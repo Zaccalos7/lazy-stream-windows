@@ -20,6 +20,9 @@
             } else {
                 document.documentElement.setAttribute('data-theme', 'light');
             }
+            if (localStorage.getItem('orbis-sidebar') === 'closed') {
+                document.documentElement.classList.add('sidebar-closed');
+            }
         })();
     </script>
     <script src="/js/site.js" defer></script>
@@ -27,7 +30,11 @@
 <body>
 <div class="shell">
     <nav class="nav" aria-label="Orbis Stream">
-        <div class="nav-title"><img src="/favicon.ico" alt="" /><span>Orbis Stream</span></div>
+        <div class="nav-title">
+            <button class="btn subtle icon-only" id="sidebar-toggle" title="Toggle Sidebar" aria-label="Toggle Sidebar"><i class="icon">&#xE700;</i></button>
+            <img src="/favicon.ico" alt="" />
+            <span>Orbis Stream</span>
+        </div>
         <a href="/orbis/mainMenu" aria-current="@Current("mainMenu")"><i class="icon">&#xE80F;</i><span>@T["dashboard"]</span></a>
         <a href="/orbis/mainLive" aria-current="@Current("mainLive", "countdown")"><i class="icon">&#xE714;</i><span>@T["liveManagement"]</span></a>
         <a href="/orbis/mainSetting" aria-current="@Current("mainSetting", "mainVideoSetting", "mainChannelSetting")"><i class="icon">&#xE713;</i><span>@T["settings"]</span></a>

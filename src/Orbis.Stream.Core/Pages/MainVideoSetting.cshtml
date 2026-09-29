@@ -38,9 +38,6 @@
             <form method="post" asp-page-handler="Duplicate" asp-route-id="@setting.Id">
                 <button class="btn subtle icon-only" title="@T["duplicate"]" aria-label="@T["duplicate"]"><i class="icon">&#xE8C8;</i></button>
             </form>
-            <form method="post" asp-page-handler="Delete" asp-route-id="@setting.Id" data-confirm="@T["deleteConfiguration"]">
-                <button class="btn subtle icon-only danger" title="@T["delete"]" aria-label="@T["delete"]"><i class="icon">&#xE74D;</i></button>
-            </form>
             <form method="post" asp-page-handler="Toggle" asp-route-id="@setting.Id">
                 <label class="toggle" title="@(active ? T["deactivateButton"] : T["activeButton"])">
                     <input type="checkbox" checked="@active" onchange="this.form.requestSubmit()" aria-label="@T["activeButton"]" />
@@ -64,6 +61,10 @@
                 <partial name="_VideoSettingFields" for="Form" />
             </div>
             <div class="dialog-footer">
+                @if (!Model.IsNew)
+                {
+                    <button class="btn subtle danger" type="submit" asp-page-handler="Delete" asp-route-id="@Model.Form.Id" data-confirm="@T["deleteConfiguration"]" formnovalidate style="margin-right: auto;"><i class="icon">&#xE74D;</i>@T["delete"]</button>
+                }
                 <button class="btn accent">@T["save"]</button>
                 <a class="btn" href="/orbis/mainVideoSetting">@T["cancel"]</a>
             </div>

@@ -1,0 +1,12 @@
+@model PagerModel
+@if (Model.Total > 1)
+{
+    <nav class="pager" aria-label="Pagination">
+        <a class="btn subtle icon-only" href="@Model.Href(Math.Max(Model.Current - 1, 0))" aria-label="‹"><i class="icon">&#xE76B;</i></a>
+        @foreach (var index in Model.Window)
+        {
+            <a class="btn @(index == Model.Current ? "" : "subtle")" href="@Model.Href(index)" aria-current="@(index == Model.Current ? "page" : null)">@(index + 1)</a>
+        }
+        <a class="btn subtle icon-only" href="@Model.Href(Math.Min(Model.Current + 1, Model.Total - 1))" aria-label="›"><i class="icon">&#xE76C;</i></a>
+    </nav>
+}

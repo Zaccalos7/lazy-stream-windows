@@ -1,0 +1,82 @@
+@model MainLiveModel
+@{
+    var page = Model.Videos.Page;
+    var pager = new PagerModel(page.Number, page.TotalPages, index => Url.Page("/MainLive", new { Model.LiveStatus, Model.ChannelName, p = index })!);
+}
+@if (Model.Videos.Content.Count == 0)
+{
+    <div class="card empty"><i class="icon">&#xE714;</i>@T["noDataPresent"]</div>
+}
+else
+{
+    <div class="table-wrap">
+        <table class="list">
+            <thead>
+            <tr>
+                <th>@T["liveStatus"]</th>
+                <th>@T["title"]</th>
+                <th>@T["channel"]</th>
+                <th>@(T["startDate"].TrimEnd(' ', ':'))</th>
+                <th></th>
+            </tr>
+            </thead>
+            <tbody>
+            @foreach (var video in Model.Videos.Content)
+            {
+                var status = video.LiveStatus;
+                var hasSetting = video.VideoSetting is not null;
+                var live = status == LiveStatus.Live;
+                var platform = video.VideoLiveHistory?.PlatformStreamName;
+
+                // Only a live that is running can be watched, and only a known platform has a page.
+                var livePlatform = live ? LiveLinkView.PlatformOf(video.VideoLiveHistory?.StreamUrl) : null;
+                var liveUrl = livePlatform is null ? null : LiveLinkView.UrlOf(video.VideoLiveHistory?.StreamUrl, video.ChannelName, platform);
+                var liveLabel = LiveLinkView.LabelOf(livePlatform);
+                var liveTitle = T["openLivePage"] + (string.IsNullOrEmpty(liveLabel) ? "" : " (" + liveLabel + ")");
+                <tr data-row>
+                    <td><span class="badge @LiveStatusView.Css(status)">@T[LiveStatusView.Key(status)]</span></td>
+                    <td class="path">
+                        <div class="truncate"><strong>@video.Name</strong></div>
+                        <div class="caption truncate" title="@video.VideoPath">@(string.IsNullOrEmpty(platform) ? "" : platform + " · ")@video.VideoPath</div>
+                    </td>
+                    <td>@(video.ChannelName ?? "N/A")</td>
+                    <td>@LiveStatusView.Date(video.StartDateLive, "dd/MM/yyyy HH:mm:ss")</td>
+                    <td>
+                        <div class="actions">
+                            @if (liveUrl is not null)
+                            {
+                                <a class="btn subtle icon-only" href="@liveUrl" target="_blank" rel="noopener noreferrer" title="@liveTitle" aria-label="@liveTitle">
+                                    <i class="icon">@LiveLinkView.GlyphOf(livePlatform)</i>
+                                </a>
+                            }
+                            @if (hasSetting)
+                            {
+                                <form method="post" asp-page="/MainLive" asp-page-handler="Stop" asp-all-route-data="Model.RowRoute(video.Pkid)" data-confirm="@T["stopLive"]">
+                                    <button class="btn subtle icon-only danger" disabled="@(!live)" title="@T["stopLiveIconLabel"]" aria-label="@T["stopLiveIconLabel"]"><i class="icon">&#xE71A;</i></button>
+                                </form>
+                                <form method="post" asp-page="/MainLive" asp-page-handler="Replay" asp-all-route-data="Model.RowRoute(video.Pkid)" data-confirm="@T["startLiveAlert"]">
+                                    <button class="btn subtle icon-only" disabled="@live" title="@T["startLiveIconLabel"]" aria-label="@T["startLiveIconLabel"]"><i class="icon">&#xE768;</i></button>
+                                </form>
+                                <form method="post" asp-page="/MainLive" asp-page-handler="Replay" asp-all-route-data="Model.RowRoute(video.Pkid)" data-confirm="@T["startLiveAlert"]">
+                                    <button class="btn subtle icon-only" title="@T["restartLiveIconLabel"]" aria-label="@T["restartLiveIconLabel"]"><i class="icon">&#xE72C;</i></button>
+                                </form>
+                            }
+                            else
+                            {
+                                <a class="btn subtle" href="@Url.Page("/MainLive", new { Model.LiveStatus, Model.ChannelName, p = Model.PageIndex, link = video.Pkid })">
+                                    <i class="icon">&#xE71B;</i>@T["connectVideoSetting"]
+                                </a>
+                            }
+                            @* A start, a stop or a restart runs the server (ffmpeg included), so
+                               the answer takes a moment: this is what says the row is working,
+                               next to the icons that asked for it. *@
+                            <span class="spinner" data-while="busy" title="@T["loading"]"></span>
+                        </div>
+                    </td>
+                </tr>
+            }
+            </tbody>
+        </table>
+    </div>
+    <partial name="_Pager" model="pager" />
+}

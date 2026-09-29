@@ -1,0 +1,127 @@
+@page "/orbis/mainChannelSetting"
+@model MainChannelSettingModel
+@{
+    ViewData["Title"] = T["channelSettings"];
+    var editing = Model.Editing;
+}
+<div class="page-header">
+    <div>
+        <h1>@T["channelSettings"]</h1>
+        <p class="subtitle"><a href="/orbis/mainSetting">@T["settings"]</a> › @T["configureChannel"]</p>
+    </div>
+    <a class="btn accent" asp-route-edit="new" asp-route-platform="@Model.Platform" asp-route-active="@Model.Active"><i class="icon">&#xE710;</i>@T["addConfiguration"]</a>
+</div>
+
+<form method="get" class="toolbar">
+    <label class="field">
+        <span class="caption">Platform</span>
+        <select class="input" name="platform" onchange="this.form.requestSubmit()">
+            <option value="">–</option>
+            @foreach (var platform in MainChannelSettingModel.Platforms)
+            {
+                <option value="@platform.Value" selected="@(Model.Platform == platform.Value)">@platform.Label</option>
+            }
+        </select>
+    </label>
+    <label class="field">
+        <span class="caption">@T["active"] / @T["deactive"]</span>
+        <select class="input" name="active" onchange="this.form.requestSubmit()">
+            <option value="">–</option>
+            <option value="true" selected="@(Model.Active == "true")">@T["active"]</option>
+            <option value="false" selected="@(Model.Active == "false")">@T["deactive"]</option>
+        </select>
+    </label>
+</form>
+
+@if (Model.Configurations.Count == 0)
+{
+    <div class="card empty"><i class="icon">&#xE93E;</i>@T["noDataPresent"]</div>
+}
+
+@foreach (var configuration in Model.Configurations)
+{
+    var active = configuration.IsActive ?? false;
+    var youtube = configuration.PlatformStreamName?.Contains("youtube", StringComparison.OrdinalIgnoreCase) ?? false;
+    <div class="row-card @(youtube ? "youtube" : "twitch")">
+        <i class="icon lead" title="@configuration.PlatformStreamName">@(youtube ? "\uE714" : "\uE93E")</i>
+        <div class="grow">
+            <h3 class="truncate">@configuration.ChannelName · @(youtube ? "YouTube" : "Twitch")</h3>
+            @if (!string.IsNullOrWhiteSpace(configuration.Description))
+            {
+                <div class="caption truncate">@configuration.Description</div>
+            }
+            <div class="caption truncate">@configuration.StreamUrl · @configuration.VideoFolder</div>
+        </div>
+        <div class="actions">
+            <span class="badge @(active ? "ended" : "")">@(active ? T["active"] : T["deactive"])</span>
+            <a class="btn subtle icon-only" asp-route-edit="@configuration.Id" asp-route-platform="@Model.Platform" asp-route-active="@Model.Active" title="@T["seeDetails"]" aria-label="@T["seeDetails"]"><i class="icon">&#xE70F;</i></a>
+            <form method="post" asp-page-handler="Delete" asp-route-id="@configuration.Id" asp-route-platform="@Model.Platform" asp-route-active="@Model.Active" data-confirm="@T["deleteConfigurations"]">
+                <button class="btn subtle icon-only danger" title="@T["delete"]" aria-label="@T["delete"]"><i class="icon">&#xE74D;</i></button>
+            </form>
+            <form method="post" asp-page-handler="Toggle" asp-route-id="@configuration.Id" asp-route-platform="@Model.Platform" asp-route-active="@Model.Active" data-confirm="@(active ? T["deactivateConfiguration"] : T["activateConfigurations"])">
+                <input type="hidden" name="current" value="@(active ? "true" : "false")" />
+                <label class="toggle" title="@(active ? T["deactivateConfigurationTooltip"] : T["activateConfigurationTooltip"])">
+                    <input type="checkbox" checked="@active" onchange="this.checked = !this.checked; this.form.requestSubmit()" aria-label="@T["activeButton"]" />
+                </label>
+            </form>
+        </div>
+    </div>
+}
+
+@if (editing is not null)
+{
+    <dialog class="dialog wide" data-open>
+        <form method="post" asp-page-handler="Save" asp-route-platform="@Model.Platform" asp-route-active="@Model.Active">
+            <input type="hidden" name="id" value="@editing.Id" />
+            <div class="dialog-body">
+                <h2>@(editing.Id is null ? T["addConfiguration"] : T["editModalTitle"])</h2>
+                <div class="choice-list" role="radiogroup" aria-label="Platform">
+                    @foreach (var platform in MainChannelSettingModel.Platforms)
+                    {
+                        <label class="choice @platform.Value">
+                            <input type="radio" name="platformStreamName" value="@platform.Value" data-stream-url="@platform.StreamUrl" required
+                                   checked="@(string.Equals(editing.PlatformStreamName, platform.Value, StringComparison.OrdinalIgnoreCase))" />
+                            <i class="icon">@(platform.Value == "youtube" ? "\uE714" : "\uE93E")</i>
+                            <span class="grow">@platform.Label</span>
+                            <span class="caption">@platform.StreamUrl</span>
+                        </label>
+                    }
+                </div>
+                <div class="form-grid section pair">
+                    <label class="field">
+                        <span>@T["channelName"]</span>
+                        <input class="input" name="channelName" value="@editing.ChannelName" required />
+                    </label>
+                    <label class="field">
+                        <span>@T["url"]</span>
+                        <input class="input" name="streamUrl" value="@editing.StreamUrl" placeholder="rtmp://…" />
+                    </label>
+                    <label class="field">
+                        <span>@T["key"]</span>
+                        <div class="input-affix">
+                            <input class="input" name="streamKey" type="password" value="@editing.StreamKey" autocomplete="off" required
+                                   data-reveal-label-show="@T["showStreamKey"]" data-reveal-label-hide="@T["hideStreamKey"]" />
+                            <button class="reveal" type="button" data-reveal aria-pressed="false" title="@T["showStreamKey"]" aria-label="@T["showStreamKey"]">
+                                <i class="icon">&#xE7B3;</i>
+                            </button>
+                        </div>
+                    </label>
+                    <label class="field dropzone">
+                        <span>@T["videoPathFolder"]</span>
+                        <input class="input" name="videoFolder" value="@editing.VideoFolder" placeholder="C:\Video" required
+                               data-drop-path data-drop-done="@T["dropVideoFolderDone"]" />
+                        <small><i class="icon">&#xE8B7;</i><span>@T["dropVideoFolderHint"]</span></small>
+                    </label>
+                </div>
+                <label class="field section">
+                    <span>@T["description"]</span>
+                    <textarea class="input" name="description" rows="3" required>@editing.Description</textarea>
+                </label>
+            </div>
+            <div class="dialog-footer">
+                <button class="btn accent">@T["save"]</button>
+                <a class="btn" asp-route-platform="@Model.Platform" asp-route-active="@Model.Active">@T["cancel"]</a>
+            </div>
+        </form>
+    </dialog>
+}

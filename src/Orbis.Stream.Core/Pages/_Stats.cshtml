@@ -1,0 +1,27 @@
+@model MainTaskManagerModel
+@{
+    // Same labels and thresholds as the React cards: green below 40, amber below 75, red above.
+    // Each card carries the name of the counter it shows: the values arrive in the push channel
+    // under those names, and the script paints them where they already are. The page is drawn
+    // before any value is measured, so every card starts with the dash and its loading.
+    (SystemInfoField Field, string Glyph, string Label, string Unit)[] meta =
+    [
+        (SystemInfoField.Cpu, "", "CPU", "%"),
+        (SystemInfoField.Ram, "", "RAM", "%"),
+        (SystemInfoField.Swap, "", "SWAP", "%"),
+        (SystemInfoField.CpuTemperature, "", T["TEMPERATURA_CPU"], "°C")
+    ];
+}
+<div class="grid">
+    @foreach (var (field, glyph, label, unit) in meta)
+    {
+        <div class="card meter">
+            <h3><i class="icon">@glyph</i>&nbsp; @label</h3>
+            <div class="ring" style="--value: 0" data-label="–" data-key="@field.ToMeterKey()" data-unit="@unit" data-name="@label" role="img" aria-label="@label"></div>
+            <p class="caption" data-while="loading">
+                <span class="spinner" aria-hidden="true"></span>&nbsp; @T["loading"]
+            </p>
+            <p class="caption" data-no-data hidden>@T["noDataPresent"]</p>
+        </div>
+    }
+</div>

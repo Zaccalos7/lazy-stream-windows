@@ -1,0 +1,9 @@
+@page "/orbis/countdown"
+@{
+    ViewData["Title"] = T["upcomingLive"];
+}
+<div class="card empty" style="padding: 48px 16px;">
+    <h1>@T["upcomingLive"]</h1>
+    <div class="countdown" data-countdown="5" data-href="/orbis/mainLive?liveStatus=LIVE" aria-live="polite">5</div>
+    <img src="/img/donnoleCinema.png" alt="@T["noImage"]" style="max-width: min(420px, 100%); border-radius: 8px;" />
+</div>

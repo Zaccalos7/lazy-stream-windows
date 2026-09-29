@@ -1,0 +1,31 @@
+@page "/orbis/mainMenu"
+@{
+    ViewData["Title"] = T["dashboard"];
+}
+<div class="page-header">
+    <div>
+        <h1>@T["dashboard"]</h1>
+        <p class="subtitle">@T["dashboardDescription"]</p>
+    </div>
+</div>
+
+<div class="grid">
+    <a class="tile" href="/orbis/mainLive">
+        <i class="icon">&#xE714;</i>
+        <div><h3>@T["liveManagement"]</h3><p>@T["liveManagementDescription"]</p></div>
+    </a>
+    <a class="tile" href="/orbis/mainSetting">
+        <i class="icon">&#xE713;</i>
+        <div><h3>@T["settings"]</h3><p>@T["settingsDescription"]</p></div>
+    </a>
+    <a class="tile" href="/orbis/mainTaskManager">
+        <i class="icon">&#xE9D9;</i>
+        <div><h3>@T["taskManager"]</h3><p>@T["taskManagerDescription"]</p></div>
+    </a>
+</div>
+
+<div class="page-footer">
+    <a class="btn coffee" href="https://buymeacoffee.com/zaccalos" target="_blank" rel="noopener noreferrer">
+        <span>🦦</span><span>@T["payMeAWeasel"]</span><span>☕</span>
+    </a>
+</div>

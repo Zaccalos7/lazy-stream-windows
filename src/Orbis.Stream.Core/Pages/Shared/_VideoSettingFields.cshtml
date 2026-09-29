@@ -1,0 +1,76 @@
+@model VideoSettingForm
+<input type="hidden" asp-for="Id" />
+<input type="hidden" asp-for="IsActive" />
+
+<label class="field">
+    <span>@T["videoSettingTitle"]</span>
+    <input class="input" asp-for="Title" placeholder="@T["titlePlaceholder"]" required />
+</label>
+
+<h3 class="section">@T["video"]</h3>
+<div class="form-grid">
+    <label class="field">
+        <span>@T["codec"]</span>
+        <select class="input" asp-for="VideoCodec" asp-items="VideoSettingForm.Items(FfmpegCodecCatalog.VideoCodecs)" required>
+            <option value="">@T["selectACodec"]</option>
+        </select>
+    </label>
+    <label class="field">
+        <span>@T["videoCodecName"]</span>
+        <select class="input" asp-for="VideoCodecName" asp-items="VideoSettingForm.CodecNameItems()" required>
+            <option value="">@T["selectVideoCodecName"]</option>
+        </select>
+    </label>
+    <label class="field">
+        <span>@T["pixelFormat"]</span>
+        <select class="input" asp-for="PixelFormat" asp-items="VideoSettingForm.Items(FfmpegCodecCatalog.PixelFormats)" required>
+            <option value="">@T["selectAPixelFormat"]</option>
+        </select>
+    </label>
+    <label class="field">
+        <span>@T["videoFormat"]</span>
+        <select class="input" asp-for="VideoFormat" asp-items="VideoSettingForm.FormatItems()" required>
+            <option value="">@T["selectFormat"]</option>
+        </select>
+    </label>
+    <label class="field">
+        <span>@T["bitrate"]</span>
+        <input class="input" asp-for="VideoBitrate" type="number" min="1" step="1" placeholder="@T["exampleBitrate"]" required />
+        <small>bps</small>
+    </label>
+    <label class="field">
+        <span>@T["gopSize"]</span>
+        <input class="input" asp-for="GopSize" type="number" min="1" step="1" placeholder="@T["gopSizeRecommendation"]" required />
+    </label>
+</div>
+
+<h3 class="section">@T["audio"]</h3>
+<div class="form-grid">
+    <label class="field">
+        <span>@T["audioCodec"]</span>
+        <select class="input" asp-for="AudioCodec" asp-items="VideoSettingForm.Items(FfmpegCodecCatalog.AudioCodecs)" required>
+            <option value="">@T["selectACodec"]</option>
+        </select>
+    </label>
+    <label class="field">
+        <span>@T["audioBitrate"]</span>
+        <input class="input" asp-for="AudioBitrate" type="number" min="1" step="1" placeholder="@T["exampleAudioBitrate"]" required />
+        <small>bps</small>
+    </label>
+</div>
+
+<h3 class="section">@T["additionalVideoOptions"]</h3>
+<div class="form-grid">
+    <label class="field">
+        <span>preset</span>
+        <select class="input" asp-for="Preset" asp-items="VideoSettingForm.PresetItems()">
+            <option value="">–</option>
+        </select>
+    </label>
+    <label class="field">
+        <span>tune</span>
+        <select class="input" asp-for="Tune" asp-items="VideoSettingForm.TuneItems()">
+            <option value="">–</option>
+        </select>
+    </label>
+</div>

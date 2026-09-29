@@ -1,0 +1,21 @@
+@page "/orbis/mainSetting"
+@{
+    ViewData["Title"] = T["settings"];
+}
+<div class="page-header">
+    <div>
+        <h1>@T["settings"]</h1>
+        <p class="subtitle">@T["selectSectionMessage"]</p>
+    </div>
+</div>
+
+<a class="row-card tile" href="/orbis/mainVideoSetting">
+    <i class="icon lead">&#xE714;</i>
+    <div class="grow"><h3>@T["videoAndAudio"]</h3><p>@T["additionalVideoOptionsDescription"]</p></div>
+    <i class="icon">&#xE76C;</i>
+</a>
+<a class="row-card tile" href="/orbis/mainChannelSetting">
+    <i class="icon lead">&#xE93E;</i>
+    <div class="grow"><h3>@T["channelSettings"]</h3><p>@T["channelSettingsDescription"]</p></div>
+    <i class="icon">&#xE76C;</i>
+</a>

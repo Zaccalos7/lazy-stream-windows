@@ -1,0 +1,64 @@
+@page "/orbis/mainLiveHistory"
+@model MainLiveHistoryModel
+@{
+    ViewData["Title"] = T["liveHistory"];
+    var page = Model.Videos.Page;
+    var pager = new PagerModel(page.Number, page.TotalPages, index => Url.Page("/MainLiveHistory", new { p = index })!);
+}
+<div class="page-header">
+    <div>
+        <h1>@T["liveHistory"]</h1>
+        <p class="subtitle"><a href="/orbis/mainLive">@T["liveManagement"]</a> › @T["liveHistory"]</p>
+    </div>
+    <a class="btn" href="/orbis/mainLive"><i class="icon">&#xE72B;</i>@T["back"]</a>
+</div>
+
+@if (Model.Videos.Content.Count == 0)
+{
+    <div class="card empty"><i class="icon">&#xE81C;</i>@T["noDataPresent"]</div>
+}
+else
+{
+    <div class="table-wrap">
+        <table class="list roomy">
+            <thead>
+            <tr>
+                <th>@T["title"]</th>
+                <th>@T["liveStatus"]</th>
+                <th>@T["channel"]</th>
+                <th>@T["platform"]</th>
+                <th>@T["path"]</th>
+                <th>@T["data"]</th>
+                <th>@T["outcome"]</th>
+            </tr>
+            </thead>
+            <tbody>
+            @foreach (var video in Model.Videos.Content)
+            {
+                var history = video.VideoLiveHistory;
+                var platform = LiveLinkView.PlatformOf(history?.StreamUrl);
+                var platformLabel = LiveLinkView.LabelOf(platform);
+                <tr>
+                    <td>@video.Name</td>
+                    <td><span class="badge @LiveStatusView.Css(video.LiveStatus)">@T[LiveStatusView.Key(video.LiveStatus)]</span></td>
+                    <td>@(video.ChannelName ?? "N/A")</td>
+                    <td>
+                        @if (platform is not null)
+                        {
+                            <span class="platform"><i class="icon">@LiveLinkView.GlyphOf(platform)</i>@platformLabel</span>
+                        }
+                        else
+                        {
+                            <span class="muted" title="@history?.StreamUrl">–</span>
+                        }
+                    </td>
+                    <td class="path"><div class="truncate" title="@video.VideoPath">@video.VideoPath</div></td>
+                    <td class="nowrap">@LiveStatusView.Date(history?.LocalDateTimeStartLive, "dd-MM-yyyy HH:mm:ss")</td>
+                    <td>@video.Message</td>
+                </tr>
+            }
+            </tbody>
+        </table>
+    </div>
+    <partial name="_Pager" model="pager" />
+}

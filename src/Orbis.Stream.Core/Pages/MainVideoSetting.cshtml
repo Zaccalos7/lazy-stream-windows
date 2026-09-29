@@ -1,0 +1,72 @@
+@page "/orbis/mainVideoSetting"
+@model MainVideoSettingModel
+@{
+    ViewData["Title"] = T["videoAndAudioSettings"];
+}
+<div class="page-header">
+    <div>
+        <h1>@T["videoAndAudioSettings"]</h1>
+        <p class="subtitle"><a href="/orbis/mainSetting">@T["settings"]</a> › @T["videoAndAudio"]</p>
+    </div>
+    <a class="btn accent" href="?edit=new"><i class="icon">&#xE710;</i>@T["addButton"]</a>
+</div>
+
+@if (Model.Settings.Count == 0)
+{
+    <div class="card empty"><i class="icon">&#xE714;</i>@T["noDataPresent"]</div>
+}
+
+@foreach (var setting in Model.Settings)
+{
+    var active = setting.IsVideoAndAudioSettingActive ?? false;
+    <div class="row-card">
+        <i class="icon lead">&#xE714;</i>
+        <div class="grow">
+            <h3 class="truncate">@(string.IsNullOrWhiteSpace(setting.Title) ? T["untitled"] : setting.Title)</h3>
+            <div class="caption truncate">
+                @T["videoCodecName"]: @(setting.VideoCodecName ?? "N/A") ·
+                @T["bitrate"]: @VideoSettingForm.FormatBitrate(setting.VideoBitrate, T["milion"]) ·
+                @T["audioBitrate"]: @(setting.AudioSettingRecord?.AudioBitrate?.ToString() ?? "N/A")
+            </div>
+        </div>
+        <div class="actions">
+            @if (active)
+            {
+                <span class="badge ended">@T["activeButton"]</span>
+            }
+            <a class="btn subtle icon-only" href="?edit=@setting.Id" title="@T["editModalTitle"]" aria-label="@T["editModalTitle"]"><i class="icon">&#xE70F;</i></a>
+            <form method="post" asp-page-handler="Duplicate" asp-route-id="@setting.Id">
+                <button class="btn subtle icon-only" title="@T["duplicate"]" aria-label="@T["duplicate"]"><i class="icon">&#xE8C8;</i></button>
+            </form>
+            <form method="post" asp-page-handler="Delete" asp-route-id="@setting.Id" data-confirm="@T["deleteConfiguration"]">
+                <button class="btn subtle icon-only danger" title="@T["delete"]" aria-label="@T["delete"]"><i class="icon">&#xE74D;</i></button>
+            </form>
+            <form method="post" asp-page-handler="Toggle" asp-route-id="@setting.Id">
+                <label class="toggle" title="@(active ? T["deactivateButton"] : T["activeButton"])">
+                    <input type="checkbox" checked="@active" onchange="this.form.requestSubmit()" aria-label="@T["activeButton"]" />
+                </label>
+            </form>
+        </div>
+    </div>
+}
+
+@if (Model.Form is not null)
+{
+    <dialog class="dialog wide" data-open>
+        <form method="post" asp-page-handler="Save">
+            <div class="dialog-body">
+                <h2>@(Model.IsNew ? T["addNewAudioVideoConfiguration"] : T["editModalTitle"])</h2>
+                <div class="toolbar">
+                    <span class="muted">@T["clickButtonToLoadVideoSettings"]</span>
+                    <a class="btn" href="?edit=@(Model.Form.Id?.ToString() ?? "new")&preset=Twitch">Twitch</a>
+                    <a class="btn" href="?edit=@(Model.Form.Id?.ToString() ?? "new")&preset=Youtube">YouTube</a>
+                </div>
+                <partial name="_VideoSettingFields" for="Form" />
+            </div>
+            <div class="dialog-footer">
+                <button class="btn accent">@T["save"]</button>
+                <a class="btn" href="/orbis/mainVideoSetting">@T["cancel"]</a>
+            </div>
+        </form>
+    </dialog>
+}

@@ -1,0 +1,35 @@
+@model MainTaskManagerModel
+@{
+    // The order of the panel and the label of each fact: a fact the machine cannot answer (a
+    // discrete graphics card on a laptop, a disk it does not have) simply does not show up.
+    string[] keys =
+    [
+        SystemFact.Os,
+        SystemFact.Architecture,
+        SystemFact.Computer,
+        SystemFact.Cpu,
+        SystemFact.CpuCores,
+        SystemFact.CpuSpeed,
+        SystemFact.RamTotal,
+        SystemFact.RamUsed,
+        SystemFact.Disk,
+        SystemFact.DiskFree,
+        SystemFact.Gpu,
+        SystemFact.Uptime,
+        SystemFact.AppUptime,
+        SystemFact.Dotnet
+    ];
+    var values = Model.Facts.ToDictionary(fact => fact.Key, fact => fact.Value, StringComparer.Ordinal);
+}
+<dl class="facts">
+    @foreach (var key in keys)
+    {
+        if (values.TryGetValue(key, out var value))
+        {
+            <div class="fact">
+                <dt>@T[key]</dt>
+                <dd title="@value">@value</dd>
+            </div>
+        }
+    }
+</dl>

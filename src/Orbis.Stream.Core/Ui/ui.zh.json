@@ -64,6 +64,7 @@
   "exampleAudioBitrate": "示例：128000",
   "additionalVideoOptions": "附加视频选项",
   "TEMPERATURA_CPU": "CPU 温度",
+  "TEMPERATURA_GPU": "GPU 温度",
   "addNewAudioVideoConfiguration": "添加新音视频配置",
   "addButton": "添加",
   "deactivateButton": "停用",

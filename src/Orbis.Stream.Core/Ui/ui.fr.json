@@ -64,6 +64,7 @@
   "exampleAudioBitrate": "Exemple : 128000",
   "additionalVideoOptions": "Options vidéo supplémentaires",
   "TEMPERATURA_CPU": "TEMPÉRATURE CPU",
+  "TEMPERATURA_GPU": "TEMPÉRATURE GPU",
   "addNewAudioVideoConfiguration": "Ajouter une nouvelle configuration audio et vidéo",
   "addButton": "Ajouter",
   "deactivateButton": "Désactiver",

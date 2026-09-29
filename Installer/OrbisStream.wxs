@@ -1,0 +1,99 @@
+<?xml version="1.0" encoding="utf-8"?>
+<!--
+  WiX authoring for the Orbis Stream MSI, an alternative to the NSIS setup in
+  installer.nsi (see build-msi.ps1).
+
+  WiX only builds MSI packages on Windows: this file cannot be compiled from
+  Linux or macOS, the .wix authoring is only validated by a real Windows run.
+
+  The payload is the self-contained single-file publish produced by
+  build-installer.ps1 / build-installer.sh:
+
+      OrbisStream.exe  Messages\  wwwroot\
+
+  Nothing else is required on the target machine: the .NET runtime is embedded
+  in the executable, and the WebView2 Evergreen Runtime ships with Windows 11.
+-->
+<Wix xmlns="http://wixtoolset.org/schemas/v4/wxs"
+     xmlns:ui="http://wixtoolset.org/schemas/v4/wxs/ui">
+
+  <Package Name="$(var.ProductName)"
+           Manufacturer="$(var.Manufacturer)"
+           Version="$(var.ProductVersion)"
+           UpgradeCode="$(var.UpgradeCode)"
+           Language="1033"
+           Scope="perUser"
+           InstallerVersion="500"
+           Compressed="yes">
+
+    <SummaryInformation Description="$(var.ProductName) $(var.ProductVersion)" />
+
+    <MajorUpgrade AllowSameVersionUpgrades="yes"
+                  Schedule="afterInstallInitialize"
+                  DowngradeErrorMessage="A newer version of [ProductName] is already installed." />
+
+    <MediaTemplate EmbedCab="yes" />
+
+    <Icon Id="ApplicationIcon" SourceFile="$(var.PublishDir)\wwwroot\favicon.ico" />
+    <Property Id="ARPPRODUCTICON" Value="ApplicationIcon" />
+    <Property Id="WIXUI_INSTALLDIR" Value="INSTALLFOLDER" />
+    <Property Id="ARPNOREPAIR" Value="1" />
+    <Property Id="ARPNOMODIFY" Value="1" />
+    <Property Id="WIXUI_EXITDIALOGOPTIONAL" Value="1" />
+
+    <ui:WixUI Id="WixUI_InstallDir" />
+
+    <!-- Per-user installation under %LOCALAPPDATA%: no elevation prompt, and the
+         install folder is writable so the app can keep stream.db and logs there. -->
+    <StandardDirectory Id="LocalAppDataFolder">
+      <Directory Id="INSTALLFOLDER" Name="$(var.InstallFolderName)">
+        <Files Include="$(var.PublishDir)\**" />
+        <Directory Id="FfmpegFolder" Name="ffmpeg">
+          <Files Include="$(var.FfmpegDir)\**" />
+        </Directory>
+      </Directory>
+    </StandardDirectory>
+
+    <StandardDirectory Id="ProgramMenuFolder">
+      <Directory Id="ApplicationProgramsFolder" Name="$(var.ProductName)">
+        <Component Id="ApplicationShortcuts" Guid="8C1F6A0E-2C4B-4E2E-9C0D-4E0B6D7B1A21">
+          <Shortcut Id="StartMenuShortcut"
+                    Name="$(var.ProductName)"
+                    Description="$(var.ProductName)"
+                    Target="[INSTALLFOLDER]OrbisStream.exe"
+                    WorkingDirectory="INSTALLFOLDER" />
+          <RemoveFolder Id="RemoveApplicationProgramsFolder" On="uninstall" />
+          <RegistryValue Root="HKCU"
+                         Key="Software\$(var.Manufacturer)\$(var.ProductName)"
+                         Name="InstallFolder"
+                         Type="string"
+                         Value="[INSTALLFOLDER]"
+                         KeyPath="yes" />
+        </Component>
+      </Directory>
+    </StandardDirectory>
+
+    <StandardDirectory Id="DesktopFolder">
+      <Component Id="DesktopShortcut" Guid="5B0C2A47-9E31-4F0B-A1D6-77E2C4E9F3D8">
+        <Shortcut Id="DesktopShortcut"
+                  Name="$(var.ProductName)"
+                  Description="$(var.ProductName)"
+                  Target="[INSTALLFOLDER]OrbisStream.exe"
+                  WorkingDirectory="INSTALLFOLDER" />
+        <RegistryValue Root="HKCU"
+                       Key="Software\$(var.Manufacturer)\$(var.ProductName)"
+                       Name="DesktopShortcut"
+                       Type="integer"
+                       Value="1"
+                       KeyPath="yes" />
+      </Component>
+    </StandardDirectory>
+
+    <Feature Id="Main" Title="$(var.ProductName)" Level="1" AllowAbsent="no">
+      <ComponentRef Id="ApplicationShortcuts" />
+      <ComponentRef Id="DesktopShortcut" />
+    </Feature>
+
+  </Package>
+
+</Wix>

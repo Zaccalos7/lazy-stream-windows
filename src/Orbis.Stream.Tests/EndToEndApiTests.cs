@@ -7,6 +7,7 @@ using System.Text.RegularExpressions;
 using Orbis.Stream.Core.Configuration;
 using Orbis.Stream.Core.Hosting;
 using Orbis.Stream.Core.Services;
+using Orbis.Stream.Core.SystemInfo;
 
 namespace Orbis.Stream.Tests;
 
@@ -588,10 +589,12 @@ public sealed class EndToEndApiTests : IClassFixture<ApplicationFixture>
 
         Assert.Equal(HttpStatusCode.OK, page.StatusCode);
 
-        // The four meters of the Java build: the test host answers in English. They are the cheap
-        // part of the page, so they are in the first answer.
+        // The meters of the Java build: the test host answers in English. They are the cheap
+        // part of the page, so they are in the first answer. The processor has a card of its own
+        // and the card another: which of the two the machine answers decides which of them stays.
         Assert.Contains("ring", body, StringComparison.Ordinal);
         Assert.Contains("CPU TEMPERATURE", body, StringComparison.Ordinal);
+        Assert.Contains("GPU TEMPERATURE", body, StringComparison.Ordinal);
         Assert.Contains("SWAP", body, StringComparison.Ordinal);
 
         // What the machine is needs WMI, which is why the panel is asked for on its own: the page
@@ -628,7 +631,7 @@ public sealed class EndToEndApiTests : IClassFixture<ApplicationFixture>
         Assert.DoesNotContain("data-interval", body, StringComparison.Ordinal);
         Assert.DoesNotContain("handler=Stats", body, StringComparison.Ordinal);
 
-        foreach (var key in new[] { "cpu", "ram", "swap", "cpu_temperature" })
+        foreach (var key in new[] { "cpu", "ram", "swap", "cpu_temperature", "gpu_temperature" })
         {
             Assert.Contains($"data-key=\"{key}\"", body, StringComparison.Ordinal);
         }
@@ -663,7 +666,7 @@ public sealed class EndToEndApiTests : IClassFixture<ApplicationFixture>
         // Under the names the cards carry, not the API ones ("CPU", "TEMPERATURA CPU"): a name that
         // does not match leaves the meter on its dash forever, with nothing to say it is wrong.
         using var values = System.Text.Json.JsonDocument.Parse(line["data: ".Length..]);
-        foreach (var key in new[] { "cpu", "ram", "swap", "cpu_temperature" })
+        foreach (var key in new[] { "cpu", "ram", "swap", "cpu_temperature", "gpu_temperature" })
         {
             Assert.True(values.RootElement.TryGetProperty(key, out _), $"missing {key} in {line}");
         }
@@ -773,6 +776,25 @@ public sealed class EndToEndApiTests : IClassFixture<ApplicationFixture>
             .ToHashSet(StringComparer.Ordinal);
         Assert.Contains("CPU", fields);
         Assert.Contains("RAM", fields);
+        Assert.Contains("TEMPERATURA CPU", fields);
+        Assert.Contains("TEMPERATURA GPU", fields);
+    }
+
+    [Theory]
+    [InlineData("/cpu/temperature")]
+    [InlineData("/gpu/temperature")]
+    public async Task Temperatures_AreServedAsPlainNumbersOrAsNothingAtAll(string endpoint)
+    {
+        // A machine with no sensor for a temperature answers -1 rather than a made up number: the
+        // meter reads that as the reason to leave the page instead of showing a dash forever.
+        using var response = await _fixture.Client.GetAsync($"/taskManager/statistics{endpoint}");
+
+        Assert.Equal(HttpStatusCode.OK, response.StatusCode);
+
+        var value = await response.Content.ReadFromJsonAsync<JsonElement>();
+        Assert.Equal(JsonValueKind.Number, value.ValueKind);
+        var celsius = value.GetDouble();
+        Assert.True(celsius == SystemInfoProviderFactory.NotAvailable || celsius is >= 1 and <= 120, $"{endpoint} answered {celsius}");
     }
 
     [Fact]

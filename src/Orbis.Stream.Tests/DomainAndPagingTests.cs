@@ -371,6 +371,66 @@ public sealed class SystemFactTests
     }
 }
 
+public sealed class TemperatureTests
+{
+    [Fact]
+    public void Temperatures_AnswerAPlausibleReadingOrNoneAtAll()
+    {
+        // The contract every sensor obeys: a temperature a machine of this size could really be at,
+        // or -1 for a machine that has no sensor to read. Nothing in between, nothing invented.
+        var provider = new PortableSystemInfoProvider();
+
+        foreach (var celsius in new[] { provider.GetCpuTemperature(), provider.GetGpuTemperature() })
+        {
+            Assert.True(
+                celsius == SystemInfoProviderFactory.NotAvailable || (celsius is >= 1 and <= 120),
+                $"a sensor answered {celsius}");
+        }
+    }
+
+    [Fact]
+    public void Temperatures_AreReadOnceForAsManyAsksAsThereAre()
+    {
+        // A sensor is expensive: a WMI query costs tens of milliseconds and the tool of the driver
+        // is a process of its own, while the meters are pushed once a second. Two asks in a row
+        // must not be two readings, or the push of the channel would pay for them every time.
+        var reads = 0;
+        var cache = new TemperatureCache();
+
+        Assert.Equal((41, 57), cache.Read(() => Counted(41), () => Counted(57)));
+        Assert.Equal((41, 57), cache.Read(() => Counted(99), () => Counted(99)));
+        Assert.Equal(2, reads);
+
+        int Counted(int celsius)
+        {
+            reads++;
+            return celsius;
+        }
+    }
+
+    [Fact]
+    public void AMachineWithoutSensorsIsNotAskedAgainEverySecond()
+    {
+        // -1 for both is a machine that has no sensor at all, and that answer is kept longer than a
+        // reading: a missing sensor must cost nothing once it has been found to be missing.
+        var reads = 0;
+        var cache = new TemperatureCache();
+
+        for (var ask = 0; ask < 5; ask++)
+        {
+            cache.Read(Missing, Missing);
+        }
+
+        Assert.Equal(2, reads);
+
+        int Missing()
+        {
+            reads++;
+            return SystemInfoProviderFactory.NotAvailable;
+        }
+    }
+}
+
 public sealed class LiveChangeNotifierTests
 {
     [Fact]

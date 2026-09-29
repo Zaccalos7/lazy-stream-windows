@@ -6,7 +6,8 @@ public enum SystemInfoField
     Cpu,
     Ram,
     Swap,
-    CpuTemperature
+    CpuTemperature,
+    GpuTemperature
 }
 
 public static class SystemInfoFieldExtensions
@@ -17,6 +18,7 @@ public static class SystemInfoFieldExtensions
         SystemInfoField.Ram => "RAM",
         SystemInfoField.Swap => "SWAP",
         SystemInfoField.CpuTemperature => "TEMPERATURA CPU",
+        SystemInfoField.GpuTemperature => "TEMPERATURA GPU",
         _ => field.ToString().ToUpperInvariant()
     };
 
@@ -30,6 +32,7 @@ public static class SystemInfoFieldExtensions
         SystemInfoField.Ram => "ram",
         SystemInfoField.Swap => "swap",
         SystemInfoField.CpuTemperature => "cpu_temperature",
+        SystemInfoField.GpuTemperature => "gpu_temperature",
         _ => field.ToString().ToLowerInvariant()
     };
 }

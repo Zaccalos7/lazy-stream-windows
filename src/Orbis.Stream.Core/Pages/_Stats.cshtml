@@ -3,13 +3,15 @@
     // Same labels and thresholds as the React cards: green below 40, amber below 75, red above.
     // Each card carries the name of the counter it shows: the values arrive in the push channel
     // under those names, and the script paints them where they already are. The page is drawn
-    // before any value is measured, so every card starts with the dash and its loading.
+    // before any value is measured, so every card starts with the dash and its loading. A card
+    // whose sensor the machine does not have is taken out of the page by the first sample.
     (SystemInfoField Field, string Glyph, string Label, string Unit)[] meta =
     [
-        (SystemInfoField.Cpu, "", "CPU", "%"),
-        (SystemInfoField.Ram, "", "RAM", "%"),
-        (SystemInfoField.Swap, "", "SWAP", "%"),
-        (SystemInfoField.CpuTemperature, "", T["TEMPERATURA_CPU"], "°C")
+        (SystemInfoField.Cpu, "\uE950", "CPU", "%"),
+        (SystemInfoField.Ram, "\uE964", "RAM", "%"),
+        (SystemInfoField.Swap, "\uEDA2", "SWAP", "%"),
+        (SystemInfoField.CpuTemperature, "\uE9CA", T["TEMPERATURA_CPU"], "°C"),
+        (SystemInfoField.GpuTemperature, "\uE714", T["TEMPERATURA_GPU"], "°C")
     ];
 }
 <div class="grid">

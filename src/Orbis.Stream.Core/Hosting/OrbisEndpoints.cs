@@ -177,6 +177,7 @@ public static class OrbisEndpoints
         group.MapGet("/ram", (SystemInfoService service) => Results.Ok(service.GetRamPercent()));
         group.MapGet("/swap", (SystemInfoService service) => Results.Ok(service.GetSwapPercent()));
         group.MapGet("/cpu/temperature", (SystemInfoService service) => Results.Ok(service.GetCpuTemperature()));
+        group.MapGet("/gpu/temperature", (SystemInfoService service) => Results.Ok(service.GetGpuTemperature()));
     }
 
     /// <summary>

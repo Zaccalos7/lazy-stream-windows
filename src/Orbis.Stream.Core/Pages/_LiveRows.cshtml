@@ -57,7 +57,7 @@ else
                                 <form method="post" asp-page="/MainLive" asp-page-handler="Replay" asp-all-route-data="Model.RowRoute(video.Pkid)" data-confirm="@T["startLiveAlert"]">
                                     <button class="btn subtle icon-only" disabled="@live" title="@T["startLiveIconLabel"]" aria-label="@T["startLiveIconLabel"]"><i class="icon">&#xE768;</i></button>
                                 </form>
-                                <form method="post" asp-page="/MainLive" asp-page-handler="Replay" asp-all-route-data="Model.RowRoute(video.Pkid)" data-confirm="@T["startLiveAlert"]">
+                                <form method="post" asp-page="/MainLive" asp-page-handler="Restart" asp-all-route-data="Model.RowRoute(video.Pkid)" data-confirm="@T["restartLiveAlert"]">
                                     <button class="btn subtle icon-only" title="@T["restartLiveIconLabel"]" aria-label="@T["restartLiveIconLabel"]"><i class="icon">&#xE72C;</i></button>
                                 </form>
                             }

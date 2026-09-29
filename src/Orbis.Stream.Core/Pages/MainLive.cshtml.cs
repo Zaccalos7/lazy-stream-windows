@@ -121,13 +121,33 @@ public sealed class MainLiveModel(
         return RedirectToPage(Filters);
     }
 
-    /// <summary>Play and restart of a card: streams again the videos of the same live history.</summary>
+    /// <summary>Play of a card: streams again the videos of the same live history, from where the
+    /// interrupted one was stopped.</summary>
     public IActionResult OnPostReplay(int pkid)
     {
         Try(() =>
         {
             var video = videos.FindVideo(pkid);
             validator.RequireVideo(video);
+            return Run(() => streaming.StartVideo(video));
+        });
+        return RedirectToPage(Filters);
+    }
+
+    /// <summary>Restart of a card: the same playlist, but from the first video and not from where
+    /// the last interruption left it.</summary>
+    public IActionResult OnPostRestart(int pkid)
+    {
+        Try(() =>
+        {
+            var video = videos.FindVideo(pkid);
+            validator.RequireVideo(video);
+
+            if (video.VideoLiveHistory is { } history && history.Pkid is { } historyPkid)
+            {
+                streaming.RestartFromBeginning(historyPkid);
+            }
+
             return Run(() => streaming.StartVideo(video));
         });
         return RedirectToPage(Filters);

@@ -132,6 +132,27 @@ public sealed class StreamingService
         SaveFlagToStopLive(video);
     }
 
+    /// <summary>
+    /// Forgets where every video of a live history was stopped, so the next play starts the
+    /// playlist from the first one. This is what the restart button asks for, and what a play does
+    /// by itself when the interrupted pass has nothing left to stream.
+    /// </summary>
+    public void RestartFromBeginning(long videoLiveHistoryPkid)
+    {
+        foreach (var video in _videoRepository.FindByLiveHistoryId(videoLiveHistoryPkid))
+        {
+            if (video.LastTimeStampBeforeStop == 0)
+            {
+                continue;
+            }
+
+            video.LastTimeStampBeforeStop = 0;
+            _videoRepository.Update(video);
+        }
+
+        _notifier.Raise();
+    }
+
     public Task StopAllAsync() => _sessions.StopAllAsync();
 
     public void Shutdown() => _shutdown.Cancel();

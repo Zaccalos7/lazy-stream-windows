@@ -9,11 +9,15 @@ namespace Orbis.Stream.Core.Services;
 /// <summary>
 /// Port of the frame loop of <c>StreamService#startVideoStreaming</c>: it streams the videos of a
 /// live history one after another, mirrors every state change on the video row and honours the
-/// "should be stopped" flag that <c>/live/stop-live</c> sets.
+/// "should be stopped" flag that <c>/live/stop-live</c> sets. A video that was interrupted keeps
+/// the position it was stopped at, so playing it again carries on from there instead of over.
 /// </summary>
 public sealed class FfmpegVideoPlaylistStreamer : IVideoPlaylistStreamer
 {
     private static readonly TimeSpan StopFlagPollInterval = TimeSpan.FromMilliseconds(500);
+
+    /// <summary>How close to the end a video has to be to count as streamed through.</summary>
+    private const int FinishedToleranceMilliseconds = 250;
 
     private readonly VideoRepository _videoRepository;
     private readonly VideoSettingRepository _videoSettingRepository;
@@ -50,19 +54,93 @@ public sealed class FfmpegVideoPlaylistStreamer : IVideoPlaylistStreamer
         long videoLiveHistoryPkid,
         CancellationToken cancellationToken)
     {
-        foreach (var video in videos)
+        var queue = await PlanAsync(videos, cancellationToken).ConfigureAwait(false);
+
+        if (queue.Count == 0)
+        {
+            // Nothing is left of the pass that was interrupted: this is a play on a playlist that
+            // ran to the end, so the videos start over instead of leaving the page with nothing
+            // to watch. (The restart button asks for the same thing without waiting for the end.)
+            _logger.LogInformation(
+                "{Message}", _localizer.PrintMessage("live.restarted.from.beginning", [videos.Count.ToString(System.Globalization.CultureInfo.InvariantCulture)]));
+            ForgetPositions(videos);
+            queue = [.. videos.Select(video => new PlannedVideo(video, null, TimeSpan.Zero))];
+        }
+
+        foreach (var planned in queue)
         {
             cancellationToken.ThrowIfCancellationRequested();
-            await StreamVideoAsync(video, outputUrl, videoLiveHistoryPkid, cancellationToken).ConfigureAwait(false);
+            await StreamVideoAsync(planned, outputUrl, videoLiveHistoryPkid, cancellationToken).ConfigureAwait(false);
         }
     }
 
+    /// <summary>
+    /// What is left to stream, in playlist order. A video that was already streamed through is
+    /// left out, a video that was interrupted is asked for its own position: only those two need to
+    /// know how long they are, so a first play probes nothing before the loop starts.
+    /// </summary>
+    private async Task<IReadOnlyList<PlannedVideo>> PlanAsync(
+        IReadOnlyList<VideoEntity> videos,
+        CancellationToken cancellationToken)
+    {
+        var queue = new List<PlannedVideo>();
+
+        foreach (var video in videos)
+        {
+            if (video.LastTimeStampBeforeStop <= 0)
+            {
+                queue.Add(new PlannedVideo(video, null, TimeSpan.Zero));
+                continue;
+            }
+
+            var probe = await _probe.ProbeAsync(video.VideoPath, cancellationToken).ConfigureAwait(false);
+            if (IsStreamedThrough(video, probe))
+            {
+                continue;
+            }
+
+            queue.Add(new PlannedVideo(video, probe, TimeSpan.FromMilliseconds(video.LastTimeStampBeforeStop)));
+        }
+
+        return queue;
+    }
+
+    /// <summary>Position recorded and position in the file: the first of the two is the whole file.</summary>
+    private static bool IsStreamedThrough(VideoEntity video, MediaProbeResult probe)
+    {
+        if (video.LiveStatus == LiveStatus.Ended)
+        {
+            return true;
+        }
+
+        return probe.DurationSeconds > 0
+            && video.LastTimeStampBeforeStop >= (long)(probe.DurationSeconds * 1000) - FinishedToleranceMilliseconds;
+    }
+
+    /// <summary>The rows go back to "never streamed", which is what the restart button means.</summary>
+    private void ForgetPositions(IReadOnlyList<VideoEntity> videos)
+    {
+        foreach (var video in videos)
+        {
+            if (video.LastTimeStampBeforeStop == 0)
+            {
+                continue;
+            }
+
+            video.LastTimeStampBeforeStop = 0;
+            _videoRepository.Update(video);
+        }
+
+        _notifier.Raise();
+    }
+
     private async Task StreamVideoAsync(
-        VideoEntity video,
+        PlannedVideo planned,
         string outputUrl,
         long videoLiveHistoryPkid,
         CancellationToken cancellationToken)
     {
+        var video = planned.Video;
         var inputPath = video.VideoPath;
         var videoKey = video.Pkid;
 
@@ -80,12 +158,18 @@ public sealed class FfmpegVideoPlaylistStreamer : IVideoPlaylistStreamer
 
             _logger.LogInformation("INPUT: working directory = {InputPath}", inputPath);
 
-            var probe = await _probe.ProbeAsync(inputPath, cancellationToken).ConfigureAwait(false);
+            var probe = planned.Probe ?? await _probe.ProbeAsync(inputPath, cancellationToken).ConfigureAwait(false);
             _logger.LogInformation(
                 "FORMAT: of grabber on running machine = {PixelFormat}", FfmpegCodecCatalog.ResolvePixelFormat(videoSetting.PixelFormat));
 
+            if (planned.ResumeFrom > TimeSpan.Zero)
+            {
+                var resumed = _localizer.PrintMessage("video.live.resumed", [inputPath, Seconds(planned.ResumeFrom)]);
+                _logger.LogInformation("{Message}", resumed);
+            }
+
             await using var session = FfmpegStreamingSession.Start(
-                _locator, videoKey, inputPath, outputUrl, videoSetting, probe, _logger);
+                _locator, videoKey, inputPath, outputUrl, videoSetting, probe, _logger, planned.ResumeFrom);
 
             _sessions.Register(session);
 
@@ -115,7 +199,8 @@ public sealed class FfmpegVideoPlaylistStreamer : IVideoPlaylistStreamer
             {
                 var endedMessage = _localizer.PrintMessage("video.live.ended");
                 _logger.LogInformation("{Message}", endedMessage);
-                SaveMessageOnVideoLiveHistory(endedMessage, videoLiveHistoryPkid, inputPath, LiveStatus.Ended, null);
+                SaveMessageOnVideoLiveHistory(
+                    endedMessage, videoLiveHistoryPkid, inputPath, LiveStatus.Ended, null, EndOf(probe, session));
                 return;
             }
 
@@ -124,7 +209,8 @@ public sealed class FfmpegVideoPlaylistStreamer : IVideoPlaylistStreamer
                 + "\n"
                 + (string.IsNullOrWhiteSpace(errorOutput) ? $"ffmpeg exited with code {exitCode}" : errorOutput.Trim());
             _logger.LogError("{Message}", streamingError);
-            SaveMessageOnVideoLiveHistory(streamingError, videoLiveHistoryPkid, inputPath, LiveStatus.Error, DateTime.Now);
+            SaveMessageOnVideoLiveHistory(
+                streamingError, videoLiveHistoryPkid, inputPath, LiveStatus.Error, DateTime.Now, 0);
         }
         catch (OperationCanceledException)
         {
@@ -136,7 +222,7 @@ public sealed class FfmpegVideoPlaylistStreamer : IVideoPlaylistStreamer
                 + "\n"
                 + exception.Message;
             _logger.LogError("{Message}", startingError);
-            SaveMessageOnVideoLiveHistory(startingError, videoLiveHistoryPkid, inputPath, LiveStatus.Error, DateTime.Now);
+            SaveMessageOnVideoLiveHistory(startingError, videoLiveHistoryPkid, inputPath, LiveStatus.Error, DateTime.Now, 0);
         }
         finally
         {
@@ -202,9 +288,21 @@ public sealed class FfmpegVideoPlaylistStreamer : IVideoPlaylistStreamer
         var message = _localizer.PrintMessage("live.stopped");
         _logger.LogInformation("{Message}", message);
         _videoRepository.SetStopFlag(videoKey, false);
-        SaveMessageOnVideoLiveHistory(message, videoLiveHistoryPkid, inputPath, LiveStatus.Stopped, null);
+        SaveMessageOnVideoLiveHistory(
+            message, videoLiveHistoryPkid, inputPath, LiveStatus.Stopped, null, session.PositionMilliseconds);
         return true;
     }
+
+    /// <summary>
+    /// The end of the file when it is known: a video that reached it is not streamed again, and the
+    /// position it stopped at is the last one a play could resume from.
+    /// </summary>
+    private static long EndOf(MediaProbeResult probe, FfmpegStreamingSession session) => Math.Max(
+        session.PositionMilliseconds,
+        probe.DurationSeconds > 0 ? (long)(probe.DurationSeconds * 1000) : 0);
+
+    private static string Seconds(TimeSpan position) =>
+        position.TotalSeconds.ToString("0.###", System.Globalization.CultureInfo.InvariantCulture);
 
     /// <summary>Port of <c>saveMessageOnVideoLiveHistory</c>.</summary>
     private void SaveMessageOnVideoLiveHistory(
@@ -212,7 +310,8 @@ public sealed class FfmpegVideoPlaylistStreamer : IVideoPlaylistStreamer
         long videoLiveHistoryPkid,
         string inputPath,
         LiveStatus liveStatus,
-        DateTime? dateTime)
+        DateTime? dateTime,
+        long? positionMilliseconds = null)
     {
         var video = _videoRepository.FindByVideoPathAndVideoLiveHistoryPkid(inputPath, videoLiveHistoryPkid);
         if (video is null)
@@ -227,6 +326,11 @@ public sealed class FfmpegVideoPlaylistStreamer : IVideoPlaylistStreamer
             video.StartDateLive = dateTime;
         }
 
+        if (positionMilliseconds is { } position)
+        {
+            video.LastTimeStampBeforeStop = Math.Max(0, position);
+        }
+
         video.Message = message;
         video.LiveStatus = liveStatus;
         _videoRepository.Update(video);
@@ -235,6 +339,9 @@ public sealed class FfmpegVideoPlaylistStreamer : IVideoPlaylistStreamer
         // only place that has to tell the open pages that the row they drew is out of date.
         _notifier.Raise();
     }
+
+    /// <summary>A video of the playlist, with what is known about it before ffmpeg is started.</summary>
+    private sealed record PlannedVideo(VideoEntity Video, MediaProbeResult? Probe, TimeSpan ResumeFrom);
 }
 
 /// <summary>Abstraction of the playlist streamer, so the services can be unit tested without ffmpeg.</summary>

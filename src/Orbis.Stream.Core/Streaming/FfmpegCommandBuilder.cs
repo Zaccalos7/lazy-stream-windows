@@ -8,7 +8,8 @@ public sealed record FfmpegStreamRequest(
     string InputPath,
     string OutputUrl,
     MediaProbeResult Probe,
-    VideoSettingEntity Setting);
+    VideoSettingEntity Setting,
+    TimeSpan ResumeFrom = default);
 
 /// <summary>
 /// Translates the <c>FFmpegFrameRecorder</c> configuration of <c>StreamService</c> into the
@@ -31,10 +32,27 @@ public static class FfmpegCommandBuilder
             "-nostdin",
             "-loglevel",
             "error",
-            "-re",
-            "-i",
-            request.InputPath
+
+            // Where the transcode is, twice a second: that is the only place a running ffmpeg tells
+            // how far it got, and a stop has to leave the position on the video row to resume there.
+            "-progress",
+            "pipe:1",
+            "-nostats",
+            "-stats_period",
+            "0.2",
+            "-re"
         };
+
+        // Where to carry on from, before the input: as an input option ffmpeg seeks there and starts
+        // reading immediately, where an output option would decode and throw the frames away.
+        if (request.ResumeFrom > TimeSpan.Zero)
+        {
+            arguments.Add("-ss");
+            arguments.Add(Seconds(request.ResumeFrom));
+        }
+
+        arguments.Add("-i");
+        arguments.Add(request.InputPath);
 
         // JavaCV mapped the grabbed video/audio streams of the input file.
         arguments.Add("-map");
@@ -127,4 +145,7 @@ public static class FfmpegCommandBuilder
     }
 
     private static string Number(double value) => value.ToString("0.######", CultureInfo.InvariantCulture);
+
+    private static string Seconds(TimeSpan position) =>
+        Number(Math.Max(0d, position.TotalSeconds));
 }

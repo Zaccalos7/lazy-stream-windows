@@ -11,6 +11,8 @@ public sealed class FfmpegStreamingSession : IAsyncDisposable
     private readonly Process _process;
     private readonly ILogger _logger;
     private readonly Task<string> _standardError;
+    private readonly Task _standardOutput;
+    private long _positionMilliseconds;
     private int _stopRequested;
 
     private FfmpegStreamingSession(Process process, int videoPkid, string inputPath, ILogger logger)
@@ -19,12 +21,19 @@ public sealed class FfmpegStreamingSession : IAsyncDisposable
         _logger = logger;
         VideoPkid = videoPkid;
         InputPath = inputPath;
-        _standardError = process.StandardError.ReadToEndAsync();
+        _standardError = ReadToEndAsync(process.StandardError);
+
+        // Nothing else reads what ffmpeg writes on its standard output, and the pipe it writes
+        // <c>-progress</c> into is small: a session that left it alone would block ffmpeg itself.
+        _standardOutput = FollowProgressAsync();
     }
 
     public int VideoPkid { get; }
 
     public string InputPath { get; }
+
+    /// <summary>How far the transcode got, as ffmpeg last reported it. Zero until the first report.</summary>
+    public long PositionMilliseconds => Interlocked.Read(ref _positionMilliseconds);
 
     public bool StopRequested => Volatile.Read(ref _stopRequested) == 1;
 
@@ -50,9 +59,10 @@ public sealed class FfmpegStreamingSession : IAsyncDisposable
         string outputUrl,
         VideoSettingEntity setting,
         MediaProbeResult probe,
-        ILogger logger)
+        ILogger logger,
+        TimeSpan resumeFrom = default)
     {
-        var arguments = FfmpegCommandBuilder.Build(new FfmpegStreamRequest(inputPath, outputUrl, probe, setting));
+        var arguments = FfmpegCommandBuilder.Build(new FfmpegStreamRequest(inputPath, outputUrl, probe, setting, resumeFrom));
         var startInfo = locator.CreateStartInfo(locator.FfmpegPath, arguments);
 
         var process = new Process { StartInfo = startInfo, EnableRaisingEvents = true };
@@ -65,6 +75,36 @@ public sealed class FfmpegStreamingSession : IAsyncDisposable
         return new FfmpegStreamingSession(process, videoPkid, inputPath, logger);
     }
 
+    /// <summary>
+    /// Reads the <c>-progress</c> block of ffmpeg, which repeats the state of the transcode until
+    /// the process ends. <c>out_time_us</c> is the position in the input, in microseconds; the
+    /// sibling <c>out_time_ms</c> counts microseconds too, which is why it is not the one used here.
+    /// </summary>
+    private async Task FollowProgressAsync()
+    {
+        const string key = "out_time_us=";
+
+        try
+        {
+            while (await _process.StandardOutput.ReadLineAsync().ConfigureAwait(false) is { } line)
+            {
+                if (line.StartsWith(key, StringComparison.Ordinal)
+                    && long.TryParse(
+                        line[key.Length..].AsSpan(),
+                        System.Globalization.NumberStyles.Integer,
+                        System.Globalization.CultureInfo.InvariantCulture,
+                        out var microseconds))
+                {
+                    Interlocked.Exchange(ref _positionMilliseconds, microseconds / 1000);
+                }
+            }
+        }
+        catch (Exception exception) when (exception is InvalidOperationException or ObjectDisposedException or IOException)
+        {
+            // The process was killed or disposed: the last position reported is the one that counts.
+        }
+    }
+
     public async Task<int> WaitForExitAsync(CancellationToken cancellationToken)
     {
         await _process.WaitForExitAsync(cancellationToken).ConfigureAwait(false);
@@ -72,6 +112,19 @@ public sealed class FfmpegStreamingSession : IAsyncDisposable
     }
 
     public async Task<string> ReadErrorAsync() => await _standardError.ConfigureAwait(false);
+
+    /// <summary>Drains a pipe of the process: a disposed process throws instead of ending the read.</summary>
+    private static async Task<string> ReadToEndAsync(StreamReader reader)
+    {
+        try
+        {
+            return await reader.ReadToEndAsync().ConfigureAwait(false);
+        }
+        catch (Exception exception) when (exception is InvalidOperationException or ObjectDisposedException or IOException)
+        {
+            return string.Empty;
+        }
+    }
 
     /// <summary>Stops the transcode, killing the whole ffmpeg process tree.</summary>
     public async Task StopAsync()
@@ -113,6 +166,9 @@ public sealed class FfmpegStreamingSession : IAsyncDisposable
         }
         finally
         {
+            // Both readers end on their own once the pipe is gone, and neither of them can fault:
+            // waiting for them releases the last reference to the process before it is disposed.
+            await Task.WhenAll(_standardError, _standardOutput).ConfigureAwait(false);
             _process.Dispose();
         }
     }

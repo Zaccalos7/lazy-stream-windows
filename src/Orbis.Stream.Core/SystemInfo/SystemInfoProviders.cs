@@ -72,6 +72,8 @@ public interface ISystemInfoProvider
 
     int GetAppGpuPercent();
 
+    int GetAppRamPercent();
+
     int GetAppDiskPercent();
 
     int GetAppNetworkPercent();
@@ -326,6 +328,31 @@ public sealed class WindowsSystemInfoProvider : ISystemInfoProvider
             return Math.Min(100, total);
         }
         catch { return 0; }
+    }
+
+    public int GetAppRamPercent()
+    {
+        try
+        {
+            if (!TryGetMemoryStatus(out var memory))
+            {
+                return 0;
+            }
+
+            var total = memory.TotalPhys;
+            if (total <= 0)
+            {
+                return 0;
+            }
+
+            using var process = Process.GetCurrentProcess();
+            var workingSet = process.WorkingSet64;
+            return (int)((workingSet * 100.0) / total);
+        }
+        catch
+        {
+            return 0;
+        }
     }
 
     [StructLayout(LayoutKind.Sequential)]
@@ -905,6 +932,30 @@ public sealed class PortableSystemInfoProvider : ISystemInfoProvider
     }
 
     public int GetAppGpuPercent() => 0;
+
+    public int GetAppRamPercent()
+    {
+        try
+        {
+            if (!TryReadLinuxMemory(out var totalKilobytes, out var availableKilobytes))
+            {
+                return 0;
+            }
+
+            if (totalKilobytes <= 0)
+            {
+                return 0;
+            }
+
+            using var process = Process.GetCurrentProcess();
+            var workingSetKilobytes = process.WorkingSet64 / 1024;
+            return (int)((workingSetKilobytes * 100.0) / totalKilobytes);
+        }
+        catch
+        {
+            return 0;
+        }
+    }
 
     private ulong _lastLinuxDiskBytes;
     private DateTime _lastLinuxDiskTime;

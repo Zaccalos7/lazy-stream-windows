@@ -292,3 +292,35 @@ document.addEventListener("click", event => {
   const closed = document.documentElement.classList.toggle("sidebar-closed");
   localStorage.setItem("orbis-sidebar", closed ? "closed" : "open");
 });
+
+// Dismiss infobar/toast notifications after 7 seconds
+document.addEventListener("DOMContentLoaded", () => {
+  // Use a MutationObserver to catch infobars that are added dynamically
+  const observer = new MutationObserver(mutations => {
+    mutations.forEach(mutation => {
+      mutation.addedNodes.forEach(node => {
+        if (node.nodeType === 1 && (node.classList?.contains("infobar") || node.querySelector?.(".infobar"))) {
+          const bars = node.classList?.contains("infobar") ? [node] : Array.from(node.querySelectorAll(".infobar"));
+          bars.forEach(bar => {
+            setTimeout(() => {
+              bar.style.transition = "opacity 0.3s ease";
+              bar.style.opacity = "0";
+              setTimeout(() => { bar.style.display = "none"; }, 300);
+            }, 7000);
+          });
+        }
+      });
+    });
+  });
+
+  observer.observe(document.body, { childList: true, subtree: true });
+
+  // Also dismiss any infobars that are already in the DOM on load
+  for (const bar of document.querySelectorAll(".infobar")) {
+    setTimeout(() => {
+      bar.style.transition = "opacity 0.3s ease";
+      bar.style.opacity = "0";
+      setTimeout(() => { bar.style.display = "none"; }, 300);
+    }, 7000);
+  }
+});

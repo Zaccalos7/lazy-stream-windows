@@ -10,6 +10,7 @@ public enum SystemInfoField
     GpuTemperature,
     AppCpu,
     AppGpu,
+    AppRam,
     AppDisk,
     AppNetwork
 }
@@ -25,6 +26,7 @@ public static class SystemInfoFieldExtensions
         SystemInfoField.GpuTemperature => "TEMPERATURA GPU",
         SystemInfoField.AppCpu => "APP CPU",
         SystemInfoField.AppGpu => "APP GPU",
+        SystemInfoField.AppRam => "APP RAM",
         SystemInfoField.AppDisk => "APP DISK",
         SystemInfoField.AppNetwork => "APP NETWORK",
         _ => field.ToString().ToUpperInvariant()
@@ -43,6 +45,7 @@ public static class SystemInfoFieldExtensions
         SystemInfoField.GpuTemperature => "gpu_temperature",
         SystemInfoField.AppCpu => "app_cpu",
         SystemInfoField.AppGpu => "app_gpu",
+        SystemInfoField.AppRam => "app_ram",
         SystemInfoField.AppDisk => "app_disk",
         SystemInfoField.AppNetwork => "app_network",
         _ => field.ToString().ToLowerInvariant()

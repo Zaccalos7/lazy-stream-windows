@@ -31,6 +31,7 @@ public sealed class SystemInfoService
             new(SystemInfoField.GpuTemperature.ToInfoName(), GetGpuTemperature()),
             new(SystemInfoField.AppCpu.ToInfoName(), GetAppCpuPercent()),
             new(SystemInfoField.AppGpu.ToInfoName(), GetAppGpuPercent()),
+            new(SystemInfoField.AppRam.ToInfoName(), GetAppRamPercent()),
             new(SystemInfoField.AppDisk.ToInfoName(), GetAppDiskPercent()),
             new(SystemInfoField.AppNetwork.ToInfoName(), GetAppNetworkPercent())
         };
@@ -76,6 +77,11 @@ public sealed class SystemInfoService
     public int GetAppGpuPercent()
     {
         return _provider.GetAppGpuPercent();
+    }
+
+    public int GetAppRamPercent()
+    {
+        return _provider.GetAppRamPercent();
     }
 
     public int GetAppDiskPercent()

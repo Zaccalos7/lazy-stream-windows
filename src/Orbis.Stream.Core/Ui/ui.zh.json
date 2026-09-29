@@ -93,6 +93,7 @@
   "stopLiveIconLabel": "停止直播",
   "startLiveIconLabel": "开始直播",
   "restartLiveIconLabel": "重新开始直播",
+  "restartLiveAlert": "您确定要从头重新开始直播吗？",
   "connectVideoSetting": "关联视频设置",
   "connectAudioSetting": "关联音频设置",
   "addedSuccessfully": "添加成功",

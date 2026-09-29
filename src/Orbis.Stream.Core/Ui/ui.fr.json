@@ -93,6 +93,7 @@
   "stopLiveIconLabel": "Arrêter le direct",
   "startLiveIconLabel": "Démarrer le direct",
   "restartLiveIconLabel": "Redémarrer le direct",
+  "restartLiveAlert": "Êtes-vous sûr de vouloir redémarrer le direct depuis le début ?",
   "connectVideoSetting": "Associer le paramètre vidéo",
   "connectAudioSetting": "Paramètre audio connecté",
   "addedSuccessfully": "Ajouté avec succès",

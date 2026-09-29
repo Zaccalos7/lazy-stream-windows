@@ -93,6 +93,7 @@
   "stopLiveIconLabel": "Stop Live",
   "startLiveIconLabel": "Start Live",
   "restartLiveIconLabel": "Restart Live",
+  "restartLiveAlert": "Are you sure you want to restart the live from the beginning?",
   "connectVideoSetting": "Connect Video Setting",
   "connectAudioSetting": "Setting Connected",
   "addedSuccessfully": "Added successfully",

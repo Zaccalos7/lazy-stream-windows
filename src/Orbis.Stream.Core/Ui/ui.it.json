@@ -93,6 +93,7 @@
   "stopLiveIconLabel": "Ferma La live",
   "startLiveIconLabel": "Avvia La live",
   "restartLiveIconLabel": "Riavvia La live",
+  "restartLiveAlert": "Sei sicuro di riavviare la live dall'inizio?",
   "connectVideoSetting": "Collega Setting Video",
   "connectAudioSetting": "Caricamento dei settaggi avvenuto con successo",
   "addedSuccessfully": "Aggiunto con successo",

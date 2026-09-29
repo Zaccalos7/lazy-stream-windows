@@ -93,6 +93,7 @@
   "stopLiveIconLabel": "Остановить эфир",
   "startLiveIconLabel": "Запустить эфир",
   "restartLiveIconLabel": "Перезапустить эфир",
+  "restartLiveAlert": "Вы уверены, что хотите перезапустить эфир с начала?",
   "connectVideoSetting": "Привязать настройку видео",
   "connectAudioSetting": "Привязать настройку аудио",
   "addedSuccessfully": "Добавлено успешно",

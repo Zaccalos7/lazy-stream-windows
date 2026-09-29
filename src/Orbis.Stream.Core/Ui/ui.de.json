@@ -93,6 +93,7 @@
   "stopLiveIconLabel": "Live stoppen",
   "startLiveIconLabel": "Live starten",
   "restartLiveIconLabel": "Live neu starten",
+  "restartLiveAlert": "Möchten Sie den Livestream wirklich von vorne neu starten?",
   "addedSuccessfully": "Erfolgreich hinzugefügt",
   "connectVideoSetting": "Videoeinstellung verknüpfen",
   "connectAudioSetting": "Einstellung verbunden",

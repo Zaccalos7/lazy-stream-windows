@@ -93,6 +93,7 @@
   "stopLiveIconLabel": "Detener en vivo",
   "startLiveIconLabel": "Iniciar en vivo",
   "restartLiveIconLabel": "Reiniciar en vivo",
+  "restartLiveAlert": "¿Está seguro de que desea reiniciar la emisión desde el principio?",
   "connectVideoSetting": "Vincular ajuste de video",
   "connectAudioSetting": "Ajuste de audio conectado",
   "addedSuccessfully": "Agregado con éxito",

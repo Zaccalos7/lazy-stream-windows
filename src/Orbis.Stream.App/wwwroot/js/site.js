@@ -77,8 +77,9 @@ if (rows && stream) {
 }
 
 // A ring shows its value in the middle and fills itself with a CSS variable, the way the server
-// drew it the first time. -1 is how a provider says it has no value, and 0 means the same for the
-// temperature: then the ring keeps the dash, the fill empties and the note under it stays.
+// drew it the first time. -1 is how a provider says the machine has no sensor for it, and 0 means
+// the same for the temperature: then the card leaves the page, because a card that can only say
+// it knows nothing is noise between the meters that do know something.
 const paintRing = (ring, value) => {
   const available = value >= 0 && (ring.dataset.unit === "%" || value > 0);
   ring.dataset.label = available ? value + ring.dataset.unit : "–";
@@ -88,6 +89,8 @@ const paintRing = (ring, value) => {
   ring.setAttribute("aria-label", ring.dataset.name + (available ? ", " + ring.dataset.label : ""));
   const note = ring.parentElement?.querySelector("[data-no-data]");
   if (note) note.hidden = available;
+  const card = ring.closest(".meter");
+  if (card) card.hidden = !available;
 };
 
 // <div data-stats>: the counters arrive in the channel already measured, under the name each card

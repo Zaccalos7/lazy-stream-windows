@@ -1,3 +1,5 @@
+using System.Diagnostics;
+using System.Globalization;
 using System.Management;
 using System.Runtime.InteropServices;
 using System.Runtime.Versioning;
@@ -60,6 +62,12 @@ public interface ISystemInfoProvider
 
     int GetCpuTemperature();
 
+    /// <summary>
+    /// Celsius of the graphics card, or -1 like the processor one when the machine has no sensor
+    /// that answers it: Windows exposes no API for it, only the tool of the driver does.
+    /// </summary>
+    int GetGpuTemperature();
+
     /// <summary>What the machine is, as opposed to the counters above: read once per page.</summary>
     IReadOnlyList<SystemFact> GetFacts();
 }
@@ -72,10 +80,63 @@ public static class SystemInfoProviderFactory
         OperatingSystem.IsWindows() ? new WindowsSystemInfoProvider() : new PortableSystemInfoProvider();
 }
 
+/// <summary>
+/// The two temperatures in one reading, kept for a few seconds: a WMI query costs tens of
+/// milliseconds and nvidia-smi is a process of its own, while the meters are pushed once a second.
+/// A machine that has no sensor at all is asked far less often still, so a missing sensor costs
+/// nothing once it has been found to be missing.
+/// </summary>
+internal sealed class TemperatureCache
+{
+    private static readonly TimeSpan Fresh = TimeSpan.FromSeconds(3);
+    private static readonly TimeSpan Missing = TimeSpan.FromSeconds(30);
+
+    private readonly Lock _lock = new();
+    private Reading? _reading;
+
+    public (int Cpu, int Gpu) Read(Func<int> cpu, Func<int> gpu)
+    {
+        var now = DateTime.UtcNow;
+        var reading = _reading;
+        if (reading is not null && reading.IsUsableAt(now))
+        {
+            return (reading.Cpu, reading.Gpu);
+        }
+
+        lock (_lock)
+        {
+            // Another caller may have read it while this one waited for the lock.
+            reading = _reading;
+            if (reading is not null && reading.IsUsableAt(now))
+            {
+                return (reading.Cpu, reading.Gpu);
+            }
+
+            var values = (cpu(), gpu());
+            _reading = new Reading(values.Item1, values.Item2, now);
+            return values;
+        }
+    }
+
+    private sealed record Reading(int Cpu, int Gpu, DateTime TakenAt)
+    {
+        public bool IsUsableAt(DateTime now) =>
+            now - TakenAt < (Cpu == SystemInfoProviderFactory.NotAvailable && Gpu == SystemInfoProviderFactory.NotAvailable
+                ? Missing
+                : Fresh);
+    }
+}
+
 /// <summary>Windows 11 implementation: kernel32 counters plus the ACPI thermal zone through WMI.</summary>
 public sealed class WindowsSystemInfoProvider : ISystemInfoProvider
 {
     private const int CpuSampleDelayMilliseconds = 500;
+    private const int NvidiaSmiTimeoutMilliseconds = 2000;
+
+    /// <summary>Zones named like the processor win over the others, which are usually the board.</summary>
+    private static readonly string[] ProcessorZones = ["cpu", "package", "tcpu"];
+
+    private readonly TemperatureCache _temperatures = new();
 
     public int GetCpuPercent()
     {
@@ -142,16 +203,30 @@ public sealed class WindowsSystemInfoProvider : ISystemInfoProvider
         return (int)((used * 100.0) / total);
     }
 
-    public int GetCpuTemperature()
-    {
-        if (!OperatingSystem.IsWindows())
-        {
-            return SystemInfoProviderFactory.NotAvailable;
-        }
+    public int GetCpuTemperature() => Temperatures().Cpu;
 
+    public int GetGpuTemperature() => Temperatures().Gpu;
+
+    /// <summary>
+    /// The two in one reading: they are read together because the same round trip answers both, and
+    /// the cache hands the same reading to whoever asks for it next.
+    /// </summary>
+    private (int Cpu, int Gpu) Temperatures() => OperatingSystem.IsWindows()
+        ? _temperatures.Read(ReadProcessorTemperature, ReadGraphicsTemperature)
+        : (SystemInfoProviderFactory.NotAvailable, SystemInfoProviderFactory.NotAvailable);
+
+    /// <summary>
+    /// The processor is an ACPI thermal zone, so it is read from the two classes Windows publishes
+    /// it through: the one of the hardware namespace, and the same sensors as the performance
+    /// counters see them. A machine that exposes neither answers -1, the same way OSHI answered
+    /// when the sensor was missing.
+    /// </summary>
+    [SupportedOSPlatform("windows")]
+    private static int ReadProcessorTemperature()
+    {
         // MSAcpi_ThermalZoneTemperature only lives in the WMI namespace of the hardware, not in the
         // default one: without the scope the query finds no class at all and the card stays empty.
-        var celsius = ReadAcpiTemperature(
+        var celsius = ReadThermalZone(
             new ManagementObjectSearcher(
                 new ManagementScope(@"\\.\root\wmi"),
                 new ObjectQuery("SELECT InstanceName, CurrentTemperature FROM MSAcpi_ThermalZoneTemperature")));
@@ -162,19 +237,116 @@ public sealed class WindowsSystemInfoProvider : ISystemInfoProvider
         }
 
         // The same sensors of the thermal zone, as the performance counters of Windows see them.
-        return ReadAcpiTemperature(
+        return ReadThermalZone(
             new ManagementObjectSearcher(
                 new ManagementScope(@"\\.\root\cimv2"),
                 new ObjectQuery("SELECT Name, Temperature FROM Win32_PerfFormattedData_Counters_ThermalZoneInformation")));
     }
 
     /// <summary>
-    /// Celsius of the thermal zone that names the processor, or of the first one that reads a
-    /// plausible temperature. A machine that exposes no zone answers -1, the same way OSHI
-    /// answered when the sensor was missing.
+    /// The card has no Windows API: the driver does, through the tool it installs. It answers from
+    /// user space, so a per-user installation needs no elevation, and a machine with another
+    /// manufacturer has no nvidia-smi and simply reports no sensor.
     /// </summary>
     [SupportedOSPlatform("windows")]
-    private static int ReadAcpiTemperature(ManagementObjectSearcher searcher)
+    private static int ReadGraphicsTemperature()
+    {
+        foreach (var tool in NvidiaSmiLocations())
+        {
+            if (Path.IsPathRooted(tool) && !File.Exists(tool))
+            {
+                continue;
+            }
+
+            if (Capture(tool, "--query-gpu=temperature.gpu --format=csv,noheader,nounits") is not { } output)
+            {
+                continue;
+            }
+
+            // One line per card, and the hottest of them is the one worth a meter.
+            var hottest = SystemInfoProviderFactory.NotAvailable;
+            foreach (var line in output.Split('\n'))
+            {
+                if (int.TryParse(line.Trim(), NumberStyles.Integer, CultureInfo.InvariantCulture, out var celsius)
+                    && IsTemperatureOfSomething(celsius))
+                {
+                    hottest = Math.Max(hottest, celsius);
+                }
+            }
+
+            if (hottest != SystemInfoProviderFactory.NotAvailable)
+            {
+                return hottest;
+            }
+        }
+
+        return SystemInfoProviderFactory.NotAvailable;
+    }
+
+    /// <summary>Where the driver puts the tool: the system folders and whatever is on the path.</summary>
+    private static string[] NvidiaSmiLocations()
+    {
+        var windows = Environment.GetEnvironmentVariable("SystemRoot") ?? @"C:\Windows";
+        var programFiles = Environment.GetEnvironmentVariable("ProgramFiles");
+        var locations = new List<string>();
+
+        if (!string.IsNullOrWhiteSpace(programFiles))
+        {
+            locations.Add(Path.Combine(programFiles, "NVIDIA Corporation", "NVSMI", "nvidia-smi.exe"));
+        }
+
+        locations.Add(Path.Combine(windows, "System32", "nvidia-smi.exe"));
+        locations.Add(Path.Combine(windows, "Sys32", "nvidia-smi.exe"));
+        locations.Add(Path.Combine(windows, "SysArm32", "nvidia-smi.exe"));
+
+        // Not a path: the search the shell would do, for a driver that installed the tool elsewhere.
+        locations.Add("nvidia-smi");
+        return [.. locations];
+    }
+
+    /// <summary>What the tool of the driver printed, or null when it is missing, hangs or fails.</summary>
+    [SupportedOSPlatform("windows")]
+    private static string? Capture(string executable, string arguments)
+    {
+        try
+        {
+            using var process = Process.Start(new ProcessStartInfo(executable, arguments)
+            {
+                RedirectStandardOutput = true,
+                RedirectStandardError = true,
+                UseShellExecute = false,
+                CreateNoWindow = true
+            });
+
+            if (process is null)
+            {
+                return null;
+            }
+
+            // The answer is a couple of numbers, so reading it to the end cannot fill the pipe.
+            var output = process.StandardOutput.ReadToEnd();
+            if (!process.WaitForExit(NvidiaSmiTimeoutMilliseconds))
+            {
+                process.Kill(entireProcessTree: true);
+                return null;
+            }
+
+            return process.ExitCode == 0 ? output : null;
+        }
+        catch (Exception)
+        {
+            // No driver, no tool, no permission: the card has no sensor to show.
+            return null;
+        }
+    }
+
+    /// <summary>
+    /// Celsius of the thermal zone that names the processor, or of the first one that reads a
+    /// plausible temperature: a board zone is still the closest thing to the processor on a
+    /// machine that names none.
+    /// </summary>
+    [SupportedOSPlatform("windows")]
+    private static int ReadThermalZone(ManagementObjectSearcher searcher)
     {
         try
         {
@@ -195,7 +367,7 @@ public sealed class WindowsSystemInfoProvider : ISystemInfoProvider
                         }
 
                         var celsius = (int)Math.Round((raw.Value / 10.0) - 273.15);
-                        if (celsius is < 1 or > 120)
+                        if (!IsTemperatureOfSomething(celsius))
                         {
                             // A thermal zone is not always the processor, and a machine reporting an
                             // impossible value has no sensor worth showing.
@@ -204,9 +376,7 @@ public sealed class WindowsSystemInfoProvider : ISystemInfoProvider
 
                         // The performance counters name the zone in Name, the ACPI class in InstanceName.
                         var zone = (item["InstanceName"] ?? item["Name"])?.ToString() ?? string.Empty;
-                        if (zone.Contains("cpu", StringComparison.OrdinalIgnoreCase)
-                            || zone.Contains("package", StringComparison.OrdinalIgnoreCase)
-                            || zone.Contains("tcpu", StringComparison.OrdinalIgnoreCase))
+                        if (ProcessorZones.Any(name => zone.Contains(name, StringComparison.OrdinalIgnoreCase)))
                         {
                             return celsius;
                         }
@@ -228,6 +398,9 @@ public sealed class WindowsSystemInfoProvider : ISystemInfoProvider
 
         return SystemInfoProviderFactory.NotAvailable;
     }
+
+    /// <summary>A reading no machine of this size reports is a sensor that is not really one.</summary>
+    internal static bool IsTemperatureOfSomething(int celsius) => celsius is >= 1 and <= 120;
 
     /// <summary>A WMI property as a number, whatever unsigned type the schema chose for it.</summary>
     [SupportedOSPlatform("windows")]
@@ -460,6 +633,8 @@ public sealed class PortableSystemInfoProvider : ISystemInfoProvider
 {
     private const int CpuSampleDelayMilliseconds = 500;
 
+    private readonly TemperatureCache _temperatures = new();
+
     public int GetCpuPercent()
     {
         if (!TryReadLinuxCpuTimes(out var idle, out var total))
@@ -521,36 +696,98 @@ public sealed class PortableSystemInfoProvider : ISystemInfoProvider
         return (int)((used * 100.0) / totalKilobytes);
     }
 
-    public int GetCpuTemperature()
-    {
-        // Only the thermal zones of the top level are read: the entries below them are symlinks to
-        // the device tree, and a recursive enumeration walks the whole sysfs graph.
-        var candidates = new List<string>();
-        if (Directory.Exists("/sys/class/thermal"))
-        {
-            foreach (var zone in Directory.EnumerateDirectories("/sys/class/thermal", "thermal_zone*"))
-            {
-                candidates.Add(Path.Combine(zone, "temp"));
-            }
-        }
+    public int GetCpuTemperature() => _temperatures.Read(ReadCpuTemperature, ReadGpuTemperature).Cpu;
 
-        foreach (var candidate in candidates)
+    public int GetGpuTemperature() => _temperatures.Read(ReadCpuTemperature, ReadGpuTemperature).Gpu;
+
+    private static int ReadCpuTemperature()
+    {
+        foreach (var sensor in ThermalSensors())
         {
-            try
+            if (TryReadMilliCelsius(sensor) is { } celsius)
             {
-                var raw = File.ReadAllText(candidate).Trim();
-                if (long.TryParse(raw, out var milliCelsius) && milliCelsius > 0)
-                {
-                    return (int)(milliCelsius / 1000);
-                }
-            }
-            catch (Exception exception) when (exception is IOException or UnauthorizedAccessException)
-            {
-                // Ignore unreadable sensors.
+                return celsius;
             }
         }
 
         return SystemInfoProviderFactory.NotAvailable;
+    }
+
+    private static int ReadGpuTemperature()
+    {
+        // The kernels without a thermal zone of their own keep the sensor of the card in the hwmon
+        // folder of the device, so a machine of this kind answers what the driver publishes.
+        foreach (var sensor in DeviceSensors())
+        {
+            if (TryReadMilliCelsius(Path.Combine(sensor, "temp1_input")) is { } celsius)
+            {
+                return celsius;
+            }
+        }
+
+        return SystemInfoProviderFactory.NotAvailable;
+    }
+
+    private static IReadOnlyList<string> ThermalSensors()
+    {
+        // Only the thermal zones of the top level are read: the entries below them are symlinks to
+        // the device tree, and a recursive enumeration walks the whole sysfs graph.
+        try
+        {
+            return Directory.Exists("/sys/class/thermal")
+                ? [.. Directory.EnumerateDirectories("/sys/class/thermal", "thermal_zone*")
+                    .Select(zone => Path.Combine(zone, "temp"))]
+                : [];
+        }
+        catch (Exception exception) when (exception is IOException or UnauthorizedAccessException)
+        {
+            // A machine whose sysfs is not readable has no sensor to show, which is not an error.
+            return [];
+        }
+    }
+
+    /// <summary>The hwmon folder of the card, which the driver of an AMD or Intel graphics publishes.</summary>
+    private static IReadOnlyList<string> DeviceSensors()
+    {
+        var sensors = new List<string>();
+
+        try
+        {
+            foreach (var card in Directory.EnumerateDirectories("/sys/class/drm", "card*"))
+            {
+                var hwmon = Path.Combine(card, "device", "hwmon");
+                if (!Directory.Exists(hwmon))
+                {
+                    continue;
+                }
+
+                sensors.AddRange(Directory.EnumerateDirectories(hwmon, "hwmon*"));
+            }
+        }
+        catch (Exception exception) when (exception is IOException or UnauthorizedAccessException)
+        {
+            // A machine whose sysfs is not readable has no sensor to show, which is not an error.
+        }
+
+        return sensors;
+    }
+
+    private static int? TryReadMilliCelsius(string sensor)
+    {
+        try
+        {
+            var raw = File.ReadAllText(sensor).Trim();
+            if (long.TryParse(raw, out var milliCelsius) && WindowsSystemInfoProvider.IsTemperatureOfSomething((int)(milliCelsius / 1000)))
+            {
+                return (int)(milliCelsius / 1000);
+            }
+        }
+        catch (Exception exception) when (exception is IOException or UnauthorizedAccessException)
+        {
+            // Ignore unreadable sensors.
+        }
+
+        return null;
     }
 
     /// <summary>The same facts of the Windows one, from the sources a developer machine has.</summary>

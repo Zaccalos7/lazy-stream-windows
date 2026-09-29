@@ -27,7 +27,8 @@ public sealed class SystemInfoService
             new(SystemInfoField.Cpu.ToInfoName(), GetCpuPercent()),
             new(SystemInfoField.Ram.ToInfoName(), GetRamPercent()),
             new(SystemInfoField.Swap.ToInfoName(), GetSwapPercent()),
-            new(SystemInfoField.CpuTemperature.ToInfoName(), GetCpuTemperature())
+            new(SystemInfoField.CpuTemperature.ToInfoName(), GetCpuTemperature()),
+            new(SystemInfoField.GpuTemperature.ToInfoName(), GetGpuTemperature())
         };
 
         _logger.LogTrace("{Message}", _localizer.PrintMessage("get.all.system.info"));
@@ -55,19 +56,27 @@ public sealed class SystemInfoService
         return swapPercent;
     }
 
-    public int GetCpuTemperature()
+    public int GetCpuTemperature() => Temperature(_provider.GetCpuTemperature(), "get.cpu.temp.info", "cpu.temp.not.available");
+
+    /// <summary>
+    /// The card, not the processor: Windows has no API for it, so a machine whose driver ships no
+    /// tool that answers has no sensor to show and the meter stays out of the page.
+    /// </summary>
+    public int GetGpuTemperature() => Temperature(_provider.GetGpuTemperature(), "get.gpu.temp.info", "gpu.temp.not.available");
+
+    /// <summary>-1 is how a provider says the machine has no sensor, the dash the meter would show.</summary>
+    private int Temperature(int celsius, string read, string missing)
     {
-        var value = _provider.GetCpuTemperature();
-        if (value == 0)
+        if (celsius < 0)
         {
-            _logger.LogWarning("{Message}", _localizer.PrintMessage("cpu.temp.not.available"));
+            _logger.LogTrace("{Message}", _localizer.PrintMessage(missing));
         }
         else
         {
-            _logger.LogInformation("{Message}", _localizer.PrintMessage("get.cpu.temp.info"));
+            _logger.LogInformation("{Message}", _localizer.PrintMessage(read));
         }
 
-        return value;
+        return celsius;
     }
 
     /// <summary>

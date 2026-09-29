@@ -1,0 +1,7 @@
+<Solution>
+  <Folder Name="/src/">
+    <Project Path="src/Orbis.Stream.App/Orbis.Stream.App.csproj" />
+    <Project Path="src/Orbis.Stream.Core/Orbis.Stream.Core.csproj" />
+    <Project Path="src/Orbis.Stream.Tests/Orbis.Stream.Tests.csproj" />
+  </Folder>
+</Solution>

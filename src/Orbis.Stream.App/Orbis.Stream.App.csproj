@@ -1,0 +1,42 @@
+﻿<Project Sdk="Microsoft.NET.Sdk">
+
+  <PropertyGroup>
+    <OutputType>WinExe</OutputType>
+    <TargetFramework>net10.0-windows</TargetFramework>
+    <Nullable>enable</Nullable>
+    <ImplicitUsings>enable</ImplicitUsings>
+    <UseWPF>true</UseWPF>
+    <RootNamespace>Orbis.Stream.App</RootNamespace>
+    <AssemblyName>OrbisStream</AssemblyName>
+    <ApplicationManifest>app.manifest</ApplicationManifest>
+    <ApplicationIcon>wwwroot\favicon.ico</ApplicationIcon>
+    <SatelliteResourceLanguages>en</SatelliteResourceLanguages>
+    <!-- The WebView2 package ships the XML documentation of its assemblies next to the
+         DLLs; the SDK copies those to the output (800 kB) although nothing reads them. -->
+    <AllowedReferenceRelatedFileExtensions>.pdb</AllowedReferenceRelatedFileExtensions>
+  </PropertyGroup>
+
+  <ItemGroup>
+    <FrameworkReference Include="Microsoft.AspNetCore.App" />
+  </ItemGroup>
+
+  <ItemGroup>
+    <PackageReference Include="Microsoft.Web.WebView2" Version="1.0.4191.47" />
+  </ItemGroup>
+
+  <ItemGroup>
+    <ProjectReference Include="..\Orbis.Stream.Core\Orbis.Stream.Core.csproj" />
+  </ItemGroup>
+
+  <ItemGroup>
+    <!-- Served from disk by the static file middleware: never bundle them into the single-file exe. -->
+    <None Include="wwwroot\**" CopyToOutputDirectory="PreserveNewest" ExcludeFromSingleFile="true" />
+  </ItemGroup>
+
+  <!-- ApplicationIcon consumes the file, so the SDK no longer copies it: the web
+       pages still link /favicon.ico (tab and sidebar icon). -->
+  <Target Name="CopyWebIconToPublish" AfterTargets="Publish">
+    <Copy SourceFiles="wwwroot\favicon.ico" DestinationFolder="$(PublishDir)wwwroot" SkipUnchangedFiles="true" />
+  </Target>
+
+</Project>

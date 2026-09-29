@@ -1,0 +1,52 @@
+﻿<Window x:Class="Orbis.Stream.App.MainWindow"
+        xmlns="http://schemas.microsoft.com/winfx/2006/xaml/presentation"
+        xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
+        xmlns:d="http://schemas.microsoft.com/expression/blend/2008"
+        xmlns:mc="http://schemas.openxmlformats.org/markup-compatibility/2006"
+        xmlns:wv2="clr-namespace:Microsoft.Web.WebView2.Wpf;assembly=Microsoft.Web.WebView2.Wpf"
+        mc:Ignorable="d"
+        Title="Orbis Stream" Height="1080" Width="1920" WindowStartupLocation="CenterScreen">
+    <!-- Splash in the colors of the web UI (fluent.css): the WebView2 stays hidden until the
+         first page has loaded, so the window never flashes white or grey. -->
+    <Window.Background>
+        <LinearGradientBrush StartPoint="0,0" EndPoint="1,1">
+            <GradientStop Color="#2A1054" Offset="0" />
+            <GradientStop Color="#0E0C16" Offset="0.55" />
+            <GradientStop Color="#3A0B2E" Offset="1" />
+        </LinearGradientBrush>
+    </Window.Background>
+    <Grid>
+
+        <wv2:WebView2 x:Name="Browser" Visibility="Hidden" />
+
+        <StackPanel x:Name="Splash" Width="380" VerticalAlignment="Center" HorizontalAlignment="Center">
+            <TextBlock Text="Orbis Stream"
+                       HorizontalAlignment="Center"
+                       FontFamily="Segoe UI Variable Display, Segoe UI"
+                       FontSize="44"
+                       FontWeight="Bold">
+                <TextBlock.Foreground>
+                    <LinearGradientBrush StartPoint="0,0" EndPoint="1,1">
+                        <GradientStop Color="#A78BFA" Offset="0" />
+                        <GradientStop Color="#EC4899" Offset="1" />
+                    </LinearGradientBrush>
+                </TextBlock.Foreground>
+            </TextBlock>
+            <ProgressBar x:Name="LoadingBar"
+                         IsIndeterminate="True"
+                         Height="4"
+                         Margin="40,28,40,18"
+                         Foreground="#EC4899"
+                         Background="#2A2440"
+                         BorderThickness="0" />
+            <TextBlock x:Name="StatusText"
+                       HorizontalAlignment="Center"
+                       TextAlignment="Center"
+                       TextWrapping="Wrap"
+                       FontSize="14"
+                       Foreground="#B8B1D4"
+                       Text="Caricamento di Orbis Stream..." />
+        </StackPanel>
+
+    </Grid>
+</Window>

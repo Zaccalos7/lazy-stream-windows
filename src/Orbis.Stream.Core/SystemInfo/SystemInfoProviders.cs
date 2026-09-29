@@ -68,6 +68,14 @@ public interface ISystemInfoProvider
     /// </summary>
     int GetGpuTemperature();
 
+    int GetAppCpuPercent();
+
+    int GetAppGpuPercent();
+
+    int GetAppDiskPercent();
+
+    int GetAppNetworkPercent();
+
     /// <summary>What the machine is, as opposed to the counters above: read once per page.</summary>
     IReadOnlyList<SystemFact> GetFacts();
 }
@@ -78,6 +86,53 @@ public static class SystemInfoProviderFactory
 
     public static ISystemInfoProvider CreateDefault() =>
         OperatingSystem.IsWindows() ? new WindowsSystemInfoProvider() : new PortableSystemInfoProvider();
+}
+
+internal static class AppMetricsHelper
+{
+    private static ulong _lastNetworkBytes;
+    private static DateTime _lastNetworkTime;
+    private static readonly object _appNetworkLock = new();
+
+    public static int GetAppNetworkMbps()
+    {
+        lock (_appNetworkLock)
+        {
+            try
+            {
+                ulong totalBytes = 0;
+                var interfaces = System.Net.NetworkInformation.NetworkInterface.GetAllNetworkInterfaces();
+                foreach (var ni in interfaces)
+                {
+                    if (ni.OperationalStatus == System.Net.NetworkInformation.OperationalStatus.Up)
+                    {
+                        var stats = ni.GetIPStatistics();
+                        totalBytes += (ulong)(stats.BytesReceived + stats.BytesSent);
+                    }
+                }
+
+                var now = DateTime.UtcNow;
+                if (_lastNetworkTime == default)
+                {
+                    _lastNetworkBytes = totalBytes;
+                    _lastNetworkTime = now;
+                    return 0;
+                }
+
+                var diff = totalBytes - _lastNetworkBytes;
+                var elapsed = (now - _lastNetworkTime).TotalSeconds;
+                _lastNetworkBytes = totalBytes;
+                _lastNetworkTime = now;
+                if (elapsed > 0)
+                {
+                    double mbps = (diff * 8 / elapsed) / 1_000_000.0;
+                    return (int)Math.Min(100, Math.Round(mbps));
+                }
+            }
+            catch { }
+            return 0;
+        }
+    }
 }
 
 /// <summary>
@@ -137,6 +192,10 @@ public sealed class WindowsSystemInfoProvider : ISystemInfoProvider
     private static readonly string[] ProcessorZones = ["cpu", "package", "tcpu"];
 
     private readonly TemperatureCache _temperatures = new();
+
+    private readonly object _appCpuLock = new();
+    private TimeSpan _lastAppCpuTime;
+    private DateTime _lastAppCpuReadTime;
 
     public int GetCpuPercent()
     {
@@ -206,6 +265,109 @@ public sealed class WindowsSystemInfoProvider : ISystemInfoProvider
     public int GetCpuTemperature() => Temperatures().Cpu;
 
     public int GetGpuTemperature() => Temperatures().Gpu;
+
+    public int GetAppCpuPercent()
+    {
+        lock (_appCpuLock)
+        {
+            try
+            {
+                using var process = Process.GetCurrentProcess();
+                var currentAppCpuTime = process.TotalProcessorTime;
+                var currentReadTime = DateTime.UtcNow;
+
+                if (_lastAppCpuReadTime == default)
+                {
+                    _lastAppCpuTime = currentAppCpuTime;
+                    _lastAppCpuReadTime = currentReadTime;
+                    return 0;
+                }
+
+                var elapsedAppCpu = (currentAppCpuTime - _lastAppCpuTime).TotalMilliseconds;
+                var elapsedTime = (currentReadTime - _lastAppCpuReadTime).TotalMilliseconds;
+
+                _lastAppCpuTime = currentAppCpuTime;
+                _lastAppCpuReadTime = currentReadTime;
+
+                if (elapsedTime <= 0)
+                {
+                    return 0;
+                }
+
+                var load = (elapsedAppCpu / (Environment.ProcessorCount * elapsedTime)) * 100.0;
+                return (int)Math.Max(0, Math.Min(100, load));
+            }
+            catch (Exception)
+            {
+                return 0;
+            }
+        }
+    }
+
+    [SupportedOSPlatform("windows")]
+    public int GetAppGpuPercent()
+    {
+        try
+        {
+            int processId = Process.GetCurrentProcess().Id;
+            using var searcher = new ManagementObjectSearcher(
+                new ManagementScope(@"\\.\root\cimv2"),
+                new ObjectQuery($"SELECT UtilizationPercentage FROM Win32_PerfFormattedData_GPUPerformanceCounters_GPUEngine WHERE Name LIKE 'pid_{processId}_%'"));
+            using var collection = searcher.Get();
+            int total = 0;
+            foreach (ManagementBaseObject item in collection)
+            {
+                using (item)
+                {
+                    if (item["UtilizationPercentage"] is ulong val) total += (int)val;
+                    else if (item["UtilizationPercentage"] is uint val2) total += (int)val2;
+                }
+            }
+            return Math.Min(100, total);
+        }
+        catch { return 0; }
+    }
+
+    [StructLayout(LayoutKind.Sequential)]
+    private struct IO_COUNTERS
+    {
+        public ulong ReadOperationCount; public ulong WriteOperationCount; public ulong OtherOperationCount;
+        public ulong ReadTransferCount; public ulong WriteTransferCount; public ulong OtherTransferCount;
+    }
+
+    [DllImport("kernel32.dll", SetLastError = true)]
+    [return: MarshalAs(UnmanagedType.Bool)]
+    private static extern bool GetProcessIoCounters(IntPtr hProcess, out IO_COUNTERS lpIoCounters);
+
+    private ulong _lastIoTransferCount;
+    private DateTime _lastIoReadTime;
+    private readonly object _appIoLock = new();
+
+    public int GetAppDiskPercent()
+    {
+        lock (_appIoLock)
+        {
+            try
+            {
+                using var process = Process.GetCurrentProcess();
+                if (GetProcessIoCounters(process.Handle, out var counters))
+                {
+                    ulong currentTransfer = counters.ReadTransferCount + counters.WriteTransferCount;
+                    var currentTime = DateTime.UtcNow;
+                    if (_lastIoReadTime == default) { _lastIoTransferCount = currentTransfer; _lastIoReadTime = currentTime; return 0; }
+                    var elapsedSecs = (currentTime - _lastIoReadTime).TotalSeconds;
+                    var diff = currentTransfer - _lastIoTransferCount;
+                    _lastIoTransferCount = currentTransfer;
+                    _lastIoReadTime = currentTime;
+                    if (elapsedSecs > 0) { double mbPerSec = (diff / elapsedSecs) / (1024 * 1024); return (int)Math.Min(100, Math.Round(mbPerSec)); }
+                }
+            }
+            catch { }
+            return 0;
+        }
+    }
+
+    public int GetAppNetworkPercent() => AppMetricsHelper.GetAppNetworkMbps();
 
     /// <summary>
     /// The two in one reading: they are read together because the same round trip answers both, and
@@ -635,6 +797,10 @@ public sealed class PortableSystemInfoProvider : ISystemInfoProvider
 
     private readonly TemperatureCache _temperatures = new();
 
+    private readonly object _appCpuLock = new();
+    private TimeSpan _lastAppCpuTime;
+    private DateTime _lastAppCpuReadTime;
+
     public int GetCpuPercent()
     {
         if (!TryReadLinuxCpuTimes(out var idle, out var total))
@@ -699,6 +865,83 @@ public sealed class PortableSystemInfoProvider : ISystemInfoProvider
     public int GetCpuTemperature() => _temperatures.Read(ReadCpuTemperature, ReadGpuTemperature).Cpu;
 
     public int GetGpuTemperature() => _temperatures.Read(ReadCpuTemperature, ReadGpuTemperature).Gpu;
+
+    public int GetAppCpuPercent()
+    {
+        lock (_appCpuLock)
+        {
+            try
+            {
+                using var process = Process.GetCurrentProcess();
+                var currentAppCpuTime = process.TotalProcessorTime;
+                var currentReadTime = DateTime.UtcNow;
+
+                if (_lastAppCpuReadTime == default)
+                {
+                    _lastAppCpuTime = currentAppCpuTime;
+                    _lastAppCpuReadTime = currentReadTime;
+                    return 0;
+                }
+
+                var elapsedAppCpu = (currentAppCpuTime - _lastAppCpuTime).TotalMilliseconds;
+                var elapsedTime = (currentReadTime - _lastAppCpuReadTime).TotalMilliseconds;
+
+                _lastAppCpuTime = currentAppCpuTime;
+                _lastAppCpuReadTime = currentReadTime;
+
+                if (elapsedTime <= 0)
+                {
+                    return 0;
+                }
+
+                var load = (elapsedAppCpu / (Environment.ProcessorCount * elapsedTime)) * 100.0;
+                return (int)Math.Max(0, Math.Min(100, load));
+            }
+            catch (Exception)
+            {
+                return 0;
+            }
+        }
+    }
+
+    public int GetAppGpuPercent() => 0;
+
+    private ulong _lastLinuxDiskBytes;
+    private DateTime _lastLinuxDiskTime;
+    private readonly object _appLinuxDiskLock = new();
+
+    public int GetAppDiskPercent()
+    {
+        lock (_appLinuxDiskLock)
+        {
+            try
+            {
+                var lines = File.ReadAllLines("/proc/self/io");
+                ulong readBytes = 0, writeBytes = 0;
+                foreach (var line in lines)
+                {
+                    if (line.StartsWith("read_bytes:", StringComparison.Ordinal)) readBytes = ulong.Parse(line.Split(' ', StringSplitOptions.RemoveEmptyEntries)[1]);
+                    if (line.StartsWith("write_bytes:", StringComparison.Ordinal)) writeBytes = ulong.Parse(line.Split(' ', StringSplitOptions.RemoveEmptyEntries)[1]);
+                }
+                ulong total = readBytes + writeBytes;
+                var now = DateTime.UtcNow;
+                if (_lastLinuxDiskTime == default) { _lastLinuxDiskBytes = total; _lastLinuxDiskTime = now; return 0; }
+                var diff = total - _lastLinuxDiskBytes;
+                var elapsed = (now - _lastLinuxDiskTime).TotalSeconds;
+                _lastLinuxDiskBytes = total;
+                _lastLinuxDiskTime = now;
+                if (elapsed > 0)
+                {
+                    double mbPerSec = (diff / elapsed) / (1024 * 1024);
+                    return (int)Math.Min(100, Math.Round(mbPerSec));
+                }
+            }
+            catch { }
+            return 0;
+        }
+    }
+
+    public int GetAppNetworkPercent() => AppMetricsHelper.GetAppNetworkMbps();
 
     private static int ReadCpuTemperature()
     {

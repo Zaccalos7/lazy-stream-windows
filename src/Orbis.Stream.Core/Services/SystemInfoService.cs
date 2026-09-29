@@ -28,7 +28,11 @@ public sealed class SystemInfoService
             new(SystemInfoField.Ram.ToInfoName(), GetRamPercent()),
             new(SystemInfoField.Swap.ToInfoName(), GetSwapPercent()),
             new(SystemInfoField.CpuTemperature.ToInfoName(), GetCpuTemperature()),
-            new(SystemInfoField.GpuTemperature.ToInfoName(), GetGpuTemperature())
+            new(SystemInfoField.GpuTemperature.ToInfoName(), GetGpuTemperature()),
+            new(SystemInfoField.AppCpu.ToInfoName(), GetAppCpuPercent()),
+            new(SystemInfoField.AppGpu.ToInfoName(), GetAppGpuPercent()),
+            new(SystemInfoField.AppDisk.ToInfoName(), GetAppDiskPercent()),
+            new(SystemInfoField.AppNetwork.ToInfoName(), GetAppNetworkPercent())
         };
 
         _logger.LogTrace("{Message}", _localizer.PrintMessage("get.all.system.info"));
@@ -63,6 +67,26 @@ public sealed class SystemInfoService
     /// tool that answers has no sensor to show and the meter stays out of the page.
     /// </summary>
     public int GetGpuTemperature() => Temperature(_provider.GetGpuTemperature(), "get.gpu.temp.info", "gpu.temp.not.available");
+
+    public int GetAppCpuPercent()
+    {
+        return _provider.GetAppCpuPercent();
+    }
+
+    public int GetAppGpuPercent()
+    {
+        return _provider.GetAppGpuPercent();
+    }
+
+    public int GetAppDiskPercent()
+    {
+        return _provider.GetAppDiskPercent();
+    }
+
+    public int GetAppNetworkPercent()
+    {
+        return _provider.GetAppNetworkPercent();
+    }
 
     /// <summary>-1 is how a provider says the machine has no sensor, the dash the meter would show.</summary>
     private int Temperature(int celsius, string read, string missing)

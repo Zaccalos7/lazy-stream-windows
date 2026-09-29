@@ -16,6 +16,16 @@
     <partial name="_Stats" model="Model" />
 </div>
 
+<div class="page-header" style="margin-top: 2rem;">
+    <div>
+        <h3>Consumi app Orbis stream</h3>
+    </div>
+</div>
+
+<div data-stats data-state="loading">
+    <partial name="_AppStats" model="Model" />
+</div>
+
 @* What the machine is needs WMI, which can take a second the first time. It is asked for on its
    own, into a panel that only shows a loading when the answer is slow enough to be noticed. *@
 <div class="card section" data-load="@Url.Page("/MainTaskManager", "Facts")" data-delay="400">

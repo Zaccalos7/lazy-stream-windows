@@ -666,7 +666,7 @@ public sealed class EndToEndApiTests : IClassFixture<ApplicationFixture>
         // Under the names the cards carry, not the API ones ("CPU", "TEMPERATURA CPU"): a name that
         // does not match leaves the meter on its dash forever, with nothing to say it is wrong.
         using var values = System.Text.Json.JsonDocument.Parse(line["data: ".Length..]);
-        foreach (var key in new[] { "cpu", "ram", "swap", "cpu_temperature", "gpu_temperature" })
+        foreach (var key in new[] { "cpu", "ram", "swap", "cpu_temperature", "gpu_temperature", "app_cpu", "app_gpu", "app_disk", "app_network" })
         {
             Assert.True(values.RootElement.TryGetProperty(key, out _), $"missing {key} in {line}");
         }
@@ -778,6 +778,10 @@ public sealed class EndToEndApiTests : IClassFixture<ApplicationFixture>
         Assert.Contains("RAM", fields);
         Assert.Contains("TEMPERATURA CPU", fields);
         Assert.Contains("TEMPERATURA GPU", fields);
+        Assert.Contains("APP CPU", fields);
+        Assert.Contains("APP GPU", fields);
+        Assert.Contains("APP DISK", fields);
+        Assert.Contains("APP NETWORK", fields);
     }
 
     [Theory]

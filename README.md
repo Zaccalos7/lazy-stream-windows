@@ -120,7 +120,7 @@ working directory when writable, then `~/.orbis-stream`.
 | Video         | `GET /video/getAllVideo`, `GET /video/getPage`, `GET /video/getAllChannelWithVideoLive`, `PUT /video/unlockVideo?videoKey=` |
 | Settings      | `GET|POST /settings/retrive`, `POST /settings/save`, `PUT /settings/change?id=`, `DELETE /settings/delete`, `GET /settings/retrive-channels` |
 | Video setting | `GET|POST|PUT|DELETE /video-setting/*`                                                        |
-| System        | `GET /taskManager/statistics/{allInfo,cpu,ram,swap,cpu/temperature}`                          |
+| System        | `GET /taskManager/statistics/{allInfo,cpu,ram,swap,cpu/temperature,gpu/temperature}`       |
 | Image         | `POST /image/upload`, `GET /image/loadimage`                                                   |
 | Docs          | `GET /documentazione`, `GET /swagger-ui.html`                                                  |
 
@@ -140,6 +140,22 @@ Responses keep the conventions the frontend expects:
 `GET /` redirects to `/orbis/mainMenu`. The pages keep the `/orbis/...` paths of the former
 React router and call the services in-process; the language chosen in the sidebar is stored in
 the `orbis-lang` cookie and also localizes the backend messages.
+
+### Temperature sensors
+
+The two temperature meters are the only counters that depend on the hardware of the machine, and
+Windows has no API for either of them:
+
+| Meter  | Source                                                                                 | Without it |
+| ------ | -------------------------------------------------------------------------------------- | ---------- |
+| CPU    | `MSAcpi_ThermalZoneTemperature`, then the same sensors as the performance counters      | `-1`, and the card is left out of the page |
+| GPU    | `nvidia-smi`, the tool the NVIDIA driver installs, which answers from user space        | `-1`, and the card is left out of the page |
+
+A desktop that does not publish a thermal zone named after the processor has no CPU sensor to
+read, which is why the graphics card is asked as well: whichever of the two answers, the page
+shows it, and the other one is not drawn at all. Sensors are read through a cache (3 s, or 30 s
+when the machine has none) because a WMI query and a process launch would otherwise be paid for
+on every sample of the push channel.
 
 ## Streaming pipeline
 

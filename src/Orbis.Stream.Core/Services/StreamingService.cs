@@ -1,0 +1,423 @@
+using Microsoft.AspNetCore.Http;
+using Microsoft.Extensions.Logging;
+using Orbis.Stream.Core.Contracts;
+using Orbis.Stream.Core.Data;
+using Orbis.Stream.Core.Domain;
+using Orbis.Stream.Core.Http;
+using Orbis.Stream.Core.I18n;
+using Orbis.Stream.Core.Streaming;
+
+namespace Orbis.Stream.Core.Services;
+
+/// <summary>Port of <c>com.orbis.stream.service.StreamService</c>.</summary>
+public sealed class StreamingService
+{
+    /// <summary>The original project hardcoded the user of every live history.</summary>
+    public const string CurrentUserName = "Mario";
+
+    private readonly VideoRepository _videoRepository;
+    private readonly VideoSettingRepository _videoSettingRepository;
+    private readonly VideoLiveHistoryRepository _videoLiveHistoryRepository;
+    private readonly ResponseFactory _responses;
+    private readonly Localizer _localizer;
+    private readonly BackgroundTaskExecutor _executor;
+    private readonly IVideoPlaylistStreamer _streamer;
+    private readonly StreamingSessionRegistry _sessions;
+    private readonly CancellationTokenSource _shutdown = new();
+    private readonly LiveChangeNotifier _notifier;
+    private readonly ILogger<StreamingService> _logger;
+
+    public StreamingService(
+        VideoRepository videoRepository,
+        VideoSettingRepository videoSettingRepository,
+        VideoLiveHistoryRepository videoLiveHistoryRepository,
+        ResponseFactory responses,
+        Localizer localizer,
+        BackgroundTaskExecutor executor,
+        IVideoPlaylistStreamer streamer,
+        StreamingSessionRegistry sessions,
+        LiveChangeNotifier notifier,
+        ILogger<StreamingService> logger)
+    {
+        _videoRepository = videoRepository;
+        _videoSettingRepository = videoSettingRepository;
+        _videoLiveHistoryRepository = videoLiveHistoryRepository;
+        _responses = responses;
+        _localizer = localizer;
+        _executor = executor;
+        _streamer = streamer;
+        _sessions = sessions;
+        _notifier = notifier;
+        _logger = logger;
+    }
+
+    public MessageResponse StartLive(StartLiveRequest request)
+    {
+        ArgumentNullException.ThrowIfNull(request);
+
+        var channelName = request.ChannelName!;
+        var platformStreamName = request.PlatformStreamName!;
+        var videoPathFolder = NormalizeUserPath(request.VideoPath!);
+        var streamKey = request.StreamKey!;
+        var streamUrl = request.StreamUrl!;
+
+        CheckIfALiveAlreadyStreamingForAChannel(channelName, platformStreamName);
+
+        // Checked before any row is saved: ffprobe's own error on a missing file is unreadable.
+        if (!File.Exists(videoPathFolder) && !Directory.Exists(videoPathFolder))
+        {
+            _logger.LogError("{Message} {Path}", _localizer.PrintMessage("file.not.found"), videoPathFolder);
+            throw new NotFoundCustomException("file.not.found");
+        }
+
+        var timeStartLive = DateTime.Now;
+        SaveVideoLiveHistory(videoPathFolder, timeStartLive, streamUrl, streamKey, platformStreamName);
+
+        var videoLiveHistory = RetrievedVideoLiveHistorySaved(videoPathFolder, timeStartLive);
+
+        SaveVideoPaths(videoPathFolder, videoLiveHistory, request.VideoSettingsRecord, channelName);
+
+        var streamingUrl = FfmpegCommandBuilder.BuildStreamingUrl(streamUrl, streamKey);
+        return StreamingVideo(videoLiveHistory, streamingUrl);
+    }
+
+    /// <summary>
+    /// Port of <c>startVideo</c>: replays or restarts a single video whose details and settings
+    /// are already stored, so no video row is created here.
+    /// </summary>
+    public MessageResponse StartVideo(VideoRequest videoRecord)
+    {
+        ArgumentNullException.ThrowIfNull(videoRecord);
+
+        var startLiveRecord = MapToStartLiveRecord(videoRecord);
+
+        var channelName = startLiveRecord.ChannelName!;
+        var platformStreamName = startLiveRecord.PlatformStreamName!;
+        CheckIfALiveAlreadyStreamingForAChannel(channelName, platformStreamName);
+
+        var videoPathFolder = startLiveRecord.VideoPath!;
+        var streamKey = startLiveRecord.StreamKey!;
+        var streamUrl = startLiveRecord.StreamUrl!;
+
+        var timeStartLive = DateTime.Now;
+        SaveVideoLiveHistory(videoPathFolder, timeStartLive, streamUrl, streamKey, platformStreamName);
+
+        // The Java version rebuilt the history from the request payload instead of using the row
+        // that was just inserted; the behaviour is preserved on purpose.
+        var videoLiveHistory = videoRecord.VideoLiveHistory?.ToEntity() ?? new VideoLiveHistoryEntity();
+
+        var streamingUrl = FfmpegCommandBuilder.BuildStreamingUrl(streamUrl, streamKey);
+        return StreamingVideo(videoLiveHistory, streamingUrl);
+    }
+
+    public void StopVideoStreamingByPkid(int videoLivePkid)
+    {
+        var video = CheckIfExistsAndReturnEntity(videoLivePkid);
+        video.ShouldBeStop = true;
+        SaveFlagToStopLive(video);
+        _notifier.Raise();
+
+        // The row flag is what the streaming loop polls; signalling the process makes the stop
+        // immediate for the user interface too.
+        if (_sessions.TryGet(videoLivePkid, out var session) && session is not null)
+        {
+            _ = session.StopAsync();
+        }
+    }
+
+    public void ResetFlag(int videoLivePkid)
+    {
+        var video = CheckIfExistsAndReturnEntity(videoLivePkid);
+        video.ShouldBeStop = false;
+        SaveFlagToStopLive(video);
+    }
+
+    public Task StopAllAsync() => _sessions.StopAllAsync();
+
+    public void Shutdown() => _shutdown.Cancel();
+
+    private void CheckIfALiveAlreadyStreamingForAChannel(string channelName, string platformStreamName)
+    {
+        var videoList = _videoRepository.FindByLiveStatusAndChannelName(LiveStatus.Live, channelName);
+        if (videoList.Count == 0)
+        {
+            return;
+        }
+
+        var alreadyStreaming = videoList
+            .Where(video => video.VideoLiveHistoryId is not null
+                            && GetPlatformStreamName(video.VideoLiveHistoryId.Value)
+                                .Equals(platformStreamName, StringComparison.OrdinalIgnoreCase))
+            .ToList();
+
+        if (alreadyStreaming.Count == 0)
+        {
+            return;
+        }
+
+        throw new LiveException("channel.has.already.a.live.active", [channelName]);
+    }
+
+    private string GetPlatformStreamName(long videoLiveHistoryPkid) =>
+        _videoLiveHistoryRepository.FindByPkid(videoLiveHistoryPkid)?.PlatformStreamName ?? string.Empty;
+
+    private MessageResponse StreamingVideo(VideoLiveHistoryEntity videoLiveHistory, string streamingUrl)
+    {
+        var videoLiveHistoryId = videoLiveHistory.Pkid;
+
+        var videoList = _videoRepository.FindByLiveHistoryId(videoLiveHistoryId);
+        if (videoList.Count == 0)
+        {
+            _logger.LogError("{Message}", _localizer.PrintMessage("video.streaming.not.found"));
+            throw new NotFoundCustomException("video.streaming.not.found");
+        }
+
+        _executor.Execute(() => _ = RunPlaylistAsync(videoList, streamingUrl, videoLiveHistoryId));
+
+        return _responses.Build("live.started", StatusCodes.Status202Accepted);
+    }
+
+    private async Task RunPlaylistAsync(IReadOnlyList<VideoEntity> videos, string streamingUrl, long videoLiveHistoryId)
+    {
+        try
+        {
+            await _streamer.StreamPlaylistAsync(videos, streamingUrl, videoLiveHistoryId, _shutdown.Token)
+                .ConfigureAwait(false);
+        }
+        catch (OperationCanceledException)
+        {
+            _logger.LogInformation("Streaming of history {VideoLiveHistoryId} cancelled", videoLiveHistoryId);
+        }
+        catch (Exception exception)
+        {
+            _logger.LogError(exception, "Streaming of history {VideoLiveHistoryId} failed", videoLiveHistoryId);
+        }
+    }
+
+    private VideoEntity CheckIfExistsAndReturnEntity(int pkid)
+    {
+        var video = _videoRepository.FindByPkid(pkid);
+        if (video is null)
+        {
+            _logger.LogWarning("{Message}", _localizer.PrintMessage("video.not.found"));
+            throw new NotFoundCustomException("video.not.found");
+        }
+
+        return video;
+    }
+
+    private void SaveFlagToStopLive(VideoEntity video) => _videoRepository.Update(video);
+
+    private VideoLiveHistoryEntity RetrievedVideoLiveHistorySaved(string videoFileAbsolutePath, DateTime timeStartLive)
+    {
+        var history = _videoLiveHistoryRepository.FindByFolderOfVideoToStreamAndLocalDateTimeStartLive(
+            videoFileAbsolutePath, timeStartLive);
+
+        if (history is null)
+        {
+            _logger.LogError("{Message}", _localizer.PrintMessage("video.history.not.found"));
+            throw new NotFoundCustomException("video.history.not.found");
+        }
+
+        return history;
+    }
+
+    private void SaveVideoLiveHistory(
+        string videoFileAbsolutePath,
+        DateTime zoneIdTime,
+        string streamUrl,
+        string streamKey,
+        string platformStreamingName)
+    {
+        _videoLiveHistoryRepository.Insert(new VideoLiveHistoryEntity
+        {
+            UserName = CurrentUserName,
+            FolderOfVideoToStream = videoFileAbsolutePath,
+            LocalDateTimeStartLive = zoneIdTime,
+            StreamUrl = streamUrl,
+            StreamKey = streamKey,
+            PlatformStreamName = platformStreamingName
+        });
+    }
+
+    /// <summary>
+    /// Windows "Copy as path" wraps the path in double quotes: without stripping them
+    /// <see cref="Path.GetFullPath(string)"/> sees a relative path and prefixes the working directory.
+    /// </summary>
+    internal static string NormalizeUserPath(string path) => path.Trim().Trim('"').Trim();
+
+    private void SaveVideoPaths(
+        string videoPathFolder,
+        VideoLiveHistoryEntity videoLiveHistory,
+        VideoSettingsRequest? videoSettingsRecord,
+        string channelName)
+    {
+        // The rows exist from here on: the pages showing them are already out of date.
+        // A null record means "no configuration", exactly like the MapStruct mapper returning null.
+        var videoSetting = videoSettingsRecord?.ToEntity();
+
+        if (Directory.Exists(videoPathFolder))
+        {
+            SaveAllVideoPaths(videoPathFolder, videoLiveHistory, videoSetting, channelName);
+        }
+        else
+        {
+            SaveOneVideoPaths(videoPathFolder, videoLiveHistory, videoSetting, channelName);
+        }
+
+        _notifier.Raise();
+    }
+
+    private void SaveAllVideoPaths(
+        string videoFile,
+        VideoLiveHistoryEntity videoLiveHistory,
+        VideoSettingEntity? videoSetting,
+        string channelName)
+    {
+        var videoList = Directory
+            .EnumerateFiles(videoFile)
+            .Where(path =>
+            {
+                if (Directory.Exists(path))
+                {
+                    return false;
+                }
+
+                var fileName = Path.GetFileName(path);
+                _logger.LogInformation("{Message}", _localizer.PrintMessage("file.name.found", [fileName]));
+
+                var lastDotIndex = fileName.LastIndexOf('.');
+                if (lastDotIndex == -1)
+                {
+                    _logger.LogError(
+                        "{Message}", _localizer.PrintMessage("extension.not.found.with.param", [lastDotIndex]));
+                    return false;
+                }
+
+                return VideoExtensions.IsVideoExtensionPresent(fileName[(lastDotIndex + 1)..]);
+            })
+            .ToList();
+
+        if (videoList.Count == 0)
+        {
+            var absolutePath = Path.GetFullPath(videoFile);
+            _logger.LogError("{Message}", _localizer.PrintMessage("folder.empty", [absolutePath]));
+            throw new NotFoundCustomException("folder.empty", [absolutePath]);
+        }
+
+        foreach (var file in videoList)
+        {
+            SaveOnModelVideo(BuildVideo(file, videoLiveHistory, channelName), videoSetting);
+        }
+    }
+
+    private void SaveOneVideoPaths(
+        string videoFile,
+        VideoLiveHistoryEntity videoLiveHistory,
+        VideoSettingEntity? videoSetting,
+        string channelName)
+    {
+        SaveOnModelVideo(BuildVideo(videoFile, videoLiveHistory, channelName), videoSetting);
+    }
+
+    private VideoEntity BuildVideo(
+        string videoFile,
+        VideoLiveHistoryEntity videoLiveHistory,
+        string channelName)
+    {
+        var fullPath = Path.GetFullPath(videoFile);
+        return new VideoEntity
+        {
+            Name = Path.GetFileName(fullPath),
+            VideoPath = fullPath,
+            Extension = ExtractExtensionFile(Path.GetFileName(fullPath)),
+            LastTimeStampBeforeStop = 0L,
+            LiveStatus = LiveStatus.Offline,
+            VideoLiveHistoryId = videoLiveHistory.Pkid,
+            ShouldBeStop = false,
+            StartDateLive = DateTime.Now,
+            ChannelName = channelName
+        };
+    }
+
+    /// <summary>
+    /// JPA cascaded the detached <c>VideoSetting</c> of the request: an already existing
+    /// identifier was merged (updated), a new one was inserted. Every video of a folder got its
+    /// own copy, so the option rows are never shared.
+    /// </summary>
+    private void SaveOnModelVideo(VideoEntity video, VideoSettingEntity? videoSetting)
+    {
+        video.VideoSettingId = PersistVideoSetting(videoSetting);
+        video.Pkid = _videoRepository.Insert(video);
+    }
+
+    private int? PersistVideoSetting(VideoSettingEntity? setting)
+    {
+        if (setting is null)
+        {
+            return null;
+        }
+
+        if (setting.Id is not null && _videoSettingRepository.FindById(setting.Id.Value) is not null)
+        {
+            _videoSettingRepository.Update(setting);
+            return setting.Id;
+        }
+
+        return _videoSettingRepository.Insert(CopyOf(setting));
+    }
+
+    private static VideoSettingEntity CopyOf(VideoSettingEntity source) => new()
+    {
+        Id = source.Id,
+        Title = source.Title,
+        VideoCodec = source.VideoCodec,
+        VideoCodecName = source.VideoCodecName,
+        PixelFormat = source.PixelFormat,
+        VideoBitrate = source.VideoBitrate,
+        VideoFormat = source.VideoFormat,
+        LastModified = source.LastModified,
+        IsDefaultConfiguration = source.IsDefaultConfiguration,
+        DefaultPlatformConfiguration = source.DefaultPlatformConfiguration,
+        GopSize = source.GopSize,
+        IsVideoAndAudioSettingActive = source.IsVideoAndAudioSettingActive,
+        AudioSetting = source.AudioSetting is null
+            ? null
+            : new AudioSettingEntity
+            {
+                Id = source.AudioSetting.Id,
+                AudioCodec = source.AudioSetting.AudioCodec,
+                AudioBitrate = source.AudioSetting.AudioBitrate
+            },
+        VideoSettingsOptions = source.VideoSettingsOptions
+            .Select(option => new VideoSettingsOptionEntity { Key = option.Key, Value = option.Value })
+            .ToList()
+    };
+
+    private string ExtractExtensionFile(string? fileName)
+    {
+        if (fileName is null)
+        {
+            _logger.LogError("{Message}", _localizer.PrintMessage("extension.not.found"));
+            throw new NotFoundCustomException("extension.not.found");
+        }
+
+        _logger.LogInformation("nome file{FileName}", fileName);
+
+        var files = fileName.Split('.');
+        if (files.Length < 2)
+        {
+            throw new FileReadingException("video.not.valid", [fileName]);
+        }
+
+        return files[^1];
+    }
+
+    private static StartLiveRequest MapToStartLiveRecord(VideoRequest videoRecord) => new(
+        videoRecord.VideoLiveHistory?.StreamUrl,
+        videoRecord.VideoLiveHistory?.StreamKey,
+        videoRecord.VideoPath,
+        videoRecord.VideoLiveHistory?.PlatformStreamName,
+        videoRecord.ChannelName,
+        videoRecord.VideoSetting);
+}

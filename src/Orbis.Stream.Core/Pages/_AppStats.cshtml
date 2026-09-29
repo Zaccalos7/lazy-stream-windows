@@ -3,7 +3,7 @@
     (SystemInfoField Field, string Glyph, string Label, string Unit)[] meta =
     [
         (SystemInfoField.AppCpu, "\uE950", "CPU", "%"),
-        (SystemInfoField.AppGpu, "\uE714", "GPU", "%"),
+        (SystemInfoField.AppRam, "\uE964", "RAM", "%"),
         (SystemInfoField.AppDisk, "\uEDA2", "DISCO", "%"),
         (SystemInfoField.AppNetwork, "\uE839", "RETE", "%")
     ];
@@ -13,7 +13,7 @@
     {
         <div class="card meter">
             <h3><i class="icon">@glyph</i>&nbsp; @label</h3>
-            <div class="ring" style="--value: 0" data-label="–" data-key="@field.ToMeterKey()" data-unit="@unit" data-name="@label" role="img" aria-label="@label"></div>
+            <div class="ring thin" style="--value: 0" data-label="–" data-key="@field.ToMeterKey()" data-unit="@unit" data-name="@label" role="img" aria-label="@label"></div>
             <p class="caption" data-while="loading">
                 <span class="spinner" aria-hidden="true"></span>&nbsp; @T["loading"]
             </p>

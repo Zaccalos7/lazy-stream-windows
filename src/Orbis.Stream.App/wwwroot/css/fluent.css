@@ -766,6 +766,10 @@ dialog.dialog.wide { width: min(840px, calc(100vw - 32px)); }
   font: 700 22px/1 var(--font-display);
   letter-spacing: -0.02em;
 }
+.ring.thin::before {
+  width: 108px;
+  height: 108px;
+}
 .ring.warn { --color: var(--caution); }
 .ring.bad { --color: var(--critical); }
 

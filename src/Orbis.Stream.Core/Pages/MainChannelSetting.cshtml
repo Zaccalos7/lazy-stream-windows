@@ -55,9 +55,6 @@
         <div class="actions">
             <span class="badge @(active ? "ended" : "")">@(active ? T["active"] : T["deactive"])</span>
             <a class="btn subtle icon-only" asp-route-edit="@configuration.Id" asp-route-platform="@Model.Platform" asp-route-active="@Model.Active" title="@T["seeDetails"]" aria-label="@T["seeDetails"]"><i class="icon">&#xE70F;</i></a>
-            <form method="post" asp-page-handler="Delete" asp-route-id="@configuration.Id" asp-route-platform="@Model.Platform" asp-route-active="@Model.Active" data-confirm="@T["deleteConfigurations"]">
-                <button class="btn subtle icon-only danger" title="@T["delete"]" aria-label="@T["delete"]"><i class="icon">&#xE74D;</i></button>
-            </form>
             <form method="post" asp-page-handler="Toggle" asp-route-id="@configuration.Id" asp-route-platform="@Model.Platform" asp-route-active="@Model.Active" data-confirm="@(active ? T["deactivateConfiguration"] : T["activateConfigurations"])">
                 <input type="hidden" name="current" value="@(active ? "true" : "false")" />
                 <label class="toggle" title="@(active ? T["deactivateConfigurationTooltip"] : T["activateConfigurationTooltip"])">
@@ -119,6 +116,10 @@
                 </label>
             </div>
             <div class="dialog-footer">
+                @if (editing.Id is not null)
+                {
+                    <button class="btn subtle danger" type="submit" asp-page-handler="Delete" asp-route-id="@editing.Id" asp-route-platform="@Model.Platform" asp-route-active="@Model.Active" data-confirm="@T["deleteConfigurations"]" formnovalidate style="margin-right: auto;"><i class="icon">&#xE74D;</i>@T["delete"]</button>
+                }
                 <button class="btn accent">@T["save"]</button>
                 <a class="btn" asp-route-platform="@Model.Platform" asp-route-active="@Model.Active">@T["cancel"]</a>
             </div>

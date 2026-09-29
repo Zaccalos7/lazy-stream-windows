@@ -280,9 +280,27 @@ a { color: var(--accent-text); text-decoration: none; }
 
 .content { flex: 1; min-width: 0; overflow-y: auto; border-radius: var(--radius-lg); }
 
-.page { max-width: 1120px; margin: 0 auto; padding: 2px 14px 36px; animation: rise 0.22s cubic-bezier(0.16, 1, 0.3, 1); }
+.page { max-width: 100%; margin: 0 auto; padding: 2px 14px 36px; animation: rise 0.22s cubic-bezier(0.16, 1, 0.3, 1); }
 
 @keyframes rise { from { opacity: 0; transform: translateY(4px); } }
+
+html.sidebar-closed .nav {
+  width: auto;
+  border-color: transparent;
+  background: transparent;
+  box-shadow: none;
+  padding: 14px 0;
+}
+html.sidebar-closed .nav > *:not(.nav-title) {
+  display: none;
+}
+html.sidebar-closed .nav-title > *:not(#sidebar-toggle) {
+  display: none;
+}
+html.sidebar-closed .nav-title {
+  padding: 0;
+  justify-content: center;
+}
 
 /* ---------- macOS style Page Header ---------- */
 
@@ -628,7 +646,7 @@ table.list td.path { max-width: 360px; }
   font-weight: 600;
   color: var(--text-2);
 }
-.fact dd { margin: 0; min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; font-weight: 500; }
+.fact dd { margin: 0; min-width: 0; overflow-wrap: anywhere; font-weight: 500; }
 
 table.list.roomy { font-size: 13px; }
 table.list.roomy th { font-size: 10px; padding: 12px 16px; }

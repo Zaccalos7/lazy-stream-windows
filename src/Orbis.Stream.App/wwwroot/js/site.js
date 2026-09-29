@@ -281,3 +281,11 @@ document.addEventListener("click", event => {
     button.setAttribute("aria-label", label);
   }
 });
+
+// Sidebar toggle
+document.addEventListener("click", event => {
+  const toggle = event.target.closest?.("#sidebar-toggle");
+  if (!toggle) return;
+  const closed = document.documentElement.classList.toggle("sidebar-closed");
+  localStorage.setItem("orbis-sidebar", closed ? "closed" : "open");
+});

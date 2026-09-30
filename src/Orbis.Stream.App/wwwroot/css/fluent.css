@@ -496,6 +496,10 @@ h3.section::before { content: ""; width: 3px; height: 12px; border-radius: 2px; 
 
 .btn.danger { color: var(--critical); }
 .btn.danger:hover { background: var(--critical-bg); color: var(--critical); border-color: transparent; }
+.btn.success:not(:disabled) { color: var(--success); }
+.btn.success:not(:disabled):hover { background: var(--success-bg); border-color: transparent; }
+.btn.caution:not(:disabled) { color: var(--caution); }
+.btn.caution:not(:disabled):hover { background: var(--caution-bg); border-color: transparent; }
 
 .btn.icon-only { width: 30px; padding: 0; }
 .btn.icon-only .icon { font-size: 14px; }
@@ -622,6 +626,10 @@ table.list tr:last-child td { border-bottom: 0; }
 table.list tbody tr { transition: background 0.12s; }
 table.list tbody tr:hover { background: var(--tint); }
 table.list td.path { max-width: 360px; }
+table.list td.num { white-space: nowrap; font-variant-numeric: tabular-nums; color: var(--text-2); }
+/* The video a playlist got to, in its details dialog: the one its row on the page stands for. */
+table.list tbody tr.is-current { background: color-mix(in srgb, var(--accent) 10%, transparent); }
+table.list tbody tr.is-current td:first-child { box-shadow: inset 3px 0 0 var(--accent); }
 
 /* System information facts */
 .facts {
@@ -685,6 +693,8 @@ table.list.roomy td.nowrap { white-space: nowrap; }
 .badge.ended { color: var(--success); background: var(--success-bg); }
 .badge.error { color: var(--critical); background: var(--critical-bg); }
 .badge.stopped { color: var(--caution); background: var(--caution-bg); }
+.badge.playlist { color: var(--accent); background: color-mix(in srgb, var(--accent) 15%, transparent); margin-right: 6px; font-variant-numeric: tabular-nums; }
+.badge.playlist::before { display: none; }
 
 /* ---------- InfoBar ---------- */
 

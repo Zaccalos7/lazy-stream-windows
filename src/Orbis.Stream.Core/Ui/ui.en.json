@@ -230,5 +230,22 @@
   "sourcesVideoGroup": "Video",
   "sourcesAudioGroup": "Audio",
   "sourcesEmptyUsed": "No sources are currently used.",
-  "sourcesEmptyAvailable": "No other sources available."
+  "sourcesEmptyAvailable": "No other sources available.",
+  "deleteLiveRow": "Delete row",
+  "deleteLiveRowConfirm": "Are you sure you want to delete this row?",
+  "firstPage": "Back to first page",
+  "startPlaylistButton": "Start playlist",
+  "startPlaylistTitle": "Start a new playlist",
+  "wizardStep3PlaylistTitle": "3. Choose the folder of videos to stream",
+  "playlistFolder": "Playlist folder",
+  "dropPlaylistFolderHint": "Drag a folder here and its path is copied into the field",
+  "playlistOnlyVideos": "Only the video files in the folder will be streamed, one after another in name order. Other files are ignored. Recognised extensions:",
+  "playlistPosition": "Video {0} of {1}",
+  "playlistDetails": "Playlist details",
+  "playlistVideoCount": "{0} videos",
+  "playlistStoppedAt": "Stopped at",
+  "deletePlaylist": "Delete playlist",
+  "deletePlaylistConfirm": "Are you sure you want to delete the whole playlist ({0} videos)?",
+  "playlistStartFrom": "Start again from this video",
+  "playlistStartFromConfirm": "Start again from video {0}? The videos before it will count as already streamed."
 }

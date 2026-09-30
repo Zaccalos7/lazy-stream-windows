@@ -17,6 +17,7 @@
         {
             <button class="btn" commandfor="unlock-dialog" command="show-modal"><i class="icon">&#xE785;</i>@T["unLockVideo"]</button>
         }
+        <button class="btn" style="font-size: 1.1em; padding: 10px 20px;" commandfor="playlist-dialog" command="show-modal"><i class="icon">&#xE90B;</i>@T["startPlaylistButton"]</button>
         <button class="btn accent" style="font-size: 1.1em; padding: 10px 20px;" commandfor="start-dialog" command="show-modal"><i class="icon">&#xE768;</i>@T["startLiveButton"]</button>
     </div>
 </div>
@@ -118,6 +119,7 @@
                     }
                 </div>
             }
+            <partial name="_StartWizardSteps" model="Model" />
         </div>
         <div class="dialog-footer">
             <button class="btn accent" type="button" commandfor="start-composer-dialog" command="show-modal" disabled="@(!canStart)" onclick="document.getElementById('start-dialog').close()">@T["startLiveButton"]</button>
@@ -134,6 +136,39 @@
         </button>
     </div>
     <iframe src="/orbis/mainPreview?compose=1" style="width: 100%; height: calc(100% - 50px); border: none;"></iframe>
+@* Start a playlist: the same two picks, plus a folder whose videos are streamed one after the other. *@
+<dialog class="dialog wide" id="playlist-dialog" data-busy-host data-open="@(Model.OpenPlaylist ? "" : null)">
+    <form method="post" asp-page-handler="Playlist" asp-all-route-data="Model.FilterRoute">
+        <div class="dialog-body">
+            <h2>@T["startPlaylistTitle"]</h2>
+            @* Reopened after a refused folder: the reason goes where the user is looking, not under the backdrop. *@
+            @if (Model.OpenPlaylist && Model.Notice is NoticeKind.Error && !string.IsNullOrEmpty(Model.NoticeText))
+            {
+                <div class="infobar error" role="alert">
+                    <i class="icon">&#xEA39;</i>
+                    <p>@Model.NoticeText</p>
+                </div>
+            }
+            <partial name="_StartWizardSteps" model="Model" />
+
+            <h3 class="section">@T["wizardStep3PlaylistTitle"]</h3>
+            <label class="field dropzone" style="margin-top: 8px;">
+                <span>@T["playlistFolder"]</span>
+                <input class="input" name="videoFolder" value="@Model.Folder" placeholder="C:\Video\Playlist" required
+                       data-drop-path data-drop-done="@T["dropVideoFolderDone"]" />
+                <small><i class="icon">&#xE8B7;</i><span>@T["dropPlaylistFolderHint"]</span></small>
+            </label>
+            <div class="infobar section">
+                <i class="icon">&#xE946;</i>
+                <p>@T["playlistOnlyVideos"]<br /><span class="caption">@string.Join(" · ", VideoExtensions.All)</span></p>
+            </div>
+        </div>
+        <div class="dialog-footer">
+            <span class="spinner" data-while="busy" title="@T["loading"]"></span>
+            <button class="btn accent" disabled="@(!canStart)">@T["startPlaylistButton"]</button>
+            <button class="btn" type="button" commandfor="playlist-dialog" command="close">@T["cancel"]</button>
+        </div>
+    </form>
 </dialog>
 
 @* Videos left LIVE after a crash, an error or a stop made on the platform. *@
@@ -169,6 +204,29 @@
         <button class="btn" commandfor="unlock-dialog" command="close">@T["back"]</button>
     </div>
 </dialog>
+
+@* The videos of one playlist: its row on the page stands for all of them. The list redraws on
+   every change like the rows do, so the dialog follows the playlist while it streams. *@
+@if (Model.OpenedPlaylist is { } opened)
+{
+    <dialog class="dialog wide" id="playlist-details" data-open>
+        <div class="dialog-body">
+            <h2>
+                @T["playlistDetails"] · @string.Format(T["playlistVideoCount"], opened.Videos.Count)
+                <span class="badge @LiveStatusView.Css(opened.Status)" style="vertical-align: middle;">@T[LiveStatusView.Key(opened.Status)]</span>
+            </h2>
+            <p class="caption truncate" title="@opened.History.FolderOfVideoToStream">
+                @(string.IsNullOrEmpty(opened.History.PlatformStreamName) ? "" : opened.History.PlatformStreamName + " · ")@opened.History.FolderOfVideoToStream
+            </p>
+            <div data-refresh="@Url.Page("/MainLive", "DetailsRows", new { details = Model.Details })" data-since="@Model.ChangeVersion">
+                <partial name="_PlaylistVideos" model="Model" />
+            </div>
+        </div>
+        <div class="dialog-footer">
+            <a class="btn" href="@cancelLink">@T["back"]</a>
+        </div>
+    </dialog>
+}
 
 @if (Model.LinkPkid is { } linkPkid && Model.Form is not null)
 {

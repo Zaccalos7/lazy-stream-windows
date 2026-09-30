@@ -53,13 +53,14 @@ public sealed class LiveStatusTests
     [Fact]
     public void VideoExtensions_AcceptTheSupportedContainers()
     {
-        foreach (var extension in new[] { "mp4", "flv", "mov", "webm", "vp9", "mkv" })
+        foreach (var extension in new[] { "mp4", "flv", "mov", "webm", "vp9", "mkv", "avi", "wmv", "m2ts", "mpg" })
         {
             Assert.True(VideoExtensions.IsVideoExtensionPresent(extension));
             Assert.True(VideoExtensions.IsVideoExtensionPresent(extension.ToUpperInvariant()));
         }
 
-        Assert.False(VideoExtensions.IsVideoExtensionPresent("avi"));
+        Assert.False(VideoExtensions.IsVideoExtensionPresent("srt"));
+        Assert.False(VideoExtensions.IsVideoExtensionPresent("jpg"));
         Assert.False(VideoExtensions.IsVideoExtensionPresent(""));
         Assert.False(VideoExtensions.IsVideoExtensionPresent(null));
     }

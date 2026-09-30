@@ -21,9 +21,13 @@ else
             </tr>
             </thead>
             <tbody>
-            @foreach (var video in Model.Videos.Content)
+            @foreach (var row in Model.Videos.Content)
             {
-                var status = video.LiveStatus;
+                // A playlist is one row: the video it got to stands for it, and its videos are in the details dialog.
+                var video = row.Video;
+                var historyPkid = video.VideoLiveHistory?.Pkid;
+                // The status of the playlist, not of the video shown: LIVE while any is on air, ENDED at the end.
+                var status = row.Status;
                 var hasSetting = video.VideoSetting is not null;
                 var live = status == LiveStatus.Live;
                 var platform = video.VideoLiveHistory?.PlatformStreamName;
@@ -36,13 +40,25 @@ else
                 <tr data-row>
                     <td><span class="badge @LiveStatusView.Css(status)">@T[LiveStatusView.Key(status)]</span></td>
                     <td class="path">
-                        <div class="truncate"><strong>@video.Name</strong></div>
-                        <div class="caption truncate" title="@video.VideoPath">@(string.IsNullOrEmpty(platform) ? "" : platform + " · ")@video.VideoPath</div>
+                        <div class="truncate">
+                            @if (row.IsPlaylist)
+                            {
+                                <span class="badge playlist">@string.Format(T["playlistPosition"], row.Position, row.Total)</span>
+                            }
+                            <strong>@video.Name</strong>
+                        </div>
+                        @{ var source = row.IsPlaylist ? video.VideoLiveHistory?.FolderOfVideoToStream : video.VideoPath; }
+                        <div class="caption truncate" title="@source">@(string.IsNullOrEmpty(platform) ? "" : platform + " · ")@source</div>
                     </td>
                     <td>@(video.ChannelName ?? "N/A")</td>
                     <td>@LiveStatusView.Date(video.StartDateLive, "dd/MM/yyyy HH:mm:ss")</td>
                     <td>
                         <div class="actions">
+                            @if (row.IsPlaylist)
+                            {
+                                <a class="btn subtle icon-only" href="@Url.Page("/MainLive", new { Model.LiveStatus, Model.ChannelName, p = Model.PageIndex, details = historyPkid })"
+                                   title="@T["playlistDetails"]" aria-label="@T["playlistDetails"]"><i class="icon">&#xE8FD;</i></a>
+                            }
                             @if (liveUrl is not null)
                             {
                                 <a class="btn subtle icon-only" href="@liveUrl" target="_blank" rel="noopener noreferrer" title="@liveTitle" aria-label="@liveTitle">
@@ -55,10 +71,10 @@ else
                                     <button class="btn subtle icon-only danger" disabled="@(!live)" title="@T["stopLiveIconLabel"]" aria-label="@T["stopLiveIconLabel"]"><i class="icon">&#xE71A;</i></button>
                                 </form>
                                 <form method="post" asp-page="/MainLive" asp-page-handler="Replay" asp-all-route-data="Model.RowRoute(video.Pkid)" data-confirm="@T["startLiveAlert"]">
-                                    <button class="btn subtle icon-only" disabled="@live" title="@T["startLiveIconLabel"]" aria-label="@T["startLiveIconLabel"]"><i class="icon">&#xE768;</i></button>
+                                    <button class="btn subtle icon-only success" disabled="@live" title="@T["startLiveIconLabel"]" aria-label="@T["startLiveIconLabel"]"><i class="icon">&#xE768;</i></button>
                                 </form>
                                 <form method="post" asp-page="/MainLive" asp-page-handler="Restart" asp-all-route-data="Model.RowRoute(video.Pkid)" data-confirm="@T["restartLiveAlert"]">
-                                    <button class="btn subtle icon-only" title="@T["restartLiveIconLabel"]" aria-label="@T["restartLiveIconLabel"]"><i class="icon">&#xE72C;</i></button>
+                                    <button class="btn subtle icon-only caution" title="@T["restartLiveIconLabel"]" aria-label="@T["restartLiveIconLabel"]"><i class="icon">&#xE72C;</i></button>
                                 </form>
                             }
                             else
@@ -66,6 +82,20 @@ else
                                 <a class="btn subtle" href="@Url.Page("/MainLive", new { Model.LiveStatus, Model.ChannelName, p = Model.PageIndex, link = video.Pkid })">
                                     <i class="icon">&#xE71B;</i>@T["connectVideoSetting"]
                                 </a>
+                            }
+                            @* A running live cannot be deleted: its ffmpeg still reads the row to know when to stop.
+                               On a playlist row the bin takes the whole playlist; one video goes from the details dialog. *@
+                            @if (row.IsPlaylist)
+                            {
+                                <form method="post" asp-page="/MainLive" asp-page-handler="DeletePlaylist" asp-all-route-data="Model.PlaylistRoute(historyPkid)" data-confirm="@string.Format(T["deletePlaylistConfirm"], row.Total)">
+                                    <button class="btn subtle icon-only danger" disabled="@live" title="@T["deletePlaylist"]" aria-label="@T["deletePlaylist"]"><i class="icon">&#xE74D;</i></button>
+                                </form>
+                            }
+                            else
+                            {
+                                <form method="post" asp-page="/MainLive" asp-page-handler="Delete" asp-all-route-data="Model.RowRoute(video.Pkid)" data-confirm="@T["deleteLiveRowConfirm"]">
+                                    <button class="btn subtle icon-only danger" disabled="@live" title="@T["deleteLiveRow"]" aria-label="@T["deleteLiveRow"]"><i class="icon">&#xE74D;</i></button>
+                                </form>
                             }
                             @* A start, a stop or a restart runs the server (ffmpeg included), so
                                the answer takes a moment: this is what says the row is working,

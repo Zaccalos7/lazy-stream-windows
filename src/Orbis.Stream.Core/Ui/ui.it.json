@@ -230,5 +230,22 @@
   "sourcesVideoGroup": "Video",
   "sourcesAudioGroup": "Audio",
   "sourcesEmptyUsed": "Nessuna sorgente in uso.",
-  "sourcesEmptyAvailable": "Nessuna altra sorgente disponibile."
+  "sourcesEmptyAvailable": "Nessuna altra sorgente disponibile.",
+  "deleteLiveRow": "Elimina riga",
+  "deleteLiveRowConfirm": "Sei sicuro di voler eliminare questa riga?",
+  "firstPage": "Torna alla prima pagina",
+  "startPlaylistButton": "Avvia playlist",
+  "startPlaylistTitle": "Avvia una nuova playlist",
+  "wizardStep3PlaylistTitle": "3. Scegli la cartella dei video da trasmettere",
+  "playlistFolder": "Cartella della playlist",
+  "dropPlaylistFolderHint": "Trascina qui una cartella: il percorso viene copiato nel campo",
+  "playlistOnlyVideos": "Verranno avviati solo i file video della cartella, uno dopo l'altro in ordine di nome. Gli altri file vengono ignorati. Estensioni riconosciute:",
+  "playlistPosition": "Video {0} di {1}",
+  "playlistDetails": "Dettagli playlist",
+  "playlistVideoCount": "{0} video",
+  "playlistStoppedAt": "Fermato a",
+  "deletePlaylist": "Elimina playlist",
+  "deletePlaylistConfirm": "Sei sicuro di voler eliminare l'intera playlist ({0} video)?",
+  "playlistStartFrom": "Riparti da questo video",
+  "playlistStartFromConfirm": "Ripartire dal video {0}? I video precedenti verranno considerati già trasmessi."
 }

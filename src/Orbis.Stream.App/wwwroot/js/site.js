@@ -52,38 +52,39 @@ function liveQuery() {
 // <div data-refresh="url" data-since="7">: the server sends a message when a row moved and only then
 // the partial is asked again. A message that arrives while the user is inside a dialog of the rows,
 // or on another window, is kept instead of dropped: with a trigger there is no later tick to fix
-// the page, so the region stays marked to be redone until the moment it can be.
-const rows = document.querySelector("[data-refresh]");
-let rowsAreStale = false;
-let rowsAreComing = false;
+// the page, so the region stays marked to be redone until the moment it can be. A page can have more
+// than one region (the rows, and the videos of an open playlist dialog): each is redone on its own.
+const regions = [...document.querySelectorAll("[data-refresh]")].map(element => ({ element, stale: false, coming: false }));
 
-const redrawRows = async () => {
-  if (!rows || rowsAreComing || !rowsAreStale) return;
-  if (document.hidden || rows.querySelector("dialog[open]")) return;
-  rowsAreComing = true;
-  rowsAreStale = false;
+const redraw = async region => {
+  if (region.coming || !region.stale) return;
+  if (document.hidden || region.element.querySelector("dialog[open]")) return;
+  region.coming = true;
+  region.stale = false;
   try {
-    const response = await fetch(rows.dataset.refresh);
-    if (response.ok) rows.innerHTML = await response.text();
-    else rowsAreStale = true;
+    const response = await fetch(region.element.dataset.refresh);
+    if (response.ok) region.element.innerHTML = await response.text();
+    else region.stale = true;
   } catch {
     // The server is restarting or the window is closing: the next change tries again.
-    rowsAreStale = true;
+    region.stale = true;
   } finally {
-    rowsAreComing = false;
+    region.coming = false;
   }
 };
 
-if (rows && stream) {
+const redrawAll = () => regions.forEach(redraw);
+
+if (regions.length && stream) {
   stream.addEventListener("rows", () => {
-    rowsAreStale = true;
-    redrawRows();
+    for (const region of regions) region.stale = true;
+    redrawAll();
   });
   document.addEventListener("visibilitychange", () => {
-    if (!document.hidden) redrawRows();
+    if (!document.hidden) redrawAll();
   });
   // Closing a dialog of the rows is the moment the user is free to see them change.
-  document.addEventListener("close", redrawRows, true);
+  document.addEventListener("close", redrawAll, true);
 }
 
 // A ring shows its value in the middle and fills itself with a CSS variable, the way the server

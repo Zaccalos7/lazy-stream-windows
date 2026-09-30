@@ -343,3 +343,16 @@ public sealed record ApiEnvelope(string Response, string Message)
     public const string Success = "success";
     public const string Error = "error";
 }
+
+/// <summary>A row of the live page. <see cref="Total"/> above one means the row stands for a whole
+/// folder playlist, <see cref="Video"/> is the video it got to and <see cref="Status"/> the status
+/// of the playlist as a whole.</summary>
+public sealed record LiveRow(VideoRequest Video, int Position, int Total, LiveStatus Status)
+{
+    public bool IsPlaylist => Total > 1;
+}
+
+/// <summary>A playlist opened in its details dialog: where it streams from, all its videos in order,
+/// and the one it got to (the one its row on the page shows).</summary>
+public sealed record PlaylistDetails(
+    VideoLiveHistoryRequest History, IReadOnlyList<VideoRequest> Videos, int? CurrentPkid, LiveStatus Status);

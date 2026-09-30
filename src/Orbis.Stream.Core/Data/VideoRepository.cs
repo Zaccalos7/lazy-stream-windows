@@ -206,6 +206,107 @@ public sealed class VideoRepository
         command.ExecuteNonQuery();
     }
 
+    /// <summary>
+    /// The live page: one row per folder playlist, and one per video for everything else (a single
+    /// file, a source of a canvas). The row a playlist shows is the video it got to: the one on air,
+    /// else the last one that was played, else the first one, with where it stands in the playlist.
+    /// A canvas is left row by row on purpose: its stop is addressed to its base row.
+    /// <para>The status of a playlist is its own, not the one of the video shown: LIVE while any video
+    /// is on air, ENDED once the last one was streamed through, else the one of the video it got to.
+    /// The status filter reads the same value.</para>
+    /// </summary>
+    public PagedResult<LiveRowEntity> FindLivePage(
+        LiveStatus? liveStatus, string? channelName, int page, int size, long? videoLiveHistoryPkid = null)
+    {
+        const string Grouped =
+            """
+            SELECT v.*,
+                   ROW_NUMBER() OVER (PARTITION BY v.grp ORDER BY v.pkid) AS position,
+                   COUNT(*) OVER (PARTITION BY v.grp) AS total,
+                   ROW_NUMBER() OVER (PARTITION BY v.grp ORDER BY
+                       CASE WHEN v.live_status = @live THEN 0 WHEN v.live_status = @offline THEN 2 ELSE 1 END,
+                       CASE WHEN v.live_status = @offline THEN NULL ELSE v.start_date_live END DESC,
+                       CASE WHEN v.live_status = @offline THEN v.pkid ELSE -v.pkid END) AS pick,
+                   CASE
+                       WHEN MAX(CASE WHEN v.live_status = @live THEN 1 ELSE 0 END) OVER (PARTITION BY v.grp) = 1 THEN @live
+                       WHEN FIRST_VALUE(v.live_status) OVER (PARTITION BY v.grp ORDER BY v.pkid DESC) = @ended THEN @ended
+                   END AS group_status
+            FROM (SELECT x.*,
+                         CASE WHEN x.scene_pkid IS NULL AND x.video_live_history_pkid IS NOT NULL
+                              THEN 'h' || x.video_live_history_pkid ELSE 'v' || x.pkid END AS grp
+                  FROM video x) v
+            """;
+
+        var where = "WHERE t.pick = 1"
+            + (liveStatus is null ? string.Empty : " AND COALESCE(t.group_status, t.live_status) = @status")
+            + (string.IsNullOrEmpty(channelName) ? string.Empty : " AND t.channel_name = @channel")
+            + (videoLiveHistoryPkid is null ? string.Empty : " AND t.video_live_history_pkid = @history");
+
+        void Bind(SqliteCommand command)
+        {
+            command.Parameters.AddWithValue("@live", LiveStatus.Live.ToStorageValue());
+            command.Parameters.AddWithValue("@offline", LiveStatus.Offline.ToStorageValue());
+            command.Parameters.AddWithValue("@ended", LiveStatus.Ended.ToStorageValue());
+            if (liveStatus is { } status)
+            {
+                command.Parameters.AddWithValue("@status", status.ToStorageValue());
+            }
+
+            if (!string.IsNullOrEmpty(channelName))
+            {
+                command.Parameters.AddWithValue("@channel", channelName);
+            }
+
+            if (videoLiveHistoryPkid is { } history)
+            {
+                command.Parameters.AddWithValue("@history", history);
+            }
+        }
+
+        using var connection = _connectionFactory.Open();
+
+        using var countCommand = connection.CreateCommand();
+        countCommand.CommandText = $"SELECT COUNT(*) FROM ({Grouped}) t {where};";
+        Bind(countCommand);
+        var total = Convert.ToInt64(countCommand.ExecuteScalar(), CultureInfo.InvariantCulture);
+
+        using var command = connection.CreateCommand();
+        command.CommandText =
+            $"SELECT {BaseColumns}, t.position, t.total, COALESCE(t.group_status, t.live_status) FROM ({Grouped}) t {where} " +
+            "ORDER BY t.start_date_live DESC, t.pkid DESC LIMIT @size OFFSET @offset;";
+        Bind(command);
+        command.Parameters.AddWithValue("@size", size);
+        command.Parameters.AddWithValue("@offset", (long)page * size);
+
+        var items = new List<LiveRowEntity>();
+        using var reader = command.ExecuteReader();
+        while (reader.Read())
+        {
+            items.Add(new LiveRowEntity(
+                Map(reader), reader.GetInt32(20), reader.GetInt32(21), LiveStatusExtensions.FromStorage(reader.GetValue(22))));
+        }
+
+        return new PagedResult<LiveRowEntity>(items, page, size, total);
+    }
+
+    public void DeleteByLiveHistoryId(long videoLiveHistoryPkid)
+    {
+        using var connection = _connectionFactory.Open();
+        using var command = connection.CreateCommand();
+        command.CommandText = "DELETE FROM video WHERE video_live_history_pkid = @pkid AND scene_pkid IS NULL;";
+        command.Parameters.AddWithValue("@pkid", videoLiveHistoryPkid);
+        command.ExecuteNonQuery();
+    }
+
+    public void Delete(int pkid)
+    {
+        using var connection = _connectionFactory.Open();
+        using var command = connection.CreateCommand();
+        command.CommandText = "DELETE FROM video WHERE pkid = @pkid;";
+        command.Parameters.AddWithValue("@pkid", pkid);
+        command.ExecuteNonQuery();
+    }
+
     public void SetVideoSetting(int pkid, int? videoSettingId)
     {
         using var connection = _connectionFactory.Open();
@@ -352,3 +453,7 @@ internal static class SqliteValue
         _ => null
     };
 }
+
+/// <summary>A row of the live page: a video, or the video a playlist got to, with where it stands
+/// and the status of the whole playlist (the video's own one for a single file).</summary>
+public sealed record LiveRowEntity(VideoEntity Video, int Position, int Total, LiveStatus Status);

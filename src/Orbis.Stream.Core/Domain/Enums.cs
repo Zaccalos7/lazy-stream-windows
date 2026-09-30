@@ -55,7 +55,14 @@ public static class SystemInfoFieldExtensions
 /// <summary>Port of <c>com.orbis.stream.enums.VideoExtensionEnum</c>.</summary>
 public static class VideoExtensions
 {
-    private static readonly string[] Supported = ["mp4", "flv", "mov", "webm", "vp9", "mkv"];
+    /// <summary>The containers ffmpeg reads as video. A playlist folder is filtered by these, so
+    /// subtitles, covers and other files lying next to the videos are left out.</summary>
+    private static readonly string[] Supported =
+    [
+        "mp4", "m4v", "mov", "qt", "mkv", "webm", "vp9", "flv", "f4v", "avi", "divx", "wmv", "asf",
+        "mpg", "mpeg", "mpe", "m1v", "m2v", "vob", "ts", "mts", "m2ts", "3gp", "3g2", "ogv", "ogm",
+        "rm", "rmvb", "mxf", "dv", "nut", "y4m"
+    ];
 
     public static IReadOnlyList<string> All => Supported;
 

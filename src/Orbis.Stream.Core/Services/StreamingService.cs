@@ -85,6 +85,31 @@ public sealed class StreamingService
     }
 
     /// <summary>
+    /// A live from a folder picked in the playlist wizard. Unlike <see cref="StartLive"/>, which also
+    /// takes a single file, the path has to be a folder: its videos (and nothing else lying in it)
+    /// become the playlist, one row each, in the order Explorer lists them.
+    /// </summary>
+    public MessageResponse StartPlaylist(StartLiveRequest request)
+    {
+        ArgumentNullException.ThrowIfNull(request);
+
+        var folder = NormalizeUserPath(request.VideoPath ?? string.Empty);
+        if (folder.Length == 0 || File.Exists(folder))
+        {
+            _logger.LogError("{Message}", _localizer.PrintMessage("playlist.not.a.folder", [folder]));
+            throw new NotFoundCustomException("playlist.not.a.folder", [folder]);
+        }
+
+        if (!Directory.Exists(folder))
+        {
+            _logger.LogError("{Message} {Path}", _localizer.PrintMessage("folder.not.found"), folder);
+            throw new NotFoundCustomException("folder.not.found");
+        }
+
+        return StartLive(request with { VideoPath = folder });
+    }
+
+    /// <summary>
     /// Port of <c>startVideo</c>: replays or restarts a single video whose details and settings
     /// are already stored, so no video row is created here.
     /// </summary>
@@ -144,17 +169,71 @@ public sealed class StreamingService
     {
         foreach (var video in _videoRepository.FindByLiveHistoryId(videoLiveHistoryPkid))
         {
-            if (video.LastTimeStampBeforeStop == 0)
+            // The status goes back too: an ENDED left over from the previous pass would make the
+            // playlist read as finished while it is starting over.
+            if (video.LastTimeStampBeforeStop == 0 && video.LiveStatus is LiveStatus.Offline or LiveStatus.Live)
             {
                 continue;
             }
 
             video.LastTimeStampBeforeStop = 0;
+            if (video.LiveStatus != LiveStatus.Live)
+            {
+                video.LiveStatus = LiveStatus.Offline;
+            }
+
             _videoRepository.Update(video);
         }
 
         _notifier.Raise();
     }
+
+    /// <summary>
+    /// "Start again from this video" of the playlist dialog: the videos before it count as streamed
+    /// (so a later play resumes after them, not from the first one), it and the ones after it
+    /// start over. The play itself is <see cref="StartVideo"/>, which then finds only these to stream.
+    /// </summary>
+    public void PrepareStartFrom(int pkid)
+    {
+        var target = CheckIfExistsAndReturnEntity(pkid);
+        if (target.VideoLiveHistoryId is not { } historyPkid)
+        {
+            throw new NotFoundCustomException("video.history.not.found");
+        }
+
+        // Checked before a row is touched: a refused start must leave the playlist as it was.
+        CheckIfALiveAlreadyStreamingForAChannel(target.ChannelName, GetPlatformStreamName(historyPkid));
+
+        var skipped = _localizer.PrintMessage("video.live.skipped", [target.Name]);
+        foreach (var video in _videoRepository.FindByLiveHistoryId(historyPkid).Where(video => video.ScenePkid is null))
+        {
+            if (video.Pkid < target.Pkid)
+            {
+                if (video.LiveStatus == LiveStatus.Ended && video.LastTimeStampBeforeStop > 0)
+                {
+                    continue;
+                }
+
+                // ENDED with a position is what the planner reads as "streamed through": the
+                // position only has to be there, the status is what makes it skip the file.
+                video.LiveStatus = LiveStatus.Ended;
+                video.LastTimeStampBeforeStop = Math.Max(video.LastTimeStampBeforeStop, SkippedPosition);
+                video.Message = skipped;
+            }
+            else
+            {
+                video.LiveStatus = LiveStatus.Offline;
+                video.LastTimeStampBeforeStop = 0;
+            }
+
+            _videoRepository.Update(video);
+        }
+
+        _notifier.Raise();
+    }
+
+    /// <summary>The position a skipped video is left at: any value above zero, see <see cref="PrepareStartFrom"/>.</summary>
+    private const long SkippedPosition = 1;
 
     public Task StopAllAsync() => _sessions.StopAllAsync();
 
@@ -419,6 +498,9 @@ public sealed class StreamingService
 
                 return VideoExtensions.IsVideoExtensionPresent(fileName[(lastDotIndex + 1)..]);
             })
+            // The rows are streamed in pkid order, so the insert order is the playlist order: the
+            // file system gives no order at all, and "Episode 10" belongs after "Episode 2".
+            .Order(NaturalFileNameComparer.Instance)
             .ToList();
 
         if (videoList.Count == 0)

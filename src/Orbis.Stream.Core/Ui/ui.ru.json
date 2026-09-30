@@ -230,5 +230,22 @@
   "sourcesVideoGroup": "Video",
   "sourcesAudioGroup": "Audio",
   "sourcesEmptyUsed": "No sources are currently used.",
-  "sourcesEmptyAvailable": "No other sources available."
+  "sourcesEmptyAvailable": "No other sources available.",
+  "deleteLiveRow": "Удалить строку",
+  "deleteLiveRowConfirm": "Вы уверены, что хотите удалить эту строку?",
+  "firstPage": "На первую страницу",
+  "startPlaylistButton": "Запустить плейлист",
+  "startPlaylistTitle": "Запустить новый плейлист",
+  "wizardStep3PlaylistTitle": "3. Выберите папку с видео для трансляции",
+  "playlistFolder": "Папка плейлиста",
+  "dropPlaylistFolderHint": "Перетащите сюда папку, и её путь будет скопирован в поле",
+  "playlistOnlyVideos": "Будут транслироваться только видеофайлы из папки, один за другим по имени. Остальные файлы игнорируются. Распознаваемые расширения:",
+  "playlistPosition": "Видео {0} из {1}",
+  "playlistDetails": "Подробности плейлиста",
+  "playlistVideoCount": "Видео: {0}",
+  "playlistStoppedAt": "Остановлено на",
+  "deletePlaylist": "Удалить плейлист",
+  "deletePlaylistConfirm": "Вы уверены, что хотите удалить весь плейлист (видео: {0})?",
+  "playlistStartFrom": "Начать с этого видео",
+  "playlistStartFromConfirm": "Начать с видео {0}? Предыдущие видео будут считаться уже показанными."
 }

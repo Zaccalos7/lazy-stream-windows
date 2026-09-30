@@ -97,7 +97,15 @@ public sealed class FfmpegVideoPlaylistStreamer : IVideoPlaylistStreamer
         foreach (var planned in queue)
         {
             cancellationToken.ThrowIfCancellationRequested();
-            await StreamVideoAsync(planned, outputUrl, videoLiveHistoryPkid, cancellationToken).ConfigureAwait(false);
+
+            // A stop is for the whole playlist, not for the video that happened to be on air: the
+            // next one must not go live by itself. It stays where it is, so a play resumes here.
+            var stopped = await StreamVideoAsync(planned, outputUrl, videoLiveHistoryPkid, cancellationToken)
+                .ConfigureAwait(false);
+            if (stopped)
+            {
+                return;
+            }
         }
     }
 
@@ -192,19 +200,22 @@ public sealed class FfmpegVideoPlaylistStreamer : IVideoPlaylistStreamer
     {
         foreach (var video in videos)
         {
-            if (video.LastTimeStampBeforeStop == 0)
+            if (video.LastTimeStampBeforeStop == 0 && video.LiveStatus == LiveStatus.Offline)
             {
                 continue;
             }
 
+            // The status goes back with the position, for the same reason as the restart button.
             video.LastTimeStampBeforeStop = 0;
+            video.LiveStatus = LiveStatus.Offline;
             _videoRepository.Update(video);
         }
 
         _notifier.Raise();
     }
 
-    private async Task StreamVideoAsync(
+    /// <returns>Whether the user stopped the live, as opposed to the video ending or failing.</returns>
+    private async Task<bool> StreamVideoAsync(
         PlannedVideo planned,
         string outputUrl,
         long videoLiveHistoryPkid,
@@ -266,7 +277,7 @@ public sealed class FfmpegVideoPlaylistStreamer : IVideoPlaylistStreamer
 
                 if (outcome == StreamOutcome.Stopped)
                 {
-                    return;
+                    return true;
                 }
 
                 if (outcome == StreamOutcome.Reconfigured)
@@ -287,7 +298,7 @@ public sealed class FfmpegVideoPlaylistStreamer : IVideoPlaylistStreamer
                 if (exitCode != 0 && _videoRepository.FindByPkid(videoKey)?.ShouldBeStop == true)
                 {
                     await StopAndRecordAsync(session, videoKey, videoLiveHistoryPkid, inputPath).ConfigureAwait(false);
-                    return;
+                    return true;
                 }
 
                 if (exitCode == 0)
@@ -296,7 +307,7 @@ public sealed class FfmpegVideoPlaylistStreamer : IVideoPlaylistStreamer
                     _logger.LogInformation("{Message}", endedMessage);
                     SaveMessageOnVideoLiveHistory(
                         endedMessage, videoLiveHistoryPkid, inputPath, LiveStatus.Ended, null, EndOf(probe, session));
-                    return;
+                    return false;
                 }
 
                 var streamingError = _localizer.PrintMessage(
@@ -306,7 +317,7 @@ public sealed class FfmpegVideoPlaylistStreamer : IVideoPlaylistStreamer
                 _logger.LogError("{Message}", streamingError);
                 SaveMessageOnVideoLiveHistory(
                     streamingError, videoLiveHistoryPkid, inputPath, LiveStatus.Error, DateTime.Now, 0);
-                return;
+                return false;
             }
         }
         catch (OperationCanceledException)
@@ -320,6 +331,7 @@ public sealed class FfmpegVideoPlaylistStreamer : IVideoPlaylistStreamer
                 + exception.Message;
             _logger.LogError("{Message}", startingError);
             SaveMessageOnVideoLiveHistory(startingError, videoLiveHistoryPkid, inputPath, LiveStatus.Error, DateTime.Now, 0);
+            return false;
         }
         finally
         {

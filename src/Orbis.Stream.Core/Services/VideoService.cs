@@ -54,6 +54,56 @@ public sealed class VideoService
         return SpringPageFactory.Create(Map(result, WithRelations), page.Sorts);
     }
 
+    /// <summary>The live page, one row per playlist: see <see cref="VideoRepository.FindLivePage"/>.</summary>
+    public SpringPage<LiveRow> GetLivePage(LiveStatus? liveStatus, string? channelName, PageRequest page)
+    {
+        var result = _videoRepository.FindLivePage(liveStatus, channelName, page.Page, page.Size);
+        return SpringPageFactory.Create(
+            Map(result, row => new LiveRow(WithRelations(row.Video), row.Position, row.Total, row.Status)),
+            page.Sorts);
+    }
+
+    /// <summary>Every video of a playlist, in streaming order, for its details dialog.</summary>
+    public PlaylistDetails? GetPlaylist(long videoLiveHistoryPkid)
+    {
+        var history = _videoLiveHistoryRepository.FindByPkid(videoLiveHistoryPkid);
+        var videos = _videoRepository.FindByLiveHistoryId(videoLiveHistoryPkid)
+            .Where(video => video.ScenePkid is null)
+            .Select(VideoRequest.FromEntity)
+            .ToList();
+
+        if (history is null || videos.Count == 0)
+        {
+            return null;
+        }
+
+        // The same pick as the row of the page, asked of the same query, so the two never disagree.
+        var current = _videoRepository.FindLivePage(null, null, 0, 1, videoLiveHistoryPkid).Items.FirstOrDefault();
+        return new PlaylistDetails(
+            VideoLiveHistoryRequest.FromEntity(history), videos, current?.Video.Pkid, current?.Status ?? LiveStatus.Offline);
+    }
+
+    /// <summary>The whole playlist leaves the page. Refused while one of its videos is on air, for
+    /// the same reason as a single row: ffmpeg reads the row to know when to stop.</summary>
+    public MessageResponse DeletePlaylist(long videoLiveHistoryPkid)
+    {
+        var videos = _videoRepository.FindByLiveHistoryId(videoLiveHistoryPkid);
+        if (videos.Count == 0)
+        {
+            throw new NotFoundCustomException("video.not.found");
+        }
+
+        if (videos.Any(video => video.LiveStatus == LiveStatus.Live))
+        {
+            throw new LiveException("video.delete.live");
+        }
+
+        _videoRepository.DeleteByLiveHistoryId(videoLiveHistoryPkid);
+        _notifier.Raise();
+        _logger.LogInformation("{Message}", _localizer.PrintMessage("delete.successful"));
+        return _responses.Build("delete.successful", StatusCodes.Status200OK);
+    }
+
     /// <summary>One video with its live history and setting, the payload <c>/live/start-video-live</c> expects.</summary>
     public VideoRequest FindVideo(int pkid) => WithRelations(FindVideoToUnlock(pkid));
 
@@ -121,6 +171,22 @@ public sealed class VideoService
         _executor.Execute(() => _ = UnlockAsync(video));
 
         return _responses.Build("unlock.in.progress", StatusCodes.Status202Accepted);
+    }
+
+    /// <summary>Removes one row of the live list. A row still LIVE has an ffmpeg behind it that
+    /// reads this row to know when to stop, so it has to be stopped first.</summary>
+    public MessageResponse DeleteVideo(int pkid)
+    {
+        var video = FindVideoToUnlock(pkid);
+        if (video.LiveStatus == LiveStatus.Live)
+        {
+            throw new LiveException("video.delete.live");
+        }
+
+        _videoRepository.Delete(pkid);
+        _notifier.Raise();
+        _logger.LogInformation("{Message}", _localizer.PrintMessage("delete.successful"));
+        return _responses.Build("delete.successful", StatusCodes.Status200OK);
     }
 
     private async Task UnlockAsync(VideoEntity video)

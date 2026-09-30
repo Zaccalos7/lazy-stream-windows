@@ -94,7 +94,7 @@
             @if (live.IsPlayable)
             {
                 <video data-preview-video src="@MainPreviewModel.VideoUrlOf(live.VideoPkid)@startAt"
-                       preload="auto" autoplay muted playsinline controls></video>
+                       width="640" height="360" preload="metadata" autoplay muted playsinline controls></video>
             }
             <div class="preview-cover" data-preview-cover hidden="@live.IsPlayable">
                 <i class="icon">&#xE714;</i>

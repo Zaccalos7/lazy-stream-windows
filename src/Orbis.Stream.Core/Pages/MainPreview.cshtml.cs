@@ -35,6 +35,12 @@ public sealed class MainPreviewModel(
     [BindProperty(SupportsGet = true, Name = "scene")]
     public long? Scene { get; set; }
 
+    [BindProperty(SupportsGet = true)]
+    public int? SettingId { get; set; }
+
+    [BindProperty(SupportsGet = true)]
+    public int? ConfigurationId { get; set; }
+
     public LiveSnapshot Snapshot => _snapshot ??= preview.Snapshot(Live);
 
     public bool IsComposing => !Snapshot.IsLive || !string.IsNullOrEmpty(Compose);

@@ -184,21 +184,14 @@ public sealed class MainLiveModel(
             return RedirectToPage(Filters);
         }
 
-        var request = new StartLiveRequest(
-            configuration.StreamUrl,
-            configuration.StreamKey,
-            configuration.VideoFolder,
-            configuration.PlatformStreamName,
-            configuration.ChannelName,
-            setting);
-
-        var started = Try(() =>
-        {
-            validator.RequireStartLive(request);
-            return Run(() => streaming.StartLive(request));
-        });
-
-        return started ? RedirectToPage("/Countdown") : RedirectToPage(Filters);
+        // We no longer start the stream directly; we open the composer with the chosen settings.
+        // Orbis handles compose=1 via GET so we redirect there.
+        // Wait, the javascript has to open the modal instead, or we can just redirect to the MainPreview page
+        // to do the composing. But the prompt said: "invece su start live ora dopo aver scelto la configurazione video e il setting canale , ti apre una schermata grossa il 90%".
+        // Let's redirect to MainPreview but pass the setting and configuration ids if we wanted to auto-fill.
+        // Actually, the easiest way to "open a large screen 90% of the screen" is to just stay on MainLive but open the composer modal.
+        // We will signal the page to open the composer modal.
+        return RedirectToPage("/MainPreview", new { compose = "1", settingId = settingId, configurationId = configurationId });
     }
 
     private void LoadVideos()

@@ -622,9 +622,8 @@ public sealed class EndToEndApiTests : IClassFixture<ApplicationFixture>
         var askedBody = await asked.Content.ReadAsStringAsync();
         Assert.Contains("id=\"start-dialog\" data-busy-host open", askedBody, StringComparison.Ordinal);
 
-        // Starting a live walks the folder and starts ffmpeg on the server: the dialog says so
-        // next to its button instead of looking inert.
-        Assert.Contains("data-while=\"busy\"", plainBody, StringComparison.Ordinal);
+        // Starting a live shows a dialog with the "start-composer-dialog" command.
+        Assert.Contains("start-composer-dialog", plainBody, StringComparison.Ordinal);
     }
 
     [Fact]

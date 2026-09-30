@@ -104,9 +104,9 @@
 
 @* The start: the same two choices as the live wizard. The scene id is filled in by the script once
    the layout is saved, so what streams is exactly what is on the canvas. *@
-<dialog class="dialog wide" id="scene-start-dialog" data-busy-host>
+<dialog class="dialog wide" id="scene-start-dialog" data-busy-host open="@(Model.SettingId.HasValue && Model.ConfigurationId.HasValue ? "" : null)">
     <form method="post" asp-page-handler="StartScene">
-        <input type="hidden" name="scenePkid" data-composer-start-pkid />
+        <input type="hidden" name="scenePkid" data-composer-start-pkid value="@Model.Scene" />
         <div class="dialog-body">
             <h2>@T["startNewLiveTitle"]</h2>
 
@@ -125,7 +125,7 @@
                     @foreach (var setting in Model.ActiveSettings)
                     {
                         <label class="choice">
-                            <input type="radio" name="settingId" value="@setting.Id" required />
+                            <input type="radio" name="settingId" value="@setting.Id" required checked="@(setting.Id == Model.SettingId)" />
                             <span class="grow">
                                 <strong>@(string.IsNullOrWhiteSpace(setting.Title) ? T["untitled"] : setting.Title)</strong>
                                 <span class="caption" style="display: block;">
@@ -153,7 +153,7 @@
                     @foreach (var configuration in Model.ActiveConfigurations)
                     {
                         <label class="choice">
-                            <input type="radio" name="configurationId" value="@configuration.Id" required />
+                            <input type="radio" name="configurationId" value="@configuration.Id" required checked="@(configuration.Id == Model.ConfigurationId)" />
                             <span class="grow">
                                 <strong>@configuration.ChannelName</strong> · @configuration.PlatformStreamName
                                 <span class="caption" style="display: block;">@configuration.StreamUrl</span>

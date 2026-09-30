@@ -51,82 +51,14 @@
     <partial name="_LiveRows" model="Model" />
 </div>
 
-@* Start a new live: one active video/audio setting + one active streaming configuration. *@
-<dialog class="dialog wide" id="start-dialog" data-busy-host open="@(Model.OpenStart ? "" : null)">
-    <form method="post" asp-page-handler="Start" asp-all-route-data="Model.FilterRoute">
-        <div class="dialog-body">
-            <h2>@T["startNewLiveTitle"]</h2>
-
-            <h3>@T["wizardStep1Title"]</h3>
-            @if (Model.ActiveSettings.Count == 0)
-            {
-                <div class="infobar warning section">
-                    <i class="icon">&#xE7BA;</i>
-                    <p><strong>@T["noActiveSetting"]</strong><br />@T["wizardNoActiveSettingsMessage"]</p>
-                    <a class="btn" href="/orbis/mainVideoSetting">@T["activateVideoAudioSettings"]</a>
-                </div>
-            }
-            else
-            {
-                <div class="choice-list section" style="margin-top: 8px;">
-                    @foreach (var setting in Model.ActiveSettings)
-                    {
-                        <label class="choice">
-                            <input type="radio" name="settingId" value="@setting.Id" required />
-                            <span class="grow">
-                                <strong>@(string.IsNullOrWhiteSpace(setting.Title) ? T["untitled"] : setting.Title)</strong>
-                                @if (setting.IsDefaultConfiguration == true)
-                                {
-                                    <span class="badge">@setting.DefaultPlatformConfiguration</span>
-                                }
-                                <span class="caption" style="display: block;">
-                                    @setting.VideoCodecName · @VideoSettingForm.FormatBitrate(setting.VideoBitrate, T["milion"]) ·
-                                    @setting.VideoFormat?.ToUpperInvariant() · GOP @(setting.GopSize?.ToString() ?? "–") ·
-                                    @T["audioBitrate"] @(setting.AudioSettingRecord?.AudioBitrate?.ToString() ?? "N/A")
-                                </span>
-                            </span>
-                        </label>
-                    }
-                </div>
-            }
-
-            <h3 class="section">@T["wizardStep2Title"]</h3>
-            @if (Model.ActiveConfigurations.Count == 0)
-            {
-                <div class="infobar warning section">
-                    <i class="icon">&#xE7BA;</i>
-                    <p><strong>@T["noActiveStreamingConfiguration"]</strong><br />@T["wizardNoActiveConfigurationsMessage"]</p>
-                    <a class="btn" href="/orbis/mainChannelSetting">@T["activeConfigurationLabel"]</a>
-                </div>
-            }
-            else
-            {
-                <div class="choice-list" style="margin-top: 8px;">
-                    @foreach (var configuration in Model.ActiveConfigurations)
-                    {
-                        <label class="choice">
-                            <input type="radio" name="configurationId" value="@configuration.Id" required />
-                            <span class="grow">
-                                <strong>@configuration.ChannelName</strong> · @configuration.PlatformStreamName
-                                <span class="caption" style="display: block;">@configuration.VideoFolder · @configuration.StreamUrl</span>
-                                @if (!string.IsNullOrWhiteSpace(configuration.Description))
-                                {
-                                    <span class="caption" style="display: block;">@configuration.Description</span>
-                                }
-                            </span>
-                        </label>
-                    }
-                </div>
-            }
-        </div>
-        <div class="dialog-footer">
-            @* The wizard walks the folder and starts ffmpeg on the server: while it answers, the
-               button says so instead of leaving the dialog looking inert. *@
-            <span class="spinner" data-while="busy" title="@T["loading"]"></span>
-            <button class="btn accent" disabled="@(!canStart)">@T["startLiveButton"]</button>
-            <button class="btn" type="button" commandfor="start-dialog" command="close">@T["cancel"]</button>
-        </div>
-    </form>
+@* Start a new live by composing the scene first. *@
+<dialog class="dialog wide" id="start-dialog" open="@(Model.OpenStart ? "" : null)" style="width: 90vw; max-width: 90vw; height: 90vh; padding: 0;">
+    <div style="display: flex; justify-content: flex-end; padding: 10px; background: var(--background);">
+        <button class="btn subtle icon-only" type="button" commandfor="start-dialog" command="close" title="@T["cancel"]">
+            <i class="icon">&#xE711;</i>
+        </button>
+    </div>
+    <iframe src="/orbis/mainPreview?compose=1" style="width: 100%; height: calc(100% - 50px); border: none;"></iframe>
 </dialog>
 
 @* Videos left LIVE after a crash, an error or a stop made on the platform. *@

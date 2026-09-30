@@ -67,6 +67,9 @@ public static class EntityFields
         ["isDefaultConfiguration"] = new FilterField("is_default_configuration", FilterKind.Boolean),
         ["defaultPlatformConfiguration"] = new FilterField("default_platform_configuration", FilterKind.Text),
         ["gopSize"] = new FilterField("gop_size", FilterKind.Integer),
+        ["videoWidth"] = new FilterField("video_width", FilterKind.Integer),
+        ["videoHeight"] = new FilterField("video_height", FilterKind.Integer),
+        ["frameRate"] = new FilterField("frame_rate", FilterKind.Double),
         ["isVideoAndAudioSettingActive"] = new FilterField("is_video_and_audio_setting_active", FilterKind.Boolean)
     };
 }

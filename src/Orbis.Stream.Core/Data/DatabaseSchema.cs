@@ -42,6 +42,9 @@ public static class DatabaseSchema
                 Column("is_default_configuration", "BOOLEAN", "BOOLEAN DEFAULT 'False'", nullable: true),
                 Column("default_platform_configuration", "VARCHAR(255)", "VARCHAR(255) DEFAULT 'Custom'", nullable: true),
                 Column("gop_size", "INTEGER", "INTEGER DEFAULT '2' NOT NULL", nullable: false),
+                Column("video_width", "INTEGER", "INTEGER", nullable: true),
+                Column("video_height", "INTEGER", "INTEGER", nullable: true),
+                Column("frame_rate", "REAL", "REAL", nullable: true),
                 Column("is_video_and_audio_setting_active", "BOOLEAN", "BOOLEAN DEFAULT 'False' NOT NULL", nullable: false),
                 Column("audio_setting_id", "INTEGER", "INTEGER", nullable: true)
             ],
@@ -112,6 +115,9 @@ public static class DatabaseSchema
             is_default_configuration BOOLEAN DEFAULT 'False',
             default_platform_configuration VARCHAR(255) DEFAULT 'Custom',
             gop_size INTEGER DEFAULT '2' NOT NULL,
+            video_width INTEGER,
+            video_height INTEGER,
+            frame_rate REAL,
             is_video_and_audio_setting_active BOOLEAN DEFAULT 'False' NOT NULL,
             audio_setting_id INTEGER,
             FOREIGN KEY (audio_setting_id) REFERENCES audio_setting (id)

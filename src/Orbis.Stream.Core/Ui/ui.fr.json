@@ -158,5 +158,36 @@
   "appUptime": "Temps de l'application",
   "dotnet": "Runtime .NET",
   "retry": "Réessayer",
+<<<<<<< HEAD
   "initializing": "Initialisation..."
+=======
+  "preview": "Aperçu",
+  "previewDescription": "Regardez le direct que vous envoyez et modifiez ses paramètres pendant qu'il tourne.",
+  "livePreviewTitle": "Aperçu du direct",
+  "livePreviewSubtitle": "Le lecteur affiche le fichier envoyé, à la position où l'encodeur se trouve.",
+  "noLiveRunning": "Aucun direct en cours",
+  "startALiveHere": "Lancez un direct, il apparaîtra ici.",
+  "liveNow": "En direct",
+  "liveOnPlatform": "Ouvrir la page du direct",
+  "watching": "En cours de visionnage",
+  "selectLiveToWatch": "Choisir un direct…",
+  "runningLives": "Directs en cours",
+  "reconfiguring": "Redémarrage de l'encodage…",
+  "sourceVideo": "Source",
+  "liveOutput": "Sortie du direct",
+  "frameRate": "Images par seconde",
+  "width": "Largeur",
+  "height": "Hauteur",
+  "resolution": "Résolution",
+  "keepSource": "Comme la source",
+  "applyNote": "Les modifications s'appliquent immédiatement : le direct repart de ce point.",
+  "parametersApplied": "Paramètres mis à jour",
+  "parametersFailed": "Les paramètres n'ont pas pu être modifiés",
+  "noAudioTrack": "Aucune piste audio",
+  "notPlayableHere": "Ce fichier ne peut pas être lu dans cette fenêtre",
+  "positionOf": "{0} / {1}",
+  "videoParameters": "Vidéo",
+  "gopNotEditable": "Non modifiable pendant le direct",
+  "audioChannels": "Canaux audio"
+>>>>>>> 1d42792 (feat: Add video parameters support and live preview functionality in multiple languages)
 }

@@ -9,7 +9,7 @@
     <InvariantGlobalization>false</InvariantGlobalization>
 
     <!-- Kept in sync with Installer/OrbisStream.wxs: the MSI product version. -->
-    <Version>1.0.17</Version>
+    <Version>1.0.18</Version>
     <Product>Orbis Stream</Product>
     <Company>Orbis</Company>
   </PropertyGroup>

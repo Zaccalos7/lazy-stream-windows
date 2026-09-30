@@ -224,5 +224,11 @@
   "unsavedChanges": "Modifications non enregistrées",
   "sceneNeedsPicture": "Placez au moins un écran, une webcam ou une vidéo sur le canevas",
   "sceneNeedsName": "Donnez un nom à la scène",
-  "alreadyOnCanvas": "Cette source est déjà sur le canevas"
+  "alreadyOnCanvas": "Cette source est déjà sur le canevas",
+  "usedSources": "Used Sources",
+  "availableSources": "Available Sources",
+  "sourcesVideoGroup": "Video",
+  "sourcesAudioGroup": "Audio",
+  "sourcesEmptyUsed": "No sources are currently used.",
+  "sourcesEmptyAvailable": "No other sources available."
 }

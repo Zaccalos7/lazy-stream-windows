@@ -224,5 +224,11 @@
   "unsavedChanges": "未保存的更改",
   "sceneNeedsPicture": "请至少在画布上放置一个屏幕、摄像头或视频",
   "sceneNeedsName": "请为场景命名",
-  "alreadyOnCanvas": "此来源已在画布上"
+  "alreadyOnCanvas": "此来源已在画布上",
+  "usedSources": "Used Sources",
+  "availableSources": "Available Sources",
+  "sourcesVideoGroup": "Video",
+  "sourcesAudioGroup": "Audio",
+  "sourcesEmptyUsed": "No sources are currently used.",
+  "sourcesEmptyAvailable": "No other sources available."
 }

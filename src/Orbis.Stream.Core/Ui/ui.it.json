@@ -224,5 +224,11 @@
   "unsavedChanges": "Modifiche non salvate",
   "sceneNeedsPicture": "Metti sul canvas almeno uno schermo, una webcam o un video",
   "sceneNeedsName": "Dai un nome alla scena",
-  "alreadyOnCanvas": "Questa sorgente è già sul canvas"
+  "alreadyOnCanvas": "Questa sorgente è già sul canvas",
+  "usedSources": "Sorgenti in uso",
+  "availableSources": "Sorgenti disponibili",
+  "sourcesVideoGroup": "Video",
+  "sourcesAudioGroup": "Audio",
+  "sourcesEmptyUsed": "Nessuna sorgente in uso.",
+  "sourcesEmptyAvailable": "Nessuna altra sorgente disponibile."
 }

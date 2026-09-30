@@ -26,6 +26,7 @@
   const stage = root.querySelector("[data-composer-stage]");
   const blank = root.querySelector("[data-composer-blank]");
   const catalogBox = root.querySelector("[data-composer-catalog]");
+  const usedBox = root.querySelector("[data-composer-used]");
   const layersBox = root.querySelector("[data-composer-layers]");
   const scenesBox = root.querySelector("[data-composer-scenes]");
   const nameBox = root.querySelector("[data-composer-name]");
@@ -330,10 +331,66 @@
   };
 
   const renderCatalog = () => {
-    for (const entry of catalogBox.querySelectorAll("[data-source-id]")) {
-      const option = catalog.find(candidate => candidate.id === entry.dataset.sourceId);
-      entry.classList.toggle("is-used", !!option && scene.items.some(item => sameSource(item, option)));
+    catalogBox.replaceChildren();
+    usedBox.replaceChildren();
+
+    const usedOptions = [];
+    const availableOptions = [];
+
+    for (const option of catalog) {
+      const isUsed = scene.items.some(item => sameSource(item, option));
+      if (isUsed) {
+        usedOptions.push(option);
+      } else {
+        availableOptions.push(option);
+      }
     }
+
+    // --- Used Sources ---
+    if (usedOptions.length === 0) {
+      const empty = document.createElement("p");
+      empty.className = "caption composer-none";
+      empty.textContent = word("empty-used") || "No sources are currently used.";
+      usedBox.append(empty);
+    } else {
+      for (const option of usedOptions) {
+        usedBox.append(createEntry(option, true));
+      }
+    }
+
+    // --- Available Sources ---
+    if (catalog.length === 0) {
+      const empty = document.createElement("p");
+      empty.className = "caption composer-none";
+      empty.textContent = word("empty");
+      catalogBox.append(empty);
+      return;
+    }
+
+    if (availableOptions.length === 0) {
+      const empty = document.createElement("p");
+      empty.className = "caption composer-none";
+      empty.textContent = word("empty-available") || "No other sources available.";
+      catalogBox.append(empty);
+      return;
+    }
+
+    const availableAudio = availableOptions.filter(o => o.kind === Kind.Microphone);
+    const availableVideo = availableOptions.filter(o => o.kind !== Kind.Microphone);
+
+    const appendGroup = (options, title) => {
+      if (options.length === 0) return;
+      const heading = document.createElement("h4");
+      heading.className = "caption composer-group";
+      heading.textContent = title;
+      catalogBox.append(heading);
+      for (const option of options) {
+        catalogBox.append(createEntry(option, false));
+      }
+    };
+
+    appendGroup(availableVideo, word("video-group") || "Video");
+    appendGroup(availableAudio, word("audio-group") || "Audio");
   };
 
   const render = () => {
@@ -583,65 +640,54 @@
 
   const sizeText = option => option.width > 0 ? `${option.width}×${option.height}` : "";
 
+
+  const createEntry = (option, isUsedItem = false) => {
+    const entry = document.createElement("button");
+    entry.type = "button";
+    entry.className = "composer-source";
+    if (isUsedItem) entry.classList.add("is-used");
+    entry.draggable = !isUsedItem;
+    entry.dataset.sourceId = option.id;
+    entry.title = isUsedItem ? word("remove") : word("add");
+
+    const text = document.createElement("span");
+    text.className = "grow";
+    const name = document.createElement("strong");
+    name.className = "truncate";
+    name.textContent = option.name;
+    text.append(name);
+    const size = sizeText(option);
+    if (size) {
+      const caption = document.createElement("span");
+      caption.className = "caption";
+      caption.textContent = size;
+      text.append(caption);
+    }
+
+    const actionIcon = document.createElement("i");
+    actionIcon.className = "icon composer-used";
+    actionIcon.textContent = isUsedItem ? "\uE711" : "\uE73E"; // Remove icon or Used tick
+
+    entry.append(iconOf(option.kind), text, actionIcon);
+
+    if (!isUsedItem) {
+      entry.addEventListener("dragstart", event => {
+        event.dataTransfer.setData(sourceType, option.id);
+        event.dataTransfer.effectAllowed = "copy";
+      });
+      entry.addEventListener("click", () => addSource(option));
+    } else {
+      entry.addEventListener("click", (e) => {
+        e.stopPropagation();
+        const item = scene.items.find(i => sameSource(i, option));
+        if (item) removeItem(item.uid);
+      });
+    }
+
+    return entry;
+  };
   const drawCatalog = () => {
-    catalogBox.replaceChildren();
     delete catalogBox.dataset.state;
-
-    if (catalog.length === 0) {
-      const empty = document.createElement("p");
-      empty.className = "caption composer-none";
-      empty.textContent = word("empty");
-      catalogBox.append(empty);
-      return;
-    }
-
-    for (const group of groups) {
-      const options = catalog.filter(option => option.kind === group.kind);
-      if (options.length === 0) continue;
-
-      const heading = document.createElement("h4");
-      heading.className = "caption composer-group";
-      heading.textContent = word(group.word);
-      catalogBox.append(heading);
-
-      for (const option of options) {
-        const entry = document.createElement("button");
-        entry.type = "button";
-        entry.className = "composer-source";
-        entry.draggable = true;
-        entry.dataset.sourceId = option.id;
-        entry.title = word("add");
-
-        const text = document.createElement("span");
-        text.className = "grow";
-        const name = document.createElement("strong");
-        name.className = "truncate";
-        name.textContent = option.name;
-        text.append(name);
-        const size = sizeText(option);
-        if (size) {
-          const caption = document.createElement("span");
-          caption.className = "caption";
-          caption.textContent = size;
-          text.append(caption);
-        }
-
-        const used = document.createElement("i");
-        used.className = "icon composer-used";
-        used.textContent = "\uE73E";
-
-        entry.append(iconOf(option.kind), text, used);
-        entry.addEventListener("dragstart", event => {
-          event.dataTransfer.setData(sourceType, option.id);
-          event.dataTransfer.effectAllowed = "copy";
-        });
-        // A click is the same as a drop in the middle: a source list that only works with a
-        // mouse drag is a list a keyboard cannot use.
-        entry.addEventListener("click", () => addSource(option));
-        catalogBox.append(entry);
-      }
-    }
-
     renderCatalog();
   };
 

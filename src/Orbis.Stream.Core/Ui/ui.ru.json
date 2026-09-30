@@ -224,5 +224,11 @@
   "unsavedChanges": "Несохранённые изменения",
   "sceneNeedsPicture": "Добавьте на холст хотя бы экран, веб-камеру или видео",
   "sceneNeedsName": "Дайте сцене название",
-  "alreadyOnCanvas": "Этот источник уже на холсте"
+  "alreadyOnCanvas": "Этот источник уже на холсте",
+  "usedSources": "Used Sources",
+  "availableSources": "Available Sources",
+  "sourcesVideoGroup": "Video",
+  "sourcesAudioGroup": "Audio",
+  "sourcesEmptyUsed": "No sources are currently used.",
+  "sourcesEmptyAvailable": "No other sources available."
 }

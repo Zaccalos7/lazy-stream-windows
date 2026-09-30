@@ -158,9 +158,9 @@
   "appUptime": "Temps de l'application",
   "dotnet": "Runtime .NET",
   "retry": "Réessayer",
-<<<<<<< HEAD
-  "initializing": "Initialisation..."
-=======
+
+  "initializing": "Initialisation...",
+
   "preview": "Aperçu",
   "previewDescription": "Regardez le direct que vous envoyez et modifiez ses paramètres pendant qu'il tourne.",
   "livePreviewTitle": "Aperçu du direct",
@@ -189,5 +189,5 @@
   "videoParameters": "Vidéo",
   "gopNotEditable": "Non modifiable pendant le direct",
   "audioChannels": "Canaux audio"
->>>>>>> 1d42792 (feat: Add video parameters support and live preview functionality in multiple languages)
+
 }

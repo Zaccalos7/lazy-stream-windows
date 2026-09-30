@@ -144,73 +144,100 @@ public sealed class FfmpegVideoPlaylistStreamer : IVideoPlaylistStreamer
         var inputPath = video.VideoPath;
         var videoKey = video.Pkid;
 
+        // The session of the pass in progress, kept out of the <c>using</c> of an iteration so that
+        // the new one is registered before the old one is killed. A preview that asks in between the
+        // two has to see the live going on, not a moment where nothing is running.
+        FfmpegStreamingSession? session = null;
+
         try
         {
-            var videoSetting = video.VideoSettingId is null
-                ? null
-                : _videoSettingRepository.FindById(video.VideoSettingId.Value);
-
-            if (videoSetting is null)
-            {
-                throw new InvalidOperationException(
-                    $"video setting not found for video {videoKey} (videoSettingId={video.VideoSettingId?.ToString() ?? "null"})");
-            }
-
-            _logger.LogInformation("INPUT: working directory = {InputPath}", inputPath);
-
             var probe = planned.Probe ?? await _probe.ProbeAsync(inputPath, cancellationToken).ConfigureAwait(false);
-            _logger.LogInformation(
-                "FORMAT: of grabber on running machine = {PixelFormat}", FfmpegCodecCatalog.ResolvePixelFormat(videoSetting.PixelFormat));
+            var resumeFrom = planned.ResumeFrom;
 
-            if (planned.ResumeFrom > TimeSpan.Zero)
+            // One pass per ffmpeg process. The pass ends when the file does, when the user stops it,
+            // or when the encoder configuration changed and the only way to honour it is to start
+            // again from where the transcode got to.
+            while (true)
             {
-                var resumed = _localizer.PrintMessage("video.live.resumed", [inputPath, Seconds(planned.ResumeFrom)]);
-                _logger.LogInformation("{Message}", resumed);
-            }
+                cancellationToken.ThrowIfCancellationRequested();
 
-            await using var session = FfmpegStreamingSession.Start(
-                _locator, videoKey, inputPath, outputUrl, videoSetting, probe, _logger, planned.ResumeFrom);
+                // Read on every pass, not once before the loop: this is where a parameter changed
+                // from the preview page arrives, and it has to reach the next command line.
+                var videoSetting = FindSetting(videoKey);
 
-            _sessions.Register(session);
+                _logger.LogInformation("INPUT: working directory = {InputPath}", inputPath);
+                _logger.LogInformation(
+                    "FORMAT: of grabber on running machine = {PixelFormat}", FfmpegCodecCatalog.ResolvePixelFormat(videoSetting.PixelFormat));
 
-            var startedMessage = _localizer.PrintMessage("video.live.started", [inputPath]);
-            _logger.LogInformation("{Message}", startedMessage);
-            SaveMessageOnVideoLiveHistory(
-                startedMessage, videoLiveHistoryPkid, inputPath, LiveStatus.Live, DateTime.Now);
+                if (resumeFrom > TimeSpan.Zero)
+                {
+                    var resumed = _localizer.PrintMessage("video.live.resumed", [inputPath, Seconds(resumeFrom)]);
+                    _logger.LogInformation("{Message}", resumed);
+                }
 
-            var wasStopped = await MonitorAsync(session, videoKey, videoLiveHistoryPkid, inputPath, cancellationToken)
-                .ConfigureAwait(false);
+                var next = FfmpegStreamingSession.Start(
+                    _locator, videoKey, inputPath, outputUrl, videoSetting, probe, _logger, resumeFrom);
 
-            if (wasStopped)
-            {
-                return;
-            }
+                var previous = session;
+                session = next;
+                _sessions.Register(next);
+                if (previous is not null)
+                {
+                    await previous.DisposeAsync().ConfigureAwait(false);
+                }
 
-            var exitCode = await session.WaitForExitAsync(cancellationToken).ConfigureAwait(false);
-            var errorOutput = await session.ReadErrorAsync().ConfigureAwait(false);
-
-            if (exitCode != 0 && _videoRepository.FindByPkid(videoKey)?.ShouldBeStop == true)
-            {
-                await StopAndRecordAsync(session, videoKey, videoLiveHistoryPkid, inputPath).ConfigureAwait(false);
-                return;
-            }
-
-            if (exitCode == 0)
-            {
-                var endedMessage = _localizer.PrintMessage("video.live.ended");
-                _logger.LogInformation("{Message}", endedMessage);
+                var startedMessage = _localizer.PrintMessage("video.live.started", [inputPath]);
+                _logger.LogInformation("{Message}", startedMessage);
                 SaveMessageOnVideoLiveHistory(
-                    endedMessage, videoLiveHistoryPkid, inputPath, LiveStatus.Ended, null, EndOf(probe, session));
+                    startedMessage, videoLiveHistoryPkid, inputPath, LiveStatus.Live, DateTime.Now);
+
+                var outcome = await MonitorAsync(session, videoKey, videoLiveHistoryPkid, inputPath, cancellationToken)
+                    .ConfigureAwait(false);
+
+                if (outcome == StreamOutcome.Stopped)
+                {
+                    return;
+                }
+
+                if (outcome == StreamOutcome.Reconfigured)
+                {
+                    // Where the transcode got to is where the new one carries on from: the live
+                    // skips nothing, it only pays for the second ffmpeg starting.
+                    resumeFrom = TimeSpan.FromMilliseconds(session.PositionMilliseconds);
+                    var reconfigured = _localizer.PrintMessage("video.live.reconfigured", [inputPath]);
+                    _logger.LogInformation("{Message}", reconfigured);
+                    SaveMessageOnVideoLiveHistory(
+                        reconfigured, videoLiveHistoryPkid, inputPath, LiveStatus.Live, null);
+                    continue;
+                }
+
+                var exitCode = await session.WaitForExitAsync(cancellationToken).ConfigureAwait(false);
+                var errorOutput = await session.ReadErrorAsync().ConfigureAwait(false);
+
+                if (exitCode != 0 && _videoRepository.FindByPkid(videoKey)?.ShouldBeStop == true)
+                {
+                    await StopAndRecordAsync(session, videoKey, videoLiveHistoryPkid, inputPath).ConfigureAwait(false);
+                    return;
+                }
+
+                if (exitCode == 0)
+                {
+                    var endedMessage = _localizer.PrintMessage("video.live.ended");
+                    _logger.LogInformation("{Message}", endedMessage);
+                    SaveMessageOnVideoLiveHistory(
+                        endedMessage, videoLiveHistoryPkid, inputPath, LiveStatus.Ended, null, EndOf(probe, session));
+                    return;
+                }
+
+                var streamingError = _localizer.PrintMessage(
+                    "error.during.streaming.video", [inputPath, videoLiveHistoryPkid])
+                    + "\n"
+                    + (string.IsNullOrWhiteSpace(errorOutput) ? $"ffmpeg exited with code {exitCode}" : errorOutput.Trim());
+                _logger.LogError("{Message}", streamingError);
+                SaveMessageOnVideoLiveHistory(
+                    streamingError, videoLiveHistoryPkid, inputPath, LiveStatus.Error, DateTime.Now, 0);
                 return;
             }
-
-            var streamingError = _localizer.PrintMessage(
-                "error.during.streaming.video", [inputPath, videoLiveHistoryPkid])
-                + "\n"
-                + (string.IsNullOrWhiteSpace(errorOutput) ? $"ffmpeg exited with code {exitCode}" : errorOutput.Trim());
-            _logger.LogError("{Message}", streamingError);
-            SaveMessageOnVideoLiveHistory(
-                streamingError, videoLiveHistoryPkid, inputPath, LiveStatus.Error, DateTime.Now, 0);
         }
         catch (OperationCanceledException)
         {
@@ -227,14 +254,42 @@ public sealed class FfmpegVideoPlaylistStreamer : IVideoPlaylistStreamer
         finally
         {
             _sessions.Remove(videoKey);
+            if (session is not null)
+            {
+                await session.DisposeAsync().ConfigureAwait(false);
+            }
         }
+    }
+
+    /// <summary>The configuration of the video, read again on every pass so a live change is seen.</summary>
+    private VideoSettingEntity FindSetting(int videoKey)
+    {
+        var settingId = _videoRepository.FindByPkid(videoKey)?.VideoSettingId;
+        var videoSetting = settingId is { } id ? _videoSettingRepository.FindById(id) : null;
+
+        return videoSetting ?? throw new InvalidOperationException(
+            $"video setting not found for video {videoKey} (videoSettingId={settingId?.ToString() ?? "null"})");
+    }
+
+    /// <summary>Why the monitor stopped watching a transcode.</summary>
+    private enum StreamOutcome
+    {
+        /// <summary>The ffmpeg process ended on its own: the caller reads its exit code.</summary>
+        Finished,
+
+        /// <summary>The user stopped the live: the position has to be recorded and the video left alone.</summary>
+        Stopped,
+
+        /// <summary>The encoder configuration changed: start again from the current position.</summary>
+        Reconfigured
     }
 
     /// <summary>
     /// Polls the stop flag like the Java version polled it every 50 frames, but also reacts
-    /// immediately to the in-memory stop signal.
+    /// immediately to the in-memory stop signal and to a change of parameters made from the
+    /// preview page.
     /// </summary>
-    private async Task<bool> MonitorAsync(
+    private async Task<StreamOutcome> MonitorAsync(
         FfmpegStreamingSession session,
         int videoKey,
         long videoLiveHistoryPkid,
@@ -245,7 +300,8 @@ public sealed class FfmpegVideoPlaylistStreamer : IVideoPlaylistStreamer
         {
             if (session.StopRequested)
             {
-                return await StopAndRecordAsync(session, videoKey, videoLiveHistoryPkid, inputPath).ConfigureAwait(false);
+                await StopAndRecordAsync(session, videoKey, videoLiveHistoryPkid, inputPath).ConfigureAwait(false);
+                return StreamOutcome.Stopped;
             }
 
             var video = _videoRepository.FindByPkid(videoKey);
@@ -253,12 +309,18 @@ public sealed class FfmpegVideoPlaylistStreamer : IVideoPlaylistStreamer
             {
                 _logger.LogWarning(
                     "{Message}", _localizer.PrintMessage("error.during.retrieved.video", [inputPath, videoLiveHistoryPkid]));
-                return false;
+                return StreamOutcome.Finished;
             }
 
             if (video.ShouldBeStop)
             {
-                return await StopAndRecordAsync(session, videoKey, videoLiveHistoryPkid, inputPath).ConfigureAwait(false);
+                await StopAndRecordAsync(session, videoKey, videoLiveHistoryPkid, inputPath).ConfigureAwait(false);
+                return StreamOutcome.Stopped;
+            }
+
+            if (session.RestartRequested)
+            {
+                return StreamOutcome.Reconfigured;
             }
 
             try
@@ -267,17 +329,17 @@ public sealed class FfmpegVideoPlaylistStreamer : IVideoPlaylistStreamer
             }
             catch (OperationCanceledException)
             {
-                return false;
+                return StreamOutcome.Finished;
             }
 
             if (session.HasExited)
             {
-                return false;
+                return StreamOutcome.Finished;
             }
         }
     }
 
-    private async Task<bool> StopAndRecordAsync(
+    private async Task StopAndRecordAsync(
         FfmpegStreamingSession session,
         int videoKey,
         long videoLiveHistoryPkid,
@@ -290,7 +352,6 @@ public sealed class FfmpegVideoPlaylistStreamer : IVideoPlaylistStreamer
         _videoRepository.SetStopFlag(videoKey, false);
         SaveMessageOnVideoLiveHistory(
             message, videoLiveHistoryPkid, inputPath, LiveStatus.Stopped, null, session.PositionMilliseconds);
-        return true;
     }
 
     /// <summary>

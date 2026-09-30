@@ -68,4 +68,27 @@ public static class VideoExtensions
 
         return Supported.Any(supported => supported.Equals(extension, StringComparison.OrdinalIgnoreCase));
     }
+
+    /// <summary>
+    /// Content type of the file the preview serves. It is not the one the container would like:
+    /// what matters is what the WebView can decode, and the values below are what Chromium
+    /// answers to for these extensions.
+    /// </summary>
+    public static string ContentTypeOf(string? extension) => extension?.ToLowerInvariant() switch
+    {
+        "mp4" or "m4v" => "video/mp4",
+        "mov" => "video/quicktime",
+        "webm" or "vp9" => "video/webm",
+        "flv" => "video/x-flv",
+        "mkv" => "video/x-matroska",
+        _ => "application/octet-stream"
+    };
+
+    /// <summary>
+    /// Whether the WebView can play the container on its own. Matroska and FLV are the two the
+    /// preview cannot show: they are still served, so the frame carries the reason instead of
+    /// failing on something the user cannot see.
+    /// </summary>
+    public static bool IsBrowserPlayable(string? extension) =>
+        extension?.ToLowerInvariant() is "mp4" or "m4v" or "mov" or "webm" or "vp9";
 }

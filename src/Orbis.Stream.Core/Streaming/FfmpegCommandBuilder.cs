@@ -24,12 +24,22 @@ public static class FfmpegCommandBuilder
 
         var setting = request.Setting;
         var probe = request.Probe;
-        var frameRate = probe.FrameRate > 0 ? probe.FrameRate : 25d;
+
+        // The rate the encoder is asked for: what the setting asks for, otherwise the rate ffprobe
+        // read from the file (25 is the fallback of the probe, kept for a probe that knows nothing).
+        var output = ResolveOutput(setting, probe);
+        var frameRate = output.FrameRate;
 
         var arguments = new List<string>
         {
             "-hide_banner",
             "-nostdin",
+
+            // A transcode that starts again with new parameters writes over what the previous one
+            // sent: with a real ingest there is nothing to overwrite, and with a destination on
+            // disk ffmpeg would otherwise stop to ask a question nobody is there to answer.
+            "-y",
+
             "-loglevel",
             "error",
 
@@ -79,6 +89,13 @@ public static class FfmpegCommandBuilder
         arguments.Add("-r");
         arguments.Add(Number(frameRate));
 
+        // Only when the setting asks for a resolution of its own: without it the frame is
+        // re-encoded exactly as the file is, which is what every stream did before the field.
+        if (ScaleFilter(setting) is { } scale)
+        {
+            arguments.Add("-vf");
+            arguments.Add(scale);
+        }
         if (setting.VideoBitrate is > 0)
         {
             arguments.Add("-b:v");
@@ -133,7 +150,43 @@ public static class FfmpegCommandBuilder
     }
 
     /// <summary>
-    /// Port of the stream url composition of <c>StreamService#startLive</c>: the key is appended
+    /// What the encoder will be asked to produce for a file: the resolution and the frame rate of
+    /// the setting when it has one, the ones ffprobe read otherwise. This is the single place that
+    /// decides it, so the command line and the numbers the preview shows can never disagree.
+    /// </summary>
+    public static MediaOutput ResolveOutput(VideoSettingEntity setting, MediaProbeResult probe)
+    {
+        ArgumentNullException.ThrowIfNull(setting);
+        ArgumentNullException.ThrowIfNull(probe);
+
+        return new MediaOutput(
+            setting.VideoWidth is > 0 ? Even(setting.VideoWidth.Value) : probe.Width,
+            setting.VideoHeight is > 0 ? Even(setting.VideoHeight.Value) : probe.Height,
+            setting.FrameRate is > 0 ? setting.FrameRate.Value : probe.FrameRate > 0 ? probe.FrameRate : 25d);
+    }
+
+    /// <summary>
+    /// The <c>scale</c> filter of a setting that asks for a resolution, or null when it keeps the
+    /// one of the file. Both dimensions are rounded down to an even number: every pixel format a
+    /// platform accepts (yuv420p above all) refuses an odd frame size, and a live that dies on the
+    /// first frame of a new resolution is a much worse answer than one pixel of padding.
+    /// </summary>
+    public static string? ScaleFilter(VideoSettingEntity setting)
+    {
+        ArgumentNullException.ThrowIfNull(setting);
+
+        if (setting.VideoWidth is not > 0 || setting.VideoHeight is not > 0)
+        {
+            return null;
+        }
+
+        // The name of the filter is part of the value: <c>-vf 160:120</c> asks ffmpeg for a filter
+        // called "160:120", which is why a live that had never rescaled looked fine and the first
+        // one that did died on the first frame instead of sending the smaller resolution.
+        return $"scale={Even(setting.VideoWidth.Value)}:{Even(setting.VideoHeight.Value)}";
+    }
+
+    /// <summary>Port of the stream url composition of <c>StreamService#startLive</c>: the key is appended
     /// to the url, adding the separator only when needed.
     /// </summary>
     public static string BuildStreamingUrl(string streamUrl, string streamKey)
@@ -143,6 +196,8 @@ public static class FfmpegCommandBuilder
 
         return streamUrl.EndsWith('/') ? streamUrl + streamKey : streamUrl + "/" + streamKey;
     }
+
+    private static int Even(int value) => value - (value % 2);
 
     private static string Number(double value) => value.ToString("0.######", CultureInfo.InvariantCulture);
 

@@ -58,6 +58,7 @@ public static class OrbisServiceCollectionExtensions
         services.AddSingleton<SettingService>();
         services.AddSingleton<VideoSettingService>();
         services.AddSingleton<ImageService>();
+        services.AddSingleton<LivePreviewService>();
 
         services.AddSingleton<DatabaseBootstrapper>();
         services.AddHostedService(provider => provider.GetRequiredService<DatabaseBootstrapper>());

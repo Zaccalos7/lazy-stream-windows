@@ -120,6 +120,27 @@ public static class FfmpegCodecCatalog
 
     public static string ResolvePixelFormat(int? pixelFormat) => Find(PixelFormats, pixelFormat) ?? "yuv420p";
 
+    /// <summary>
+    /// The catalog entry an ffmpeg encoder name belongs to, or null for a vendor encoder the
+    /// catalog does not list (<c>h264_nvenc</c> and the other hardware ones). The preview needs it
+    /// to keep the abstract codec and the encoder name of a setting from drifting apart when only
+    /// the encoder is changed.
+    /// </summary>
+    public static int? IdOfEncoderName(string? encoderName)
+    {
+        if (string.IsNullOrWhiteSpace(encoderName))
+        {
+            return null;
+        }
+
+        var name = encoderName.Trim();
+        return VideoCodecs.FirstOrDefault(option => option.FfmpegName == name)?.Id;
+    }
+
+    /// <summary>Label of a catalog entry, so the preview can name a pixel format without ffprobe.</summary>
+    public static string? LabelOf(IReadOnlyList<MediaOption> options, int? id) =>
+        id is null ? null : options.FirstOrDefault(option => option.Id == id.Value)?.Label;
+
     private static string? Find(IReadOnlyList<MediaOption> options, int? id) =>
         id is null ? null : options.FirstOrDefault(option => option.Id == id.Value)?.FfmpegName;
 

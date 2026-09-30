@@ -34,6 +34,7 @@ public static class OrbisEndpoints
         MapVideoSettings(app);
         MapImage(app);
         MapTaskManager(app);
+        MapPreview(app);
         MapUpdates(app);
         return app;
     }
@@ -181,11 +182,51 @@ public static class OrbisEndpoints
     }
 
     /// <summary>
+    /// The preview API: where the page reads the state of the live it is watching, the file behind
+    /// the player, and the endpoint that changes the parameters of a running transcode.
+    /// </summary>
+    private static void MapPreview(IEndpointRouteBuilder app)
+    {
+        var group = app.MapGroup("/preview");
+
+        group.MapGet("/live", (LivePreviewService service, HttpRequest request) =>
+            Results.Json(service.Snapshot(Watched(request))));
+
+        group.MapGet("/live/{pkid:int}/video", (int pkid, LivePreviewService service) =>
+        {
+            var file = service.FileOf(pkid);
+            // The player asks for ranges to seek, so the answer has to be a file result that knows
+            // about them: without this every seek would start the file over.
+            return Results.File(file.Path, file.ContentType, enableRangeProcessing: true);
+        });
+
+        group.MapPut("/live/{pkid:int}/parameters", (
+            int pkid,
+            LiveParameterRequest? request,
+            LivePreviewService service,
+            RequestValidator validator) =>
+        {
+            validator.RequireLiveParameters(request);
+            return AsResult(service.ApplyParameters(pkid, request!));
+        });
+    }
+
+    /// <summary>The live a preview page is following, when it asked for one that is still running.</summary>
+    private static int? Watched(HttpRequest request)
+    {
+        var raw = request.Query["live"].FirstOrDefault();
+        return int.TryParse(raw, NumberStyles.Integer, CultureInfo.InvariantCulture, out var pkid) && pkid > 0
+            ? pkid
+            : null;
+    }
+
+    /// <summary>
     /// The push channel the pages listen to, so that they ask for what changed instead of asking
-    /// every few seconds. Two kinds of message: <c>rows</c> when a live row moved (the page redoes
-    /// its partial) and <c>stats</c> with the counters themselves (the page paints them, with no
-    /// request at all). The sampling stays on the server, where the value comes from anyway:
-    /// sampling is unavoidable, being asked again by every window is not.
+    /// every few seconds. Three kinds of message: <c>rows</c> when a live row moved (the page
+    /// redoes its partial), <c>stats</c> with the counters themselves and <c>live</c> with the
+    /// state of the live the page is watching (the page paints it, with no request at all). The
+    /// sampling stays on the server, where the value comes from anyway: sampling is unavoidable,
+    /// being asked again by every window is not.
     /// </summary>
     private static void MapUpdates(IEndpointRouteBuilder app)
     {
@@ -193,11 +234,13 @@ public static class OrbisEndpoints
             HttpContext context,
             LiveChangeNotifier notifier,
             SystemInfoService systemInfo,
+            LivePreviewService preview,
             CancellationToken token) =>
         {
             var watchRows = Watches(context.Request, "rows");
             var watchStats = Watches(context.Request, "stats");
-            if (!watchRows && !watchStats)
+            var watchLive = Watches(context.Request, "live");
+            if (!watchRows && !watchStats && !watchLive)
             {
                 return Results.Empty;
             }
@@ -220,7 +263,10 @@ public static class OrbisEndpoints
                 await response.Body.FlushAsync(token).ConfigureAwait(false);
             }
 
-            using var statsTimer = watchStats ? new PeriodicTimer(StatsInterval) : null;
+            // One timer for both sampled messages: they are both read once a second, and a page
+            // watching one of them is not paying for a tick that paints nothing.
+            using var sampler = watchStats || watchLive ? new PeriodicTimer(StatsInterval) : null;
+            var watched = watchLive ? Watched(context.Request) : null;
 
             try
             {
@@ -237,15 +283,20 @@ public static class OrbisEndpoints
                     await WriteAsync("stats", StatsJson(systemInfo)).ConfigureAwait(false);
                 }
 
-                // Both sources are awaited together: a change must not hold back the counters, and a
-                // counter tick must not be waited for by a page that does not want them. A source
-                // nobody watches stays pending until the client goes away.
+                if (watchLive)
+                {
+                    await WriteAsync("live", LiveJson(preview, watched)).ConfigureAwait(false);
+                }
+
+                // Every source is awaited together: a change must not hold back the samples, and a
+                // tick must not be waited for by a page that does not want it. A source nobody
+                // watches stays pending until the client goes away.
                 var rows = watchRows ? notifier.WaitAsync(version, token) : NeverRows(version, token);
-                var stats = statsTimer is not null ? statsTimer.WaitForNextTickAsync(token).AsTask() : NeverStats(token);
+                var sample = sampler is not null ? sampler.WaitForNextTickAsync(token).AsTask() : NeverStats(token);
 
                 while (true)
                 {
-                    var first = await Task.WhenAny(rows, stats).ConfigureAwait(false);
+                    var first = await Task.WhenAny(rows, sample).ConfigureAwait(false);
 
                     if (first == rows)
                     {
@@ -259,8 +310,17 @@ public static class OrbisEndpoints
                     }
                     else
                     {
-                        await WriteAsync("stats", StatsJson(systemInfo)).ConfigureAwait(false);
-                        stats = statsTimer is not null ? statsTimer.WaitForNextTickAsync(token).AsTask() : NeverStats(token);
+                        if (watchStats)
+                        {
+                            await WriteAsync("stats", StatsJson(systemInfo)).ConfigureAwait(false);
+                        }
+
+                        if (watchLive)
+                        {
+                            await WriteAsync("live", LiveJson(preview, watched)).ConfigureAwait(false);
+                        }
+
+                        sample = sampler is not null ? sampler.WaitForNextTickAsync(token).AsTask() : NeverStats(token);
                     }
                 }
             }
@@ -334,6 +394,16 @@ public static class OrbisEndpoints
 
         return JsonSerializer.Serialize(values);
     }
+
+    /// <summary>
+    /// The state of a live as the preview page wants it: the same camel case the rest of the API
+    /// answers in, so the page reads one shape whether the first sample came from the endpoint or
+    /// from the stream.
+    /// </summary>
+    private static string LiveJson(LivePreviewService preview, int? watched) =>
+        JsonSerializer.Serialize(preview.Snapshot(watched), PreviewJson);
+
+    private static readonly JsonSerializerOptions PreviewJson = new(JsonSerializerDefaults.Web);
 
     /// <summary>Writes the <c>{ response, message }</c> envelope with the Spring status code.</summary>
     private static IResult AsResult(MessageResponse response) =>

@@ -81,6 +81,22 @@ public sealed class VideoSettingEntity
 
     public int? GopSize { get; set; }
 
+    /// <summary>
+    /// Width the encoder is asked to produce. Null (the two of them) means "keep the resolution
+    /// of the file": the command builder only adds a <c>scale</c> filter when both are set, so a
+    /// half filled pair is a mistake rather than a default.
+    /// </summary>
+    public int? VideoWidth { get; set; }
+
+    /// <summary>Height the encoder is asked to produce; see <see cref="VideoWidth"/>.</summary>
+    public int? VideoHeight { get; set; }
+
+    /// <summary>
+    /// Frames per second the encoder is asked to produce. Null keeps the rate ffprobe read from
+    /// the file, which is what every stream did before this field existed.
+    /// </summary>
+    public double? FrameRate { get; set; }
+
     public bool? IsVideoAndAudioSettingActive { get; set; }
 
     public AudioSettingEntity? AudioSetting { get; set; }

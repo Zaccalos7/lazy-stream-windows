@@ -92,4 +92,78 @@ public sealed class FfmpegCommandBuilderTests
     {
         Assert.Equal(expected, FfmpegCommandBuilder.BuildStreamingUrl(url, key));
     }
+
+    [Fact]
+    public void Build_ScalesToTheResolutionOfTheSetting()
+    {
+        var setting = Setting();
+        setting.VideoWidth = 1280;
+        setting.VideoHeight = 720;
+
+        var arguments = FfmpegCommandBuilder.Build(
+            new FfmpegStreamRequest("/videos/clip.mp4", "rtmp://ingest/live/key", Probe(), setting));
+
+        Assert.Equal("scale=1280:720", arguments[arguments.ToList().IndexOf("-vf") + 1]);
+    }
+
+    [Fact]
+    public void Build_RoundsTheScaleDownToAnEvenFrameSize()
+    {
+        var setting = Setting();
+        setting.VideoWidth = 1281;
+        setting.VideoHeight = 721;
+
+        var arguments = FfmpegCommandBuilder.Build(
+            new FfmpegStreamRequest("/videos/clip.mp4", "rtmp://ingest/live/key", Probe(), setting));
+
+        Assert.Equal("scale=1280:720", arguments[arguments.ToList().IndexOf("-vf") + 1]);
+    }
+
+    [Fact]
+    public void Build_LeavesTheResolutionOfTheSourceAloneWhenTheSettingHasNone()
+    {
+        var command = string.Join(' ', FfmpegCommandBuilder.Build(
+            new FfmpegStreamRequest("/videos/clip.mp4", "rtmp://ingest/live/key", Probe(), Setting())));
+
+        Assert.DoesNotContain("-vf", command, StringComparison.Ordinal);
+    }
+
+    [Fact]
+    public void Build_TakesTheFrameRateOfTheSettingOverTheOneOfTheSource()
+    {
+        var setting = Setting();
+        setting.FrameRate = 60d;
+
+        var command = string.Join(' ', FfmpegCommandBuilder.Build(
+            new FfmpegStreamRequest("/videos/clip.mp4", "rtmp://ingest/live/key", Probe(frameRate: 23.976d), setting)));
+
+        Assert.Contains("-r 60", command, StringComparison.Ordinal);
+        Assert.Contains("-g 120", command, StringComparison.Ordinal);
+    }
+
+    [Fact]
+    public void ResolveOutput_FallsBackToWhatTheSourceCarries()
+    {
+        var output = FfmpegCommandBuilder.ResolveOutput(Setting(), Probe(frameRate: 23.976d));
+
+        Assert.Equal(1920, output.Width);
+        Assert.Equal(1080, output.Height);
+        Assert.Equal(23.976d, output.FrameRate);
+    }
+
+    [Fact]
+    public void ResolveOutput_AnswersWhatTheCommandLineAsksFor()
+    {
+        var setting = Setting();
+        setting.VideoWidth = 854;
+        setting.VideoHeight = 481;
+        setting.FrameRate = 24d;
+
+        var output = FfmpegCommandBuilder.ResolveOutput(setting, Probe(frameRate: 60d));
+
+        Assert.Equal(854, output.Width);
+        Assert.Equal(480, output.Height);
+        Assert.Equal(24d, output.FrameRate);
+        Assert.Equal("scale=854:480", FfmpegCommandBuilder.ScaleFilter(setting));
+    }
 }

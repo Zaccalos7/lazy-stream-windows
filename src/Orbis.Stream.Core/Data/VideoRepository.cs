@@ -281,6 +281,15 @@ internal static class SqliteValue
         _ => (int)ToInt64(value)
     };
 
+    public static double? ToNullableDouble(object? value) => value switch
+    {
+        null or DBNull => null,
+        double number => number,
+        long number => number,
+        int number => number,
+        var other => Convert.ToDouble(other, CultureInfo.InvariantCulture)
+    };
+
     public static bool ToBoolean(object? value) => value switch
     {
         null or DBNull => false,

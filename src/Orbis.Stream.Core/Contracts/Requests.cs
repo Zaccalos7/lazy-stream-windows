@@ -78,7 +78,10 @@ public sealed record VideoSettingsRequest(
     string? VideoFormat,
     AudioSettingsRequest? AudioSettingRecord,
     bool? IsDefaultConfiguration,
-    string? DefaultPlatformConfiguration)
+    string? DefaultPlatformConfiguration,
+    int? VideoWidth,
+    int? VideoHeight,
+    double? FrameRate)
 {
     public static VideoSettingsRequest FromEntity(VideoSettingEntity entity) => new(
         entity.Id,
@@ -94,7 +97,10 @@ public sealed record VideoSettingsRequest(
         entity.VideoFormat,
         AudioSettingsRequest.FromEntity(entity.AudioSetting),
         entity.IsDefaultConfiguration,
-        entity.DefaultPlatformConfiguration);
+        entity.DefaultPlatformConfiguration,
+        entity.VideoWidth,
+        entity.VideoHeight,
+        entity.FrameRate);
 
     public VideoSettingEntity ToEntity() => new()
     {
@@ -108,6 +114,9 @@ public sealed record VideoSettingsRequest(
         LastModified = LastModified,
         IsVideoAndAudioSettingActive = IsVideoAndAudioSettingActive,
         GopSize = GopSize,
+        VideoWidth = VideoWidth,
+        VideoHeight = VideoHeight,
+        FrameRate = FrameRate,
         IsDefaultConfiguration = IsDefaultConfiguration,
         DefaultPlatformConfiguration = DefaultPlatformConfiguration,
         AudioSetting = AudioSettingRecord is null
@@ -123,6 +132,23 @@ public sealed record VideoSettingsRequest(
             .ToList() ?? []
     };
 }
+
+/// <summary>
+/// The parameters the preview page can change while a live is running. Every field is optional:
+/// one that travels null is left as it is, so the page can send the single control that changed
+/// without having to know the whole configuration. Zero is a value and not an absence: it is how
+/// <see cref="VideoWidth"/>, <see cref="VideoHeight"/> and <see cref="FrameRate"/> ask for the source
+/// again, which the page could not do with a field it simply left out.
+/// </summary>
+public sealed record LiveParameterRequest(
+    int? VideoCodec,
+    string? VideoCodecName,
+    int? PixelFormat,
+    int? VideoBitrate,
+    int? AudioBitrate,
+    int? VideoWidth,
+    int? VideoHeight,
+    double? FrameRate);
 
 /// <summary>Port of <c>com.orbis.stream.record.VideoLiveHistoryRecord</c>.</summary>
 public sealed record VideoLiveHistoryRequest(

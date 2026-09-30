@@ -79,6 +79,26 @@ public sealed class RequestValidator
         Throw(errors);
     }
 
+    /// <summary>
+    /// The preview sends one change at a time and every field of it is optional, so the only thing
+    /// to refuse is a request that carries nothing: it would answer as a success without having
+    /// touched anything.
+    /// </summary>
+    public void RequireLiveParameters(LiveParameterRequest? request)
+    {
+        if (request is null || request is
+            {
+                VideoCodec: null, VideoCodecName: null, PixelFormat: null, VideoBitrate: null,
+                AudioBitrate: null, VideoWidth: null, VideoHeight: null, FrameRate: null
+            })
+        {
+            throw new RequestValidationException(new Dictionary<string, string>
+            {
+                ["parameters"] = Message("live.parameters.empty")
+            });
+        }
+    }
+
     public void RequireImage(IFormFile? image)
     {
         if (image is null)

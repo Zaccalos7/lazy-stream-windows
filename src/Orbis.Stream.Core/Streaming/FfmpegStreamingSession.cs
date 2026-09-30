@@ -14,13 +14,22 @@ public sealed class FfmpegStreamingSession : IAsyncDisposable
     private readonly Task _standardOutput;
     private long _positionMilliseconds;
     private int _stopRequested;
+    private int _restartRequested;
 
-    private FfmpegStreamingSession(Process process, int videoPkid, string inputPath, ILogger logger)
+    private FfmpegStreamingSession(
+        Process process,
+        int videoPkid,
+        string inputPath,
+        MediaProbeResult probe,
+        MediaOutput output,
+        ILogger logger)
     {
         _process = process;
         _logger = logger;
         VideoPkid = videoPkid;
         InputPath = inputPath;
+        Probe = probe;
+        Output = output;
         _standardError = ReadToEndAsync(process.StandardError);
 
         // Nothing else reads what ffmpeg writes on its standard output, and the pipe it writes
@@ -32,10 +41,29 @@ public sealed class FfmpegStreamingSession : IAsyncDisposable
 
     public string InputPath { get; }
 
+    /// <summary>What ffprobe read from the file, kept so the preview knows the source without asking again.</summary>
+    public MediaProbeResult Probe { get; }
+
+    /// <summary>
+    /// What this process was started to produce, kept because the configuration can change under
+    /// a running transcode: until the new ffmpeg is up, these are the numbers being sent.
+    /// </summary>
+    public MediaOutput Output { get; }
+
+    /// <summary>When this ffmpeg was started: it is what tells one running live from another.</summary>
+    public DateTimeOffset StartedAt { get; } = DateTimeOffset.UtcNow;
+
     /// <summary>How far the transcode got, as ffmpeg last reported it. Zero until the first report.</summary>
     public long PositionMilliseconds => Interlocked.Read(ref _positionMilliseconds);
 
     public bool StopRequested => Volatile.Read(ref _stopRequested) == 1;
+
+    /// <summary>
+    /// Set when the encoder configuration changed under a running transcode. ffmpeg cannot change
+    /// its options halfway, so the answer is to start it again from where it got to: the streaming
+    /// loop watches this flag and does exactly that.
+    /// </summary>
+    public bool RestartRequested => Volatile.Read(ref _restartRequested) == 1;
 
     public bool HasExited
     {
@@ -72,8 +100,17 @@ public sealed class FfmpegStreamingSession : IAsyncDisposable
         }
 
         logger.LogInformation("ffmpeg started for {Input} -> {OutputUrl}", inputPath, outputUrl);
-        return new FfmpegStreamingSession(process, videoPkid, inputPath, logger);
+        return new FfmpegStreamingSession(
+            process,
+            videoPkid,
+            inputPath,
+            probe,
+            FfmpegCommandBuilder.ResolveOutput(setting, probe),
+            logger);
     }
+
+    /// <summary>Asks the streaming loop to start this transcode again with a new configuration.</summary>
+    public void RequestRestart() => Interlocked.Exchange(ref _restartRequested, 1);
 
     /// <summary>
     /// Reads the <c>-progress</c> block of ffmpeg, which repeats the state of the transcode until
@@ -181,12 +218,42 @@ public sealed class StreamingSessionRegistry
 
     public int ActiveCount => _sessions.Count;
 
+    /// <summary>
+    /// The running transcodes, most recently started first. The dictionary hands out a snapshot, so
+    /// the preview can walk them while a start or a stop is changing the map.
+    /// </summary>
+    public IReadOnlyList<FfmpegStreamingSession> Running =>
+        _sessions.Values.OrderByDescending(session => session.StartedAt).ToList();
+
     public void Register(FfmpegStreamingSession session) => _sessions[session.VideoPkid] = session;
 
     public void Remove(int videoPkid) => _sessions.TryRemove(videoPkid, out _);
 
     public bool TryGet(int videoPkid, out FfmpegStreamingSession? session) =>
         _sessions.TryGetValue(videoPkid, out session);
+
+    /// <summary>
+    /// The session a preview is about: the one asked for when it is still running, otherwise the
+    /// transcode that started last. Null when nothing is being sent.
+    /// </summary>
+    public FfmpegStreamingSession? Watched(int? videoPkid) =>
+        videoPkid is { } wanted && _sessions.TryGetValue(wanted, out var asked) && !asked.HasExited
+            ? asked
+            : _sessions.Values.Where(session => !session.HasExited)
+                .OrderByDescending(session => session.StartedAt)
+                .FirstOrDefault();
+
+    /// <summary>Asks a running transcode to start again with a new configuration. False if it is gone.</summary>
+    public bool RequestRestart(int videoPkid)
+    {
+        if (!_sessions.TryGetValue(videoPkid, out var session) || session is null)
+        {
+            return false;
+        }
+
+        session.RequestRestart();
+        return true;
+    }
 
     public Task StopAsync(int videoPkid)
     {

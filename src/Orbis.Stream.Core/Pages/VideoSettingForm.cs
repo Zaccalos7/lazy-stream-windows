@@ -28,6 +28,13 @@ public sealed class VideoSettingForm
 
     public int? GopSize { get; set; }
 
+    /// <summary>Resolution asked to the encoder; the pair is empty when the source keeps its own.</summary>
+    public int? VideoWidth { get; set; }
+
+    public int? VideoHeight { get; set; }
+
+    public double? FrameRate { get; set; }
+
     public int? AudioCodec { get; set; }
 
     public int? AudioBitrate { get; set; }
@@ -48,7 +55,12 @@ public sealed class VideoSettingForm
         && GopSize is not null
         && !string.IsNullOrWhiteSpace(VideoFormat)
         && AudioCodec is not null
-        && AudioBitrate is not null;
+        && AudioBitrate is not null
+        && IsResolutionComplete
+        && FrameRate is not > 480;
+
+    /// <summary>The two halves of a resolution travel together: one alone is a half typed form.</summary>
+    public bool IsResolutionComplete => VideoWidth is null == (VideoHeight is null);
 
     public static VideoSettingForm From(VideoSettingsRequest setting) => new()
     {
@@ -60,6 +72,9 @@ public sealed class VideoSettingForm
         VideoBitrate = setting.VideoBitrate,
         VideoFormat = setting.VideoFormat,
         GopSize = setting.GopSize,
+        VideoWidth = setting.VideoWidth,
+        VideoHeight = setting.VideoHeight,
+        FrameRate = setting.FrameRate,
         AudioCodec = setting.AudioSettingRecord?.AudioCodec,
         AudioBitrate = setting.AudioSettingRecord?.AudioBitrate,
         Preset = Option(setting, "preset"),
@@ -84,7 +99,10 @@ public sealed class VideoSettingForm
         VideoFormat,
         new AudioSettingsRequest(AudioCodec, AudioBitrate),
         false,
-        CustomPlatform);
+        CustomPlatform,
+        VideoWidth,
+        VideoHeight,
+        FrameRate);
 
     private static string? Option(VideoSettingsRequest setting, string key) =>
         setting.VideoOptions?.FirstOrDefault(option => option?.Key == key)?.Value;

@@ -206,6 +206,15 @@ public sealed class VideoRepository
         command.ExecuteNonQuery();
     }
 
+    public void Delete(int pkid)
+    {
+        using var connection = _connectionFactory.Open();
+        using var command = connection.CreateCommand();
+        command.CommandText = "DELETE FROM video WHERE pkid = @pkid;";
+        command.Parameters.AddWithValue("@pkid", pkid);
+        command.ExecuteNonQuery();
+    }
+
     public void SetVideoSetting(int pkid, int? videoSettingId)
     {
         using var connection = _connectionFactory.Open();

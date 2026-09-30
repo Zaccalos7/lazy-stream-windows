@@ -171,6 +171,52 @@ public sealed class EndToEndApiTests : IClassFixture<ApplicationFixture>
     }
 
     [Fact]
+    public async Task ANewScene_KeepsItsSourcesAndAnswersWithItsId()
+    {
+        // The desktop and one monitor are two sources of the same kind: both on one canvas is the
+        // layout of anyone streaming a second screen with the whole desktop behind it.
+        var scene = new
+        {
+            pkid = (long?)null,
+            name = "Desktop + webcam",
+            width = 1920,
+            height = 1080,
+            items = new object[]
+            {
+                new { sourceKind = 1, sourceTarget = "desktop", label = "Desktop", x = 0, y = 0, width = 1920, height = 1080, audioEnabled = false },
+                new { sourceKind = 1, sourceTarget = "monitor:1920,0,1280x1024", label = "Screen 2", x = 0, y = 0, width = 640, height = 512, audioEnabled = false },
+                new { sourceKind = 2, sourceTarget = "video=Integrated Camera", label = "Webcam", x = 1440, y = 810, width = 480, height = 270, audioEnabled = false },
+                new { sourceKind = 3, sourceTarget = "audio=Microphone", label = "Mic", x = 0, y = 0, width = 0, height = 0, audioEnabled = true }
+            }
+        };
+
+        using var saved = await _fixture.Client.PostAsJsonAsync("/scene/save", scene);
+        Assert.Equal(HttpStatusCode.Created, saved.StatusCode);
+        var pkid = (await saved.Content.ReadFromJsonAsync<JsonElement>()).GetProperty("pkid").GetInt64();
+        Assert.True(pkid > 0);
+
+        using var read = await _fixture.Client.GetAsync($"/scene/{pkid}");
+        var stored = await read.Content.ReadFromJsonAsync<JsonElement>();
+        var targets = stored.GetProperty("items").EnumerateArray()
+            .Select(item => item.GetProperty("sourceTarget").GetString())
+            .ToList();
+
+        // In the order they were stacked: the order ffmpeg lays them over each other.
+        Assert.Equal(["desktop", "monitor:1920,0,1280x1024", "video=Integrated Camera", "audio=Microphone"], targets);
+
+        // The same camera twice is still refused: dshow cannot open one device twice.
+        using var duplicated = await _fixture.Client.PostAsJsonAsync("/scene/save", new
+        {
+            pkid = (long?)null,
+            name = "Twice",
+            width = 1920,
+            height = 1080,
+            items = new object[] { scene.items[2], scene.items[2] }
+        });
+        Assert.False(duplicated.IsSuccessStatusCode);
+    }
+
+    [Fact]
     public async Task Root_RedirectsToTheClientRouter()
     {
         using var response = await _fixture.NoRedirectClient.GetAsync("/", HttpCompletionOption.ResponseHeadersRead);

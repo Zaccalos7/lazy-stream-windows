@@ -226,7 +226,10 @@ public sealed class LivePreviewTests : IAsyncLifetime
         using var offline = await _host.Client.GetAsync("/orbis/mainPreview");
         Assert.Equal(HttpStatusCode.OK, offline.StatusCode);
         var html = await offline.Content.ReadAsStringAsync();
-        Assert.Contains("data-preview", html, StringComparison.Ordinal);
+
+        // With nothing on air the page is the canvas the next live is composed on.
+        Assert.Contains("data-composer", html, StringComparison.Ordinal);
+        Assert.Contains("scene-start-dialog", html, StringComparison.Ordinal);
 
         if (!await StartLiveAsync())
         {

@@ -230,5 +230,8 @@
   "sourcesVideoGroup": "Video",
   "sourcesAudioGroup": "Audio",
   "sourcesEmptyUsed": "No sources are currently used.",
-  "sourcesEmptyAvailable": "No other sources available."
+  "sourcesEmptyAvailable": "No other sources available.",
+  "deleteLiveRow": "Удалить строку",
+  "deleteLiveRowConfirm": "Вы уверены, что хотите удалить эту строку?",
+  "firstPage": "На первую страницу"
 }

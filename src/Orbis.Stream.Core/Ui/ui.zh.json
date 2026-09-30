@@ -230,5 +230,8 @@
   "sourcesVideoGroup": "Video",
   "sourcesAudioGroup": "Audio",
   "sourcesEmptyUsed": "No sources are currently used.",
-  "sourcesEmptyAvailable": "No other sources available."
+  "sourcesEmptyAvailable": "No other sources available.",
+  "deleteLiveRow": "删除行",
+  "deleteLiveRowConfirm": "您确定要删除此行吗？",
+  "firstPage": "返回第一页"
 }

@@ -230,5 +230,8 @@
   "sourcesVideoGroup": "Video",
   "sourcesAudioGroup": "Audio",
   "sourcesEmptyUsed": "Nessuna sorgente in uso.",
-  "sourcesEmptyAvailable": "Nessuna altra sorgente disponibile."
+  "sourcesEmptyAvailable": "Nessuna altra sorgente disponibile.",
+  "deleteLiveRow": "Elimina riga",
+  "deleteLiveRowConfirm": "Sei sicuro di voler eliminare questa riga?",
+  "firstPage": "Torna alla prima pagina"
 }

@@ -230,5 +230,8 @@
   "sourcesVideoGroup": "Video",
   "sourcesAudioGroup": "Audio",
   "sourcesEmptyUsed": "No sources are currently used.",
-  "sourcesEmptyAvailable": "No other sources available."
+  "sourcesEmptyAvailable": "No other sources available.",
+  "deleteLiveRow": "Delete row",
+  "deleteLiveRowConfirm": "Are you sure you want to delete this row?",
+  "firstPage": "Back to first page"
 }

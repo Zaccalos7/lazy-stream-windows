@@ -157,5 +157,6 @@
   "uptime": "Uptime",
   "appUptime": "App uptime",
   "dotnet": ".NET runtime",
-  "retry": "Retry"
+  "retry": "Retry",
+  "initializing": "Initializing..."
 }

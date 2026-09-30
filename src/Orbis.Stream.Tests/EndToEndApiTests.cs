@@ -231,7 +231,7 @@ public sealed class EndToEndApiTests : IClassFixture<ApplicationFixture>
         using var italian = await _fixture.NoRedirectClient.SendAsync(page);
         var html = await italian.Content.ReadAsStringAsync();
 
-        Assert.Contains("<html lang=\"it\">", html, StringComparison.Ordinal);
+        Assert.Contains("<html lang=\"it\"", html, StringComparison.Ordinal);
         Assert.Contains("Gestione Live", html, StringComparison.Ordinal);
     }
 

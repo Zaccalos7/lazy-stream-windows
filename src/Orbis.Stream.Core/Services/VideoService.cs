@@ -123,6 +123,22 @@ public sealed class VideoService
         return _responses.Build("unlock.in.progress", StatusCodes.Status202Accepted);
     }
 
+    /// <summary>Removes one row of the live list. A row still LIVE has an ffmpeg behind it that
+    /// reads this row to know when to stop, so it has to be stopped first.</summary>
+    public MessageResponse DeleteVideo(int pkid)
+    {
+        var video = FindVideoToUnlock(pkid);
+        if (video.LiveStatus == LiveStatus.Live)
+        {
+            throw new LiveException("video.delete.live");
+        }
+
+        _videoRepository.Delete(pkid);
+        _notifier.Raise();
+        _logger.LogInformation("{Message}", _localizer.PrintMessage("delete.successful"));
+        return _responses.Build("delete.successful", StatusCodes.Status200OK);
+    }
+
     private async Task UnlockAsync(VideoEntity video)
     {
         video.ShouldBeStop = true;

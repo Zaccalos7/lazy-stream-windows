@@ -55,10 +55,10 @@ else
                                     <button class="btn subtle icon-only danger" disabled="@(!live)" title="@T["stopLiveIconLabel"]" aria-label="@T["stopLiveIconLabel"]"><i class="icon">&#xE71A;</i></button>
                                 </form>
                                 <form method="post" asp-page="/MainLive" asp-page-handler="Replay" asp-all-route-data="Model.RowRoute(video.Pkid)" data-confirm="@T["startLiveAlert"]">
-                                    <button class="btn subtle icon-only" disabled="@live" title="@T["startLiveIconLabel"]" aria-label="@T["startLiveIconLabel"]"><i class="icon">&#xE768;</i></button>
+                                    <button class="btn subtle icon-only success" disabled="@live" title="@T["startLiveIconLabel"]" aria-label="@T["startLiveIconLabel"]"><i class="icon">&#xE768;</i></button>
                                 </form>
                                 <form method="post" asp-page="/MainLive" asp-page-handler="Restart" asp-all-route-data="Model.RowRoute(video.Pkid)" data-confirm="@T["restartLiveAlert"]">
-                                    <button class="btn subtle icon-only" title="@T["restartLiveIconLabel"]" aria-label="@T["restartLiveIconLabel"]"><i class="icon">&#xE72C;</i></button>
+                                    <button class="btn subtle icon-only caution" title="@T["restartLiveIconLabel"]" aria-label="@T["restartLiveIconLabel"]"><i class="icon">&#xE72C;</i></button>
                                 </form>
                             }
                             else
@@ -67,6 +67,10 @@ else
                                     <i class="icon">&#xE71B;</i>@T["connectVideoSetting"]
                                 </a>
                             }
+                            @* A running live cannot be deleted: its ffmpeg still reads the row to know when to stop. *@
+                            <form method="post" asp-page="/MainLive" asp-page-handler="Delete" asp-all-route-data="Model.RowRoute(video.Pkid)" data-confirm="@T["deleteLiveRowConfirm"]">
+                                <button class="btn subtle icon-only danger" disabled="@live" title="@T["deleteLiveRow"]" aria-label="@T["deleteLiveRow"]"><i class="icon">&#xE74D;</i></button>
+                            </form>
                             @* A start, a stop or a restart runs the server (ffmpeg included), so
                                the answer takes a moment: this is what says the row is working,
                                next to the icons that asked for it. *@

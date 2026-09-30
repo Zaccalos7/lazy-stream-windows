@@ -85,6 +85,31 @@ public sealed class StreamingService
     }
 
     /// <summary>
+    /// A live from a folder picked in the playlist wizard. Unlike <see cref="StartLive"/>, which also
+    /// takes a single file, the path has to be a folder: its videos (and nothing else lying in it)
+    /// become the playlist, one row each, in the order Explorer lists them.
+    /// </summary>
+    public MessageResponse StartPlaylist(StartLiveRequest request)
+    {
+        ArgumentNullException.ThrowIfNull(request);
+
+        var folder = NormalizeUserPath(request.VideoPath ?? string.Empty);
+        if (folder.Length == 0 || File.Exists(folder))
+        {
+            _logger.LogError("{Message}", _localizer.PrintMessage("playlist.not.a.folder", [folder]));
+            throw new NotFoundCustomException("playlist.not.a.folder", [folder]);
+        }
+
+        if (!Directory.Exists(folder))
+        {
+            _logger.LogError("{Message} {Path}", _localizer.PrintMessage("folder.not.found"), folder);
+            throw new NotFoundCustomException("folder.not.found");
+        }
+
+        return StartLive(request with { VideoPath = folder });
+    }
+
+    /// <summary>
     /// Port of <c>startVideo</c>: replays or restarts a single video whose details and settings
     /// are already stored, so no video row is created here.
     /// </summary>
@@ -419,6 +444,9 @@ public sealed class StreamingService
 
                 return VideoExtensions.IsVideoExtensionPresent(fileName[(lastDotIndex + 1)..]);
             })
+            // The rows are streamed in pkid order, so the insert order is the playlist order: the
+            // file system gives no order at all, and "Episode 10" belongs after "Episode 2".
+            .Order(NaturalFileNameComparer.Instance)
             .ToList();
 
         if (videoList.Count == 0)

@@ -153,6 +153,20 @@ public sealed class MainLiveModel(
         return RedirectToPage(Filters);
     }
 
+    public IActionResult OnPostDelete(int pkid)
+    {
+        Run(() => videos.DeleteVideo(pkid));
+
+        // Deleting the only row of the last page would leave the view on a page that no longer exists.
+        LoadVideos();
+        if (Videos.Content.Count == 0 && PageIndex > 0)
+        {
+            PageIndex = Math.Max(Videos.Page.TotalPages - 1, 0);
+        }
+
+        return RedirectToPage(Filters);
+    }
+
     public IActionResult OnPostUnlock(int videoKey)
     {
         Run(() => videos.UnlockVideo(videoKey));

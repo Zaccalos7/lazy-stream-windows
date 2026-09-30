@@ -496,6 +496,10 @@ h3.section::before { content: ""; width: 3px; height: 12px; border-radius: 2px; 
 
 .btn.danger { color: var(--critical); }
 .btn.danger:hover { background: var(--critical-bg); color: var(--critical); border-color: transparent; }
+.btn.success:not(:disabled) { color: var(--success); }
+.btn.success:not(:disabled):hover { background: var(--success-bg); border-color: transparent; }
+.btn.caution:not(:disabled) { color: var(--caution); }
+.btn.caution:not(:disabled):hover { background: var(--caution-bg); border-color: transparent; }
 
 .btn.icon-only { width: 30px; padding: 0; }
 .btn.icon-only .icon { font-size: 14px; }

@@ -74,7 +74,10 @@ public static class FfmpegCommandBuilder
 
         // -re is an input option: read at the rate the file plays at, which is what the Java
         // version did by pacing the frames it decoded.
-        arguments.Add("-re");
+        arguments.Add("-thread_queue_size");
+        arguments.Add("1024");
+        arguments.Add("-readrate");
+        arguments.Add("1");
         arguments.Add("-i");
         arguments.Add(request.InputPath);
 
@@ -240,7 +243,10 @@ public static class FfmpegCommandBuilder
                 arguments.Add(Seconds(resumeFrom));
             }
 
-            arguments.Add("-re");
+            arguments.Add("-thread_queue_size");
+            arguments.Add("1024");
+            arguments.Add("-readrate");
+            arguments.Add("1");
             arguments.Add("-i");
             arguments.Add(item.Target);
             return;

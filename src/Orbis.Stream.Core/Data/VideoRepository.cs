@@ -10,7 +10,8 @@ public sealed class VideoRepository
 {
     private const string BaseColumns =
         "t.pkid, t.name, t.video_path, t.extension, t.live_status, t.last_time_stamp_before_stop, " +
-        "t.message, t.should_be_stop, t.start_date_live, t.channel_name, t.video_live_history_pkid, t.video_setting_id";
+        "t.message, t.should_be_stop, t.start_date_live, t.channel_name, t.video_live_history_pkid, t.video_setting_id, " +
+        "t.source_kind, t.source_target, t.scene_pkid, t.x, t.y, t.width, t.height, t.audio_enabled";
 
     private readonly SqliteConnectionFactory _connectionFactory;
 
@@ -131,6 +132,20 @@ public sealed class VideoRepository
         return ReadAll(command).FirstOrDefault();
     }
 
+    /// <summary>
+    /// The rows a live streaming a canvas has, in stacking order. The playlist already comes back
+    /// ordered by pkid, and this is the same order the scene items were written in, so the first
+    /// row is the base the others are laid over.
+    /// </summary>
+    public IReadOnlyList<VideoEntity> FindByScenePkid(long scenePkid)
+    {
+        using var connection = _connectionFactory.Open();
+        using var command = connection.CreateCommand();
+        command.CommandText = $"SELECT {BaseColumns} FROM video t WHERE t.scene_pkid = @scene ORDER BY t.pkid;";
+        command.Parameters.AddWithValue("@scene", scenePkid);
+        return ReadAll(command);
+    }
+
     public int Insert(VideoEntity video)
     {
         using var connection = _connectionFactory.Open();
@@ -138,8 +153,10 @@ public sealed class VideoRepository
         command.CommandText =
             """
             INSERT INTO video (name, video_path, extension, live_status, last_time_stamp_before_stop, message,
-                               should_be_stop, start_date_live, channel_name, video_live_history_pkid, video_setting_id)
-            VALUES (@name, @path, @extension, @liveStatus, @lastTimeStamp, @message, @shouldBeStop, @startDateLive, @channelName, @history, @setting);
+                               should_be_stop, start_date_live, channel_name, video_live_history_pkid, video_setting_id,
+                               source_kind, source_target, scene_pkid, x, y, width, height, audio_enabled)
+            VALUES (@name, @path, @extension, @liveStatus, @lastTimeStamp, @message, @shouldBeStop, @startDateLive, @channelName, @history, @setting,
+                    @sourceKind, @sourceTarget, @scenePkid, @x, @y, @width, @height, @audioEnabled);
             SELECT last_insert_rowid();
             """;
         Bind(command, video);
@@ -163,7 +180,15 @@ public sealed class VideoRepository
                 start_date_live = @startDateLive,
                 channel_name = @channelName,
                 video_live_history_pkid = @history,
-                video_setting_id = @setting
+                video_setting_id = @setting,
+                source_kind = @sourceKind,
+                source_target = @sourceTarget,
+                scene_pkid = @scenePkid,
+                x = @x,
+                y = @y,
+                width = @width,
+                height = @height,
+                audio_enabled = @audioEnabled
             WHERE pkid = @pkid;
             """;
         Bind(command, video);
@@ -204,6 +229,14 @@ public sealed class VideoRepository
         command.Parameters.AddWithValue("@channelName", video.ChannelName);
         command.Parameters.AddWithValue("@history", video.VideoLiveHistoryId is null ? DBNull.Value : video.VideoLiveHistoryId.Value);
         command.Parameters.AddWithValue("@setting", video.VideoSettingId is null ? DBNull.Value : video.VideoSettingId.Value);
+        command.Parameters.AddWithValue("@sourceKind", (int)video.SourceKind);
+        command.Parameters.AddWithValue("@sourceTarget", SqliteValue.From(video.SourceTarget));
+        command.Parameters.AddWithValue("@scenePkid", SqliteValue.From(video.ScenePkid));
+        command.Parameters.AddWithValue("@x", SqliteValue.From(video.X));
+        command.Parameters.AddWithValue("@y", SqliteValue.From(video.Y));
+        command.Parameters.AddWithValue("@width", SqliteValue.From(video.Width));
+        command.Parameters.AddWithValue("@height", SqliteValue.From(video.Height));
+        command.Parameters.AddWithValue("@audioEnabled", video.AudioEnabled ? 1 : 0);
     }
 
     private static List<VideoEntity> ReadAll(SqliteCommand command)
@@ -231,7 +264,17 @@ public sealed class VideoRepository
         StartDateLive = SqliteValue.ToNullableDateTime(reader.GetValue(8)),
         ChannelName = reader.GetString(9),
         VideoLiveHistoryId = SqliteValue.ToNullableInt64(reader.GetValue(10)),
-        VideoSettingId = SqliteValue.ToNullableInt32(reader.GetValue(11))
+        VideoSettingId = SqliteValue.ToNullableInt32(reader.GetValue(11)),
+        SourceKind = SourceKindExtensions.TryParse(SqliteValue.ToText(reader.GetValue(12)), out var kind)
+            ? kind
+            : SourceKind.File,
+        SourceTarget = SqliteValue.ToText(reader.GetValue(13)),
+        ScenePkid = SqliteValue.ToNullableInt64(reader.GetValue(14)),
+        X = SqliteValue.ToNullableInt32(reader.GetValue(15)),
+        Y = SqliteValue.ToNullableInt32(reader.GetValue(16)),
+        Width = SqliteValue.ToNullableInt32(reader.GetValue(17)),
+        Height = SqliteValue.ToNullableInt32(reader.GetValue(18)),
+        AudioEnabled = SqliteValue.ToBoolean(reader.GetValue(19))
     };
 }
 

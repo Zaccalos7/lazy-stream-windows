@@ -35,13 +35,71 @@ public static class OrbisEndpoints
         MapImage(app);
         MapTaskManager(app);
         MapPreview(app);
+        MapScene(app);
         MapUpdates(app);
         return app;
+    }
+
+    /// <summary>
+    /// The canvases and the sources that can go on them. The catalog is a separate route from the
+    /// scenes because the page asks for it on every open, while the scenes are only fetched when
+    /// one is being edited.
+    /// </summary>
+    private static void MapScene(IEndpointRouteBuilder app)
+    {
+        var group = app.MapGroup("/scene");
+
+        group.MapGet("/all", (SceneService service) => Results.Ok(service.GetAll()));
+        group.MapGet("/{pkid:long}", (long pkid, SceneService service) => Results.Ok(service.GetOne(pkid)));
+        group.MapPost("/save", (SceneRequest? request, SceneService service) =>
+        {
+            if (request is null)
+            {
+                throw new RequestValidationException(new Dictionary<string, string>
+                {
+                    ["body"] = "input.not.valid"
+                });
+            }
+
+            var (response, pkid) = service.Save(request);
+            return Results.Json(
+                new SceneSavedResponse(response.Body.Response, response.Body.Message, pkid),
+                statusCode: response.StatusCode);
+        });
+        group.MapDelete("/{pkid:long}", (long pkid, SceneService service) => AsResult(service.Delete(pkid)));
+
+        app.MapGet("/preview/sources", (SourceCatalogService service) => Results.Ok(service.List()));
+
+        // One still per tile. No content is an answer, not an error: a camera that is busy in
+        // another application still goes on the canvas, it just shows its icon instead.
+        app.MapGet("/preview/sources/snapshot", async (
+            string? kind,
+            string? target,
+            SourceSnapshotService service,
+            CancellationToken cancellationToken) =>
+        {
+            if (!SourceKindExtensions.TryParse(kind, out var sourceKind))
+            {
+                return Results.NoContent();
+            }
+
+            var frame = await service.GrabAsync(sourceKind, target, cancellationToken).ConfigureAwait(false);
+            return frame is null ? Results.NoContent() : Results.File(frame, "image/jpeg");
+        });
     }
 
     private static void MapLive(IEndpointRouteBuilder app)
     {
         var group = app.MapGroup("/live");
+
+        group.MapPost("/start-scene-live", (
+            StartSceneLiveRequest? request,
+            StreamingService service,
+            RequestValidator validator) =>
+        {
+            validator.RequireStartSceneLive(request);
+            return AsResult(service.StartSceneLive(request!));
+        });
 
         group.MapPost("/start-live", (
             StartLiveRequest? request,

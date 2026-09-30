@@ -18,6 +18,12 @@ public sealed class SettingEntity
     public bool? IsActive { get; set; }
 
     public string ChannelName { get; set; } = "Zingy";
+
+    /// <summary>
+    /// The canvas this channel streams, when it streams a composition instead of a folder of
+    /// files. Null keeps the previous behaviour, so no existing configuration changes meaning.
+    /// </summary>
+    public long? ScenePkid { get; set; }
 }
 
 /// <summary>Port of <c>com.orbis.stream.model.VideoLiveHistory</c>.</summary>
@@ -133,4 +139,79 @@ public sealed class VideoEntity
     public long? VideoLiveHistoryId { get; set; }
 
     public int? VideoSettingId { get; set; }
+
+    /// <summary>
+    /// What this row is capturing. <see cref="SourceKind.File"/> is a file to play; the other two
+    /// are capture devices, and they have no <see cref="VideoPath"/> in the usual sense: the device
+    /// is named by <see cref="SourceTarget"/>.
+    /// </summary>
+    public SourceKind SourceKind { get; set; } = SourceKind.File;
+
+    /// <summary>The device to capture: a gdigrab target or a dshow name. Null for a file.</summary>
+    public string? SourceTarget { get; set; }
+
+    /// <summary>Where the row came from on a canvas, when the live streams a composition.</summary>
+    public long? ScenePkid { get; set; }
+
+    /// <summary>Tile rectangle on the composed output, in output pixels. Null fills the canvas.</summary>
+    public int? X { get; set; }
+
+    public int? Y { get; set; }
+
+    public int? Width { get; set; }
+
+    public int? Height { get; set; }
+
+    /// <summary>Whether this source contributes audio to the mix.</summary>
+    public bool AudioEnabled { get; set; }
+}
+
+/// <summary>
+/// A saved layout of sources: the blank canvas the user fills before starting a live. The rows of
+/// <see cref="SceneItemEntity"/> are in the order they are stacked, so the first one is the base
+/// the others are laid over.
+/// </summary>
+public sealed class SceneEntity
+{
+    public long Pkid { get; set; }
+
+    public string Name { get; set; } = string.Empty;
+
+    public string? Description { get; set; }
+
+    /// <summary>Width of the composed output. Null means "follow the base source".</summary>
+    public int? Width { get; set; }
+
+    /// <summary>Height of the composed output. Null means "follow the base source".</summary>
+    public int? Height { get; set; }
+
+    public DateTime? LastModified { get; set; }
+
+    public List<SceneItemEntity> Items { get; set; } = [];
+}
+
+/// <summary>One source on a <see cref="SceneEntity"/>, and where it sits on it.</summary>
+public sealed class SceneItemEntity
+{
+    public long Pkid { get; set; }
+
+    public long ScenePkid { get; set; }
+
+    public SourceKind SourceKind { get; set; } = SourceKind.File;
+
+    /// <summary>A file path, a gdigrab target or a dshow device name, depending on the kind.</summary>
+    public string SourceTarget { get; set; } = string.Empty;
+
+    /// <summary>Shown on the tile, so a webcam does not have to be recognised by its device name.</summary>
+    public string? Label { get; set; }
+
+    public int X { get; set; }
+
+    public int Y { get; set; }
+
+    public int Width { get; set; }
+
+    public int Height { get; set; }
+
+    public bool AudioEnabled { get; set; }
 }

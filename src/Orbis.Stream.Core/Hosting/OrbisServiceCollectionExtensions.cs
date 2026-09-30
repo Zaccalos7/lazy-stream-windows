@@ -32,6 +32,7 @@ public static class OrbisServiceCollectionExtensions
         services.AddSingleton<VideoSettingRepository>();
         services.AddSingleton<SettingRepository>();
         services.AddSingleton<VideoLiveHistoryRepository>();
+        services.AddSingleton<SceneRepository>();
 
         var messagesDirectory = MessageCatalog.LocateMessagesDirectory(contentRoot: options.DataDirectory)
             ?? Path.Combine(AppContext.BaseDirectory, "Messages");
@@ -59,10 +60,34 @@ public static class OrbisServiceCollectionExtensions
         services.AddSingleton<VideoSettingService>();
         services.AddSingleton<ImageService>();
         services.AddSingleton<LivePreviewService>();
+        // What the canvas can be built from. The folders are read on every listing, so a folder
+        // added in the channel settings shows its files without restarting the application.
+        services.AddSingleton<ISourceProvider, DisplaySourceProvider>();
+        services.AddSingleton<ISourceProvider, CameraSourceProvider>();
+        services.AddSingleton<ISourceProvider>(provider =>
+            new FileSourceProvider(ConfiguredFolders(provider.GetRequiredService<SettingRepository>())));
+        services.AddSingleton<SourceCatalogService>();
+        services.AddSingleton<SourceSnapshotService>();
+        services.AddSingleton<SceneService>();
 
         services.AddSingleton<DatabaseBootstrapper>();
         services.AddHostedService(provider => provider.GetRequiredService<DatabaseBootstrapper>());
 
         return services;
+    }
+
+    /// <summary>
+    /// An iterator, so it is read again every time it is walked: the providers are singletons and
+    /// a list captured when the container was built would never see a folder added afterwards.
+    /// </summary>
+    private static IEnumerable<string> ConfiguredFolders(SettingRepository settings)
+    {
+        foreach (var setting in settings.FindAll(new Dictionary<string, string>()))
+        {
+            if (!string.IsNullOrWhiteSpace(setting.VideoFolder))
+            {
+                yield return setting.VideoFolder;
+            }
+        }
     }
 }

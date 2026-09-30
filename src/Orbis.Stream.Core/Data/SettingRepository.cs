@@ -8,7 +8,8 @@ namespace Orbis.Stream.Core.Data;
 public sealed class SettingRepository
 {
     private const string BaseColumns =
-        "t.id, t.stream_url, t.stream_key, t.platform_stream_name, t.description, t.video_folder, t.is_active, t.channel_name";
+        "t.id, t.stream_url, t.stream_key, t.platform_stream_name, t.description, t.video_folder, t.is_active, t.channel_name, "
+        + "t.scene_pkid";
 
     private readonly SqliteConnectionFactory _connectionFactory;
 
@@ -63,8 +64,8 @@ public sealed class SettingRepository
         using var command = connection.CreateCommand();
         command.CommandText =
             """
-            INSERT INTO setting (stream_url, stream_key, platform_stream_name, description, video_folder, is_active, channel_name)
-            VALUES (@streamUrl, @streamKey, @platform, @description, @videoFolder, @isActive, @channelName);
+            INSERT INTO setting (stream_url, stream_key, platform_stream_name, description, video_folder, is_active, channel_name, scene_pkid)
+            VALUES (@streamUrl, @streamKey, @platform, @description, @videoFolder, @isActive, @channelName, @scenePkid);
             SELECT last_insert_rowid();
             """;
         command.Parameters.AddWithValue("@streamUrl", setting.StreamUrl);
@@ -74,6 +75,7 @@ public sealed class SettingRepository
         command.Parameters.AddWithValue("@videoFolder", setting.VideoFolder);
         command.Parameters.AddWithValue("@isActive", SqliteValue.From(setting.IsActive));
         command.Parameters.AddWithValue("@channelName", setting.ChannelName);
+        command.Parameters.AddWithValue("@scenePkid", SqliteValue.From(setting.ScenePkid));
         return Convert.ToInt32(command.ExecuteScalar(), CultureInfo.InvariantCulture);
     }
 
@@ -94,7 +96,8 @@ public sealed class SettingRepository
                 description = COALESCE(@description, description),
                 video_folder = COALESCE(@videoFolder, video_folder),
                 is_active = COALESCE(@isActive, is_active),
-                channel_name = COALESCE(@channelName, channel_name)
+                channel_name = COALESCE(@channelName, channel_name),
+                scene_pkid = COALESCE(@scenePkid, scene_pkid)
             WHERE id = @id;
             """;
         command.Parameters.AddWithValue("@streamUrl", (object?)setting.StreamUrl ?? DBNull.Value);
@@ -104,6 +107,7 @@ public sealed class SettingRepository
         command.Parameters.AddWithValue("@videoFolder", (object?)setting.VideoFolder ?? DBNull.Value);
         command.Parameters.AddWithValue("@isActive", SqliteValue.From(setting.IsActive));
         command.Parameters.AddWithValue("@channelName", (object?)setting.ChannelName ?? DBNull.Value);
+        command.Parameters.AddWithValue("@scenePkid", SqliteValue.From(setting.ScenePkid));
         command.Parameters.AddWithValue("@id", setting.Id);
         command.ExecuteNonQuery();
     }
@@ -132,7 +136,8 @@ public sealed class SettingRepository
                 Description = SqliteValue.ToText(reader.GetValue(4)),
                 VideoFolder = reader.GetString(5),
                 IsActive = reader.IsDBNull(6) ? null : SqliteValue.ToBoolean(reader.GetValue(6)),
-                ChannelName = reader.GetString(7)
+                ChannelName = reader.GetString(7),
+                ScenePkid = SqliteValue.ToNullableInt64(reader.GetValue(8))
             });
         }
 

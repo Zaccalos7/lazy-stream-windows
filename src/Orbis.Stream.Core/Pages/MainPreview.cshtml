@@ -3,7 +3,7 @@
 @using System.Globalization
 @using Orbis.Stream.Core.Services
 @{
-    ViewData["Title"] = T["livePreviewTitle"];
+    ViewData["Title"] = Model.IsComposing ? T["composeTitle"] : T["livePreviewTitle"];
     var live = Model.Snapshot;
 
     // The player shows the file of the live, and the page already knows where it is: the first
@@ -20,11 +20,29 @@
             : span.ToString(@"m\:ss", CultureInfo.InvariantCulture);
     }
 }
+@if (Model.IsComposing)
+{
+    <div class="page-header">
+        <div>
+            <h1>@T["composeTitle"]</h1>
+            <p class="subtitle">@T["composeSubtitle"]</p>
+        </div>
+        @if (live.IsLive)
+        {
+            <a class="btn" href="/orbis/mainPreview"><i class="icon">&#xE72B;</i>@T["backToPreview"]</a>
+        }
+    </div>
+
+    <partial name="_SceneComposer" model="Model" />
+    return;
+}
+
 <div class="page-header">
     <div>
         <h1>@T["livePreviewTitle"]</h1>
         <p class="subtitle">@T["livePreviewSubtitle"]</p>
     </div>
+    <a class="btn" href="/orbis/mainPreview?compose=1"><i class="icon">&#xE8A1;</i>@T["composeScene"]</a>
     @if (live.Running.Count > 1)
     {
         <form method="get">
@@ -68,17 +86,8 @@
      data-position="@live.PositionMilliseconds"
      data-playable="@(live.IsPlayable ? "1" : "0")">
 
-@if (!live.IsLive)
-{
-    <div class="card empty">
-        <i class="icon">&#xE714;</i>
-        <h3>@T["noLiveRunning"]</h3>
-        <p class="muted">@T["startALiveHere"]</p>
-        <a class="btn accent" href="/orbis/mainLive"><i class="icon">&#xE710;</i>@T["startLive"]</a>
-    </div>
-}
-else
-{
+@* With no live the page is the canvas (above), so from here on there always is one to watch. *@
+@{
     var parameters = live.Parameters;
     <div class="preview">
         <div class="preview-stage card">
@@ -87,7 +96,7 @@ else
                 <video data-preview-video src="@MainPreviewModel.VideoUrlOf(live.VideoPkid)@startAt"
                        preload="auto" autoplay muted playsinline controls></video>
             }
-            <div class="preview-cover" data-preview-cover hidden>
+            <div class="preview-cover" data-preview-cover hidden="@live.IsPlayable">
                 <i class="icon">&#xE714;</i>
                 <p class="muted">@T["notPlayableHere"]</p>
             </div>

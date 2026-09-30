@@ -63,7 +63,8 @@ public static class DatabaseSchema
                 Column("description", "TEXT", "TEXT", nullable: true),
                 Column("video_folder", "VARCHAR(255)", "VARCHAR(255) DEFAULT '/' NOT NULL", nullable: false),
                 Column("is_active", "BOOLEAN", "BOOLEAN DEFAULT 'false'", nullable: true),
-                Column("channel_name", "TEXT", "TEXT DEFAULT 'Zingy' NOT NULL", nullable: false)
+                Column("channel_name", "TEXT", "TEXT DEFAULT 'Zingy' NOT NULL", nullable: false),
+                Column("scene_pkid", "BIGINT", "BIGINT", nullable: true)
             ],
             ["video"] =
             [
@@ -78,7 +79,37 @@ public static class DatabaseSchema
                 Column("start_date_live", "TIMESTAMP", "TIMESTAMP", nullable: true),
                 Column("channel_name", "VARCHAR(512)", "VARCHAR(512) DEFAULT 'Zingy' NOT NULL", nullable: false),
                 Column("video_live_history_pkid", "BIGINT", "BIGINT", nullable: true),
-                Column("video_setting_id", "INTEGER", "INTEGER", nullable: true)
+                Column("video_setting_id", "INTEGER", "INTEGER", nullable: true),
+                Column("source_kind", "INTEGER", "INTEGER DEFAULT '0' NOT NULL", nullable: false),
+                Column("source_target", "TEXT", "TEXT", nullable: true),
+                Column("scene_pkid", "BIGINT", "BIGINT", nullable: true),
+                Column("x", "INTEGER", "INTEGER", nullable: true),
+                Column("y", "INTEGER", "INTEGER", nullable: true),
+                Column("width", "INTEGER", "INTEGER", nullable: true),
+                Column("height", "INTEGER", "INTEGER", nullable: true),
+                Column("audio_enabled", "BOOLEAN", "BOOLEAN DEFAULT 'false' NOT NULL", nullable: false)
+            ],
+            ["stream_scene"] =
+            [
+                Column("pkid", "INTEGER", "INTEGER PRIMARY KEY AUTOINCREMENT", nullable: false),
+                Column("name", "VARCHAR(255)", "VARCHAR(255) NOT NULL", nullable: false),
+                Column("description", "TEXT", "TEXT", nullable: true),
+                Column("width", "INTEGER", "INTEGER", nullable: true),
+                Column("height", "INTEGER", "INTEGER", nullable: true),
+                Column("last_modified", "TIMESTAMP", "TIMESTAMP", nullable: true)
+            ],
+            ["stream_scene_item"] =
+            [
+                Column("pkid", "INTEGER", "INTEGER PRIMARY KEY AUTOINCREMENT", nullable: false),
+                Column("scene_pkid", "BIGINT", "BIGINT NOT NULL", nullable: false),
+                Column("source_kind", "INTEGER", "INTEGER DEFAULT '0' NOT NULL", nullable: false),
+                Column("source_target", "TEXT", "TEXT NOT NULL", nullable: false),
+                Column("label", "VARCHAR(255)", "VARCHAR(255)", nullable: true),
+                Column("x", "INTEGER", "INTEGER DEFAULT '0' NOT NULL", nullable: false),
+                Column("y", "INTEGER", "INTEGER DEFAULT '0' NOT NULL", nullable: false),
+                Column("width", "INTEGER", "INTEGER DEFAULT '0' NOT NULL", nullable: false),
+                Column("height", "INTEGER", "INTEGER DEFAULT '0' NOT NULL", nullable: false),
+                Column("audio_enabled", "BOOLEAN", "BOOLEAN DEFAULT 'false' NOT NULL", nullable: false)
             ]
         };
 
@@ -140,6 +171,7 @@ public static class DatabaseSchema
             video_folder VARCHAR(255) DEFAULT '/' NOT NULL,
             is_active BOOLEAN DEFAULT 'false',
             channel_name TEXT DEFAULT 'Zingy' NOT NULL,
+            scene_pkid BIGINT,
             CONSTRAINT uk_setting_stream_url_stream_key UNIQUE (stream_url, stream_key)
         )
         """,
@@ -157,14 +189,57 @@ public static class DatabaseSchema
             channel_name VARCHAR(512) DEFAULT 'Zingy' NOT NULL,
             video_live_history_pkid BIGINT,
             video_setting_id INTEGER,
+            source_kind INTEGER DEFAULT '0' NOT NULL,
+            source_target TEXT,
+            scene_pkid BIGINT,
+            x INTEGER,
+            y INTEGER,
+            width INTEGER,
+            height INTEGER,
+            audio_enabled BOOLEAN DEFAULT 'false' NOT NULL,
             FOREIGN KEY (video_live_history_pkid) REFERENCES video_live_history (pkid),
             FOREIGN KEY (video_setting_id) REFERENCES video_setting (id) ON DELETE SET NULL
+        )
+        """,
+        """
+        CREATE TABLE IF NOT EXISTS stream_scene (
+            pkid INTEGER PRIMARY KEY AUTOINCREMENT,
+            name VARCHAR(255) NOT NULL,
+            description TEXT,
+            width INTEGER,
+            height INTEGER,
+            last_modified TIMESTAMP
+        )
+        """,
+        """
+        CREATE TABLE IF NOT EXISTS stream_scene_item (
+            pkid INTEGER PRIMARY KEY AUTOINCREMENT,
+            scene_pkid BIGINT NOT NULL,
+            source_kind INTEGER DEFAULT '0' NOT NULL,
+            source_target TEXT NOT NULL,
+            label VARCHAR(255),
+            x INTEGER DEFAULT '0' NOT NULL,
+            y INTEGER DEFAULT '0' NOT NULL,
+            width INTEGER DEFAULT '0' NOT NULL,
+            height INTEGER DEFAULT '0' NOT NULL,
+            audio_enabled BOOLEAN DEFAULT 'false' NOT NULL,
+            FOREIGN KEY (scene_pkid) REFERENCES stream_scene (pkid) ON DELETE CASCADE
         )
         """,
         "CREATE INDEX IF NOT EXISTS idx_video_live_status_channel ON video (live_status, channel_name)",
         "CREATE INDEX IF NOT EXISTS idx_video_live_history ON video (video_live_history_pkid)",
         "CREATE INDEX IF NOT EXISTS idx_video_setting_default ON video_setting (is_default_configuration, default_platform_configuration)",
         "CREATE INDEX IF NOT EXISTS idx_video_settings_options_setting ON video_settings_options (video_setting_id)"
+    ];
+
+    /// <summary>
+    /// Indexes on columns that a database from a previous version may not have yet: they can only
+    /// be created once <see cref="EnsureCreated"/> has added those columns.
+    /// </summary>
+    private static readonly IReadOnlyList<string> IndexesAfterSync =
+    [
+        "CREATE INDEX IF NOT EXISTS idx_video_scene ON video (scene_pkid)",
+        "CREATE INDEX IF NOT EXISTS idx_stream_scene_item_scene ON stream_scene_item (scene_pkid)"
     ];
 
     public static void EnsureCreated(SqliteConnection connection, ILogger? logger = null)
@@ -198,6 +273,11 @@ public static class DatabaseSchema
                     logger?.LogInformation("Added missing column {Table}.{Column}", table, column.Name);
                 }
             }
+        }
+
+        foreach (var statement in IndexesAfterSync)
+        {
+            Execute(connection, statement);
         }
     }
 

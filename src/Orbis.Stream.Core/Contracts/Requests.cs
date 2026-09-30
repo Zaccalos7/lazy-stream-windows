@@ -246,6 +246,94 @@ public sealed record StartLiveRequest(
     string? ChannelName,
     VideoSettingsRequest? VideoSettingsRecord);
 
+/// <summary>
+/// Starts a live from a saved canvas instead of a folder. There is no path on purpose: the sources
+/// are the rows of the scene, and the encoder setting is the same one a folder start takes.
+/// </summary>
+public sealed record StartSceneLiveRequest(
+    long ScenePkid,
+    string? StreamUrl,
+    string? StreamKey,
+    string? PlatformStreamName,
+    string? ChannelName,
+    VideoSettingsRequest? VideoSettingsRecord);
+
+/// <summary>One source on a canvas, as the page sends it.</summary>
+public sealed record SceneItemRequest(
+    SourceKind SourceKind,
+    string SourceTarget,
+    string? Label,
+    int X,
+    int Y,
+    int Width,
+    int Height,
+    bool AudioEnabled)
+{
+    public SceneItemEntity ToEntity(long scenePkid) => new()
+    {
+        ScenePkid = scenePkid,
+        SourceKind = SourceKind,
+        SourceTarget = SourceTarget,
+        Label = Label,
+        X = X,
+        Y = Y,
+        Width = Width,
+        Height = Height,
+        AudioEnabled = AudioEnabled
+    };
+}
+
+/// <summary>A canvas, with the sources on it in stacking order.</summary>
+public sealed record SceneRequest(
+    long? Pkid,
+    string? Name,
+    string? Description,
+    int? Width,
+    int? Height,
+    IReadOnlyList<SceneItemRequest>? Items)
+{
+    public static SceneRequest FromEntity(SceneEntity scene) => new(
+        scene.Pkid,
+        scene.Name,
+        scene.Description,
+        scene.Width,
+        scene.Height,
+        [.. scene.Items.Select(item => new SceneItemRequest(
+            item.SourceKind,
+            item.SourceTarget,
+            item.Label,
+            item.X,
+            item.Y,
+            item.Width,
+            item.Height,
+            item.AudioEnabled))]);
+
+    /// <summary>
+    /// The items carry the id the scene has, or 0 on a first save: the repository writes them
+    /// with the id it has just given the scene, so the caller never needs to know it in advance.
+    /// </summary>
+    public SceneEntity ToEntity()
+    {
+        var scenePkid = Pkid ?? 0;
+        return new SceneEntity
+        {
+            Pkid = scenePkid,
+            Name = Name ?? string.Empty,
+            Description = Description,
+            Width = Width,
+            Height = Height,
+            LastModified = DateTime.Now,
+            Items = [.. (Items ?? []).Select(item => item.ToEntity(scenePkid))]
+        };
+    }
+}
+
+/// <summary>
+/// The answer to a save: the usual envelope, plus the id the canvas has now, which the page needs
+/// to start a live from a scene it has only just created.
+/// </summary>
+public sealed record SceneSavedResponse(string Response, string Message, long Pkid);
+
 /// <summary>Port of <c>com.orbis.stream.dto.SystemInfoDto</c>.</summary>
 public sealed record SystemInfoResponse(string? Field, int Value);
 

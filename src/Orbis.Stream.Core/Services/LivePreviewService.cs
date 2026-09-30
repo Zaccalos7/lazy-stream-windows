@@ -163,7 +163,9 @@ public sealed class LivePreviewService
             history?.StreamUrl,
             session.PositionMilliseconds,
             (long)(probe.DurationSeconds * 1000),
-            VideoExtensions.IsBrowserPlayable(video.Extension),
+            // A canvas is not any one of its files: playing the first of them would show a
+            // picture that is not the one on air.
+            video.ScenePkid is null && VideoExtensions.IsBrowserPlayable(video.Extension),
             new LiveMedia(probe.Width, probe.Height, probe.FrameRate, probe.HasAudio, probe.AudioChannels),
             new LiveMedia(session.Output.Width, session.Output.Height, session.Output.FrameRate, probe.HasAudio, probe.AudioChannels),
             ParametersOf(setting, probe));

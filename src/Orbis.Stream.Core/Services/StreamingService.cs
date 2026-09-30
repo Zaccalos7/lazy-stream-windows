@@ -18,6 +18,7 @@ public sealed class StreamingService
     private readonly VideoRepository _videoRepository;
     private readonly VideoSettingRepository _videoSettingRepository;
     private readonly VideoLiveHistoryRepository _videoLiveHistoryRepository;
+    private readonly SceneRepository _sceneRepository;
     private readonly ResponseFactory _responses;
     private readonly Localizer _localizer;
     private readonly BackgroundTaskExecutor _executor;
@@ -31,6 +32,7 @@ public sealed class StreamingService
         VideoRepository videoRepository,
         VideoSettingRepository videoSettingRepository,
         VideoLiveHistoryRepository videoLiveHistoryRepository,
+        SceneRepository sceneRepository,
         ResponseFactory responses,
         Localizer localizer,
         BackgroundTaskExecutor executor,
@@ -42,6 +44,7 @@ public sealed class StreamingService
         _videoRepository = videoRepository;
         _videoSettingRepository = videoSettingRepository;
         _videoLiveHistoryRepository = videoLiveHistoryRepository;
+        _sceneRepository = sceneRepository;
         _responses = responses;
         _localizer = localizer;
         _executor = executor;
@@ -181,6 +184,105 @@ public sealed class StreamingService
 
     private string GetPlatformStreamName(long videoLiveHistoryPkid) =>
         _videoLiveHistoryRepository.FindByPkid(videoLiveHistoryPkid)?.PlatformStreamName ?? string.Empty;
+
+    /// <summary>
+    /// Starts a live from a canvas instead of a folder. The scene is written out as one video row
+    /// per source, exactly the way a folder scan writes one row per file: everything downstream
+    /// (the live page, the history, the stop, the preview) reads rows and never learns that a
+    /// canvas and a playlist are not the same thing.
+    /// </summary>
+    public MessageResponse StartSceneLive(StartSceneLiveRequest request)
+    {
+        ArgumentNullException.ThrowIfNull(request);
+
+        var channelName = request.ChannelName!;
+        var platformStreamName = request.PlatformStreamName!;
+        var streamKey = request.StreamKey!;
+        var streamUrl = request.StreamUrl!;
+
+        CheckIfALiveAlreadyStreamingForAChannel(channelName, platformStreamName);
+
+        var scene = _sceneRepository.FindByPkid(request.ScenePkid)
+            ?? throw new NotFoundCustomException("scene.not.found", [request.ScenePkid.ToString(System.Globalization.CultureInfo.InvariantCulture)]);
+
+        var sources = scene.Items.Where(item => item.SourceKind.HasPicture() || item.AudioEnabled).ToList();
+        if (!sources.Any(item => item.SourceKind.HasPicture()))
+        {
+            _logger.LogError("{Message}", _localizer.PrintMessage("scene.no.picture", [scene.Name]));
+            throw new NotFoundCustomException("scene.no.picture", [scene.Name]);
+        }
+
+        // The folder column is what the history is looked up by on a restart, so a scene is stored
+        // as a name of its own rather than as a path that does not exist on disk.
+        var source = SceneReference.Of(scene);
+
+        var timeStartLive = DateTime.Now;
+        SaveVideoLiveHistory(source, timeStartLive, streamUrl, streamKey, platformStreamName);
+        var videoLiveHistory = RetrievedVideoLiveHistorySaved(source, timeStartLive);
+
+        var videoSetting = request.VideoSettingsRecord?.ToEntity();
+        SaveSceneSources(scene, sources, videoLiveHistory, videoSetting, channelName);
+
+        var streamingUrl = FfmpegCommandBuilder.BuildStreamingUrl(streamUrl, streamKey);
+        return StreamingVideo(videoLiveHistory, streamingUrl);
+    }
+
+    private void SaveSceneSources(
+        SceneEntity scene,
+        IReadOnlyList<SceneItemEntity> items,
+        VideoLiveHistoryEntity videoLiveHistory,
+        VideoSettingEntity? videoSetting,
+        string channelName)
+    {
+        foreach (var item in items)
+        {
+            var video = new VideoEntity
+            {
+                Name = string.IsNullOrWhiteSpace(item.Label) ? DescribeSource(item) : item.Label!,
+                // A file keeps its path here, the way every row the folder scan wrote does; a device
+                // has no path, so the tile carries the name the pages show and the target the
+                // command line opens.
+                VideoPath = item.SourceKind == SourceKind.File
+                    ? Path.GetFullPath(StreamingService.NormalizeUserPath(item.SourceTarget))
+                    : SceneReference.ItemPath(item.SourceKind, item.SourceTarget),
+                Extension = item.SourceKind == SourceKind.File
+                    ? ExtractExtensionFile(Path.GetFileName(item.SourceTarget))
+                    : item.SourceKind.ToWireValue().ToLowerInvariant(),
+                LastTimeStampBeforeStop = 0L,
+                LiveStatus = LiveStatus.Offline,
+                VideoLiveHistoryId = videoLiveHistory.Pkid,
+                ShouldBeStop = false,
+                StartDateLive = DateTime.Now,
+                ChannelName = channelName,
+                VideoSettingId = videoSetting?.Id,
+                SourceKind = item.SourceKind,
+                SourceTarget = item.SourceKind == SourceKind.File ? null : item.SourceTarget,
+                ScenePkid = scene.Pkid,
+                X = item.X,
+                Y = item.Y,
+                Width = item.Width,
+                Height = item.Height,
+                AudioEnabled = item.AudioEnabled
+            };
+
+            if (videoSetting is not null && video.VideoSettingId is null)
+            {
+                video.VideoSettingId = videoSetting.Id;
+            }
+
+            _videoRepository.Insert(video);
+        }
+
+        _notifier.Raise();
+    }
+
+    private static string DescribeSource(SceneItemEntity item) => item.SourceKind switch
+    {
+        SourceKind.Screen => item.SourceTarget,
+        SourceKind.Camera => item.SourceTarget.Replace("video=", string.Empty, StringComparison.Ordinal),
+        SourceKind.Microphone => item.SourceTarget.Replace("audio=", string.Empty, StringComparison.Ordinal),
+        _ => Path.GetFileName(item.SourceTarget)
+    };
 
     private MessageResponse StreamingVideo(VideoLiveHistoryEntity videoLiveHistory, string streamingUrl)
     {

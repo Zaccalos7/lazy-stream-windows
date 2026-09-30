@@ -41,7 +41,10 @@ public sealed class FfmpegStreamingSession : IAsyncDisposable
 
     public string InputPath { get; }
 
-    /// <summary>What ffprobe read from the file, kept so the preview knows the source without asking again.</summary>
+    /// <summary>
+    /// What ffprobe read from the file, kept so the preview knows the source without asking again.
+    /// For a canvas it is what the composition was built as (see <see cref="StartComposition"/>).
+    /// </summary>
     public MediaProbeResult Probe { get; }
 
     /// <summary>
@@ -91,6 +94,49 @@ public sealed class FfmpegStreamingSession : IAsyncDisposable
         TimeSpan resumeFrom = default)
     {
         var arguments = FfmpegCommandBuilder.Build(new FfmpegStreamRequest(inputPath, outputUrl, probe, setting, resumeFrom));
+        return Launch(locator, videoPkid, inputPath, arguments, probe, FfmpegCommandBuilder.ResolveOutput(setting, probe), logger);
+    }
+
+    /// <summary>
+    /// The same process, started on a canvas instead of a file. The canvas has no container to
+    /// probe, so the probe it keeps describes what the composition was built as: its size, its
+    /// rate, and whether a sound is mixed into it. The preview reads a session the same way
+    /// whatever it streams, and a missing probe was a page that could not be drawn.
+    /// </summary>
+    public static FfmpegStreamingSession StartComposition(
+        FfmpegToolLocator locator,
+        int videoPkid,
+        IReadOnlyList<FfmpegCompositionItem> items,
+        string outputUrl,
+        VideoSettingEntity setting,
+        int canvasWidth,
+        int canvasHeight,
+        double canvasFrameRate,
+        ILogger logger,
+        TimeSpan resumeFrom = default)
+    {
+        var arguments = FfmpegCommandBuilder.BuildComposition(new FfmpegCompositionRequest(
+            items, outputUrl, setting, canvasWidth, canvasHeight, canvasFrameRate, resumeFrom));
+
+        // The composition is always sent at the size of the canvas: the resolution of the setting
+        // is not applied on top of it (see BuildComposition), so it is not the one shown either.
+        var frameRate = setting.FrameRate is > 0 ? setting.FrameRate.Value : canvasFrameRate;
+        var output = new MediaOutput(canvasWidth, canvasHeight, frameRate);
+        var sound = FfmpegCommandBuilder.CarriesSound(items);
+        var probe = new MediaProbeResult(canvasWidth, canvasHeight, frameRate, sound, sound ? 2 : 0, 0);
+
+        return Launch(locator, videoPkid, SceneDescriptionOf(items), arguments, probe, output, logger);
+    }
+
+    private static FfmpegStreamingSession Launch(
+        FfmpegToolLocator locator,
+        int videoPkid,
+        string inputPath,
+        IReadOnlyList<string> arguments,
+        MediaProbeResult probe,
+        MediaOutput output,
+        ILogger logger)
+    {
         var startInfo = locator.CreateStartInfo(locator.FfmpegPath, arguments);
 
         var process = new Process { StartInfo = startInfo, EnableRaisingEvents = true };
@@ -99,15 +145,14 @@ public sealed class FfmpegStreamingSession : IAsyncDisposable
             throw new InvalidOperationException($"Unable to start ffmpeg for {inputPath}");
         }
 
-        logger.LogInformation("ffmpeg started for {Input} -> {OutputUrl}", inputPath, outputUrl);
-        return new FfmpegStreamingSession(
-            process,
-            videoPkid,
-            inputPath,
-            probe,
-            FfmpegCommandBuilder.ResolveOutput(setting, probe),
-            logger);
+        logger.LogInformation(
+            "ffmpeg started for {Input} -> {OutputUrl}", inputPath, arguments[^1]);
+        return new FfmpegStreamingSession(process, videoPkid, inputPath, probe, output, logger);
     }
+
+    /// <summary>What the pages show instead of a path when a live is streaming a canvas.</summary>
+    private static string SceneDescriptionOf(IReadOnlyList<FfmpegCompositionItem> items) =>
+        items.Count == 1 ? items[0].Target : $"{items.Count} sources";
 
     /// <summary>Asks the streaming loop to start this transcode again with a new configuration.</summary>
     public void RequestRestart() => Interlocked.Exchange(ref _restartRequested, 1);

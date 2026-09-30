@@ -57,6 +57,34 @@ public sealed class RequestValidator
         Throw(errors);
     }
 
+    /// <summary>
+    /// The same as a folder start, with a scene id where the path goes. A canvas carries its
+    /// sources, so there is no folder to validate and nothing to guess at.
+    /// </summary>
+    public void RequireStartSceneLive(StartSceneLiveRequest? request)
+    {
+        if (request is null)
+        {
+            throw new RequestValidationException(new Dictionary<string, string>
+            {
+                ["body"] = Message("input.not.valid")
+            });
+        }
+
+        var errors = new Dictionary<string, string>();
+        AddIfNull(errors, "streamUrl", request.StreamUrl, "not.valid.input");
+        AddIfNull(errors, "streamKey", request.StreamKey, "not.valid.input");
+        AddIfNull(errors, "platformStreamName", request.PlatformStreamName, "input.not.valid");
+        AddIfNull(errors, "channelName", request.ChannelName, "input.not.valid");
+
+        if (request.ScenePkid <= 0)
+        {
+            errors["scenePkid"] = Message("not.valid.input");
+        }
+
+        Throw(errors);
+    }
+
     public void RequireVideo(VideoRequest? request)
     {
         if (request is null)

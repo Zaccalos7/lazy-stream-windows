@@ -1,0 +1,162 @@
+@model MainPreviewModel
+@{
+    var canStart = Model.ActiveSettings.Count > 0 && Model.ActiveConfigurations.Count > 0;
+    (int Width, int Height)[] sizes = [(1280, 720), (1920, 1080), (2560, 1440), (3840, 2160)];
+}
+@* The canvas the next live is put together on. Everything here is drawn by the script: the sources
+   are asked for when the page opens (enumerating cameras runs ffmpeg), and the scene is only a
+   layout until it is saved. The words it needs travel as data attributes, in the page language. *@
+<div class="composer" data-composer
+     data-scene="@Model.Scene"
+     data-w-screens="@T["sourcesScreens"]" data-w-cameras="@T["sourcesCameras"]"
+     data-w-microphones="@T["sourcesMicrophones"]" data-w-files="@T["sourcesFiles"]"
+     data-w-empty="@T["sourcesEmpty"]" data-w-failed="@T["sourcesFailed"]"
+     data-w-add="@T["addToCanvas"]" data-w-up="@T["bringForward"]" data-w-down="@T["sendBackward"]"
+     data-w-fill="@T["fillCanvas"]" data-w-remove="@T["removeSource"]" data-w-sound="@T["soundOn"]"
+     data-w-audio-only="@T["audioOnly"]" data-w-new="@T["newScene"]" data-w-unsaved="@T["unsavedChanges"]"
+     data-w-needs-picture="@T["sceneNeedsPicture"]" data-w-needs-name="@T["sceneNeedsName"]"
+     data-w-twice="@T["alreadyOnCanvas"]" data-w-ok="@T["success"]" data-w-ko="@T["error"]" data-w-warning="@T["warning"]">
+
+    <aside class="card composer-sources" aria-label="@T["sources"]">
+        <div class="composer-head">
+            <h3>@T["sources"]</h3>
+            <button type="button" class="btn subtle icon-only" data-composer-refresh title="@T["refreshSources"]" aria-label="@T["refreshSources"]"><i class="icon">&#xE72C;</i></button>
+        </div>
+        <div class="composer-catalog" data-composer-catalog data-state="loading">
+            <div class="composer-loading"><span class="spinner"></span><span class="caption">@T["loading"]</span></div>
+        </div>
+        <label class="field dropzone composer-file">
+            <span>@T["addVideoFile"]</span>
+            <span class="composer-file-row">
+                <input class="input" data-drop-path data-composer-path placeholder="C:\Video\intro.mp4" />
+                <button type="button" class="btn" data-composer-add-path>@T["add"]</button>
+            </span>
+            <small><i class="icon">&#xE8B5;</i><span>@T["addVideoFileHint"]</span></small>
+        </label>
+    </aside>
+
+    <section class="composer-main">
+        <div class="card composer-bar">
+            <label class="field">
+                <span class="caption">@T["scene"]</span>
+                <select class="input" data-composer-scenes>
+                    <option value="">@T["newScene"]</option>
+                </select>
+            </label>
+            <label class="field grow">
+                <span class="caption">@T["sceneName"]</span>
+                <input class="input" data-composer-name maxlength="255" placeholder="@T["newScene"]" />
+            </label>
+            <label class="field">
+                <span class="caption">@T["resolution"]</span>
+                <select class="input" data-composer-size>
+                    @foreach (var (width, height) in sizes)
+                    {
+                        <option value="@(width)x@(height)" selected="@(width == 1920)">@width × @height</option>
+                    }
+                </select>
+            </label>
+            <div class="composer-actions">
+                <span class="caption composer-dirty" data-composer-dirty hidden>@T["unsavedChanges"]</span>
+                <button type="button" class="btn subtle icon-only danger" data-composer-delete hidden
+                        data-confirm-text="@T["deleteSceneConfirm"]" title="@T["deleteScene"]" aria-label="@T["deleteScene"]"><i class="icon">&#xE74D;</i></button>
+                <button type="button" class="btn" data-composer-save><i class="icon">&#xE74E;</i>@T["saveScene"]</button>
+                <button type="button" class="btn accent" data-composer-start><i class="icon">&#xE768;</i>@T["startSceneLive"]</button>
+            </div>
+        </div>
+
+        <div class="composer-stage-wrap">
+            @* The stage keeps the aspect of the output; tiles are placed in output pixels and drawn
+               as a percentage of it, so the layout is the same whatever size the window is. *@
+            <div class="composer-stage" data-composer-stage tabindex="0" style="aspect-ratio: 1920 / 1080;">
+                <div class="composer-guide x" data-guide="x" hidden></div>
+                <div class="composer-guide y" data-guide="y" hidden></div>
+                <div class="composer-blank" data-composer-blank>
+                    <i class="icon">&#xE7F4;</i>
+                    <strong>@T["canvasEmpty"]</strong>
+                    <span class="caption">@T["canvasEmptyHint"]</span>
+                </div>
+            </div>
+        </div>
+        <p class="caption preview-note"><i class="icon">&#xE946;</i>@T["composerKeys"]</p>
+    </section>
+
+    <aside class="card composer-layers" aria-label="@T["layers"]">
+        <div class="composer-head">
+            <h3>@T["layers"]</h3>
+        </div>
+        <p class="caption">@T["layersHint"]</p>
+        <ol class="composer-layer-list" data-composer-layers></ol>
+    </aside>
+</div>
+
+@* The start: the same two choices as the live wizard. The scene id is filled in by the script once
+   the layout is saved, so what streams is exactly what is on the canvas. *@
+<dialog class="dialog wide" id="scene-start-dialog" data-busy-host>
+    <form method="post" asp-page-handler="StartScene">
+        <input type="hidden" name="scenePkid" data-composer-start-pkid />
+        <div class="dialog-body">
+            <h2>@T["startNewLiveTitle"]</h2>
+
+            <h3>@T["wizardStep1Title"]</h3>
+            @if (Model.ActiveSettings.Count == 0)
+            {
+                <div class="infobar warning section">
+                    <i class="icon">&#xE7BA;</i>
+                    <p><strong>@T["noActiveSetting"]</strong><br />@T["wizardNoActiveSettingsMessage"]</p>
+                    <a class="btn" href="/orbis/mainVideoSetting">@T["activateVideoAudioSettings"]</a>
+                </div>
+            }
+            else
+            {
+                <div class="choice-list section" style="margin-top: 8px;">
+                    @foreach (var setting in Model.ActiveSettings)
+                    {
+                        <label class="choice">
+                            <input type="radio" name="settingId" value="@setting.Id" required />
+                            <span class="grow">
+                                <strong>@(string.IsNullOrWhiteSpace(setting.Title) ? T["untitled"] : setting.Title)</strong>
+                                <span class="caption" style="display: block;">
+                                    @setting.VideoCodecName · @VideoSettingForm.FormatBitrate(setting.VideoBitrate, T["milion"]) ·
+                                    @setting.VideoFormat?.ToUpperInvariant() · @T["audioBitrate"] @(setting.AudioSettingRecord?.AudioBitrate?.ToString() ?? "N/A")
+                                </span>
+                            </span>
+                        </label>
+                    }
+                </div>
+            }
+
+            <h3 class="section">@T["wizardStep2Title"]</h3>
+            @if (Model.ActiveConfigurations.Count == 0)
+            {
+                <div class="infobar warning section">
+                    <i class="icon">&#xE7BA;</i>
+                    <p><strong>@T["noActiveStreamingConfiguration"]</strong><br />@T["wizardNoActiveConfigurationsMessage"]</p>
+                    <a class="btn" href="/orbis/mainChannelSetting">@T["activeConfigurationLabel"]</a>
+                </div>
+            }
+            else
+            {
+                <div class="choice-list" style="margin-top: 8px;">
+                    @foreach (var configuration in Model.ActiveConfigurations)
+                    {
+                        <label class="choice">
+                            <input type="radio" name="configurationId" value="@configuration.Id" required />
+                            <span class="grow">
+                                <strong>@configuration.ChannelName</strong> · @configuration.PlatformStreamName
+                                <span class="caption" style="display: block;">@configuration.StreamUrl</span>
+                            </span>
+                        </label>
+                    }
+                </div>
+            }
+        </div>
+        <div class="dialog-footer">
+            <span class="spinner" data-while="busy" title="@T["loading"]"></span>
+            <button class="btn accent" disabled="@(!canStart)">@T["startLiveButton"]</button>
+            <button class="btn" type="button" commandfor="scene-start-dialog" command="close">@T["cancel"]</button>
+        </div>
+    </form>
+</dialog>
+
+<script src="/js/composer.js" defer></script>

@@ -1,3 +1,4 @@
+using System.Globalization;
 using Orbis.Stream.Core.Data;
 using Orbis.Stream.Core.Domain;
 using Orbis.Stream.Core.I18n;
@@ -19,8 +20,15 @@ public sealed class FfmpegVideoPlaylistStreamer : IVideoPlaylistStreamer
     /// <summary>How close to the end a video has to be to count as streamed through.</summary>
     private const int FinishedToleranceMilliseconds = 250;
 
+    /// <summary>
+    /// What a canvas is captured at when nothing else says: gdigrab reads 5 frames a second unless
+    /// it is told otherwise, and a live at 5 frames a second is not a watchable stream.
+    /// </summary>
+    private const double DefaultCanvasFrameRate = 30d;
+
     private readonly VideoRepository _videoRepository;
     private readonly VideoSettingRepository _videoSettingRepository;
+    private readonly SceneRepository _sceneRepository;
     private readonly FfmpegProbe _probe;
     private readonly FfmpegToolLocator _locator;
     private readonly StreamingSessionRegistry _sessions;
@@ -31,6 +39,7 @@ public sealed class FfmpegVideoPlaylistStreamer : IVideoPlaylistStreamer
     public FfmpegVideoPlaylistStreamer(
         VideoRepository videoRepository,
         VideoSettingRepository videoSettingRepository,
+        SceneRepository sceneRepository,
         FfmpegProbe probe,
         FfmpegToolLocator locator,
         StreamingSessionRegistry sessions,
@@ -40,6 +49,7 @@ public sealed class FfmpegVideoPlaylistStreamer : IVideoPlaylistStreamer
     {
         _videoRepository = videoRepository;
         _videoSettingRepository = videoSettingRepository;
+        _sceneRepository = sceneRepository;
         _probe = probe;
         _locator = locator;
         _sessions = sessions;
@@ -54,7 +64,24 @@ public sealed class FfmpegVideoPlaylistStreamer : IVideoPlaylistStreamer
         long videoLiveHistoryPkid,
         CancellationToken cancellationToken)
     {
-        var queue = await PlanAsync(videos, cancellationToken).ConfigureAwait(false);
+        // Rows that came from a canvas are not a playlist: they are one picture, so they are grouped
+        // and streamed as a single ffmpeg instead of one after the other.
+        var groups = GroupAsync(videos).ToList();
+        var files = groups.Where(group => group.ScenePkid is null).SelectMany(group => group.Videos).ToList();
+
+        if (files.Count == 0)
+        {
+            foreach (var scene in groups.Where(group => group.ScenePkid is not null))
+            {
+                cancellationToken.ThrowIfCancellationRequested();
+                await StreamSceneAsync(scene.Videos, outputUrl, videoLiveHistoryPkid, cancellationToken)
+                    .ConfigureAwait(false);
+            }
+
+            return;
+        }
+
+        var queue = await PlanAsync(files, cancellationToken).ConfigureAwait(false);
 
         if (queue.Count == 0)
         {
@@ -63,8 +90,8 @@ public sealed class FfmpegVideoPlaylistStreamer : IVideoPlaylistStreamer
             // to watch. (The restart button asks for the same thing without waiting for the end.)
             _logger.LogInformation(
                 "{Message}", _localizer.PrintMessage("live.restarted.from.beginning", [videos.Count.ToString(System.Globalization.CultureInfo.InvariantCulture)]));
-            ForgetPositions(videos);
-            queue = [.. videos.Select(video => new PlannedVideo(video, null, TimeSpan.Zero))];
+            ForgetPositions(files);
+            queue = [.. files.Select(video => new PlannedVideo(video, null, TimeSpan.Zero))];
         }
 
         foreach (var planned in queue)
@@ -75,7 +102,50 @@ public sealed class FfmpegVideoPlaylistStreamer : IVideoPlaylistStreamer
     }
 
     /// <summary>
-    /// What is left to stream, in playlist order. A video that was already streamed through is
+    /// Splits the rows in playlist order into one group per canvas plus one group for the files.
+    /// A live from a folder has no canvas on any of its rows, so it comes back as it went in.
+    /// </summary>
+    private static IEnumerable<VideoGroup> GroupAsync(IReadOnlyList<VideoEntity> videos)
+    {
+        VideoGroup? scene = null;
+        var files = new List<VideoEntity>();
+
+        foreach (var video in videos)
+        {
+            if (video.ScenePkid is not { } scenePkid)
+            {
+                files.Add(video);
+                scene = null;
+                continue;
+            }
+
+            // A different canvas, or a file in between two of them, closes the group being built:
+            // the rows of one canvas have to be contiguous to be composited together.
+            if (scene is null || scene.ScenePkid != scenePkid)
+            {
+                if (scene is not null)
+                {
+                    yield return scene;
+                }
+
+                scene = new VideoGroup(scenePkid, []);
+            }
+
+            scene.Videos.Add(video);
+        }
+
+        if (scene is not null)
+        {
+            yield return scene;
+        }
+
+        if (files.Count > 0)
+        {
+            yield return new VideoGroup(null, files);
+        }
+    }
+
+    /// <summary>What is left to stream, in playlist order. A video that was already streamed through is
     /// left out, a video that was interrupted is asked for its own position: only those two need to
     /// know how long they are, so a first play probes nothing before the loop starts.
     /// </summary>
@@ -261,6 +331,203 @@ public sealed class FfmpegVideoPlaylistStreamer : IVideoPlaylistStreamer
         }
     }
 
+    /// <summary>
+    /// The files whose sound was asked for but that have none. A video without an audio track is
+    /// common, and <c>[n:a]</c> on it fails the whole graph before the first frame: such a file
+    /// stays on the canvas and simply leaves the mix. A file ffprobe cannot read counts as silent,
+    /// so the error the user sees is ffmpeg's about the file, not a filter one about its sound.
+    /// </summary>
+    private async Task<HashSet<VideoEntity>> SilentFilesAsync(
+        IReadOnlyList<VideoEntity> rows,
+        CancellationToken cancellationToken)
+    {
+        var silent = new HashSet<VideoEntity>();
+        foreach (var row in rows.Where(row => row.SourceKind == SourceKind.File && row.AudioEnabled))
+        {
+            try
+            {
+                var probe = await _probe.ProbeAsync(row.VideoPath, cancellationToken).ConfigureAwait(false);
+                if (!probe.HasAudio)
+                {
+                    silent.Add(row);
+                }
+            }
+            catch (Exception exception) when (exception is not OperationCanceledException)
+            {
+                _logger.LogWarning(exception, "Could not probe {Path}", row.VideoPath);
+                silent.Add(row);
+            }
+        }
+
+        return silent;
+    }
+
+    /// <summary>
+    /// The output size is the one the canvas was drawn with. A scene deleted while its live was
+    /// still in the history has no size any more, and then the box around the tiles is the
+    /// smallest canvas that still holds every one of them where it was dropped.
+    /// </summary>
+    private (int Width, int Height) CanvasSizeOf(long? scenePkid, IReadOnlyList<VideoEntity> rows)
+    {
+        if (scenePkid is { } pkid
+            && _sceneRepository.FindByPkid(pkid) is { Width: > 0, Height: > 0 } scene)
+        {
+            return (scene.Width!.Value, scene.Height!.Value);
+        }
+
+        var pictures = rows.Where(row => row.SourceKind.HasPicture()).ToList();
+        return (
+            pictures.Select(row => (row.X ?? 0) + (row.Width ?? 0)).DefaultIfEmpty(0).Max(),
+            pictures.Select(row => (row.Y ?? 0) + (row.Height ?? 0)).DefaultIfEmpty(0).Max());
+    }
+
+    /// <summary>
+    /// One ffmpeg for a whole canvas. The rows of a scene are its sources, not a playlist: they are
+    /// opened together and laid over each other, and the pass lasts until the user stops it, because
+    /// a capture device has no end to reach.
+    /// </summary>
+    private async Task StreamSceneAsync(
+        IReadOnlyList<VideoEntity> rows,
+        string outputUrl,
+        long videoLiveHistoryPkid,
+        CancellationToken cancellationToken)
+    {
+        var baseRow = rows.FirstOrDefault(row => row.SourceKind.HasPicture());
+        if (baseRow is null)
+        {
+            return;
+        }
+
+        var (canvasWidth, canvasHeight) = CanvasSizeOf(baseRow.ScenePkid, rows);
+        if (canvasWidth <= 0 || canvasHeight <= 0)
+        {
+            var message = _localizer.PrintMessage("error.scene.no.canvas", [baseRow.Name]);
+            _logger.LogError("{Message}", message);
+            foreach (var row in rows)
+            {
+                SaveMessageOnVideoLiveHistory(
+                    message, videoLiveHistoryPkid, row.VideoPath, LiveStatus.Error, DateTime.Now, 0);
+            }
+
+            return;
+        }
+
+        var videoKey = baseRow.Pkid;
+        var description = _localizer.PrintMessage("video.live.scene", [rows.Count.ToString(CultureInfo.InvariantCulture)]);
+        FfmpegStreamingSession? session = null;
+
+        try
+        {
+            var resumeFrom = TimeSpan.Zero;
+            var silent = await SilentFilesAsync(rows, cancellationToken).ConfigureAwait(false);
+
+            while (true)
+            {
+                cancellationToken.ThrowIfCancellationRequested();
+                var videoSetting = FindSetting(videoKey);
+
+                var items = rows
+                    .Select(row => new FfmpegCompositionItem(
+                        row.SourceKind,
+                        row.SourceKind == SourceKind.File ? row.VideoPath : row.SourceTarget ?? string.Empty,
+                        row.X ?? 0,
+                        row.Y ?? 0,
+                        row.Width ?? 0,
+                        row.Height ?? 0,
+                        row.AudioEnabled && !silent.Contains(row)))
+                    .ToList();
+
+                var next = FfmpegStreamingSession.StartComposition(
+                    _locator,
+                    videoKey,
+                    items,
+                    outputUrl,
+                    videoSetting,
+                    canvasWidth,
+                    canvasHeight,
+                    DefaultCanvasFrameRate,
+                    _logger,
+                    resumeFrom);
+
+                var previous = session;
+                session = next;
+                _sessions.Register(next);
+                if (previous is not null)
+                {
+                    await previous.DisposeAsync().ConfigureAwait(false);
+                }
+
+                MarkRows(rows, LiveStatus.Live, description);
+                _logger.LogInformation("{Message}", description);
+
+                var outcome = await MonitorAsync(session, videoKey, videoLiveHistoryPkid, baseRow.VideoPath, cancellationToken)
+                    .ConfigureAwait(false);
+
+                if (outcome == StreamOutcome.Stopped)
+                {
+                    var stopped = _localizer.PrintMessage("live.stopped");
+                    MarkRows(rows, LiveStatus.Stopped, stopped);
+                    return;
+                }
+
+                if (outcome == StreamOutcome.Reconfigured)
+                {
+                    resumeFrom = TimeSpan.FromMilliseconds(session.PositionMilliseconds);
+                    var reconfigured = _localizer.PrintMessage("video.live.reconfigured", [description]);
+                    _logger.LogInformation("{Message}", reconfigured);
+                    SaveMessageOnVideoLiveHistory(
+                        reconfigured, videoLiveHistoryPkid, baseRow.VideoPath, LiveStatus.Live, null);
+                    continue;
+                }
+
+                var exitCode = await session.WaitForExitAsync(cancellationToken).ConfigureAwait(false);
+                var errorOutput = await session.ReadErrorAsync().ConfigureAwait(false);
+
+                var failure = _localizer.PrintMessage("error.during.streaming.video", [description, videoLiveHistoryPkid])
+                    + "\n"
+                    + (string.IsNullOrWhiteSpace(errorOutput) ? $"ffmpeg exited with code {exitCode}" : errorOutput.Trim());
+                _logger.LogError("{Message}", failure);
+                MarkRows(rows, LiveStatus.Error, failure);
+                return;
+            }
+        }
+        catch (OperationCanceledException)
+        {
+            throw;
+        }
+        catch (Exception exception)
+        {
+            var failure = _localizer.PrintMessage("error.during.starting.video", [description]) + "\n" + exception.Message;
+            _logger.LogError("{Message}", failure);
+            MarkRows(rows, LiveStatus.Error, failure);
+        }
+        finally
+        {
+            _sessions.Remove(videoKey);
+            if (session is not null)
+            {
+                await session.DisposeAsync().ConfigureAwait(false);
+            }
+        }
+    }
+
+    /// <summary>
+    /// Every row of a canvas shows the same live, so they all carry the same status: the live page
+    /// lists them one under the other and a row left behind at OFFLINE is a row that looks broken.
+    /// </summary>
+    private void MarkRows(IReadOnlyList<VideoEntity> rows, LiveStatus status, string message)
+    {
+        foreach (var row in rows)
+        {
+            row.LiveStatus = status;
+            row.Message = message;
+            row.LastTimeStampBeforeStop = status == LiveStatus.Stopped ? row.LastTimeStampBeforeStop : 0;
+            _videoRepository.Update(row);
+        }
+
+        _notifier.Raise();
+    }
+
     /// <summary>The configuration of the video, read again on every pass so a live change is seen.</summary>
     private VideoSettingEntity FindSetting(int videoKey)
     {
@@ -403,6 +670,12 @@ public sealed class FfmpegVideoPlaylistStreamer : IVideoPlaylistStreamer
 
     /// <summary>A video of the playlist, with what is known about it before ffmpeg is started.</summary>
     private sealed record PlannedVideo(VideoEntity Video, MediaProbeResult? Probe, TimeSpan ResumeFrom);
+
+    /// <summary>
+    /// Rows that are streamed together: the files of a playlist, or the sources of one canvas.
+    /// <see cref="ScenePkid"/> is what tells them apart.
+    /// </summary>
+    private sealed record VideoGroup(long? ScenePkid, List<VideoEntity> Videos);
 }
 
 /// <summary>Abstraction of the playlist streamer, so the services can be unit tested without ffmpeg.</summary>

@@ -224,5 +224,11 @@
   "unsavedChanges": "Cambios sin guardar",
   "sceneNeedsPicture": "Coloca en el lienzo al menos una pantalla, una webcam o un vídeo",
   "sceneNeedsName": "Ponle un nombre a la escena",
-  "alreadyOnCanvas": "Esta fuente ya está en el lienzo"
+  "alreadyOnCanvas": "Esta fuente ya está en el lienzo",
+  "usedSources": "Used Sources",
+  "availableSources": "Available Sources",
+  "sourcesVideoGroup": "Video",
+  "sourcesAudioGroup": "Audio",
+  "sourcesEmptyUsed": "No sources are currently used.",
+  "sourcesEmptyAvailable": "No other sources available."
 }

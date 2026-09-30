@@ -224,5 +224,11 @@
   "unsavedChanges": "Ungespeicherte Änderungen",
   "sceneNeedsPicture": "Lege mindestens einen Bildschirm, eine Webcam oder ein Video auf die Leinwand",
   "sceneNeedsName": "Gib der Szene einen Namen",
-  "alreadyOnCanvas": "Diese Quelle ist bereits auf der Leinwand"
+  "alreadyOnCanvas": "Diese Quelle ist bereits auf der Leinwand",
+  "usedSources": "Used Sources",
+  "availableSources": "Available Sources",
+  "sourcesVideoGroup": "Video",
+  "sourcesAudioGroup": "Audio",
+  "sourcesEmptyUsed": "No sources are currently used.",
+  "sourcesEmptyAvailable": "No other sources available."
 }

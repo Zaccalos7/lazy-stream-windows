@@ -10,29 +10,41 @@
      data-scene="@Model.Scene"
      data-w-screens="@T["sourcesScreens"]" data-w-cameras="@T["sourcesCameras"]"
      data-w-microphones="@T["sourcesMicrophones"]" data-w-files="@T["sourcesFiles"]"
-     data-w-empty="@T["sourcesEmpty"]" data-w-failed="@T["sourcesFailed"]"
+     data-w-empty-used="@T["sourcesEmptyUsed"]" data-w-empty-available="@T["sourcesEmptyAvailable"]"
+     data-w-failed="@T["sourcesFailed"]" data-w-video-group="@T["sourcesVideoGroup"]" data-w-audio-group="@T["sourcesAudioGroup"]"
      data-w-add="@T["addToCanvas"]" data-w-up="@T["bringForward"]" data-w-down="@T["sendBackward"]"
      data-w-fill="@T["fillCanvas"]" data-w-remove="@T["removeSource"]" data-w-sound="@T["soundOn"]"
      data-w-audio-only="@T["audioOnly"]" data-w-new="@T["newScene"]" data-w-unsaved="@T["unsavedChanges"]"
      data-w-needs-picture="@T["sceneNeedsPicture"]" data-w-needs-name="@T["sceneNeedsName"]"
      data-w-twice="@T["alreadyOnCanvas"]" data-w-ok="@T["success"]" data-w-ko="@T["error"]" data-w-warning="@T["warning"]">
 
-    <aside class="card composer-sources" aria-label="@T["sources"]">
-        <div class="composer-head">
-            <h3>@T["sources"]</h3>
-            <button type="button" class="btn subtle icon-only" data-composer-refresh title="@T["refreshSources"]" aria-label="@T["refreshSources"]"><i class="icon">&#xE72C;</i></button>
+    <aside class="composer-sidebar" aria-label="@T["sources"]">
+        <div class="card composer-sources" aria-label="@T["usedSources"]">
+            <div class="composer-head">
+                <h3>@T["usedSources"]</h3>
+            </div>
+            <div class="composer-catalog" data-composer-used>
+                <p class="caption composer-none">@T["sourcesEmptyUsed"]</p>
+            </div>
         </div>
-        <div class="composer-catalog" data-composer-catalog data-state="loading">
-            <div class="composer-loading"><span class="spinner"></span><span class="caption">@T["loading"]</span></div>
+
+        <div class="card composer-sources" aria-label="@T["availableSources"]">
+            <div class="composer-head">
+                <h3>@T["availableSources"]</h3>
+                <button type="button" class="btn subtle icon-only" data-composer-refresh title="@T["refreshSources"]" aria-label="@T["refreshSources"]"><i class="icon">&#xE72C;</i></button>
+            </div>
+            <div class="composer-catalog" data-composer-catalog data-state="loading">
+                <div class="composer-loading"><span class="spinner"></span><span class="caption">@T["loading"]</span></div>
+            </div>
+            <label class="field dropzone composer-file">
+                <span>@T["addVideoFile"]</span>
+                <span class="composer-file-row">
+                    <input class="input" data-drop-path data-composer-path placeholder="C:\Video\intro.mp4" />
+                    <button type="button" class="btn" data-composer-add-path>@T["add"]</button>
+                </span>
+                <small><i class="icon">&#xE8B5;</i><span>@T["addVideoFileHint"]</span></small>
+            </label>
         </div>
-        <label class="field dropzone composer-file">
-            <span>@T["addVideoFile"]</span>
-            <span class="composer-file-row">
-                <input class="input" data-drop-path data-composer-path placeholder="C:\Video\intro.mp4" />
-                <button type="button" class="btn" data-composer-add-path>@T["add"]</button>
-            </span>
-            <small><i class="icon">&#xE8B5;</i><span>@T["addVideoFileHint"]</span></small>
-        </label>
     </aside>
 
     <section class="composer-main">

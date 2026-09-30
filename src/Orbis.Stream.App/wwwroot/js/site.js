@@ -35,9 +35,19 @@ initTheme();
 // connection per page, opened only for what the page actually watches.
 const watchRows = !!document.querySelector("[data-refresh]");
 const watchStats = !!document.querySelector("[data-stats]");
-const stream = watchRows || watchStats
-  ? new EventSource("/updates?watch=" + [watchRows && "rows", watchStats && "stats"].filter(Boolean).join(","))
+const watchLive = !!document.querySelector("[data-preview]");
+const watchList = [watchRows && "rows", watchStats && "stats", watchLive && "live"].filter(Boolean).join(",");
+const stream = watchList
+  ? new EventSource("/updates?watch=" + watchList + (watchLive ? liveQuery() : ""))
   : null;
+
+// Which live the stream is about. The page carries it as a query parameter of the channel and not
+// only of the endpoint: the server has to know it while it pushes, and a channel that asked for
+// "whatever is live" would swap the file under a player that is already playing.
+function liveQuery() {
+  const pkid = document.querySelector("[data-preview]")?.dataset.pkid;
+  return pkid ? "&live=" + encodeURIComponent(pkid) : "";
+}
 
 // <div data-refresh="url" data-since="7">: the server sends a message when a row moved and only then
 // the partial is asked again. A message that arrives while the user is inside a dialog of the rows,
@@ -113,6 +123,256 @@ if (watchStats && stream) {
     for (const region of document.querySelectorAll("[data-stats][data-state]")) delete region.dataset.state;
   });
 }
+
+// ---------- Live preview ----------
+// The player, the position the encoder is at, and the parameters that can still be changed while
+// the live runs. All of it arrives on the push channel once a second: the page asks the server
+// nothing while it watches.
+const preview = document.querySelector("[data-preview]");
+const previewVideo = preview?.querySelector("[data-preview-video]");
+const previewForm = preview?.querySelector("[data-preview-form]");
+
+// A player is behind the encoder by whatever the machine did in the last second, and it falls
+// further behind every time a frame is late. A little drift is not worth a seek: a seek costs a
+// keyframe, and a keyframe during a live is a freeze the viewer sees. So the player is corrected
+// only once it is more than a second behind, and never pushed back: running ahead is not a drift
+// worth undoing, the file does not have anything past the encoder to show.
+const previewTolerance = 1.2;
+
+// How long a control the user has just touched is left alone by the repaint, so the value that
+// comes back from the server does not land in the middle of what is being typed.
+const previewSettle = 2500;
+
+let previewPkid = Number(preview?.dataset.pkid || 0);
+let previewIsLive = preview?.dataset.live === "1";
+let previewPosition = Number(preview?.dataset.position || 0);
+let previewBusy = false;
+let previewDropped = false;
+const previewDirty = new Map();
+
+const previewWords = preview?.querySelector("[data-preview-words]") || {};
+const previewMark = (key, fallback) => previewWords.dataset?.[key] || fallback;
+
+const previewClock = milliseconds => {
+  const total = Math.max(0, Math.floor(milliseconds / 1000));
+  const pad = number => String(number).padStart(2, "0");
+  const hours = Math.floor(total / 3600);
+  return hours >= 1
+    ? `${hours}:${pad(Math.floor((total % 3600) / 60))}:${pad(total % 60)}`
+    : `${Math.floor(total / 60)}:${pad(total % 60)}`;
+};
+
+const previewFps = value => value > 0
+  ? (Number.isInteger(value) ? String(value) : value.toFixed(3)) + " fps"
+  : "–";
+
+const previewSize = media => media && media.width > 0 ? `${media.width}×${media.height}` : "–";
+
+const setPreviewText = (selector, value) => {
+  for (const node of preview.querySelectorAll(selector)) node.textContent = value;
+};
+
+const setPreviewField = (name, value) => {
+  for (const field of previewForm.querySelectorAll("[data-param]")) {
+    if (field.dataset.param !== name) continue;
+    if (field === document.activeElement || (previewDirty.get(name) || 0) > Date.now()) continue;
+    field.value = value ?? "";
+  }
+};
+
+// The player follows the encoder instead of the wall clock: every sample says where ffmpeg really
+// is, and the video is asked to be there. A player that has nothing loaded yet, or that is seeking,
+// is left alone: its currentTime is not the truth while it is looking for a frame.
+const followEncoder = position => {
+  previewPosition = position;
+  if (!previewVideo) return;
+  if (previewVideo.readyState === 0 || previewVideo.seeking) return;
+  const target = position / 1000;
+  if (target - previewVideo.currentTime > previewTolerance) previewVideo.currentTime = target;
+};
+
+if (previewVideo) {
+  // Muted and inline, so the autoplay of a file the browser has no user gesture for is allowed.
+  previewVideo.play().catch(() => {});
+  // A player that was paused because the window went to the background, or because a seek left it
+  // without a buffer, is put back on the edge instead of showing the last decoded frame.
+  previewVideo.addEventListener("stalled", () => { previewDropped = true; });
+  previewVideo.addEventListener("playing", () => { previewDropped = false; });
+  previewVideo.addEventListener("error", () => {
+    preview.querySelector("[data-preview-cover]")?.removeAttribute("hidden");
+    previewVideo.hidden = true;
+  });
+  document.addEventListener("visibilitychange", () => {
+    if (document.hidden || previewDropped) return;
+    previewVideo.play().then(() => followEncoder(previewPosition)).catch(() => {});
+  });
+}
+
+const paintPreview = state => {
+  if (!preview || !previewForm) return;
+  const position = state.positionMilliseconds;
+
+  // A live that stopped, or a page that was left on one that stopped and now another is running:
+  // what the page shows is not what the snapshot describes, so it is drawn again. The stream stays
+  // open, and the reloaded page asks for the same live again.
+  if (state.isLive !== previewIsLive || (state.isLive && state.videoPkid !== previewPkid)) {
+    location.reload();
+    return;
+  }
+
+  if (!state.isLive) return;
+
+  followEncoder(position);
+  setPreviewText("[data-preview-position]", previewClock(position) + " / " + previewClock(state.durationMilliseconds));
+  for (const spinner of preview.querySelectorAll("[data-preview-restart]")) spinner.hidden = !state.reconfiguring;
+
+  setPreviewText('[data-preview-fact="output.size"]', previewSize(state.output));
+  setPreviewText('[data-preview-fact="output.fps"]', previewFps(state.output.frameRate));
+  setPreviewText('[data-preview-fact="output.codec"]', state.parameters.videoCodecName || "–");
+  setPreviewText('[data-preview-fact="source.size"]', previewSize(state.source));
+  setPreviewText('[data-preview-fact="source.fps"]', previewFps(state.source.frameRate));
+  setPreviewText('[data-preview-fact="audio.channels"]',
+    state.source.audioChannels > 0 ? String(state.source.audioChannels) : previewMark("noAudio", "–"));
+
+  const parameters = state.parameters;
+  setPreviewField("videoCodec", parameters.videoCodec);
+  setPreviewField("videoCodecName", parameters.videoCodecName);
+  setPreviewField("pixelFormat", parameters.pixelFormat);
+  setPreviewField("videoBitrate", parameters.videoBitrate);
+  setPreviewField("gopSize", parameters.gopSize);
+  setPreviewField("videoWidth", parameters.videoWidth);
+  setPreviewField("videoHeight", parameters.videoHeight);
+  setPreviewField("frameRate", parameters.frameRate);
+  setPreviewField("audioBitrate", parameters.audioBitrate);
+  for (const box of preview.querySelectorAll('[data-param="keepSource"]')) {
+    if (Date.now() < (previewDirty.get("keepSource") || 0)) continue;
+    box.checked = parameters.videoWidth === null || parameters.videoWidth === undefined;
+  }
+};
+
+if (watchLive && stream) {
+  stream.addEventListener("live", event => {
+    let state;
+    try {
+      state = JSON.parse(event.data);
+    } catch {
+      return;
+    }
+    paintPreview(state);
+  });
+}
+
+// "As the source" and the two halves of a resolution are one decision: the halves are hidden and
+// skipped while it is on, which is also why they travel as nothing at all in the request.
+const sourceFields = () => preview.querySelectorAll("[data-source-off]");
+
+const setSourceFields = keep => {
+  for (const field of sourceFields()) field.hidden = keep;
+};
+
+if (previewForm) {
+  const keepSource = previewForm.querySelector('[data-param="keepSource"]');
+  setSourceFields(keepSource?.checked === true);
+  keepSource?.addEventListener("change", () => setSourceFields(keepSource.checked));
+
+  // The encoder that goes with a codec is the server's decision: clearing the control leaves the
+  // request with the codec alone, and the sample that comes back fills the encoder in. Sending the
+  // encoder that was on screen would undo the choice the user just made.
+  previewForm.querySelector('[data-param="videoCodec"]')?.addEventListener("change", event => {
+    const encoder = previewForm.querySelector('[data-param="videoCodecName"]');
+    if (!encoder) return;
+    encoder.value = "";
+    previewDirty.delete("videoCodecName");
+  });
+
+  for (const field of previewForm.querySelectorAll("[data-param]")) {
+    field.addEventListener("input", () => previewDirty.set(field.dataset.param, Date.now() + previewSettle));
+  }
+
+  // One control is one request. The whole form travels, not only what changed: the server compares
+  // the values with the setting it has and answers a request that changes nothing without touching
+  // ffmpeg, which is what keeps a mistyped-then-corrected pair of resolutions from restarting the
+  // live twice.
+  previewForm.addEventListener("change", async event => {
+    const field = event.target.closest?.("[data-param]");
+    if (!field || field === previewForm.querySelector('[data-param="gopSize"]')) return;
+
+    const keep = previewForm.querySelector('[data-param="keepSource"]')?.checked === true;
+    const body = {};
+    for (const control of previewForm.querySelectorAll("[data-param]")) {
+      const key = control.dataset.param;
+      if (key === "keepSource" || key === "gopSize") continue;
+      const value = control.value.trim();
+      if (key === "videoWidth" || key === "videoHeight") {
+        // Zero is how the request says "as the source": the two halves travel together, and both
+        // travel only when the decision is to drop the resolution the setting carried.
+        if (!keep) body[key] = value === "" ? 0 : Number(value);
+        continue;
+      }
+      if (key === "frameRate") {
+        // An empty frame rate means the source keeps its own, which is the same decision as above.
+        body[key] = value === "" ? 0 : Number(value);
+        continue;
+      }
+      if (value === "") continue;
+      body[key] = control.type === "number" ? Number(value) : value;
+    }
+
+    if (!Object.keys(body).length) return;
+
+    if (previewBusy) return;
+    previewBusy = true;
+    previewForm.dataset.busy = "1";
+    try {
+      const response = await fetch(`/preview/live/${previewPkid}/parameters`, {
+        method: "PUT",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify(body)
+      });
+      const payload = await response.json().catch(() => ({}));
+      if (response.ok) {
+        say("success", previewMark("ok", ""), payload.message || previewMark("applied", ""), "");
+      } else {
+        // A refused change comes back as { field: message }, the way every other form of the
+        // application answers, and the control that was refused is the one that goes back to the
+        // value the setting holds.
+        const first = Object.values(payload)[0] || response.statusText;
+        say("error", previewMark("ko", ""), first, field.dataset.param);
+        previewDirty.delete(field.dataset.param);
+      }
+    } catch {
+      say("error", previewMark("ko", ""), previewMark("failed", ""), "");
+    } finally {
+      delete previewForm.dataset.busy;
+      previewBusy = false;
+    }
+  });
+}
+
+// The one infobar of a page that answers with a fetch: it goes above the header, where the server
+// would have put it after a post.
+const say = (kind, heading, text, backTo) => {
+  const page = document.querySelector(".page");
+  if (!page) return;
+  for (const bar of page.querySelectorAll(".infobar.preview-say")) bar.remove();
+  const bar = document.createElement("div");
+  bar.className = "infobar preview-say " + kind;
+  bar.setAttribute("role", "status");
+  const icon = document.createElement("i");
+  icon.className = "icon";
+  icon.textContent = kind === "error" ? "\uEA39" : "\uE73E";
+  const body = document.createElement("p");
+  const strong = document.createElement("strong");
+  strong.textContent = heading;
+  body.append(strong, " ", text);
+  bar.append(icon, body);
+  page.prepend(bar);
+  if (backTo) {
+    // The control that was refused goes back to what the setting holds, so the page stops showing
+    // a value the encoder is not using.
+    fetch(`/preview/live?live=${previewPkid}`).then(r => r.json()).then(paintPreview).catch(() => {});
+  }
+};
 
 // <div data-load="url" data-delay="400">: a panel filled from the server on its own, because
 // waiting for it would hold the page that contains it. The loading appears only after the delay: on

@@ -139,6 +139,29 @@
     </div>
 </dialog>
 
+@* The videos of one playlist: its row on the page stands for all of them. The list redraws on
+   every change like the rows do, so the dialog follows the playlist while it streams. *@
+@if (Model.OpenedPlaylist is { } opened)
+{
+    <dialog class="dialog wide" id="playlist-details" data-open>
+        <div class="dialog-body">
+            <h2>
+                @T["playlistDetails"] · @string.Format(T["playlistVideoCount"], opened.Videos.Count)
+                <span class="badge @LiveStatusView.Css(opened.Status)" style="vertical-align: middle;">@T[LiveStatusView.Key(opened.Status)]</span>
+            </h2>
+            <p class="caption truncate" title="@opened.History.FolderOfVideoToStream">
+                @(string.IsNullOrEmpty(opened.History.PlatformStreamName) ? "" : opened.History.PlatformStreamName + " · ")@opened.History.FolderOfVideoToStream
+            </p>
+            <div data-refresh="@Url.Page("/MainLive", "DetailsRows", new { details = Model.Details })" data-since="@Model.ChangeVersion">
+                <partial name="_PlaylistVideos" model="Model" />
+            </div>
+        </div>
+        <div class="dialog-footer">
+            <a class="btn" href="@cancelLink">@T["back"]</a>
+        </div>
+    </dialog>
+}
+
 @if (Model.LinkPkid is { } linkPkid && Model.Form is not null)
 {
     <dialog class="dialog wide" data-open>

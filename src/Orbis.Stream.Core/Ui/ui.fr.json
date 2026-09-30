@@ -240,5 +240,12 @@
   "playlistFolder": "Dossier de la playlist",
   "dropPlaylistFolderHint": "Glissez un dossier ici et son chemin est copié dans le champ",
   "playlistOnlyVideos": "Seuls les fichiers vidéo du dossier seront diffusés, l'un après l'autre par ordre de nom. Les autres fichiers sont ignorés. Extensions reconnues :",
-  "playlistPosition": "Vidéo {0} sur {1}"
+  "playlistPosition": "Vidéo {0} sur {1}",
+  "playlistDetails": "Détails de la playlist",
+  "playlistVideoCount": "{0} vidéos",
+  "playlistStoppedAt": "Arrêtée à",
+  "deletePlaylist": "Supprimer la playlist",
+  "deletePlaylistConfirm": "Êtes-vous sûr de vouloir supprimer toute la playlist ({0} vidéos) ?",
+  "playlistStartFrom": "Redémarrer à partir de cette vidéo",
+  "playlistStartFromConfirm": "Redémarrer à partir de la vidéo {0} ? Les vidéos précédentes seront considérées comme déjà diffusées."
 }

@@ -1,0 +1,57 @@
+@model MainLiveModel
+@* The videos of the playlist in the details dialog, in streaming order: the one the row of the page
+   stands for is marked, and each can be taken out of the playlist on its own. *@
+@if (Model.OpenedPlaylist is { } playlist)
+{
+    <div class="table-wrap">
+        <table class="list">
+            <thead>
+            <tr>
+                <th>#</th>
+                <th>@T["liveStatus"]</th>
+                <th>@T["title"]</th>
+                <th>@T["playlistStoppedAt"]</th>
+                <th></th>
+            </tr>
+            </thead>
+            <tbody>
+            @{
+                // One playlist is on air at a time: while it is, the start points wait for a stop.
+                var playlistLive = playlist.Status == LiveStatus.Live;
+            }
+            @for (var index = 0; index < playlist.Videos.Count; index++)
+            {
+                var video = playlist.Videos[index];
+                var status = video.LiveStatus;
+                var live = status == LiveStatus.Live;
+                var current = video.Pkid == playlist.CurrentPkid;
+                var position = video.LastTimeStampBeforeStop ?? 0;
+                <tr class="@(current ? "is-current" : null)" aria-current="@(current ? "true" : null)">
+                    <td class="num">@(index + 1)</td>
+                    <td><span class="badge @LiveStatusView.Css(status)">@T[LiveStatusView.Key(status)]</span></td>
+                    <td class="path">
+                        <div class="truncate"><strong>@video.Name</strong></div>
+                        <div class="caption truncate" title="@video.VideoPath">@video.VideoPath</div>
+                    </td>
+                    <td class="num">@(position > 0 && status != LiveStatus.Ended ? TimeSpan.FromMilliseconds(position).ToString(@"hh\:mm\:ss") : "–")</td>
+                    <td>
+                        <div class="actions">
+                            <form method="post" asp-page="/MainLive" asp-page-handler="ReplayFrom" asp-all-route-data="Model.DetailsRowRoute(video.Pkid)" data-confirm="@string.Format(T["playlistStartFromConfirm"], index + 1)">
+                                <button class="btn subtle icon-only success" disabled="@playlistLive" title="@T["playlistStartFrom"]" aria-label="@T["playlistStartFrom"]"><i class="icon">&#xE768;</i></button>
+                            </form>
+                            <form method="post" asp-page="/MainLive" asp-page-handler="Delete" asp-all-route-data="Model.DetailsRowRoute(video.Pkid)" data-confirm="@T["deleteLiveRowConfirm"]">
+                                <button class="btn subtle icon-only danger" disabled="@live" title="@T["deleteLiveRow"]" aria-label="@T["deleteLiveRow"]"><i class="icon">&#xE74D;</i></button>
+                            </form>
+                            <span class="spinner" data-while="busy" title="@T["loading"]"></span>
+                        </div>
+                    </td>
+                </tr>
+            }
+            </tbody>
+        </table>
+    </div>
+}
+else
+{
+    <div class="card empty"><i class="icon">&#xE714;</i>@T["noDataPresent"]</div>
+}

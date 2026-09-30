@@ -240,5 +240,12 @@
   "playlistFolder": "Cartella della playlist",
   "dropPlaylistFolderHint": "Trascina qui una cartella: il percorso viene copiato nel campo",
   "playlistOnlyVideos": "Verranno avviati solo i file video della cartella, uno dopo l'altro in ordine di nome. Gli altri file vengono ignorati. Estensioni riconosciute:",
-  "playlistPosition": "Video {0} di {1}"
+  "playlistPosition": "Video {0} di {1}",
+  "playlistDetails": "Dettagli playlist",
+  "playlistVideoCount": "{0} video",
+  "playlistStoppedAt": "Fermato a",
+  "deletePlaylist": "Elimina playlist",
+  "deletePlaylistConfirm": "Sei sicuro di voler eliminare l'intera playlist ({0} video)?",
+  "playlistStartFrom": "Riparti da questo video",
+  "playlistStartFromConfirm": "Ripartire dal video {0}? I video precedenti verranno considerati già trasmessi."
 }

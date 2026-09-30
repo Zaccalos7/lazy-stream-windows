@@ -240,5 +240,12 @@
   "playlistFolder": "Playlist-Ordner",
   "dropPlaylistFolderHint": "Ziehen Sie einen Ordner hierher, um seinen Pfad einzufügen",
   "playlistOnlyVideos": "Nur die Videodateien des Ordners werden gestreamt, nacheinander nach Namen sortiert. Andere Dateien werden ignoriert. Erkannte Endungen:",
-  "playlistPosition": "Video {0} von {1}"
+  "playlistPosition": "Video {0} von {1}",
+  "playlistDetails": "Playlist-Details",
+  "playlistVideoCount": "{0} Videos",
+  "playlistStoppedAt": "Gestoppt bei",
+  "deletePlaylist": "Playlist löschen",
+  "deletePlaylistConfirm": "Möchten Sie wirklich die gesamte Playlist ({0} Videos) löschen?",
+  "playlistStartFrom": "Ab diesem Video neu starten",
+  "playlistStartFromConfirm": "Ab Video {0} neu starten? Die Videos davor gelten als bereits gestreamt."
 }

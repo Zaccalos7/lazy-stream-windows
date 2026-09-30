@@ -102,7 +102,10 @@ public sealed class FfmpegVideoPlaylistStreamer : IVideoPlaylistStreamer
             // next one must not go live by itself. It stays where it is, so a play resumes here.
             var stopped = await StreamVideoAsync(planned, outputUrl, videoLiveHistoryPkid, cancellationToken)
                 .ConfigureAwait(false);
-            _ = stopped;
+            if (stopped)
+            {
+                return;
+            }
         }
     }
 
@@ -197,12 +200,14 @@ public sealed class FfmpegVideoPlaylistStreamer : IVideoPlaylistStreamer
     {
         foreach (var video in videos)
         {
-            if (video.LastTimeStampBeforeStop == 0)
+            if (video.LastTimeStampBeforeStop == 0 && video.LiveStatus == LiveStatus.Offline)
             {
                 continue;
             }
 
+            // The status goes back with the position, for the same reason as the restart button.
             video.LastTimeStampBeforeStop = 0;
+            video.LiveStatus = LiveStatus.Offline;
             _videoRepository.Update(video);
         }
 

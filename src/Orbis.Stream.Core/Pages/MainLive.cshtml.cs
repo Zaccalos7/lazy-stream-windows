@@ -1,6 +1,7 @@
 using Microsoft.AspNetCore.Mvc;
 using Orbis.Stream.Core.Contracts;
 using Orbis.Stream.Core.Data;
+using Orbis.Stream.Core.Domain;
 using Orbis.Stream.Core.Hosting;
 using Orbis.Stream.Core.I18n;
 using Orbis.Stream.Core.Services;
@@ -28,7 +29,7 @@ public sealed class MainLiveModel(
     [BindProperty(SupportsGet = true, Name = "p")]
     public int PageIndex { get; set; }
 
-    public SpringPage<VideoRequest> Videos { get; private set; } = null!;
+    public SpringPage<LiveRow> Videos { get; private set; } = null!;
 
     public IReadOnlyCollection<string> Channels { get; private set; } = [];
 
@@ -66,11 +67,15 @@ public sealed class MainLiveModel(
 
     public bool OpenPlaylist => !string.IsNullOrEmpty(Playlist);
 
-    /// <summary>"Video 3 of 12" of the rows on this page that belong to a folder playlist.</summary>
-    public IReadOnlyDictionary<int, (int Position, int Total)> PlaylistPositions { get; private set; } =
-        new Dictionary<int, (int Position, int Total)>();
+    /// <summary>The playlist whose details dialog is open (<c>?details={historyPkid}</c>). It stays
+    /// in the address after an action taken inside the dialog, so the dialog comes back with it.</summary>
+    [BindProperty(SupportsGet = true)]
+    public long? Details { get; set; }
 
-    public object Filters => new { LiveStatus, ChannelName, p = PageIndex };
+    /// <summary>What the details dialog shows; null when no dialog is asked for, or the playlist is gone.</summary>
+    public PlaylistDetails? OpenedPlaylist { get; private set; }
+
+    public object Filters => new { LiveStatus, ChannelName, p = PageIndex, details = Details };
 
     /// <summary>
     /// The filters (and, when the form acts on a row, its key) as route data, so every action
@@ -83,10 +88,21 @@ public sealed class MainLiveModel(
     /// <summary>Filters plus the <c>pkid</c> of the row the form acts on.</summary>
     public Dictionary<string, string> RowRoute(int? pkid) => RouteOf("pkid", pkid);
 
+    /// <summary>Filters plus the <c>pkid</c> of a video of the open details dialog, which comes back open.</summary>
+    public Dictionary<string, string> DetailsRowRoute(int? pkid)
+    {
+        var route = RouteOf("pkid", pkid);
+        route["details"] = (Details ?? 0).ToString(System.Globalization.CultureInfo.InvariantCulture);
+        return route;
+    }
+
+    /// <summary>Filters plus the live history of the playlist the form acts on as a whole.</summary>
+    public Dictionary<string, string> PlaylistRoute(long? history) => RouteOf("history", history);
+
     /// <summary>Filters plus the <c>videoKey</c> of the locked video the unlock form acts on.</summary>
     public Dictionary<string, string> UnlockRoute(int? videoKey) => RouteOf("videoKey", videoKey);
 
-    private Dictionary<string, string> RouteOf(string? key = null, int? value = null)
+    private Dictionary<string, string> RouteOf(string? key = null, long? value = null)
     {
         var route = new Dictionary<string, string>
         {
@@ -106,6 +122,7 @@ public sealed class MainLiveModel(
     public void OnGet(int? link)
     {
         LoadVideos();
+        LoadDetails();
         Channels = settings.RetrieveChannel(new Dictionary<string, string>());
         Locked = videos.GetLockedVideos();
         ActiveSettings = videoSettings.GetAllVideoSettings(new Dictionary<string, string> { ["isVideoAndAudioSettingActive"] = "true" });
@@ -122,6 +139,26 @@ public sealed class MainLiveModel(
     {
         LoadVideos();
         return Partial("_LiveRows", this);
+    }
+
+    /// <summary>The list of the details dialog, redrawn on every change like the rows are.</summary>
+    public PartialViewResult OnGetDetailsRows()
+    {
+        LoadDetails();
+        return Partial("_PlaylistVideos", this);
+    }
+
+    public IActionResult OnPostDeletePlaylist(long history)
+    {
+        Run(() => videos.DeletePlaylist(history));
+
+        LoadVideos();
+        if (Videos.Content.Count == 0 && PageIndex > 0)
+        {
+            PageIndex = Math.Max(Videos.Page.TotalPages - 1, 0);
+        }
+
+        return RedirectToPage(Filters);
     }
 
     public IActionResult OnPostStop(int pkid)
@@ -178,6 +215,20 @@ public sealed class MainLiveModel(
             PageIndex = Math.Max(Videos.Page.TotalPages - 1, 0);
         }
 
+        return RedirectToPage(Filters);
+    }
+
+    /// <summary>"Start again from this video" of the playlist dialog: the ones before it count as
+    /// streamed, and the playlist goes on air from it. The dialog stays open to watch it start.</summary>
+    public IActionResult OnPostReplayFrom(int pkid)
+    {
+        Try(() =>
+        {
+            streaming.PrepareStartFrom(pkid);
+            var video = videos.FindVideo(pkid);
+            validator.RequireVideo(video);
+            return Run(() => streaming.StartVideo(video));
+        });
         return RedirectToPage(Filters);
     }
 
@@ -268,7 +319,19 @@ public sealed class MainLiveModel(
             filters["channelName"] = ChannelName;
         }
 
-        Videos = videos.GetAllVideoList(filters, new PageRequest(Math.Max(PageIndex, 0), PageSize, [new SortOrder("startDateLive", true)]));
-        PlaylistPositions = videos.GetPlaylistPositions(Videos.Content);
+        Videos = videos.GetLivePage(
+            LiveStatusExtensions.TryParseWireValue(LiveStatus, out var status) ? status : null,
+            ChannelName,
+            new PageRequest(Math.Max(PageIndex, 0), PageSize, [new SortOrder("startDateLive", true)]));
+    }
+
+    private void LoadDetails()
+    {
+        if (Details is not { } history)
+        {
+            return;
+        }
+
+        OpenedPlaylist = videos.GetPlaylist(history);
     }
 }

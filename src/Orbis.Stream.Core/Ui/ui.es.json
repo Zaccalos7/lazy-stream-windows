@@ -240,5 +240,12 @@
   "playlistFolder": "Carpeta de la playlist",
   "dropPlaylistFolderHint": "Arrastra aquí una carpeta y su ruta se copia en el campo",
   "playlistOnlyVideos": "Solo se transmitirán los archivos de vídeo de la carpeta, uno tras otro por orden de nombre. Los demás archivos se ignoran. Extensiones reconocidas:",
-  "playlistPosition": "Vídeo {0} de {1}"
+  "playlistPosition": "Vídeo {0} de {1}",
+  "playlistDetails": "Detalles de la playlist",
+  "playlistVideoCount": "{0} vídeos",
+  "playlistStoppedAt": "Detenido en",
+  "deletePlaylist": "Eliminar playlist",
+  "deletePlaylistConfirm": "¿Está seguro de que desea eliminar toda la playlist ({0} vídeos)?",
+  "playlistStartFrom": "Reiniciar desde este vídeo",
+  "playlistStartFromConfirm": "¿Reiniciar desde el vídeo {0}? Los vídeos anteriores se considerarán ya emitidos."
 }

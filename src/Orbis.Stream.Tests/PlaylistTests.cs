@@ -69,9 +69,11 @@ public sealed class PlaylistTests : IAsyncLifetime
 
         var folder = Path.Combine(_host.DataDirectory, "playlist");
         Directory.CreateDirectory(folder);
-        foreach (var name in new[] { "clip 10.mp4", "clip 2.mp4" })
+        Directory.CreateDirectory(Path.Combine(_host.DataDirectory, "output"));
+        // The first one is long enough to be stopped halfway, the last one short enough to reach the end.
+        foreach (var (name, seconds) in new[] { ("clip 10.mp4", 3), ("clip 2.mp4", 20) })
         {
-            await RunAsync(ffmpeg, $"-y -f lavfi -i testsrc=size=160x120:rate=15 -t 20 -pix_fmt yuv420p \"{Path.Combine(folder, name)}\"");
+            await RunAsync(ffmpeg, $"-y -f lavfi -i testsrc=size=160x120:rate=15 -t {seconds} -pix_fmt yuv420p \"{Path.Combine(folder, name)}\"");
         }
 
         File.WriteAllText(Path.Combine(folder, "notes.txt"), "not a video");
@@ -87,20 +89,58 @@ public sealed class PlaylistTests : IAsyncLifetime
         var rows = repository.FindByLiveHistoryId(historyPkid);
         Assert.Equal(["clip 2.mp4", "clip 10.mp4"], rows.Select(row => row.Name));
 
-        var positions = repository.FindPlaylistPositions([historyPkid]);
-        Assert.Equal((1, 2), positions[rows[0].Pkid]);
-        Assert.Equal((2, 2), positions[rows[1].Pkid]);
+        // The live page shows the playlist as one row, standing on the video it got to.
+        LiveRowEntity PlaylistRow() => Assert.Single(repository.FindLivePage(null, "playlist-channel", 0, 10).Items);
+        Assert.Equal((rows[0].Pkid, 1, 2), (PlaylistRow().Video.Pkid, PlaylistRow().Position, PlaylistRow().Total));
 
         Assert.True(await WaitForAsync(() => repository.FindByPkid(rows[0].Pkid)!.LiveStatus == LiveStatus.Live), "the first video never went live");
         // ffmpeg reports its position about once a second: a stop before the first report has nothing to record.
         await Task.Delay(TimeSpan.FromSeconds(3));
         streaming.StopVideoStreamingByPkid(rows[0].Pkid);
-        Assert.True(await WaitForAsync(() => repository.FindByPkid(rows[0].Pkid)!.LiveStatus == LiveStatus.Stopped), "the first video was not stopped");
+        var wasStopped = await WaitForAsync(() => repository.FindByPkid(rows[0].Pkid)!.LiveStatus == LiveStatus.Stopped);
+        Assert.True(wasStopped, "the first video was not stopped: " + string.Join(" | ", repository.FindByLiveHistoryId(historyPkid).Select(row => $"{row.Name} {row.LiveStatus} {row.LastTimeStampBeforeStop} {row.Message}")));
 
         // Before the fix the loop moved on to the next file as soon as the first one was stopped.
         await Task.Delay(TimeSpan.FromSeconds(3));
         Assert.Equal(LiveStatus.Offline, repository.FindByPkid(rows[1].Pkid)!.LiveStatus);
         Assert.True(repository.FindByPkid(rows[0].Pkid)!.LastTimeStampBeforeStop > 0, "the stop did not record where to resume from");
+        Assert.Equal((rows[0].Pkid, LiveStatus.Stopped), (PlaylistRow().Video.Pkid, PlaylistRow().Video.LiveStatus));
+
+        var details = _host.Services.GetRequiredService<VideoService>().GetPlaylist(historyPkid);
+        Assert.NotNull(details);
+        Assert.Equal(2, details.Videos.Count);
+        Assert.Equal(rows[0].Pkid, details.CurrentPkid);
+
+        // Rendered: one row on the page, and both videos in the details dialog and in its live redraw.
+        var page = await _host.Client.GetStringAsync("/orbis/mainLive?channelName=playlist-channel");
+        Assert.Single(System.Text.RegularExpressions.Regex.Matches(page, "<tr data-row"));
+        Assert.DoesNotContain("clip 10.mp4", page);
+
+        var withDetails = await _host.Client.GetStringAsync($"/orbis/mainLive?details={historyPkid}");
+        Assert.Contains("id=\"playlist-details\"", withDetails);
+        Assert.Contains("clip 10.mp4", withDetails);
+
+        var redraw = await _host.Client.GetStringAsync($"/orbis/mainLive?handler=DetailsRows&details={historyPkid}");
+        Assert.Contains("is-current", redraw);
+        Assert.Contains("clip 2.mp4", redraw);
+        Assert.Contains("clip 10.mp4", redraw);
+
+        // Start again from the last video: the first counts as streamed, the last goes on air, and
+        // the playlist reads LIVE while it is, then ENDED once the last video reached its end.
+        Assert.Equal(LiveStatus.Stopped, PlaylistRow().Status);
+        streaming.PrepareStartFrom(rows[1].Pkid);
+        streaming.StartVideo(_host.Services.GetRequiredService<VideoService>().FindVideo(rows[1].Pkid));
+        Assert.True(await WaitForAsync(() => PlaylistRow().Status == LiveStatus.Live), "the playlist did not go live from the chosen video");
+        Assert.Equal((rows[1].Pkid, 2), (PlaylistRow().Video.Pkid, PlaylistRow().Position));
+        Assert.Equal(LiveStatus.Ended, repository.FindByPkid(rows[0].Pkid)!.LiveStatus);
+
+        Assert.True(await WaitForAsync(() => PlaylistRow().Status == LiveStatus.Ended), "the playlist did not end after its last video");
+        Assert.Single(repository.FindLivePage(LiveStatus.Ended, "playlist-channel", 0, 10).Items);
+
+        // A restart forgets the statuses of the pass before, or the playlist would still read ENDED.
+        streaming.RestartFromBeginning(historyPkid);
+        Assert.All(repository.FindByLiveHistoryId(historyPkid), row => Assert.Equal(LiveStatus.Offline, row.LiveStatus));
+        Assert.Equal((rows[0].Pkid, LiveStatus.Offline), (PlaylistRow().Video.Pkid, PlaylistRow().Status));
     }
 
     private StartLiveRequest RequestFor(string folder) => new(

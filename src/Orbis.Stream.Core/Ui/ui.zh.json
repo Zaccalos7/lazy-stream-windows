@@ -240,5 +240,12 @@
   "playlistFolder": "播放列表文件夹",
   "dropPlaylistFolderHint": "将文件夹拖到此处，其路径会复制到字段中",
   "playlistOnlyVideos": "只会按名称顺序依次推流文件夹中的视频文件，其他文件将被忽略。支持的扩展名：",
-  "playlistPosition": "视频 {0} / {1}"
+  "playlistPosition": "视频 {0} / {1}",
+  "playlistDetails": "播放列表详情",
+  "playlistVideoCount": "{0} 个视频",
+  "playlistStoppedAt": "停止于",
+  "deletePlaylist": "删除播放列表",
+  "deletePlaylistConfirm": "您确定要删除整个播放列表（{0} 个视频）吗？",
+  "playlistStartFrom": "从此视频重新开始",
+  "playlistStartFromConfirm": "从视频 {0} 重新开始？之前的视频将视为已播放。"
 }

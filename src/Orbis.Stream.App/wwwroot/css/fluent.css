@@ -907,48 +907,88 @@ dialog.dialog.wide { width: min(840px, calc(100vw - 32px)); }
   *, *::before, *::after { animation: none !important; transition: none !important; }
 }
 
-/* Skeleton Loading Animation */
-.skeleton-row {
-    animation: pulse 1.5s infinite ease-in-out;
+/* ---------- Live preview ---------- */
+
+/* The indicator of the preview page: it is the only place where "a live is running" is stated
+   without opening the live management, so it pulses the way a recording does. */
+.btn.live-indicator {
+  color: var(--on-accent);
+  background: var(--critical);
+  border-color: transparent;
+  box-shadow: none;
+  text-decoration: none;
 }
+.btn.live-indicator:hover { filter: brightness(1.06); }
+.btn.live-indicator .icon { font-size: 14px; }
+.btn.live-indicator.is-live .icon { animation: pulse 1.6s ease-in-out infinite; }
 
 @keyframes pulse {
-    0% { opacity: 1; }
-    50% { opacity: 0.5; }
-    100% { opacity: 1; }
+  0%, 100% { opacity: 1; }
+  50% { opacity: 0.45; }
 }
 
-.skeleton-text {
-    height: 14px;
-    background-color: var(--stroke-strong);
-    border-radius: 4px;
-    margin-bottom: 4px;
+.preview {
+  display: grid;
+  gap: 12px;
+  grid-template-columns: minmax(0, 1.55fr) minmax(320px, 1fr);
+  align-items: start;
 }
 
-.skeleton-text.short {
-    width: 40%;
+.preview-stage {
+  position: relative;
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+  padding: 10px;
+  overflow: hidden;
 }
 
-.skeleton-text.medium {
-    width: 60%;
+.preview-stage video {
+  display: block;
+  width: 100%;
+  aspect-ratio: 16 / 9;
+  border-radius: var(--radius-sm);
+  background: #000;
+  object-fit: contain;
 }
 
-.skeleton-text.long {
-    width: 80%;
+.preview-cover {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  gap: 8px;
+  aspect-ratio: 16 / 9;
+  color: var(--text-2);
+  text-align: center;
+  border-radius: var(--radius-sm);
+  background: var(--tint);
 }
+.preview-cover .icon { font-size: 30px; color: var(--text-3); }
+.preview-cover p { margin: 0; font-size: 12px; }
 
-.skeleton-badge {
-    height: 18px;
-    width: 60px;
-    background-color: var(--stroke-strong);
-    border-radius: 10px;
+.preview-bar { display: flex; align-items: center; gap: 10px; }
+.preview-id { flex: 1; min-width: 0; display: flex; flex-direction: column; }
+.preview-id strong { font-size: 13px; }
+.preview-time { font-variant-numeric: tabular-nums; white-space: nowrap; }
+
+.preview-params { display: flex; flex-direction: column; }
+.preview-params .section:first-child { margin-top: 0; }
+
+.preview-facts {
+  display: grid;
+  gap: 10px 14px;
+  grid-template-columns: repeat(auto-fill, minmax(120px, 1fr));
 }
+.preview-facts > div { display: flex; flex-direction: column; gap: 1px; min-width: 0; }
+.preview-facts strong { font-size: 13px; font-weight: 600; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
 
-.skeleton-icon {
-    width: 28px;
-    height: 28px;
-    background-color: var(--stroke-strong);
-    border-radius: 50%;
-    display: inline-block;
-    margin-right: 4px;
+.preview-note { display: flex; align-items: center; gap: 6px; margin: 18px 0 0; }
+.preview-note .icon { flex: none; font-size: 13px; color: var(--text-3); }
+
+.preview [data-source-off][hidden] { display: none; }
+.preview .field .toggle { align-items: center; gap: 8px; min-height: 34px; }
+
+@media (max-width: 1100px) {
+  .preview { grid-template-columns: minmax(0, 1fr); }
 }

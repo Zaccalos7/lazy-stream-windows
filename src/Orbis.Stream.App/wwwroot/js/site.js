@@ -148,6 +148,50 @@ document.addEventListener("submit", event => {
   if (!host) return;
   host.dataset.busy = "1";
   for (const button of host.querySelectorAll("button[type=submit], button:not([type])")) button.disabled = true;
+
+  if (host.matches("[data-row]")) {
+      const initText = document.documentElement.dataset.initializing || "Initializing...";
+
+      const page = document.querySelector(".page");
+      if (page) {
+          const toast = document.createElement("div");
+          toast.className = "infobar success toast-init";
+          toast.setAttribute("role", "status");
+          toast.innerHTML = `<i class="icon">\uE73E</i><p><strong>${initText}</strong></p>`;
+          page.insertBefore(toast, page.firstChild);
+
+          setTimeout(() => {
+              toast.style.transition = "opacity 0.3s ease";
+              toast.style.opacity = "0";
+              setTimeout(() => toast.remove(), 300);
+          }, 7000);
+      }
+
+      setTimeout(() => {
+          for (const td of Array.from(host.children)) {
+              if (td.tagName === "TD") {
+                  td.style.display = "none";
+              }
+          }
+          host.insertAdjacentHTML("beforeend", `
+              <td class="skeleton-col"><div class="skeleton-badge"></div></td>
+              <td class="skeleton-col path">
+                  <div class="skeleton-text medium"></div>
+                  <div class="skeleton-text long"></div>
+              </td>
+              <td class="skeleton-col"><div class="skeleton-text short"></div></td>
+              <td class="skeleton-col"><div class="skeleton-text medium"></div></td>
+              <td class="skeleton-col">
+                  <div class="actions">
+                      <div class="skeleton-icon"></div>
+                      <div class="skeleton-icon"></div>
+                      <div class="skeleton-icon"></div>
+                  </div>
+              </td>
+          `);
+          host.classList.add("skeleton-row");
+      }, 10);
+  }
 });
 
 // The side bar starts a live from anywhere: on this page the dialog is already there, elsewhere

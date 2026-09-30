@@ -157,5 +157,6 @@
   "uptime": "运行时间",
   "appUptime": "程序运行时间",
   "dotnet": ".NET 运行时",
-  "retry": "重试"
+  "retry": "重试",
+  "initializing": "正在初始化..."
 }

@@ -157,5 +157,6 @@
   "uptime": "Temps de fonctionnement",
   "appUptime": "Temps de l'application",
   "dotnet": "Runtime .NET",
-  "retry": "Réessayer"
+  "retry": "Réessayer",
+  "initializing": "Initialisation..."
 }

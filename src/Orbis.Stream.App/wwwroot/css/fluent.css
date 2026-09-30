@@ -701,8 +701,47 @@ table.list.roomy td.nowrap { white-space: nowrap; }
   background: var(--card);
   animation: rise 0.2s cubic-bezier(0.16, 1, 0.3, 1);
 }
+
+.toast-init {
+  position: fixed;
+  top: 20px;
+  left: 50%;
+  transform: translateX(-50%);
+  z-index: 9999;
+  min-width: 300px;
+  box-shadow: var(--shadow-flyout);
+  animation: slideDown 0.3s cubic-bezier(0.16, 1, 0.3, 1);
+}
+
+@keyframes slideDown {
+  from { transform: translate(-50%, -20px); opacity: 0; }
+  to { transform: translate(-50%, 0); opacity: 1; }
+}
+
+@keyframes rise {
+  from { transform: translateY(10px); opacity: 0; }
+  to { transform: translateY(0); opacity: 1; }
+}
 .infobar .icon { font-size: 16px; margin-top: 1px; color: var(--hue); }
 .infobar.success { --hue: var(--success); background: var(--success-bg); border-color: rgba(52, 199, 89, 0.25); }
+
+.toast-init {
+  position: fixed;
+  top: 20px;
+  left: 50%;
+  transform: translateX(-50%);
+  z-index: 9999;
+  min-width: 300px;
+  box-shadow: 0 4px 12px rgba(0, 0, 0, 0.15);
+  animation: slideDown 0.3s cubic-bezier(0.16, 1, 0.3, 1);
+  background: var(--card);
+  color: var(--text);
+}
+
+.toast-init.success {
+  background: var(--success-bg) !important;
+  border-left: 3px solid var(--success) !important;
+}
 .infobar.error { --hue: var(--critical); background: var(--critical-bg); border-color: rgba(255, 59, 48, 0.25); }
 .infobar.warning { --hue: var(--caution); background: var(--caution-bg); border-color: rgba(255, 149, 0, 0.25); }
 .infobar p { margin: 0; flex: 1; }
@@ -866,4 +905,50 @@ dialog.dialog.wide { width: min(840px, calc(100vw - 32px)); }
 
 @media (prefers-reduced-motion: reduce) {
   *, *::before, *::after { animation: none !important; transition: none !important; }
+}
+
+/* Skeleton Loading Animation */
+.skeleton-row {
+    animation: pulse 1.5s infinite ease-in-out;
+}
+
+@keyframes pulse {
+    0% { opacity: 1; }
+    50% { opacity: 0.5; }
+    100% { opacity: 1; }
+}
+
+.skeleton-text {
+    height: 14px;
+    background-color: var(--stroke-strong);
+    border-radius: 4px;
+    margin-bottom: 4px;
+}
+
+.skeleton-text.short {
+    width: 40%;
+}
+
+.skeleton-text.medium {
+    width: 60%;
+}
+
+.skeleton-text.long {
+    width: 80%;
+}
+
+.skeleton-badge {
+    height: 18px;
+    width: 60px;
+    background-color: var(--stroke-strong);
+    border-radius: 10px;
+}
+
+.skeleton-icon {
+    width: 28px;
+    height: 28px;
+    background-color: var(--stroke-strong);
+    border-radius: 50%;
+    display: inline-block;
+    margin-right: 4px;
 }

@@ -34,6 +34,7 @@ public sealed class FfmpegVideoPlaylistStreamer : IVideoPlaylistStreamer
     private readonly StreamingSessionRegistry _sessions;
     private readonly Localizer _localizer;
     private readonly LiveChangeNotifier _notifier;
+    private readonly LivePreviewFrames _frames;
     private readonly ILogger<FfmpegVideoPlaylistStreamer> _logger;
 
     public FfmpegVideoPlaylistStreamer(
@@ -45,6 +46,7 @@ public sealed class FfmpegVideoPlaylistStreamer : IVideoPlaylistStreamer
         StreamingSessionRegistry sessions,
         Localizer localizer,
         LiveChangeNotifier notifier,
+        LivePreviewFrames frames,
         ILogger<FfmpegVideoPlaylistStreamer> logger)
     {
         _videoRepository = videoRepository;
@@ -55,6 +57,7 @@ public sealed class FfmpegVideoPlaylistStreamer : IVideoPlaylistStreamer
         _sessions = sessions;
         _localizer = localizer;
         _notifier = notifier;
+        _frames = frames;
         _logger = logger;
     }
 
@@ -257,7 +260,7 @@ public sealed class FfmpegVideoPlaylistStreamer : IVideoPlaylistStreamer
                 }
 
                 var next = FfmpegStreamingSession.Start(
-                    _locator, videoKey, inputPath, outputUrl, videoSetting, probe, _logger, resumeFrom);
+                    _locator, videoKey, inputPath, outputUrl, videoSetting, probe, _logger, resumeFrom, _frames.PathOf(videoKey));
 
                 var previous = session;
                 session = next;
@@ -340,6 +343,8 @@ public sealed class FfmpegVideoPlaylistStreamer : IVideoPlaylistStreamer
             {
                 await session.DisposeAsync().ConfigureAwait(false);
             }
+
+            _frames.Forget(videoKey);
         }
     }
 
@@ -459,7 +464,8 @@ public sealed class FfmpegVideoPlaylistStreamer : IVideoPlaylistStreamer
                     canvasHeight,
                     DefaultCanvasFrameRate,
                     _logger,
-                    resumeFrom);
+                    resumeFrom,
+                    _frames.PathOf(videoKey));
 
                 var previous = session;
                 session = next;
@@ -520,6 +526,8 @@ public sealed class FfmpegVideoPlaylistStreamer : IVideoPlaylistStreamer
             {
                 await session.DisposeAsync().ConfigureAwait(false);
             }
+
+            _frames.Forget(videoKey);
         }
     }
 

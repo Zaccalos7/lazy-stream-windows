@@ -91,9 +91,10 @@ public sealed class FfmpegStreamingSession : IAsyncDisposable
         VideoSettingEntity setting,
         MediaProbeResult probe,
         ILogger logger,
-        TimeSpan resumeFrom = default)
+        TimeSpan resumeFrom = default,
+        string? previewPath = null)
     {
-        var arguments = FfmpegCommandBuilder.Build(new FfmpegStreamRequest(inputPath, outputUrl, probe, setting, resumeFrom));
+        var arguments = FfmpegCommandBuilder.Build(new FfmpegStreamRequest(inputPath, outputUrl, probe, setting, resumeFrom, previewPath));
         return Launch(locator, videoPkid, inputPath, arguments, probe, FfmpegCommandBuilder.ResolveOutput(setting, probe), logger);
     }
 
@@ -113,10 +114,11 @@ public sealed class FfmpegStreamingSession : IAsyncDisposable
         int canvasHeight,
         double canvasFrameRate,
         ILogger logger,
-        TimeSpan resumeFrom = default)
+        TimeSpan resumeFrom = default,
+        string? previewPath = null)
     {
         var arguments = FfmpegCommandBuilder.BuildComposition(new FfmpegCompositionRequest(
-            items, outputUrl, setting, canvasWidth, canvasHeight, canvasFrameRate, resumeFrom));
+            items, outputUrl, setting, canvasWidth, canvasHeight, canvasFrameRate, resumeFrom, previewPath));
 
         // The composition is always sent at the size of the canvas: the resolution of the setting
         // is not applied on top of it (see BuildComposition), so it is not the one shown either.

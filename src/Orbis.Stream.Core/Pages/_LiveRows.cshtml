@@ -45,16 +45,20 @@ else
                             {
                                 <span class="badge playlist">@string.Format(T["playlistPosition"], row.Position, row.Total)</span>
                             }
-                            <strong>@video.Name</strong>
+                            else if (row.IsScene)
+                            {
+                                <span class="badge playlist">@string.Format(T["sceneSources"], row.Total)</span>
+                            }
+                            <strong>@(row.SceneName ?? video.Name)</strong>
                         </div>
-                        @{ var source = row.IsPlaylist ? video.VideoLiveHistory?.FolderOfVideoToStream : video.VideoPath; }
+                        @{ var source = row.IsPlaylist ? video.VideoLiveHistory?.FolderOfVideoToStream : row.IsScene ? video.Name : video.VideoPath; }
                         <div class="caption truncate" title="@source">@(string.IsNullOrEmpty(platform) ? "" : platform + " · ")@source</div>
                     </td>
                     <td>@(video.ChannelName ?? "N/A")</td>
                     <td>@LiveStatusView.Date(video.StartDateLive, "dd/MM/yyyy HH:mm:ss")</td>
                     <td>
                         <div class="actions">
-                            @if (row.IsPlaylist)
+                            @if (row.HasDetails)
                             {
                                 <a class="btn subtle icon-only" href="@Url.Page("/MainLive", new { Model.LiveStatus, Model.ChannelName, p = Model.PageIndex, details = historyPkid })"
                                    title="@T["playlistDetails"]" aria-label="@T["playlistDetails"]"><i class="icon">&#xE8FD;</i></a>
@@ -85,9 +89,9 @@ else
                             }
                             @* A running live cannot be deleted: its ffmpeg still reads the row to know when to stop.
                                On a playlist row the bin takes the whole playlist; one video goes from the details dialog. *@
-                            @if (row.IsPlaylist)
+                            @if (row.HasDetails)
                             {
-                                <form method="post" asp-page="/MainLive" asp-page-handler="DeletePlaylist" asp-all-route-data="Model.PlaylistRoute(historyPkid)" data-confirm="@string.Format(T["deletePlaylistConfirm"], row.Total)">
+                                <form method="post" asp-page="/MainLive" asp-page-handler="DeletePlaylist" asp-all-route-data="Model.PlaylistRoute(historyPkid)" data-confirm="@string.Format(T[row.IsScene ? "deleteSceneLiveConfirm" : "deletePlaylistConfirm"], row.Total)">
                                     <button class="btn subtle icon-only danger" disabled="@live" title="@T["deletePlaylist"]" aria-label="@T["deletePlaylist"]"><i class="icon">&#xE74D;</i></button>
                                 </form>
                             }

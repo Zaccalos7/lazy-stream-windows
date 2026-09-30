@@ -51,7 +51,7 @@ else
                 <input type="radio" name="configurationId" value="@configuration.Id" required />
                 <span class="grow">
                     <strong>@configuration.ChannelName</strong> · @configuration.PlatformStreamName
-                    <span class="caption" style="display: block;">@configuration.VideoFolder · @configuration.StreamUrl</span>
+                    <span class="caption" style="display: block;">@configuration.StreamUrl</span>
                     @if (!string.IsNullOrWhiteSpace(configuration.Description))
                     {
                         <span class="caption" style="display: block;">@configuration.Description</span>

@@ -32,8 +32,6 @@ public sealed class RequestValidator
         AddIfNull(errors, "streamUrl", request.StreamUrl, "not.valid.input");
         AddIfNull(errors, "streamKey", request.StreamKey, "not.valid.input");
         AddIfNull(errors, "platformStreamName", request.PlatformStreamName, "not.valid.input");
-        AddIfNull(errors, "description", request.Description, "not.valid.input");
-        AddIfNull(errors, "videoFolder", request.VideoFolder, "not.valid.input");
         AddIfNull(errors, "channelName", request.ChannelName, "not.valid.input");
         Throw(errors);
     }

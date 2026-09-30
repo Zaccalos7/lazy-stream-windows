@@ -247,5 +247,9 @@
   "deletePlaylist": "Playlist löschen",
   "deletePlaylistConfirm": "Möchten Sie wirklich die gesamte Playlist ({0} Videos) löschen?",
   "playlistStartFrom": "Ab diesem Video neu starten",
-  "playlistStartFromConfirm": "Ab Video {0} neu starten? Die Videos davor gelten als bereits gestreamt."
+  "playlistStartFromConfirm": "Ab Video {0} neu starten? Die Videos davor gelten als bereits gestreamt.",
+  "composeNext": "Weiter: Szene zusammenstellen",
+  "previewWaiting": "Warte auf das erste Bild…",
+  "sceneSources": "Szene · {0} Quellen",
+  "deleteSceneLiveConfirm": "Möchten Sie diesen Livestream ({0} Quellen) wirklich löschen?"
 }

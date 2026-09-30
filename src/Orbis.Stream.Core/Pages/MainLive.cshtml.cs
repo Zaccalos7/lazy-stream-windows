@@ -57,6 +57,17 @@ public sealed class MainLiveModel(
 
     public bool OpenStart => !string.IsNullOrEmpty(Start);
 
+    /// <summary>The composer comes back open on this scene, with the two picks of the first step,
+    /// when a start was refused (<c>?compose={scenePkid}&amp;settingId=…&amp;configurationId=…</c>).</summary>
+    [BindProperty(SupportsGet = true, Name = "compose")]
+    public long? ComposeScene { get; set; }
+
+    [BindProperty(SupportsGet = true)]
+    public int? SettingId { get; set; }
+
+    [BindProperty(SupportsGet = true)]
+    public int? ConfigurationId { get; set; }
+
     /// <summary>The playlist wizard comes back open, with the folder it was given, when the folder
     /// was refused (<c>?playlist=1&amp;folder=…</c>): the user fixes the path instead of retyping it.</summary>
     [BindProperty(SupportsGet = true)]
@@ -253,21 +264,41 @@ public sealed class MainLiveModel(
     }
 
     /// <summary>The wizard: one active video setting plus one active streaming configuration.</summary>
-    public IActionResult OnPostStart(int settingId, int configurationId)
+    /// <summary>
+    /// The live wizard: the setting and the destination of the first step, and the scene the
+    /// composer has just saved. The rows of the live keep every source of it (kind, target, place
+    /// on the canvas), so a play or a restart later needs nothing else.
+    /// </summary>
+    public IActionResult OnPostStartScene(long scenePkid, int settingId, int configurationId)
     {
-        var request = StartRequestOf(settingId, configurationId, folder: null);
-        if (request is null)
+        var setting = videoSettings.GetAllVideoSettings(new Dictionary<string, string> { ["id"] = settingId.ToString(System.Globalization.CultureInfo.InvariantCulture) }).FirstOrDefault();
+        var configuration = settings.RetrieveSettings(new Dictionary<string, string> { ["id"] = configurationId.ToString(System.Globalization.CultureInfo.InvariantCulture) }).FirstOrDefault();
+
+        var started = false;
+        if (setting is null || configuration is null)
         {
-            return RedirectToPage(Filters);
+            SetNotice(NoticeKind.Error, localizer.PrintMessage("not.valid.input"));
+        }
+        else
+        {
+            var request = new StartSceneLiveRequest(
+                scenePkid,
+                configuration.StreamUrl,
+                configuration.StreamKey,
+                configuration.PlatformStreamName,
+                configuration.ChannelName,
+                setting);
+
+            started = Try(() =>
+            {
+                validator.RequireStartSceneLive(request);
+                return Run(() => streaming.StartSceneLive(request));
+            });
         }
 
-        var started = Try(() =>
-        {
-            validator.RequireStartLive(request);
-            return Run(() => streaming.StartLive(request));
-        });
-
-        return started ? RedirectToPage("/Countdown") : RedirectToPage(Filters);
+        return started
+            ? RedirectToPage("/Countdown")
+            : RedirectToPage(new { LiveStatus, ChannelName, p = PageIndex, compose = scenePkid, settingId, configurationId });
     }
 
     /// <summary>The same wizard, with the folder picked here in place of the configuration's one.</summary>
@@ -285,9 +316,9 @@ public sealed class MainLiveModel(
             : RedirectToPage(new { LiveStatus, ChannelName, p = PageIndex, playlist = 1, folder = videoFolder });
     }
 
-    /// <summary>What the wizard picked, as a start request; null (with the notice set) when either
-    /// pick no longer exists. A <paramref name="folder"/> replaces the configuration's one.</summary>
-    private StartLiveRequest? StartRequestOf(int settingId, int configurationId, string? folder)
+    /// <summary>What the playlist wizard picked, as a start request; null (with the notice set) when
+    /// either pick no longer exists.</summary>
+    private StartLiveRequest? StartRequestOf(int settingId, int configurationId, string folder)
     {
         var setting = videoSettings.GetAllVideoSettings(new Dictionary<string, string> { ["id"] = settingId.ToString(System.Globalization.CultureInfo.InvariantCulture) }).FirstOrDefault();
         var configuration = settings.RetrieveSettings(new Dictionary<string, string> { ["id"] = configurationId.ToString(System.Globalization.CultureInfo.InvariantCulture) }).FirstOrDefault();
@@ -300,7 +331,7 @@ public sealed class MainLiveModel(
         return new StartLiveRequest(
             configuration.StreamUrl,
             configuration.StreamKey,
-            folder ?? configuration.VideoFolder,
+            folder,
             configuration.PlatformStreamName,
             configuration.ChannelName,
             setting);

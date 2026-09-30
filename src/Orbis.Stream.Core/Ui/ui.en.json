@@ -247,5 +247,9 @@
   "deletePlaylist": "Delete playlist",
   "deletePlaylistConfirm": "Are you sure you want to delete the whole playlist ({0} videos)?",
   "playlistStartFrom": "Start again from this video",
-  "playlistStartFromConfirm": "Start again from video {0}? The videos before it will count as already streamed."
+  "playlistStartFromConfirm": "Start again from video {0}? The videos before it will count as already streamed.",
+  "composeNext": "Next: compose the scene",
+  "previewWaiting": "Waiting for the first frame…",
+  "sceneSources": "Scene · {0} sources",
+  "deleteSceneLiveConfirm": "Are you sure you want to delete this live ({0} sources)?"
 }

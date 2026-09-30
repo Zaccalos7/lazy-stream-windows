@@ -52,8 +52,7 @@ public sealed class MainChannelSettingModel(SettingService settings, RequestVali
         string? channelName,
         string? streamUrl,
         string? streamKey,
-        string? description,
-        string? videoFolder)
+        string? description)
     {
         if (string.IsNullOrWhiteSpace(streamUrl))
         {
@@ -64,8 +63,10 @@ public sealed class MainChannelSettingModel(SettingService settings, RequestVali
             streamUrl?.Trim(),
             streamKey?.Trim(),
             platformStreamName,
-            description?.Trim(),
-            videoFolder?.Trim(),
+            // Optional: an empty box is stored as empty, so an edit can also clear it.
+            description?.Trim() ?? string.Empty,
+            // What a live streams is chosen on the canvas when it starts, not on the destination.
+            null,
             id is null ? true : null,
             channelName?.Trim());
 

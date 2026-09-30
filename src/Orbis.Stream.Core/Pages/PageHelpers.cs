@@ -15,6 +15,9 @@ public sealed record PagerModel(int Current, int Total, Func<int, string> Href)
     }
 }
 
+/// <summary>The scene composer: the scene it opens on, if any (after a save or a refused start).</summary>
+public sealed record SceneComposerModel(long? Scene);
+
 public static class LiveStatusView
 {
     public static string Key(LiveStatus? status) => status switch

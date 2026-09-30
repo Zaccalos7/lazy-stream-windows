@@ -130,6 +130,10 @@ if (watchStats && stream) {
 // the live runs. All of it arrives on the push channel once a second: the page asks the server
 // nothing while it watches.
 const preview = document.querySelector("[data-preview]");
+
+// The light picture of the live: a frame that cannot be had (the live ended between the page and
+// the request) leaves the cover under it, instead of a broken image.
+preview?.querySelector("[data-preview-frame]")?.addEventListener("error", event => { event.target.hidden = true; });
 const previewVideo = preview?.querySelector("[data-preview-video]");
 const previewForm = preview?.querySelector("[data-preview-form]");
 
@@ -210,16 +214,19 @@ if (previewVideo) {
 }
 
 const paintPreview = state => {
-  if (!preview || !previewForm) return;
+  if (!preview) return;
   const position = state.positionMilliseconds;
 
   // A live that stopped, or a page that was left on one that stopped and now another is running:
   // what the page shows is not what the snapshot describes, so it is drawn again. The stream stays
-  // open, and the reloaded page asks for the same live again.
+  // open, and the reloaded page asks for the same live again. A page with nothing on air has no
+  // form, and is only waiting for this.
   if (state.isLive !== previewIsLive || (state.isLive && state.videoPkid !== previewPkid)) {
     location.reload();
     return;
   }
+
+  if (!previewForm) return;
 
   if (!state.isLive) return;
 
@@ -353,7 +360,8 @@ if (previewForm) {
 // The one infobar of a page that answers with a fetch: it goes above the header, where the server
 // would have put it after a post.
 const say = (kind, heading, text, backTo) => {
-  const page = document.querySelector(".page");
+  // Inside a modal the page is under the backdrop: the answer goes where the user is looking.
+  const page = document.querySelector("dialog[open] [data-say-here]") || document.querySelector(".page");
   if (!page) return;
   for (const bar of page.querySelectorAll(".infobar.preview-say")) bar.remove();
   const bar = document.createElement("div");
@@ -463,6 +471,30 @@ document.addEventListener("click", event => {
   if (!shortcut || !wizard || wizard.open) return;
   event.preventDefault();
   wizard.showModal();
+});
+
+// <button data-wizard-next="dialog-id" data-wizard-fields="a b">: a step of a wizard that lives in
+// two dialogs. The picks of this step are checked here, copied into the fields of the same names in
+// the next dialog, and the next dialog takes the place of this one; data-wizard-back goes back.
+document.addEventListener("click", event => {
+  const next = event.target.closest?.("[data-wizard-next]");
+  const back = event.target.closest?.("[data-wizard-back]");
+  if (next) {
+    const form = next.closest("form");
+    if (form && !form.reportValidity()) return;
+    const target = document.getElementById(next.dataset.wizardNext);
+    if (!target) return;
+    for (const name of (next.dataset.wizardFields || "").split(" ").filter(Boolean)) {
+      const value = form?.querySelector(`[name="${name}"]:checked, select[name="${name}"]`)?.value ?? "";
+      for (const field of target.querySelectorAll(`[name="${name}"]`)) field.value = value;
+    }
+    next.closest("dialog")?.close();
+    target.showModal();
+  } else if (back) {
+    const target = document.getElementById(back.dataset.wizardBack);
+    back.closest("dialog")?.close();
+    target?.showModal();
+  }
 });
 
 // <form data-confirm="question">: asks in the shared ContentDialog before submitting.

@@ -14,6 +14,7 @@ public sealed class VideoService
     private readonly VideoRepository _videoRepository;
     private readonly VideoSettingRepository _videoSettingRepository;
     private readonly VideoLiveHistoryRepository _videoLiveHistoryRepository;
+    private readonly SceneRepository _sceneRepository;
     private readonly ResponseFactory _responses;
     private readonly Localizer _localizer;
     private readonly BackgroundTaskExecutor _executor;
@@ -24,6 +25,7 @@ public sealed class VideoService
         VideoRepository videoRepository,
         VideoSettingRepository videoSettingRepository,
         VideoLiveHistoryRepository videoLiveHistoryRepository,
+        SceneRepository sceneRepository,
         ResponseFactory responses,
         Localizer localizer,
         BackgroundTaskExecutor executor,
@@ -33,6 +35,7 @@ public sealed class VideoService
         _videoRepository = videoRepository;
         _videoSettingRepository = videoSettingRepository;
         _videoLiveHistoryRepository = videoLiveHistoryRepository;
+        _sceneRepository = sceneRepository;
         _responses = responses;
         _localizer = localizer;
         _executor = executor;
@@ -59,18 +62,22 @@ public sealed class VideoService
     {
         var result = _videoRepository.FindLivePage(liveStatus, channelName, page.Page, page.Size);
         return SpringPageFactory.Create(
-            Map(result, row => new LiveRow(WithRelations(row.Video), row.Position, row.Total, row.Status)),
+            Map(result, row => new LiveRow(WithRelations(row.Video), row.Position, row.Total, row.Status, SceneNameOf(row.Video))),
             page.Sorts);
     }
 
-    /// <summary>Every video of a playlist, in streaming order, for its details dialog.</summary>
+    /// <summary>The name a canvas live goes by: the scene it was started from, or a plain word for
+    /// one deleted since (its rows keep every source, so the live still restarts). Null for a file.</summary>
+    private string? SceneNameOf(VideoEntity video) => video.ScenePkid is not { } scenePkid
+        ? null
+        : _sceneRepository.FindByPkid(scenePkid)?.Name is { Length: > 0 } name ? name : "#" + scenePkid.ToString(System.Globalization.CultureInfo.InvariantCulture);
+
+    /// <summary>Every row of a live, in streaming order, for its details dialog.</summary>
     public PlaylistDetails? GetPlaylist(long videoLiveHistoryPkid)
     {
         var history = _videoLiveHistoryRepository.FindByPkid(videoLiveHistoryPkid);
-        var videos = _videoRepository.FindByLiveHistoryId(videoLiveHistoryPkid)
-            .Where(video => video.ScenePkid is null)
-            .Select(VideoRequest.FromEntity)
-            .ToList();
+        var rows = _videoRepository.FindByLiveHistoryId(videoLiveHistoryPkid);
+        var videos = rows.Select(VideoRequest.FromEntity).ToList();
 
         if (history is null || videos.Count == 0)
         {
@@ -80,7 +87,11 @@ public sealed class VideoService
         // The same pick as the row of the page, asked of the same query, so the two never disagree.
         var current = _videoRepository.FindLivePage(null, null, 0, 1, videoLiveHistoryPkid).Items.FirstOrDefault();
         return new PlaylistDetails(
-            VideoLiveHistoryRequest.FromEntity(history), videos, current?.Video.Pkid, current?.Status ?? LiveStatus.Offline);
+            VideoLiveHistoryRequest.FromEntity(history),
+            videos,
+            current?.Video.Pkid,
+            current?.Status ?? LiveStatus.Offline,
+            rows.Count > 0 ? SceneNameOf(rows[0]) : null);
     }
 
     /// <summary>The whole playlist leaves the page. Refused while one of its videos is on air, for

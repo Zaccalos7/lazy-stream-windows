@@ -49,6 +49,7 @@ public static class OrbisServiceCollectionExtensions
         services.AddSingleton(_ => new FfmpegToolLocator(options.FfmpegPath, options.FfprobePath));
         services.AddSingleton<FfmpegProbe>();
         services.AddSingleton<StreamingSessionRegistry>();
+        services.AddSingleton<LivePreviewFrames>();
         services.AddSingleton<FfmpegVideoPlaylistStreamer>();
         services.AddSingleton<IVideoPlaylistStreamer>(provider => (IVideoPlaylistStreamer)provider.GetRequiredService<FfmpegVideoPlaylistStreamer>());
 

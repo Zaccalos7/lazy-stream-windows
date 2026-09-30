@@ -247,5 +247,9 @@
   "deletePlaylist": "Supprimer la playlist",
   "deletePlaylistConfirm": "Êtes-vous sûr de vouloir supprimer toute la playlist ({0} vidéos) ?",
   "playlistStartFrom": "Redémarrer à partir de cette vidéo",
-  "playlistStartFromConfirm": "Redémarrer à partir de la vidéo {0} ? Les vidéos précédentes seront considérées comme déjà diffusées."
+  "playlistStartFromConfirm": "Redémarrer à partir de la vidéo {0} ? Les vidéos précédentes seront considérées comme déjà diffusées.",
+  "composeNext": "Suivant : composer la scène",
+  "previewWaiting": "En attente de la première image…",
+  "sceneSources": "Scène · {0} sources",
+  "deleteSceneLiveConfirm": "Êtes-vous sûr de vouloir supprimer ce direct ({0} sources) ?"
 }

@@ -1,6 +1,6 @@
 @model MainLiveModel
-@* The videos of the playlist in the details dialog, in streaming order: the one the row of the page
-   stands for is marked, and each can be taken out of the playlist on its own. *@
+@* The rows of a live in the details dialog, in streaming order: the one the row of the page stands
+   for is marked. The videos of a playlist can each be started from or taken out on their own. *@
 @if (Model.OpenedPlaylist is { } playlist)
 {
     <div class="table-wrap">
@@ -10,8 +10,11 @@
                 <th>#</th>
                 <th>@T["liveStatus"]</th>
                 <th>@T["title"]</th>
-                <th>@T["playlistStoppedAt"]</th>
-                <th></th>
+                @if (!playlist.IsScene)
+                {
+                    <th>@T["playlistStoppedAt"]</th>
+                    <th></th>
+                }
             </tr>
             </thead>
             <tbody>
@@ -33,18 +36,23 @@
                         <div class="truncate"><strong>@video.Name</strong></div>
                         <div class="caption truncate" title="@video.VideoPath">@video.VideoPath</div>
                     </td>
-                    <td class="num">@(position > 0 && status != LiveStatus.Ended ? TimeSpan.FromMilliseconds(position).ToString(@"hh\:mm\:ss") : "–")</td>
-                    <td>
-                        <div class="actions">
-                            <form method="post" asp-page="/MainLive" asp-page-handler="ReplayFrom" asp-all-route-data="Model.DetailsRowRoute(video.Pkid)" data-confirm="@string.Format(T["playlistStartFromConfirm"], index + 1)">
-                                <button class="btn subtle icon-only success" disabled="@playlistLive" title="@T["playlistStartFrom"]" aria-label="@T["playlistStartFrom"]"><i class="icon">&#xE768;</i></button>
-                            </form>
-                            <form method="post" asp-page="/MainLive" asp-page-handler="Delete" asp-all-route-data="Model.DetailsRowRoute(video.Pkid)" data-confirm="@T["deleteLiveRowConfirm"]">
-                                <button class="btn subtle icon-only danger" disabled="@live" title="@T["deleteLiveRow"]" aria-label="@T["deleteLiveRow"]"><i class="icon">&#xE74D;</i></button>
-                            </form>
-                            <span class="spinner" data-while="busy" title="@T["loading"]"></span>
-                        </div>
-                    </td>
+                    @* The sources of a canvas go on air together: there is no "from here" and no single
+                       one to take out, the live is started, stopped and deleted as a whole. *@
+                    @if (!playlist.IsScene)
+                    {
+                        <td class="num">@(position > 0 && status != LiveStatus.Ended ? TimeSpan.FromMilliseconds(position).ToString(@"hh\:mm\:ss") : "–")</td>
+                        <td>
+                            <div class="actions">
+                                <form method="post" asp-page="/MainLive" asp-page-handler="ReplayFrom" asp-all-route-data="Model.DetailsRowRoute(video.Pkid)" data-confirm="@string.Format(T["playlistStartFromConfirm"], index + 1)">
+                                    <button class="btn subtle icon-only success" disabled="@playlistLive" title="@T["playlistStartFrom"]" aria-label="@T["playlistStartFrom"]"><i class="icon">&#xE768;</i></button>
+                                </form>
+                                <form method="post" asp-page="/MainLive" asp-page-handler="Delete" asp-all-route-data="Model.DetailsRowRoute(video.Pkid)" data-confirm="@T["deleteLiveRowConfirm"]">
+                                    <button class="btn subtle icon-only danger" disabled="@live" title="@T["deleteLiveRow"]" aria-label="@T["deleteLiveRow"]"><i class="icon">&#xE74D;</i></button>
+                                </form>
+                                <span class="spinner" data-while="busy" title="@T["loading"]"></span>
+                            </div>
+                        </td>
+                    }
                 </tr>
             }
             </tbody>

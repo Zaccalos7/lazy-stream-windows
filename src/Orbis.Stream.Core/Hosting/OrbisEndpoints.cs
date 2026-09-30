@@ -9,6 +9,7 @@ using Orbis.Stream.Core.Domain;
 using Orbis.Stream.Core.Http;
 using Orbis.Stream.Core.I18n;
 using Orbis.Stream.Core.Services;
+using Orbis.Stream.Core.Streaming;
 
 namespace Orbis.Stream.Core.Hosting;
 
@@ -256,6 +257,47 @@ public static class OrbisEndpoints
             // The player asks for ranges to seek, so the answer has to be a file result that knows
             // about them: without this every seek would start the file over.
             return Results.File(file.Path, file.ContentType, enableRangeProcessing: true);
+        });
+
+        // The light picture of a live: the JPEGs its ffmpeg writes next to the stream, pushed as
+        // motion JPEG, which an <img> plays on its own. A frame goes out only when there is a new
+        // one, and the answer ends with the live, so an open page costs nothing once it is over.
+        group.MapGet("/live/{pkid:int}/stream", async (
+            int pkid,
+            HttpContext context,
+            LivePreviewFrames frames,
+            StreamingSessionRegistry sessions,
+            CancellationToken token) =>
+        {
+            const string Boundary = "orbisframe";
+            context.Response.ContentType = $"multipart/x-mixed-replace; boundary={Boundary}";
+            context.Response.Headers.CacheControl = "no-store";
+            context.Features.Get<Microsoft.AspNetCore.Http.Features.IHttpResponseBodyFeature>()?.DisableBuffering();
+
+            var sent = DateTime.MinValue;
+            try
+            {
+                while (!token.IsCancellationRequested && sessions.TryGet(pkid, out _))
+                {
+                    var written = frames.LastWrite(pkid);
+                    if (written != sent && frames.Read(pkid) is { } frame)
+                    {
+                        sent = written;
+                        var header = System.Text.Encoding.ASCII.GetBytes(
+                            $"--{Boundary}\r\nContent-Type: image/jpeg\r\nContent-Length: {frame.Length}\r\n\r\n");
+                        await context.Response.Body.WriteAsync(header, token).ConfigureAwait(false);
+                        await context.Response.Body.WriteAsync(frame, token).ConfigureAwait(false);
+                        await context.Response.Body.WriteAsync("\r\n"u8.ToArray(), token).ConfigureAwait(false);
+                        await context.Response.Body.FlushAsync(token).ConfigureAwait(false);
+                    }
+
+                    await Task.Delay(100, token).ConfigureAwait(false);
+                }
+            }
+            catch (OperationCanceledException)
+            {
+                // The page went away: nothing to finish.
+            }
         });
 
         group.MapPut("/live/{pkid:int}/parameters", (

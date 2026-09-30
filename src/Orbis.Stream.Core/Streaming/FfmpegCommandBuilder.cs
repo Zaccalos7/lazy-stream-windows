@@ -10,7 +10,8 @@ public sealed record FfmpegStreamRequest(
     string OutputUrl,
     MediaProbeResult Probe,
     VideoSettingEntity Setting,
-    TimeSpan ResumeFrom = default);
+    TimeSpan ResumeFrom = default,
+    string? PreviewPath = null);
 
 /// <summary>One source on the canvas, as the command line needs it.</summary>
 public sealed record FfmpegCompositionItem(
@@ -34,7 +35,8 @@ public sealed record FfmpegCompositionRequest(
     int CanvasWidth,
     int CanvasHeight,
     double CanvasFrameRate,
-    TimeSpan ResumeFrom = default);
+    TimeSpan ResumeFrom = default,
+    string? PreviewPath = null);
 
 /// <summary>
 /// Translates the <c>FFmpegFrameRecorder</c> configuration of <c>StreamService</c> into the
@@ -49,6 +51,16 @@ public static class FfmpegCommandBuilder
     private const string AudioLabel = "orbisa";
 
     private const string CanvasLabel = "canvas";
+
+    /// <summary>The copy of the composed picture that goes to the preview instead of the live.</summary>
+    private const string PreviewLabel = "orbisp";
+
+    /// <summary>
+    /// The preview is a picture to look at, not a second live: a few frames a second, small, as
+    /// JPEG. It costs next to nothing next to the live encode, and it is what is on air (the
+    /// composed canvas, the scaled file) rather than the source the page would otherwise replay.
+    /// </summary>
+    private const string PreviewFilter = "fps=5,scale=w='min(640,iw)':h=-2";
 
     public static IReadOnlyList<string> Build(FfmpegStreamRequest request)
     {
@@ -95,6 +107,14 @@ public static class FfmpegCommandBuilder
             arguments, setting, frameRate, probe.HasAudio, probe.AudioChannels, ScaleFilter(setting));
 
         arguments.Add(request.OutputUrl);
+
+        if (request.PreviewPath is { } previewPath)
+        {
+            // The scale of the setting applies to the output before it: the preview gets the same
+            // picture the live does, then shrinks it on its own.
+            var scale = ScaleFilter(setting);
+            AppendPreviewOutput(arguments, "0:v:0", (scale is null ? string.Empty : scale + ",") + PreviewFilter, previewPath);
+        }
 
         return arguments;
     }
@@ -146,13 +166,23 @@ public static class FfmpegCommandBuilder
             AppendInput(arguments, items[index], request.ResumeFrom, frameRate);
         }
 
+        // A label of the graph can feed one output only: with a preview the composed picture is
+        // split in two, and the copy is shrunk inside the graph (-vf cannot act on a graph output).
+        var graph = BuildFilterGraph(items, pictures, canvasWidth, canvasHeight, frameRate);
+        var videoLabel = VideoLabel;
+        if (request.PreviewPath is not null)
+        {
+            videoLabel = VideoLabel + "out";
+            graph += $";[{VideoLabel}]split=2[{videoLabel}][{PreviewLabel}0];[{PreviewLabel}0]{PreviewFilter}[{PreviewLabel}]";
+        }
+
         arguments.Add("-filter_complex");
-        arguments.Add(Combine(BuildFilterGraph(items, pictures, canvasWidth, canvasHeight, frameRate), BuildAudioMix(items)));
+        arguments.Add(Combine(graph, BuildAudioMix(items)));
 
         // A label of the graph is mapped in brackets: bare, ffmpeg reads it as an input index and
         // refuses the whole command line.
         arguments.Add("-map");
-        arguments.Add($"[{VideoLabel}]");
+        arguments.Add($"[{videoLabel}]");
 
         if (HasAudioMix(items))
         {
@@ -167,7 +197,42 @@ public static class FfmpegCommandBuilder
 
         arguments.Add(request.OutputUrl);
 
+        if (request.PreviewPath is { } previewPath)
+        {
+            AppendPreviewOutput(arguments, $"[{PreviewLabel}]", filter: null, previewPath);
+        }
+
         return arguments;
+    }
+
+    /// <summary>
+    /// The second output of a live: one JPEG, overwritten a few times a second. Written to a
+    /// temporary file and renamed, so the page never reads a frame that is half written.
+    /// </summary>
+    private static void AppendPreviewOutput(List<string> arguments, string map, string? filter, string path)
+    {
+        arguments.Add("-map");
+        arguments.Add(map);
+        arguments.Add("-an");
+        arguments.Add("-sn");
+        arguments.Add("-dn");
+        if (filter is not null)
+        {
+            arguments.Add("-vf");
+            arguments.Add(filter);
+        }
+
+        arguments.Add("-c:v");
+        arguments.Add("mjpeg");
+        arguments.Add("-q:v");
+        arguments.Add("8");
+        arguments.Add("-f");
+        arguments.Add("image2");
+        arguments.Add("-update");
+        arguments.Add("1");
+        arguments.Add("-atomic_writing");
+        arguments.Add("1");
+        arguments.Add(path);
     }
 
     /// <summary>

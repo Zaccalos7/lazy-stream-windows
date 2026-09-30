@@ -1,6 +1,5 @@
-@model MainPreviewModel
+@model SceneComposerModel
 @{
-    var canStart = Model.ActiveSettings.Count > 0 && Model.ActiveConfigurations.Count > 0;
     (int Width, int Height)[] sizes = [(1280, 720), (1920, 1080), (2560, 1440), (3840, 2160)];
 }
 @* The canvas the next live is put together on. Everything here is drawn by the script: the sources
@@ -101,74 +100,5 @@
         <ol class="composer-layer-list" data-composer-layers></ol>
     </aside>
 </div>
-
-@* The start: the same two choices as the live wizard. The scene id is filled in by the script once
-   the layout is saved, so what streams is exactly what is on the canvas. *@
-<dialog class="dialog wide" id="scene-start-dialog" data-busy-host>
-    <form method="post" asp-page-handler="StartScene">
-        <input type="hidden" name="scenePkid" data-composer-start-pkid />
-        <div class="dialog-body">
-            <h2>@T["startNewLiveTitle"]</h2>
-
-            <h3>@T["wizardStep1Title"]</h3>
-            @if (Model.ActiveSettings.Count == 0)
-            {
-                <div class="infobar warning section">
-                    <i class="icon">&#xE7BA;</i>
-                    <p><strong>@T["noActiveSetting"]</strong><br />@T["wizardNoActiveSettingsMessage"]</p>
-                    <a class="btn" href="/orbis/mainVideoSetting">@T["activateVideoAudioSettings"]</a>
-                </div>
-            }
-            else
-            {
-                <div class="choice-list section" style="margin-top: 8px;">
-                    @foreach (var setting in Model.ActiveSettings)
-                    {
-                        <label class="choice">
-                            <input type="radio" name="settingId" value="@setting.Id" required />
-                            <span class="grow">
-                                <strong>@(string.IsNullOrWhiteSpace(setting.Title) ? T["untitled"] : setting.Title)</strong>
-                                <span class="caption" style="display: block;">
-                                    @setting.VideoCodecName · @VideoSettingForm.FormatBitrate(setting.VideoBitrate, T["milion"]) ·
-                                    @setting.VideoFormat?.ToUpperInvariant() · @T["audioBitrate"] @(setting.AudioSettingRecord?.AudioBitrate?.ToString() ?? "N/A")
-                                </span>
-                            </span>
-                        </label>
-                    }
-                </div>
-            }
-
-            <h3 class="section">@T["wizardStep2Title"]</h3>
-            @if (Model.ActiveConfigurations.Count == 0)
-            {
-                <div class="infobar warning section">
-                    <i class="icon">&#xE7BA;</i>
-                    <p><strong>@T["noActiveStreamingConfiguration"]</strong><br />@T["wizardNoActiveConfigurationsMessage"]</p>
-                    <a class="btn" href="/orbis/mainChannelSetting">@T["activeConfigurationLabel"]</a>
-                </div>
-            }
-            else
-            {
-                <div class="choice-list" style="margin-top: 8px;">
-                    @foreach (var configuration in Model.ActiveConfigurations)
-                    {
-                        <label class="choice">
-                            <input type="radio" name="configurationId" value="@configuration.Id" required />
-                            <span class="grow">
-                                <strong>@configuration.ChannelName</strong> · @configuration.PlatformStreamName
-                                <span class="caption" style="display: block;">@configuration.StreamUrl</span>
-                            </span>
-                        </label>
-                    }
-                </div>
-            }
-        </div>
-        <div class="dialog-footer">
-            <span class="spinner" data-while="busy" title="@T["loading"]"></span>
-            <button class="btn accent" disabled="@(!canStart)">@T["startLiveButton"]</button>
-            <button class="btn" type="button" commandfor="scene-start-dialog" command="close">@T["cancel"]</button>
-        </div>
-    </form>
-</dialog>
 
 <script src="/js/composer.js" defer></script>

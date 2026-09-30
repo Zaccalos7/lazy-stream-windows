@@ -37,7 +37,9 @@
   const startButton = root.querySelector("[data-composer-start]");
   const pathBox = root.querySelector("[data-composer-path]");
   const guides = { x: stage.querySelector('[data-guide="x"]'), y: stage.querySelector('[data-guide="y"]') };
-  const startDialog = document.getElementById("scene-start-dialog");
+  // The live wizard sends this form once the layout is saved: the setting and the destination
+  // were picked on the step before, so the start goes out with nothing else to ask.
+  const startForm = document.querySelector("[data-composer-start-form]");
 
   // How close, in screen pixels, an edge has to come to a guide line before it sticks to it.
   const snapDistance = 8;
@@ -873,7 +875,7 @@
   startButton.addEventListener("click", async () => {
     if ((dirty || scene.pkid === null) && !(await save())) return;
     document.querySelector("[data-composer-start-pkid]").value = String(scene.pkid);
-    startDialog?.showModal();
+    startForm?.requestSubmit();
   });
 
   deleteButton.addEventListener("click", () => {
@@ -904,11 +906,25 @@
 
   // ---------- Start ----------
 
-  (async () => {
+  const boot = async () => {
     render();
     await Promise.all([loadCatalog(), loadScenes()]);
     const wanted = Number(root.dataset.scene || 0);
     const saved = scenes.find(entry => entry.pkid === wanted);
     if (saved) loadScene(saved);
-  })();
+  };
+
+  // Listing the cameras and the microphones runs ffmpeg: a composer inside a closed dialog waits
+  // for the dialog to open, so the page that holds it does not pay for a canvas nobody asked for.
+  const host = root.closest("dialog");
+  if (host && !host.open) {
+    const opened = () => {
+      if (!host.open) return;
+      host.removeEventListener("toggle", opened);
+      boot();
+    };
+    host.addEventListener("toggle", opened);
+  } else {
+    boot();
+  }
 })();

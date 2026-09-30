@@ -207,10 +207,10 @@ public sealed class VideoRepository
     }
 
     /// <summary>
-    /// The live page: one row per folder playlist, and one per video for everything else (a single
-    /// file, a source of a canvas). The row a playlist shows is the video it got to: the one on air,
-    /// else the last one that was played, else the first one, with where it stands in the playlist.
-    /// A canvas is left row by row on purpose: its stop is addressed to its base row.
+    /// The live page: one row per live. A folder playlist shows the video it got to (the one on air,
+    /// else the last one that was played, else the first one), with where it stands in the playlist.
+    /// A canvas shows its base source, the first one with a picture: that is the row its ffmpeg is
+    /// registered under, so it is the row a stop has to be addressed to.
     /// <para>The status of a playlist is its own, not the one of the video shown: LIVE while any video
     /// is on air, ENDED once the last one was streamed through, else the one of the video it got to.
     /// The status filter reads the same value.</para>
@@ -224,15 +224,16 @@ public sealed class VideoRepository
                    ROW_NUMBER() OVER (PARTITION BY v.grp ORDER BY v.pkid) AS position,
                    COUNT(*) OVER (PARTITION BY v.grp) AS total,
                    ROW_NUMBER() OVER (PARTITION BY v.grp ORDER BY
-                       CASE WHEN v.live_status = @live THEN 0 WHEN v.live_status = @offline THEN 2 ELSE 1 END,
-                       CASE WHEN v.live_status = @offline THEN NULL ELSE v.start_date_live END DESC,
-                       CASE WHEN v.live_status = @offline THEN v.pkid ELSE -v.pkid END) AS pick,
+                       CASE WHEN v.scene_pkid IS NOT NULL THEN (CASE WHEN v.source_kind = @microphone THEN 1 ELSE 0 END)
+                            WHEN v.live_status = @live THEN 0 WHEN v.live_status = @offline THEN 2 ELSE 1 END,
+                       CASE WHEN v.scene_pkid IS NOT NULL OR v.live_status = @offline THEN NULL ELSE v.start_date_live END DESC,
+                       CASE WHEN v.scene_pkid IS NOT NULL OR v.live_status = @offline THEN v.pkid ELSE -v.pkid END) AS pick,
                    CASE
                        WHEN MAX(CASE WHEN v.live_status = @live THEN 1 ELSE 0 END) OVER (PARTITION BY v.grp) = 1 THEN @live
                        WHEN FIRST_VALUE(v.live_status) OVER (PARTITION BY v.grp ORDER BY v.pkid DESC) = @ended THEN @ended
                    END AS group_status
             FROM (SELECT x.*,
-                         CASE WHEN x.scene_pkid IS NULL AND x.video_live_history_pkid IS NOT NULL
+                         CASE WHEN x.video_live_history_pkid IS NOT NULL
                               THEN 'h' || x.video_live_history_pkid ELSE 'v' || x.pkid END AS grp
                   FROM video x) v
             """;
@@ -247,6 +248,7 @@ public sealed class VideoRepository
             command.Parameters.AddWithValue("@live", LiveStatus.Live.ToStorageValue());
             command.Parameters.AddWithValue("@offline", LiveStatus.Offline.ToStorageValue());
             command.Parameters.AddWithValue("@ended", LiveStatus.Ended.ToStorageValue());
+            command.Parameters.AddWithValue("@microphone", (int)SourceKind.Microphone);
             if (liveStatus is { } status)
             {
                 command.Parameters.AddWithValue("@status", status.ToStorageValue());
@@ -293,7 +295,7 @@ public sealed class VideoRepository
     {
         using var connection = _connectionFactory.Open();
         using var command = connection.CreateCommand();
-        command.CommandText = "DELETE FROM video WHERE video_live_history_pkid = @pkid AND scene_pkid IS NULL;";
+        command.CommandText = "DELETE FROM video WHERE video_live_history_pkid = @pkid;";
         command.Parameters.AddWithValue("@pkid", videoLiveHistoryPkid);
         command.ExecuteNonQuery();
     }

@@ -344,15 +344,27 @@ public sealed record ApiEnvelope(string Response, string Message)
     public const string Error = "error";
 }
 
-/// <summary>A row of the live page. <see cref="Total"/> above one means the row stands for a whole
-/// folder playlist, <see cref="Video"/> is the video it got to and <see cref="Status"/> the status
-/// of the playlist as a whole.</summary>
-public sealed record LiveRow(VideoRequest Video, int Position, int Total, LiveStatus Status)
+/// <summary>A row of the live page: one per live. <see cref="Video"/> is the video a playlist got
+/// to, or the base source of a canvas (<see cref="SceneName"/> set); <see cref="Status"/> is the
+/// status of the live as a whole, and <see cref="Total"/> how many rows it stands for.</summary>
+public sealed record LiveRow(VideoRequest Video, int Position, int Total, LiveStatus Status, string? SceneName = null)
 {
-    public bool IsPlaylist => Total > 1;
+    public bool IsScene => SceneName is not null;
+
+    public bool IsPlaylist => !IsScene && Total > 1;
+
+    /// <summary>The rows behind it are only reachable from its details dialog.</summary>
+    public bool HasDetails => Total > 1 || IsScene;
 }
 
-/// <summary>A playlist opened in its details dialog: where it streams from, all its videos in order,
-/// and the one it got to (the one its row on the page shows).</summary>
+/// <summary>A live opened in its details dialog: where it streams from, all its rows in order (the
+/// videos of a playlist, the sources of a canvas) and the one its row on the page shows.</summary>
 public sealed record PlaylistDetails(
-    VideoLiveHistoryRequest History, IReadOnlyList<VideoRequest> Videos, int? CurrentPkid, LiveStatus Status);
+    VideoLiveHistoryRequest History,
+    IReadOnlyList<VideoRequest> Videos,
+    int? CurrentPkid,
+    LiveStatus Status,
+    string? SceneName = null)
+{
+    public bool IsScene => SceneName is not null;
+}

@@ -3,12 +3,8 @@
 @using System.Globalization
 @using Orbis.Stream.Core.Services
 @{
-    ViewData["Title"] = Model.IsComposing ? T["composeTitle"] : T["livePreviewTitle"];
+    ViewData["Title"] = T["livePreviewTitle"];
     var live = Model.Snapshot;
-
-    // The player shows the file of the live, and the page already knows where it is: the first
-    // frame is drawn at the position ffmpeg is at instead of at the beginning of the file.
-    var startAt = live.IsLive && live.PositionMilliseconds > 0 ? "#t=" + live.PositionMilliseconds / 1000d : string.Empty;
 
     string Fps(double value) => value <= 0 ? "–" : value.ToString("0.###", CultureInfo.InvariantCulture) + " fps";
     string Size(LiveMedia media) => media.Width > 0 ? $"{media.Width}×{media.Height}" : "–";
@@ -20,43 +16,11 @@
             : span.ToString(@"m\:ss", CultureInfo.InvariantCulture);
     }
 }
-@if (Model.IsComposing)
-{
-    <div class="page-header">
-        <div>
-            <h1>@T["composeTitle"]</h1>
-            <p class="subtitle">@T["composeSubtitle"]</p>
-        </div>
-        @if (live.IsLive)
-        {
-            <a class="btn" href="/orbis/mainPreview"><i class="icon">&#xE72B;</i>@T["backToPreview"]</a>
-        }
-    </div>
-
-    <partial name="_SceneComposer" model="Model" />
-    return;
-}
-
 <div class="page-header">
     <div>
         <h1>@T["livePreviewTitle"]</h1>
         <p class="subtitle">@T["livePreviewSubtitle"]</p>
     </div>
-    <a class="btn" href="/orbis/mainPreview?compose=1"><i class="icon">&#xE8A1;</i>@T["composeScene"]</a>
-    @if (live.Running.Count > 1)
-    {
-        <form method="get">
-            <label class="field">
-                <span class="caption">@T["runningLives"]</span>
-                <select class="input" name="live" onchange="this.form.requestSubmit()">
-                    @foreach (var option in live.Running)
-                    {
-                        <option value="@option.VideoPkid" selected="@option.IsWatching">@option.ChannelName · @option.VideoName</option>
-                    }
-                </select>
-            </label>
-        </form>
-    }
     @if (live.IsLive)
     {
         if (Model.LiveUrl is { } liveUrl)
@@ -73,6 +37,20 @@
     }
 </div>
 
+@* More than one live on air: which one to watch, one click away, not hidden in a list. *@
+@if (live.Running.Count > 1)
+{
+    <nav class="toolbar live-picker" aria-label="@T["runningLives"]">
+        <span class="caption">@T["runningLives"]</span>
+        @foreach (var option in live.Running)
+        {
+            <a class="btn @(option.IsWatching ? "accent" : "")" href="/orbis/mainPreview?live=@option.VideoPkid" aria-current="@(option.IsWatching ? "true" : null)">
+                <i class="icon">&#xE7F4;</i>@option.ChannelName · @option.VideoName
+            </a>
+        }
+    </nav>
+}
+
 @* The words the script needs to answer without asking the server: the page is drawn in the
    language of the request, and a fetch has to speak the same one. *@
 <p data-preview-words hidden
@@ -86,19 +64,29 @@
      data-position="@live.PositionMilliseconds"
      data-playable="@(live.IsPlayable ? "1" : "0")">
 
-@* With no live the page is the canvas (above), so from here on there always is one to watch. *@
-@{
+@* Nothing on air: the page waits for one (the push channel reloads it when a live starts), and
+   the canvas to start one is in the live wizard. *@
+@if (!live.IsLive)
+{
+    <div class="card empty">
+        <i class="icon">&#xE7F4;</i>
+        <p>@T["noLiveRunning"]</p>
+        <a class="btn accent" href="/orbis/mainLive?start=1"><i class="icon">&#xE768;</i>@T["startLiveButton"]</a>
+    </div>
+}
+else
+{
     var parameters = live.Parameters;
     <div class="preview">
         <div class="preview-stage card">
-            @if (live.IsPlayable)
-            {
-                <video data-preview-video src="@MainPreviewModel.VideoUrlOf(live.VideoPkid)@startAt"
-                       preload="auto" autoplay muted playsinline controls></video>
-            }
-            <div class="preview-cover" data-preview-cover hidden="@live.IsPlayable">
-                <i class="icon">&#xE714;</i>
-                <p class="muted">@T["notPlayableHere"]</p>
+            @* What is on air, made light: a few small frames a second that ffmpeg writes next to the
+               live, not a second copy of it. The cover under it shows until the first frame lands. *@
+            <div class="preview-screen">
+                <div class="preview-cover">
+                    <span class="spinner"></span>
+                    <p class="muted">@T["previewWaiting"]</p>
+                </div>
+                <img data-preview-frame src="@MainPreviewModel.FramesUrlOf(live.VideoPkid)" alt="@live.VideoName" />
             </div>
             <div class="preview-bar">
                 <div class="preview-id">

@@ -52,22 +52,53 @@
     <partial name="_LiveRows" model="Model" />
 </div>
 
-@* Start a new live: one active video/audio setting + one active streaming configuration. *@
-<dialog class="dialog wide" id="start-dialog" data-busy-host open="@(Model.OpenStart ? "" : null)">
-    <form method="post" asp-page-handler="Start" asp-all-route-data="Model.FilterRoute">
+@* Start a new live, step one: an active video/audio setting and an active destination. What goes
+   on air is chosen next, on the canvas: this form is never sent, its two picks travel on. *@
+<dialog class="dialog wide" id="start-dialog" data-open="@(Model.OpenStart ? "" : null)">
+    <form>
         <div class="dialog-body">
             <h2>@T["startNewLiveTitle"]</h2>
 
             <partial name="_StartWizardSteps" model="Model" />
         </div>
         <div class="dialog-footer">
-            @* The wizard walks the folder and starts ffmpeg on the server: while it answers, the
-               button says so instead of leaving the dialog looking inert. *@
-            <span class="spinner" data-while="busy" title="@T["loading"]"></span>
-            <button class="btn accent" disabled="@(!canStart)">@T["startLiveButton"]</button>
+            <button class="btn accent" type="button" disabled="@(!canStart)"
+                    data-wizard-next="compose-dialog" data-wizard-fields="settingId configurationId">
+                @T["composeNext"]<i class="icon" style="margin: 0 0 0 6px;">&#xE72A;</i>
+            </button>
             <button class="btn" type="button" commandfor="start-dialog" command="close">@T["cancel"]</button>
         </div>
     </form>
+</dialog>
+
+@* Start a new live, step two: the scene composer, as big as the window allows. Its start button
+   saves the layout and sends this form with the two picks of step one. A refused start comes back
+   here, on the same scene and the same picks, with the reason on top. *@
+<dialog class="dialog compose" id="compose-dialog" data-busy-host data-open="@(Model.ComposeScene is not null ? "" : null)">
+    <form method="post" asp-page-handler="StartScene" asp-all-route-data="Model.FilterRoute" data-composer-start-form>
+        <input type="hidden" name="settingId" value="@Model.SettingId" />
+        <input type="hidden" name="configurationId" value="@Model.ConfigurationId" />
+        <input type="hidden" name="scenePkid" value="@Model.ComposeScene" data-composer-start-pkid />
+    </form>
+    <div class="dialog-head">
+        <div class="grow">
+            <h2>@T["composeTitle"]</h2>
+            <p class="caption">@T["composeSubtitle"]</p>
+        </div>
+        <span class="spinner" data-while="busy" title="@T["loading"]"></span>
+        <button class="btn" type="button" data-wizard-back="start-dialog"><i class="icon">&#xE72B;</i>@T["back"]</button>
+        <button class="btn subtle icon-only" type="button" commandfor="compose-dialog" command="close" title="@T["cancel"]" aria-label="@T["cancel"]"><i class="icon">&#xE711;</i></button>
+    </div>
+    <div class="dialog-body" data-say-here>
+        @if (Model.ComposeScene is not null && Model.Notice is NoticeKind.Error && !string.IsNullOrEmpty(Model.NoticeText))
+        {
+            <div class="infobar error" role="alert">
+                <i class="icon">&#xEA39;</i>
+                <p>@Model.NoticeText</p>
+            </div>
+        }
+        <partial name="_SceneComposer" model="new SceneComposerModel(Model.ComposeScene)" />
+    </div>
 </dialog>
 
 @* Start a playlist: the same two picks, plus a folder whose videos are streamed one after the other. *@
@@ -146,11 +177,18 @@
     <dialog class="dialog wide" id="playlist-details" data-open>
         <div class="dialog-body">
             <h2>
-                @T["playlistDetails"] · @string.Format(T["playlistVideoCount"], opened.Videos.Count)
+                @if (opened.IsScene)
+                {
+                    @opened.SceneName @:· @string.Format(T["sceneSources"], opened.Videos.Count)
+                }
+                else
+                {
+                    @T["playlistDetails"] @:· @string.Format(T["playlistVideoCount"], opened.Videos.Count)
+                }
                 <span class="badge @LiveStatusView.Css(opened.Status)" style="vertical-align: middle;">@T[LiveStatusView.Key(opened.Status)]</span>
             </h2>
             <p class="caption truncate" title="@opened.History.FolderOfVideoToStream">
-                @(string.IsNullOrEmpty(opened.History.PlatformStreamName) ? "" : opened.History.PlatformStreamName + " · ")@opened.History.FolderOfVideoToStream
+                @(string.IsNullOrEmpty(opened.History.PlatformStreamName) ? "" : opened.History.PlatformStreamName)@(opened.IsScene ? "" : " · " + opened.History.FolderOfVideoToStream)
             </p>
             <div data-refresh="@Url.Page("/MainLive", "DetailsRows", new { details = Model.Details })" data-since="@Model.ChangeVersion">
                 <partial name="_PlaylistVideos" model="Model" />

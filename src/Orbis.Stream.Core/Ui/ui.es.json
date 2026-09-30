@@ -247,5 +247,9 @@
   "deletePlaylist": "Eliminar playlist",
   "deletePlaylistConfirm": "¿Está seguro de que desea eliminar toda la playlist ({0} vídeos)?",
   "playlistStartFrom": "Reiniciar desde este vídeo",
-  "playlistStartFromConfirm": "¿Reiniciar desde el vídeo {0}? Los vídeos anteriores se considerarán ya emitidos."
+  "playlistStartFromConfirm": "¿Reiniciar desde el vídeo {0}? Los vídeos anteriores se considerarán ya emitidos.",
+  "composeNext": "Siguiente: compón la escena",
+  "previewWaiting": "Esperando el primer fotograma…",
+  "sceneSources": "Escena · {0} fuentes",
+  "deleteSceneLiveConfirm": "¿Está seguro de que desea eliminar este directo ({0} fuentes)?"
 }

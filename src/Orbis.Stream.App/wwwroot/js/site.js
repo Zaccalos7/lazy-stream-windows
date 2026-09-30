@@ -525,7 +525,9 @@ for (const counter of document.querySelectorAll("[data-countdown]")) {
 }
 
 // <dialog data-open>: dialogs the server rendered for an edit (?edit=, ?link=) open as modal.
-for (const dialog of document.querySelectorAll("dialog[data-open]")) dialog.showModal();
+// data-open="0" is a dialog that could have been asked open and was not: Razor writes a data-*
+// attribute even when its value is null, so "closed" has to be a value of its own.
+for (const dialog of document.querySelectorAll('dialog[data-open]:not([data-open="0"])')) dialog.showModal();
 
 // <input type="radio" data-stream-url="rtmp://…">: picking a platform fills its form's streamUrl,
 // unless the user typed a custom ingest (anything that is not one of the platform presets).

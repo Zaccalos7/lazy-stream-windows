@@ -12,6 +12,7 @@ public sealed class FfmpegStreamingSession : IAsyncDisposable
     private readonly ILogger _logger;
     private readonly Task<string> _standardError;
     private readonly Task _standardOutput;
+    private readonly long _resumedFromMilliseconds;
     private long _positionMilliseconds;
     private int _stopRequested;
     private int _restartRequested;
@@ -22,10 +23,17 @@ public sealed class FfmpegStreamingSession : IAsyncDisposable
         string inputPath,
         MediaProbeResult probe,
         MediaOutput output,
+        TimeSpan resumeFrom,
         ILogger logger)
     {
         _process = process;
         _logger = logger;
+
+        // ffmpeg counts from where it was asked to seek to, not from the start of the file: the
+        // position of the live is that count plus the point it resumed from. Without it a stop after
+        // a resume recorded how long the last pass lasted, and the next play went back in time.
+        _resumedFromMilliseconds = (long)Math.Max(0, resumeFrom.TotalMilliseconds);
+        _positionMilliseconds = _resumedFromMilliseconds;
         VideoPkid = videoPkid;
         InputPath = inputPath;
         Probe = probe;
@@ -95,7 +103,7 @@ public sealed class FfmpegStreamingSession : IAsyncDisposable
         string? previewPath = null)
     {
         var arguments = FfmpegCommandBuilder.Build(new FfmpegStreamRequest(inputPath, outputUrl, probe, setting, resumeFrom, previewPath));
-        return Launch(locator, videoPkid, inputPath, arguments, probe, FfmpegCommandBuilder.ResolveOutput(setting, probe), logger);
+        return Launch(locator, videoPkid, inputPath, outputUrl, arguments, probe, FfmpegCommandBuilder.ResolveOutput(setting, probe), resumeFrom, logger);
     }
 
     /// <summary>
@@ -127,16 +135,18 @@ public sealed class FfmpegStreamingSession : IAsyncDisposable
         var sound = FfmpegCommandBuilder.CarriesSound(items);
         var probe = new MediaProbeResult(canvasWidth, canvasHeight, frameRate, sound, sound ? 2 : 0, 0);
 
-        return Launch(locator, videoPkid, SceneDescriptionOf(items), arguments, probe, output, logger);
+        return Launch(locator, videoPkid, SceneDescriptionOf(items), outputUrl, arguments, probe, output, resumeFrom, logger);
     }
 
     private static FfmpegStreamingSession Launch(
         FfmpegToolLocator locator,
         int videoPkid,
         string inputPath,
+        string outputUrl,
         IReadOnlyList<string> arguments,
         MediaProbeResult probe,
         MediaOutput output,
+        TimeSpan resumeFrom,
         ILogger logger)
     {
         var startInfo = locator.CreateStartInfo(locator.FfmpegPath, arguments);
@@ -147,9 +157,10 @@ public sealed class FfmpegStreamingSession : IAsyncDisposable
             throw new InvalidOperationException($"Unable to start ffmpeg for {inputPath}");
         }
 
+        // The output is named, not read off the end of the command line: the preview comes after it.
         logger.LogInformation(
-            "ffmpeg started for {Input} -> {OutputUrl}", inputPath, arguments[^1]);
-        return new FfmpegStreamingSession(process, videoPkid, inputPath, probe, output, logger);
+            "ffmpeg started for {Input} -> {OutputUrl}", inputPath, outputUrl);
+        return new FfmpegStreamingSession(process, videoPkid, inputPath, probe, output, resumeFrom, logger);
     }
 
     /// <summary>What the pages show instead of a path when a live is streaming a canvas.</summary>
@@ -161,8 +172,9 @@ public sealed class FfmpegStreamingSession : IAsyncDisposable
 
     /// <summary>
     /// Reads the <c>-progress</c> block of ffmpeg, which repeats the state of the transcode until
-    /// the process ends. <c>out_time_us</c> is the position in the input, in microseconds; the
-    /// sibling <c>out_time_ms</c> counts microseconds too, which is why it is not the one used here.
+    /// the process ends. <c>out_time_us</c> is how far the output got since the point the input was
+    /// seeked to, in microseconds; the sibling <c>out_time_ms</c> counts microseconds too, which is
+    /// why it is not the one used here.
     /// </summary>
     private async Task FollowProgressAsync()
     {
@@ -179,7 +191,7 @@ public sealed class FfmpegStreamingSession : IAsyncDisposable
                         System.Globalization.CultureInfo.InvariantCulture,
                         out var microseconds))
                 {
-                    Interlocked.Exchange(ref _positionMilliseconds, microseconds / 1000);
+                    Interlocked.Exchange(ref _positionMilliseconds, _resumedFromMilliseconds + microseconds / 1000);
                 }
             }
         }

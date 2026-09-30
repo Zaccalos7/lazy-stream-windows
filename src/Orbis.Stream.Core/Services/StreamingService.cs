@@ -299,8 +299,10 @@ public sealed class StreamingService
         SaveVideoLiveHistory(source, timeStartLive, streamUrl, streamKey, platformStreamName);
         var videoLiveHistory = RetrievedVideoLiveHistorySaved(source, timeStartLive);
 
-        var videoSetting = request.VideoSettingsRecord?.ToEntity();
-        SaveSceneSources(scene, sources, videoLiveHistory, videoSetting, channelName);
+        // Saved the way a folder start saves it: every row keeps the setting it went on air with, so
+        // a play or a restart of this live later reads it from the row and needs nothing else.
+        var videoSettingId = PersistVideoSetting(request.VideoSettingsRecord?.ToEntity());
+        SaveSceneSources(scene, sources, videoLiveHistory, videoSettingId, channelName);
 
         var streamingUrl = FfmpegCommandBuilder.BuildStreamingUrl(streamUrl, streamKey);
         return StreamingVideo(videoLiveHistory, streamingUrl);
@@ -310,7 +312,7 @@ public sealed class StreamingService
         SceneEntity scene,
         IReadOnlyList<SceneItemEntity> items,
         VideoLiveHistoryEntity videoLiveHistory,
-        VideoSettingEntity? videoSetting,
+        int? videoSettingId,
         string channelName)
     {
         foreach (var item in items)
@@ -333,7 +335,7 @@ public sealed class StreamingService
                 ShouldBeStop = false,
                 StartDateLive = DateTime.Now,
                 ChannelName = channelName,
-                VideoSettingId = videoSetting?.Id,
+                VideoSettingId = videoSettingId,
                 SourceKind = item.SourceKind,
                 SourceTarget = item.SourceKind == SourceKind.File ? null : item.SourceTarget,
                 ScenePkid = scene.Pkid,
@@ -343,11 +345,6 @@ public sealed class StreamingService
                 Height = item.Height,
                 AudioEnabled = item.AudioEnabled
             };
-
-            if (videoSetting is not null && video.VideoSettingId is null)
-            {
-                video.VideoSettingId = videoSetting.Id;
-            }
 
             _videoRepository.Insert(video);
         }

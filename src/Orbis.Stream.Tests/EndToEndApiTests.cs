@@ -616,14 +616,29 @@ public sealed class EndToEndApiTests : IClassFixture<ApplicationFixture>
         // that arrives with the link already shows it.
         using var plain = await _fixture.Client.GetAsync("/orbis/mainLive");
         var plainBody = await plain.Content.ReadAsStringAsync();
-        Assert.Contains("id=\"start-dialog\" data-busy-host>", plainBody, StringComparison.Ordinal);
+        // Razor writes a data-* attribute even when its value is null: closed has to be said ("0"),
+        // or every dialog of the page opened on arrival.
+        Assert.Contains("id=\"start-dialog\" data-open=\"0\"", plainBody, StringComparison.Ordinal);
+        Assert.Contains("id=\"playlist-dialog\" data-busy-host data-open=\"0\"", plainBody, StringComparison.Ordinal);
 
         using var asked = await _fixture.Client.GetAsync("/orbis/mainLive?start=1");
         var askedBody = await asked.Content.ReadAsStringAsync();
-        Assert.Contains("id=\"start-dialog\" data-busy-host open", askedBody, StringComparison.Ordinal);
+        Assert.Contains("id=\"start-dialog\" data-open=\"\"", askedBody, StringComparison.Ordinal);
 
-        // Starting a live walks the folder and starts ffmpeg on the server: the dialog says so
-        // next to its button instead of looking inert.
+        // The first step leads to the canvas, which is closed and has not listed any source yet:
+        // the composer only boots when its dialog opens.
+        Assert.Contains("data-wizard-next=\"compose-dialog\"", plainBody, StringComparison.Ordinal);
+        Assert.Contains("id=\"compose-dialog\" data-busy-host data-open=\"0\"", plainBody, StringComparison.Ordinal);
+        Assert.Contains("data-composer-start-form", plainBody, StringComparison.Ordinal);
+
+        // A refused start comes back on the canvas, with the scene and the two picks it was sent with.
+        using var refused = await _fixture.Client.GetAsync("/orbis/mainLive?compose=7&settingId=3&configurationId=4");
+        var refusedBody = await refused.Content.ReadAsStringAsync();
+        Assert.Contains("id=\"compose-dialog\" data-busy-host data-open=\"\"", refusedBody, StringComparison.Ordinal);
+        Assert.Contains("data-scene=\"7\"", refusedBody, StringComparison.Ordinal);
+        Assert.Contains("name=\"settingId\" value=\"3\"", refusedBody, StringComparison.Ordinal);
+
+        // Starting a live starts ffmpeg on the server: the dialog says so instead of looking inert.
         Assert.Contains("data-while=\"busy\"", plainBody, StringComparison.Ordinal);
     }
 

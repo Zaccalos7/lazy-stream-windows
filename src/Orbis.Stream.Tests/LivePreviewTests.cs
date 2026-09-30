@@ -227,9 +227,13 @@ public sealed class LivePreviewTests : IAsyncLifetime
         Assert.Equal(HttpStatusCode.OK, offline.StatusCode);
         var html = await offline.Content.ReadAsStringAsync();
 
-        // With nothing on air the page is the canvas the next live is composed on.
-        Assert.Contains("data-composer", html, StringComparison.Ordinal);
-        Assert.Contains("scene-start-dialog", html, StringComparison.Ordinal);
+        // With nothing on air the page waits for a live and leads to the wizard: the canvas is a
+        // step of starting a live now, and the old address of it goes there.
+        Assert.DoesNotContain("data-composer", html, StringComparison.Ordinal);
+        Assert.Contains("href=\"/orbis/mainLive?start=1\"", html, StringComparison.Ordinal);
+
+        using var compose = await _host.NoRedirectClient.GetAsync("/orbis/mainPreview?compose=1");
+        Assert.Equal("/orbis/mainLive?start=1", compose.Headers.Location?.OriginalString);
 
         if (!await StartLiveAsync())
         {
@@ -241,8 +245,20 @@ public sealed class LivePreviewTests : IAsyncLifetime
         using var live = await _host.Client.GetAsync($"/orbis/mainPreview?live={_pkid}");
         Assert.Equal(HttpStatusCode.OK, live.StatusCode);
         var page = await live.Content.ReadAsStringAsync();
-        Assert.Contains($"/preview/live/{_pkid}/video", page, StringComparison.Ordinal);
-        Assert.Contains("data-preview-video", page, StringComparison.Ordinal);
+        Assert.Contains($"/preview/live/{_pkid}/stream", page, StringComparison.Ordinal);
+        Assert.Contains("data-preview-frame", page, StringComparison.Ordinal);
+
+        // The light picture is what is on air, pushed as motion JPEG: the first part is a frame.
+        using var request = new HttpRequestMessage(HttpMethod.Get, $"/preview/live/{_pkid}/stream");
+        using var stream = await _host.Client.SendAsync(request, HttpCompletionOption.ResponseHeadersRead);
+        Assert.StartsWith("multipart/x-mixed-replace", stream.Content.Headers.ContentType?.ToString());
+        await using var body = await stream.Content.ReadAsStreamAsync();
+        var head = new byte[256];
+        using var timeout = new CancellationTokenSource(TimeSpan.FromSeconds(15));
+        var read = await body.ReadAtLeastAsync(head, 64, throwOnEndOfStream: false, timeout.Token);
+        var text = System.Text.Encoding.ASCII.GetString(head, 0, read);
+        Assert.Contains("--orbisframe", text, StringComparison.Ordinal);
+        Assert.Contains("Content-Type: image/jpeg", text, StringComparison.Ordinal);
     }
 
     private async Task<JsonElement> SnapshotAsync()

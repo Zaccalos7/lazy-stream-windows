@@ -54,7 +54,7 @@
 
 @* Start a new live, step one: an active video/audio setting and an active destination. What goes
    on air is chosen next, on the canvas: this form is never sent, its two picks travel on. *@
-<dialog class="dialog wide" id="start-dialog" data-open="@(Model.OpenStart ? "" : null)">
+<dialog class="dialog wide" id="start-dialog" data-open="@(Model.OpenStart ? "" : "0")">
     <form>
         <div class="dialog-body">
             <h2>@T["startNewLiveTitle"]</h2>
@@ -74,7 +74,7 @@
 @* Start a new live, step two: the scene composer, as big as the window allows. Its start button
    saves the layout and sends this form with the two picks of step one. A refused start comes back
    here, on the same scene and the same picks, with the reason on top. *@
-<dialog class="dialog compose" id="compose-dialog" data-busy-host data-open="@(Model.ComposeScene is not null ? "" : null)">
+<dialog class="dialog compose" id="compose-dialog" data-busy-host data-open="@(Model.ComposeScene is not null ? "" : "0")">
     <form method="post" asp-page-handler="StartScene" asp-all-route-data="Model.FilterRoute" data-composer-start-form>
         <input type="hidden" name="settingId" value="@Model.SettingId" />
         <input type="hidden" name="configurationId" value="@Model.ConfigurationId" />
@@ -102,7 +102,7 @@
 </dialog>
 
 @* Start a playlist: the same two picks, plus a folder whose videos are streamed one after the other. *@
-<dialog class="dialog wide" id="playlist-dialog" data-busy-host data-open="@(Model.OpenPlaylist ? "" : null)">
+<dialog class="dialog wide" id="playlist-dialog" data-busy-host data-open="@(Model.OpenPlaylist ? "" : "0")">
     <form method="post" asp-page-handler="Playlist" asp-all-route-data="Model.FilterRoute">
         <div class="dialog-body">
             <h2>@T["startPlaylistTitle"]</h2>

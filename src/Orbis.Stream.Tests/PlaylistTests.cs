@@ -103,7 +103,18 @@ public sealed class PlaylistTests : IAsyncLifetime
         // Before the fix the loop moved on to the next file as soon as the first one was stopped.
         await Task.Delay(TimeSpan.FromSeconds(3));
         Assert.Equal(LiveStatus.Offline, repository.FindByPkid(rows[1].Pkid)!.LiveStatus);
-        Assert.True(repository.FindByPkid(rows[0].Pkid)!.LastTimeStampBeforeStop > 0, "the stop did not record where to resume from");
+        var firstStop = repository.FindByPkid(rows[0].Pkid)!.LastTimeStampBeforeStop;
+        Assert.True(firstStop > 0, "the stop did not record where to resume from");
+
+        // A play resumes from there, and a second stop records a position in the file, past the
+        // first one: ffmpeg counts from the point it was seeked to, the session adds that point back.
+        streaming.StartVideo(_host.Services.GetRequiredService<VideoService>().FindVideo(rows[0].Pkid));
+        Assert.True(await WaitForAsync(() => repository.FindByPkid(rows[0].Pkid)!.LiveStatus == LiveStatus.Live), "the resume never went live");
+        await Task.Delay(TimeSpan.FromSeconds(2));
+        streaming.StopVideoStreamingByPkid(rows[0].Pkid);
+        Assert.True(await WaitForAsync(() => repository.FindByPkid(rows[0].Pkid)!.LiveStatus == LiveStatus.Stopped), "the resume was not stopped");
+        var secondStop = repository.FindByPkid(rows[0].Pkid)!.LastTimeStampBeforeStop;
+        Assert.True(secondStop > firstStop, $"the second stop went back in time: {secondStop} ms after {firstStop} ms");
         Assert.Equal((rows[0].Pkid, LiveStatus.Stopped), (PlaylistRow().Video.Pkid, PlaylistRow().Video.LiveStatus));
 
         var details = _host.Services.GetRequiredService<VideoService>().GetPlaylist(historyPkid);

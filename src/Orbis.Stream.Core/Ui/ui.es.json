@@ -233,5 +233,12 @@
   "sourcesEmptyAvailable": "No other sources available.",
   "deleteLiveRow": "Eliminar fila",
   "deleteLiveRowConfirm": "¿Está seguro de que desea eliminar esta fila?",
-  "firstPage": "Volver a la primera página"
+  "firstPage": "Volver a la primera página",
+  "startPlaylistButton": "Iniciar playlist",
+  "startPlaylistTitle": "Iniciar una nueva playlist",
+  "wizardStep3PlaylistTitle": "3. Elige la carpeta de vídeos a transmitir",
+  "playlistFolder": "Carpeta de la playlist",
+  "dropPlaylistFolderHint": "Arrastra aquí una carpeta y su ruta se copia en el campo",
+  "playlistOnlyVideos": "Solo se transmitirán los archivos de vídeo de la carpeta, uno tras otro por orden de nombre. Los demás archivos se ignoran. Extensiones reconocidas:",
+  "playlistPosition": "Vídeo {0} de {1}"
 }

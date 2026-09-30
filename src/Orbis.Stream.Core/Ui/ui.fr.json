@@ -233,5 +233,12 @@
   "sourcesEmptyAvailable": "No other sources available.",
   "deleteLiveRow": "Supprimer la ligne",
   "deleteLiveRowConfirm": "Êtes-vous sûr de vouloir supprimer cette ligne ?",
-  "firstPage": "Retour à la première page"
+  "firstPage": "Retour à la première page",
+  "startPlaylistButton": "Lancer la playlist",
+  "startPlaylistTitle": "Lancer une nouvelle playlist",
+  "wizardStep3PlaylistTitle": "3. Choisissez le dossier des vidéos à diffuser",
+  "playlistFolder": "Dossier de la playlist",
+  "dropPlaylistFolderHint": "Glissez un dossier ici et son chemin est copié dans le champ",
+  "playlistOnlyVideos": "Seuls les fichiers vidéo du dossier seront diffusés, l'un après l'autre par ordre de nom. Les autres fichiers sont ignorés. Extensions reconnues :",
+  "playlistPosition": "Vidéo {0} sur {1}"
 }

@@ -17,6 +17,7 @@
         {
             <button class="btn" commandfor="unlock-dialog" command="show-modal"><i class="icon">&#xE785;</i>@T["unLockVideo"]</button>
         }
+        <button class="btn" style="font-size: 1.1em; padding: 10px 20px;" commandfor="playlist-dialog" command="show-modal"><i class="icon">&#xE90B;</i>@T["startPlaylistButton"]</button>
         <button class="btn accent" style="font-size: 1.1em; padding: 10px 20px;" commandfor="start-dialog" command="show-modal"><i class="icon">&#xE768;</i>@T["startLiveButton"]</button>
     </div>
 </div>
@@ -57,67 +58,7 @@
         <div class="dialog-body">
             <h2>@T["startNewLiveTitle"]</h2>
 
-            <h3>@T["wizardStep1Title"]</h3>
-            @if (Model.ActiveSettings.Count == 0)
-            {
-                <div class="infobar warning section">
-                    <i class="icon">&#xE7BA;</i>
-                    <p><strong>@T["noActiveSetting"]</strong><br />@T["wizardNoActiveSettingsMessage"]</p>
-                    <a class="btn" href="/orbis/mainVideoSetting">@T["activateVideoAudioSettings"]</a>
-                </div>
-            }
-            else
-            {
-                <div class="choice-list section" style="margin-top: 8px;">
-                    @foreach (var setting in Model.ActiveSettings)
-                    {
-                        <label class="choice">
-                            <input type="radio" name="settingId" value="@setting.Id" required />
-                            <span class="grow">
-                                <strong>@(string.IsNullOrWhiteSpace(setting.Title) ? T["untitled"] : setting.Title)</strong>
-                                @if (setting.IsDefaultConfiguration == true)
-                                {
-                                    <span class="badge">@setting.DefaultPlatformConfiguration</span>
-                                }
-                                <span class="caption" style="display: block;">
-                                    @setting.VideoCodecName · @VideoSettingForm.FormatBitrate(setting.VideoBitrate, T["milion"]) ·
-                                    @setting.VideoFormat?.ToUpperInvariant() · GOP @(setting.GopSize?.ToString() ?? "–") ·
-                                    @T["audioBitrate"] @(setting.AudioSettingRecord?.AudioBitrate?.ToString() ?? "N/A")
-                                </span>
-                            </span>
-                        </label>
-                    }
-                </div>
-            }
-
-            <h3 class="section">@T["wizardStep2Title"]</h3>
-            @if (Model.ActiveConfigurations.Count == 0)
-            {
-                <div class="infobar warning section">
-                    <i class="icon">&#xE7BA;</i>
-                    <p><strong>@T["noActiveStreamingConfiguration"]</strong><br />@T["wizardNoActiveConfigurationsMessage"]</p>
-                    <a class="btn" href="/orbis/mainChannelSetting">@T["activeConfigurationLabel"]</a>
-                </div>
-            }
-            else
-            {
-                <div class="choice-list" style="margin-top: 8px;">
-                    @foreach (var configuration in Model.ActiveConfigurations)
-                    {
-                        <label class="choice">
-                            <input type="radio" name="configurationId" value="@configuration.Id" required />
-                            <span class="grow">
-                                <strong>@configuration.ChannelName</strong> · @configuration.PlatformStreamName
-                                <span class="caption" style="display: block;">@configuration.VideoFolder · @configuration.StreamUrl</span>
-                                @if (!string.IsNullOrWhiteSpace(configuration.Description))
-                                {
-                                    <span class="caption" style="display: block;">@configuration.Description</span>
-                                }
-                            </span>
-                        </label>
-                    }
-                </div>
-            }
+            <partial name="_StartWizardSteps" model="Model" />
         </div>
         <div class="dialog-footer">
             @* The wizard walks the folder and starts ffmpeg on the server: while it answers, the
@@ -125,6 +66,41 @@
             <span class="spinner" data-while="busy" title="@T["loading"]"></span>
             <button class="btn accent" disabled="@(!canStart)">@T["startLiveButton"]</button>
             <button class="btn" type="button" commandfor="start-dialog" command="close">@T["cancel"]</button>
+        </div>
+    </form>
+</dialog>
+
+@* Start a playlist: the same two picks, plus a folder whose videos are streamed one after the other. *@
+<dialog class="dialog wide" id="playlist-dialog" data-busy-host data-open="@(Model.OpenPlaylist ? "" : null)">
+    <form method="post" asp-page-handler="Playlist" asp-all-route-data="Model.FilterRoute">
+        <div class="dialog-body">
+            <h2>@T["startPlaylistTitle"]</h2>
+            @* Reopened after a refused folder: the reason goes where the user is looking, not under the backdrop. *@
+            @if (Model.OpenPlaylist && Model.Notice is NoticeKind.Error && !string.IsNullOrEmpty(Model.NoticeText))
+            {
+                <div class="infobar error" role="alert">
+                    <i class="icon">&#xEA39;</i>
+                    <p>@Model.NoticeText</p>
+                </div>
+            }
+            <partial name="_StartWizardSteps" model="Model" />
+
+            <h3 class="section">@T["wizardStep3PlaylistTitle"]</h3>
+            <label class="field dropzone" style="margin-top: 8px;">
+                <span>@T["playlistFolder"]</span>
+                <input class="input" name="videoFolder" value="@Model.Folder" placeholder="C:\Video\Playlist" required
+                       data-drop-path data-drop-done="@T["dropVideoFolderDone"]" />
+                <small><i class="icon">&#xE8B7;</i><span>@T["dropPlaylistFolderHint"]</span></small>
+            </label>
+            <div class="infobar section">
+                <i class="icon">&#xE946;</i>
+                <p>@T["playlistOnlyVideos"]<br /><span class="caption">@string.Join(" · ", VideoExtensions.All)</span></p>
+            </div>
+        </div>
+        <div class="dialog-footer">
+            <span class="spinner" data-while="busy" title="@T["loading"]"></span>
+            <button class="btn accent" disabled="@(!canStart)">@T["startPlaylistButton"]</button>
+            <button class="btn" type="button" commandfor="playlist-dialog" command="close">@T["cancel"]</button>
         </div>
     </form>
 </dialog>

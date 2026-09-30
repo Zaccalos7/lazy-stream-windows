@@ -233,5 +233,12 @@
   "sourcesEmptyAvailable": "No other sources available.",
   "deleteLiveRow": "删除行",
   "deleteLiveRowConfirm": "您确定要删除此行吗？",
-  "firstPage": "返回第一页"
+  "firstPage": "返回第一页",
+  "startPlaylistButton": "启动播放列表",
+  "startPlaylistTitle": "启动新的播放列表",
+  "wizardStep3PlaylistTitle": "3. 选择要推流的视频文件夹",
+  "playlistFolder": "播放列表文件夹",
+  "dropPlaylistFolderHint": "将文件夹拖到此处，其路径会复制到字段中",
+  "playlistOnlyVideos": "只会按名称顺序依次推流文件夹中的视频文件，其他文件将被忽略。支持的扩展名：",
+  "playlistPosition": "视频 {0} / {1}"
 }

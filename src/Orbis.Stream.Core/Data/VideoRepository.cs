@@ -206,6 +206,47 @@ public sealed class VideoRepository
         command.ExecuteNonQuery();
     }
 
+    /// <summary>
+    /// Where each video stands in the playlist of its live history (1-based, in streaming order)
+    /// and how long that playlist is. Only folder playlists count: the rows of a canvas are streamed
+    /// together, and a live of a single file has no "next".
+    /// </summary>
+    public Dictionary<int, (int Position, int Total)> FindPlaylistPositions(IReadOnlyCollection<long> videoLiveHistoryPkids)
+    {
+        var positions = new Dictionary<int, (int Position, int Total)>();
+        if (videoLiveHistoryPkids.Count == 0)
+        {
+            return positions;
+        }
+
+        using var connection = _connectionFactory.Open();
+        using var command = connection.CreateCommand();
+        var parameters = videoLiveHistoryPkids.Select((pkid, index) =>
+        {
+            command.Parameters.AddWithValue($"@h{index}", pkid);
+            return $"@h{index}";
+        }).ToList();
+
+        command.CommandText =
+            $"""
+            SELECT pkid, position, total FROM (
+                SELECT t.pkid,
+                       ROW_NUMBER() OVER (PARTITION BY t.video_live_history_pkid ORDER BY t.pkid) AS position,
+                       COUNT(*) OVER (PARTITION BY t.video_live_history_pkid) AS total
+                FROM video t
+                WHERE t.scene_pkid IS NULL AND t.video_live_history_pkid IN ({string.Join(", ", parameters)})
+            ) WHERE total > 1;
+            """;
+
+        using var reader = command.ExecuteReader();
+        while (reader.Read())
+        {
+            positions[reader.GetInt32(0)] = (reader.GetInt32(1), reader.GetInt32(2));
+        }
+
+        return positions;
+    }
+
     public void Delete(int pkid)
     {
         using var connection = _connectionFactory.Open();

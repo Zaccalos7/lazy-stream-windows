@@ -54,6 +54,15 @@ public sealed class VideoService
         return SpringPageFactory.Create(Map(result, WithRelations), page.Sorts);
     }
 
+    /// <summary>"Video 3 of 12" for the rows of a folder playlist, keyed by video pkid; the rows of a
+    /// single-file live or of a canvas are left out.</summary>
+    public Dictionary<int, (int Position, int Total)> GetPlaylistPositions(IEnumerable<VideoRequest> videos) =>
+        _videoRepository.FindPlaylistPositions(videos
+            .Select(video => video.VideoLiveHistory?.Pkid)
+            .OfType<long>()
+            .Distinct()
+            .ToList());
+
     /// <summary>One video with its live history and setting, the payload <c>/live/start-video-live</c> expects.</summary>
     public VideoRequest FindVideo(int pkid) => WithRelations(FindVideoToUnlock(pkid));
 

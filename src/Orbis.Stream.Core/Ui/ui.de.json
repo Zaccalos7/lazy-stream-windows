@@ -233,5 +233,12 @@
   "sourcesEmptyAvailable": "No other sources available.",
   "deleteLiveRow": "Zeile löschen",
   "deleteLiveRowConfirm": "Möchten Sie diese Zeile wirklich löschen?",
-  "firstPage": "Zur ersten Seite"
+  "firstPage": "Zur ersten Seite",
+  "startPlaylistButton": "Playlist starten",
+  "startPlaylistTitle": "Neue Playlist starten",
+  "wizardStep3PlaylistTitle": "3. Ordner mit den zu streamenden Videos wählen",
+  "playlistFolder": "Playlist-Ordner",
+  "dropPlaylistFolderHint": "Ziehen Sie einen Ordner hierher, um seinen Pfad einzufügen",
+  "playlistOnlyVideos": "Nur die Videodateien des Ordners werden gestreamt, nacheinander nach Namen sortiert. Andere Dateien werden ignoriert. Erkannte Endungen:",
+  "playlistPosition": "Video {0} von {1}"
 }

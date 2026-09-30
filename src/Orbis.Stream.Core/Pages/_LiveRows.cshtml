@@ -36,7 +36,13 @@ else
                 <tr data-row>
                     <td><span class="badge @LiveStatusView.Css(status)">@T[LiveStatusView.Key(status)]</span></td>
                     <td class="path">
-                        <div class="truncate"><strong>@video.Name</strong></div>
+                        <div class="truncate">
+                            @if (video.Pkid is { } pkid && Model.PlaylistPositions.TryGetValue(pkid, out var slot))
+                            {
+                                <span class="badge playlist" title="@video.VideoLiveHistory?.FolderOfVideoToStream">@string.Format(T["playlistPosition"], slot.Position, slot.Total)</span>
+                            }
+                            <strong>@video.Name</strong>
+                        </div>
                         <div class="caption truncate" title="@video.VideoPath">@(string.IsNullOrEmpty(platform) ? "" : platform + " · ")@video.VideoPath</div>
                     </td>
                     <td>@(video.ChannelName ?? "N/A")</td>

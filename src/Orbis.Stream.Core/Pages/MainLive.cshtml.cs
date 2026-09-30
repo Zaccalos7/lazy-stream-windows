@@ -56,6 +56,20 @@ public sealed class MainLiveModel(
 
     public bool OpenStart => !string.IsNullOrEmpty(Start);
 
+    /// <summary>The playlist wizard comes back open, with the folder it was given, when the folder
+    /// was refused (<c>?playlist=1&amp;folder=…</c>): the user fixes the path instead of retyping it.</summary>
+    [BindProperty(SupportsGet = true)]
+    public string? Playlist { get; set; }
+
+    [BindProperty(SupportsGet = true)]
+    public string? Folder { get; set; }
+
+    public bool OpenPlaylist => !string.IsNullOrEmpty(Playlist);
+
+    /// <summary>"Video 3 of 12" of the rows on this page that belong to a folder playlist.</summary>
+    public IReadOnlyDictionary<int, (int Position, int Total)> PlaylistPositions { get; private set; } =
+        new Dictionary<int, (int Position, int Total)>();
+
     public object Filters => new { LiveStatus, ChannelName, p = PageIndex };
 
     /// <summary>
@@ -190,21 +204,11 @@ public sealed class MainLiveModel(
     /// <summary>The wizard: one active video setting plus one active streaming configuration.</summary>
     public IActionResult OnPostStart(int settingId, int configurationId)
     {
-        var setting = videoSettings.GetAllVideoSettings(new Dictionary<string, string> { ["id"] = settingId.ToString(System.Globalization.CultureInfo.InvariantCulture) }).FirstOrDefault();
-        var configuration = settings.RetrieveSettings(new Dictionary<string, string> { ["id"] = configurationId.ToString(System.Globalization.CultureInfo.InvariantCulture) }).FirstOrDefault();
-        if (setting is null || configuration is null)
+        var request = StartRequestOf(settingId, configurationId, folder: null);
+        if (request is null)
         {
-            SetNotice(NoticeKind.Error, localizer.PrintMessage("not.valid.input"));
             return RedirectToPage(Filters);
         }
-
-        var request = new StartLiveRequest(
-            configuration.StreamUrl,
-            configuration.StreamKey,
-            configuration.VideoFolder,
-            configuration.PlatformStreamName,
-            configuration.ChannelName,
-            setting);
 
         var started = Try(() =>
         {
@@ -213,6 +217,42 @@ public sealed class MainLiveModel(
         });
 
         return started ? RedirectToPage("/Countdown") : RedirectToPage(Filters);
+    }
+
+    /// <summary>The same wizard, with the folder picked here in place of the configuration's one.</summary>
+    public IActionResult OnPostPlaylist(int settingId, int configurationId, string? videoFolder)
+    {
+        var request = StartRequestOf(settingId, configurationId, videoFolder ?? string.Empty);
+        var started = request is not null && Try(() =>
+        {
+            validator.RequireStartLive(request);
+            return Run(() => streaming.StartPlaylist(request));
+        });
+
+        return started
+            ? RedirectToPage("/Countdown")
+            : RedirectToPage(new { LiveStatus, ChannelName, p = PageIndex, playlist = 1, folder = videoFolder });
+    }
+
+    /// <summary>What the wizard picked, as a start request; null (with the notice set) when either
+    /// pick no longer exists. A <paramref name="folder"/> replaces the configuration's one.</summary>
+    private StartLiveRequest? StartRequestOf(int settingId, int configurationId, string? folder)
+    {
+        var setting = videoSettings.GetAllVideoSettings(new Dictionary<string, string> { ["id"] = settingId.ToString(System.Globalization.CultureInfo.InvariantCulture) }).FirstOrDefault();
+        var configuration = settings.RetrieveSettings(new Dictionary<string, string> { ["id"] = configurationId.ToString(System.Globalization.CultureInfo.InvariantCulture) }).FirstOrDefault();
+        if (setting is null || configuration is null)
+        {
+            SetNotice(NoticeKind.Error, localizer.PrintMessage("not.valid.input"));
+            return null;
+        }
+
+        return new StartLiveRequest(
+            configuration.StreamUrl,
+            configuration.StreamKey,
+            folder ?? configuration.VideoFolder,
+            configuration.PlatformStreamName,
+            configuration.ChannelName,
+            setting);
     }
 
     private void LoadVideos()
@@ -229,5 +269,6 @@ public sealed class MainLiveModel(
         }
 
         Videos = videos.GetAllVideoList(filters, new PageRequest(Math.Max(PageIndex, 0), PageSize, [new SortOrder("startDateLive", true)]));
+        PlaylistPositions = videos.GetPlaylistPositions(Videos.Content);
     }
 }

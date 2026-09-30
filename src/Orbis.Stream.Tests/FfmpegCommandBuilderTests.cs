@@ -33,7 +33,7 @@ public sealed class FfmpegCommandBuilderTests
         var command = string.Join(' ', FfmpegCommandBuilder.Build(
             new FfmpegStreamRequest("/videos/clip.mp4", "rtmp://ingest/live/key", Probe(), Setting())));
 
-        Assert.Contains("-re ", command, StringComparison.Ordinal);
+        Assert.Contains("-readrate 1 ", command, StringComparison.Ordinal);
         Assert.Contains("-i /videos/clip.mp4", command, StringComparison.Ordinal);
         Assert.Contains("-c:v libx264", command, StringComparison.Ordinal);
         Assert.Contains("-pix_fmt yuv420p", command, StringComparison.Ordinal);
@@ -344,7 +344,7 @@ public sealed class FfmpegCompositionTests
 
         var text = string.Join(' ', command);
 
-        Assert.Contains("-ss 12 -re -i /videos/intro.mp4", text, StringComparison.Ordinal);
+        Assert.Contains("-ss 12 -thread_queue_size 1024 -readrate 1 -i /videos/intro.mp4", text, StringComparison.Ordinal);
 
         // A capture device cannot be seeked into, so the position is only given to the file.
         Assert.DoesNotContain("-f dshow -ss", text, StringComparison.Ordinal);

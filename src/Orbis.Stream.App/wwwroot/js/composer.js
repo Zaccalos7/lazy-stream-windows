@@ -2,18 +2,28 @@
 // machine to drag onto it, and the layers they end up in. Everything is kept in output pixels, the
 // unit the encoder is given, and only drawn as a percentage of the stage: the layout on screen is
 // the layout on air whatever size the window is.
+//
+// It runs in two modes. The layout page draws skeletons: slots, rectangles with nothing in them,
+// saved to start lives from. The live wizard opens one of them as its empty slots, the sources are
+// dropped into them, and what is on the canvas when the live starts is saved as the scene of that
+// live alone: it is what the live restarts from, and it never joins the layouts.
 (() => {
   const root = document.querySelector("[data-composer]");
   if (!root) return;
 
+  const layoutMode = root.dataset.mode === "layout";
+
   // The kinds as the API numbers them (Orbis.Stream.Core.Domain.SourceKind).
   const Kind = { File: 0, Screen: 1, Camera: 2, Microphone: 3 };
+  // A slot has no kind: it is a rectangle, so it takes room on the canvas like a picture does.
   const hasPicture = kind => kind !== Kind.Microphone;
+  const isSlot = item => item.slot === true;
   // A camera opened as video=… has no sound of its own and a screen never has any: the sound of a
   // webcam is its microphone, which is a source of its own.
   const canCarrySound = kind => kind === Kind.File || kind === Kind.Microphone;
 
   const glyphs = { [Kind.File]: "\uE714", [Kind.Screen]: "\uE7F4", [Kind.Camera]: "\uE960", [Kind.Microphone]: "\uE720" };
+  const slotGlyph = "\uE80A";
   const groups = [
     { kind: Kind.Screen, word: "screens" },
     { kind: Kind.Camera, word: "cameras" },
@@ -46,8 +56,10 @@
   const minimumSize = 48;
 
   // The scene: items are stacked in array order, the first one at the bottom. That is the order
-  // the server stores them in and the order ffmpeg overlays them in.
+  // the server stores them in and the order ffmpeg overlays them in. In the live wizard the layout
+  // it was opened from is kept apart from it: the scene of a live is never saved over a layout.
   let scene = { pkid: null, name: "", width: 1920, height: 1080, items: [] };
+  let layoutPkid = null;
   let catalog = [];
   let scenes = [];
   let selected = null;
@@ -63,7 +75,10 @@
 
   const sameSource = (a, b) => a.kind === b.kind && a.target === b.target;
   const clamp = (value, low, high) => Math.min(Math.max(value, low), Math.max(low, high));
+  // Everything that takes room on the canvas, the empty slots included: what a tile snaps to.
   const pictures = () => scene.items.filter(item => hasPicture(item.kind));
+  const slots = () => scene.items.filter(isSlot);
+  const sources = () => scene.items.filter(item => !isSlot(item));
 
   const markDirty = () => {
     dirty = true;
@@ -79,9 +94,11 @@
 
   // The aspect a source really has, when it is known: from the catalog for a screen, from the
   // still once it arrives for the others. Unknown, a webcam and a video are assumed 16:9.
-  const aspectOf = item => (item.naturalWidth > 0 && item.naturalHeight > 0)
-    ? item.naturalWidth / item.naturalHeight
-    : 16 / 9;
+  const aspectOf = item => isSlot(item) && item.w > 0 && item.h > 0
+    ? item.w / item.h
+    : (item.naturalWidth > 0 && item.naturalHeight > 0)
+      ? item.naturalWidth / item.naturalHeight
+      : 16 / 9;
 
   // The largest rectangle of that aspect that fits the canvas, centred: what "fill" means for a
   // source that is not the shape of the output (ffmpeg pads the rest, it never stretches).
@@ -150,12 +167,53 @@
     return item;
   };
 
+  // A slot is a rectangle and a name: the first one fills the canvas, the next ones start as a
+  // third of it, the way a source laid over another one does.
+  const slotFrom = at => {
+    const first = pictures().length === 0;
+    const item = {
+      uid: nextUid++,
+      slot: true,
+      kind: null,
+      target: "",
+      label: `${word("slot")} ${slots().length + 1}`,
+      audio: false,
+      autoSized: false,
+      x: 0, y: 0,
+      w: first ? scene.width : Math.round(scene.width / 3),
+      h: first ? scene.height : Math.round(scene.width / 3 * 9 / 16)
+    };
+    if (!first) {
+      const centre = at || { x: scene.width / 2, y: scene.height / 2 };
+      item.x = centre.x - item.w / 2;
+      item.y = centre.y - item.h / 2;
+    }
+    keepInside(item);
+    return item;
+  };
+
+  const addSlot = at => {
+    const item = slotFrom(at);
+    scene.items.push(item);
+    select(item.uid);
+    markDirty();
+    render();
+  };
+
   const addSource = (option, at) => {
     const existing = scene.items.find(item => sameSource(item, option));
     if (existing) {
       // One device cannot be opened twice, and the same file twice is never what was meant.
       notify("warning", word("twice"));
       select(existing.uid);
+      return;
+    }
+
+    // Picked from the list rather than dropped somewhere: the skeleton is filled in order, the
+    // bottom slot first, which is the one the layout fills the frame with.
+    const empty = !at && hasPicture(option.kind) ? slots()[0] : null;
+    if (empty) {
+      replaceSource(empty.uid, option);
       return;
     }
 
@@ -178,12 +236,20 @@
     if (targetIndex < 0) return;
     const targetItem = scene.items[targetIndex];
 
+    // A microphone has no picture to put in a rectangle: it joins the mix and the slot stays.
+    if (!hasPicture(option.kind)) {
+      addSource(option);
+      return;
+    }
+
     const newItem = itemFrom(option);
     newItem.x = targetItem.x;
     newItem.y = targetItem.y;
     newItem.w = targetItem.w;
     newItem.h = targetItem.h;
     newItem.autoSized = false;
+    // The source remembers the slot it went into, so taking it off leaves the skeleton as it was.
+    newItem.slotLabel = isSlot(targetItem) ? targetItem.label : targetItem.slotLabel;
 
     scene.items[targetIndex] = newItem;
     tiles.get(uid)?.remove();
@@ -195,10 +261,19 @@
   };
 
   const removeItem = uid => {
-    scene.items = scene.items.filter(item => item.uid !== uid);
+    const index = scene.items.findIndex(item => item.uid === uid);
+    if (index < 0) return;
+    const item = scene.items[index];
     tiles.get(uid)?.remove();
     tiles.delete(uid);
     if (selected === uid) selected = null;
+
+    // A source taken out of a slot gives the slot back; the slot itself is what goes for good.
+    if (item.slotLabel !== undefined) {
+      scene.items[index] = { ...slotFrom(), label: item.slotLabel, x: item.x, y: item.y, w: item.w, h: item.h };
+    } else {
+      scene.items.splice(index, 1);
+    }
     markDirty();
     render();
   };
@@ -215,7 +290,8 @@
   const fill = uid => {
     const item = scene.items.find(entry => entry.uid === uid);
     if (!item || !hasPicture(item.kind)) return;
-    Object.assign(item, fitted(aspectOf(item)));
+    // A slot has no shape of its own: filling it is the whole frame.
+    Object.assign(item, isSlot(item) ? { x: 0, y: 0, w: scene.width, h: scene.height } : fitted(aspectOf(item)));
     item.autoSized = false;
     markDirty();
     render();
@@ -258,6 +334,25 @@
     tile = document.createElement("div");
     tile.className = "composer-tile";
     tile.dataset.uid = item.uid;
+
+    if (isSlot(item)) {
+      // An empty slot is its outline, its name and, in the live wizard, what to do with it.
+      tile.classList.add("is-slot");
+      const hollow = document.createElement("div");
+      hollow.className = "composer-slot";
+      hollow.append(glyphIcon(layoutMode ? slotGlyph : "\uE710"));
+      if (!layoutMode) {
+        const hint = document.createElement("span");
+        hint.textContent = word("slot-hint");
+        hollow.append(hint);
+      }
+      const name = document.createElement("span");
+      name.className = "composer-tile-label";
+      name.append(glyphIcon(slotGlyph), document.createTextNode(item.label));
+      tile.append(hollow, name);
+      appendHandles(tile, item);
+      return tile;
+    }
 
     const cover = document.createElement("div");
     cover.className = "composer-tile-cover";
@@ -302,6 +397,11 @@
     label.append(iconOf(item.kind), document.createTextNode(item.label));
 
     tile.append(cover, still, label);
+    appendHandles(tile, item);
+    return tile;
+  };
+
+  const appendHandles = (tile, item) => {
     for (const corner of ["nw", "ne", "sw", "se"]) {
       const handle = document.createElement("span");
       handle.className = "composer-handle " + corner;
@@ -312,15 +412,14 @@
     tile.addEventListener("pointerdown", event => startGesture(event, item));
     tile.addEventListener("dblclick", () => fill(item.uid));
     tiles.set(item.uid, tile);
-    return tile;
   };
 
   // A new frame of everything already on the canvas: a still is a moment, and the source that
   // could not be grabbed a minute ago is usually there now.
   const refreshStills = () => {
-    for (const item of scene.items) {
+    for (const item of sources()) {
       const tile = tiles.get(item.uid);
-      if (tile) tile.still.src = snapshotUrl(item);
+      if (tile?.still) tile.still.src = snapshotUrl(item);
     }
   };
 
@@ -358,6 +457,7 @@
       row.dataset.uid = item.uid;
       row.classList.toggle("is-selected", item.uid === selected);
       row.classList.toggle("is-audio", !hasPicture(item.kind));
+      row.classList.toggle("is-slot", isSlot(item));
 
       const text = document.createElement("span");
       text.className = "grow";
@@ -366,12 +466,15 @@
       name.textContent = item.label;
       const facts = document.createElement("span");
       facts.className = "caption";
-      facts.textContent = hasPicture(item.kind) ? `${item.w}×${item.h} · ${item.x}, ${item.y}` : word("audio-only");
+      const where = `${item.w}×${item.h} · ${item.x}, ${item.y}`;
+      facts.textContent = !hasPicture(item.kind) ? word("audio-only")
+        : isSlot(item) && !layoutMode ? `${word("slot-empty")} · ${where}`
+        : where;
       text.append(name, facts);
 
       const actions = document.createElement("span");
       actions.className = "composer-layer-actions";
-      if (canCarrySound(item.kind)) {
+      if (!isSlot(item) && canCarrySound(item.kind)) {
         actions.append(layerButton(item.audio ? "\uE767" : "\uE74F", word("sound"), () => {
           item.audio = !item.audio;
           markDirty();
@@ -386,13 +489,14 @@
       }
       actions.append(layerButton("\uE711", word("remove"), () => removeItem(item.uid)));
 
-      row.append(iconOf(item.kind), text, actions);
+      row.append(isSlot(item) ? glyphIcon(slotGlyph) : iconOf(item.kind), text, actions);
       row.addEventListener("click", () => select(item.uid));
       layersBox.append(row);
     }
   };
 
   const renderCatalog = () => {
+    if (!catalogBox) return;
     catalogBox.replaceChildren();
     usedBox.replaceChildren();
 
@@ -468,7 +572,7 @@
     }
 
     blank.hidden = pictures().length > 0;
-    deleteButton.hidden = scene.pkid === null;
+    if (deleteButton) deleteButton.hidden = scene.pkid === null;
     renderLayers();
     renderCatalog();
   };
@@ -621,6 +725,7 @@
   let pendingDropUid = null;
 
   stage.addEventListener("dragover", event => {
+    if (layoutMode) return;
     const types = [...(event.dataTransfer?.types || [])];
     if (!types.includes(sourceType) && !types.includes("Files")) return;
     event.preventDefault();
@@ -648,6 +753,7 @@
   });
 
   stage.addEventListener("drop", event => {
+    if (layoutMode) return;
     stage.classList.remove("is-over");
 
     const targetTile = event.target.closest(".composer-tile");
@@ -824,45 +930,65 @@
     sizeBox.value = value;
   };
 
+  const slotOf = (entry, index) => ({
+    uid: nextUid++,
+    slot: true,
+    kind: null,
+    target: "",
+    label: entry.label || `${word("slot")} ${index + 1}`,
+    audio: false,
+    autoSized: false,
+    x: entry.x, y: entry.y, w: entry.width, h: entry.height
+  });
+
+  const sourceOf = entry => {
+    const option = catalog.find(candidate => candidate.kind === entry.sourceKind && candidate.target === entry.sourceTarget);
+    return {
+      uid: nextUid++,
+      kind: entry.sourceKind,
+      target: entry.sourceTarget,
+      label: entry.label || option?.name || entry.sourceTarget,
+      naturalWidth: option?.width || entry.width,
+      naturalHeight: option?.height || entry.height,
+      audio: !!entry.audioEnabled,
+      autoSized: false,
+      x: entry.x, y: entry.y, w: entry.width, h: entry.height
+    };
+  };
+
+  // A layout always opens as its slots. On the layout page it is the thing being edited; in the
+  // live wizard it is only where the new scene starts from, so the scene has no id until the live
+  // starts, and saving it can never write over the layout.
   const loadScene = saved => {
     clearStage();
+    const asSlots = !!saved?.isLayout;
+    const items = (saved?.items || []).filter(entry => !asSlots || (entry.width > 0 && entry.height > 0));
+    layoutPkid = asSlots ? saved.pkid : null;
     scene = {
-      pkid: saved?.pkid ?? null,
+      pkid: asSlots && !layoutMode ? null : saved?.pkid ?? null,
       name: saved?.name || "",
       width: saved?.width || 1920,
       height: saved?.height || 1080,
-      items: (saved?.items || []).map(entry => {
-        const option = catalog.find(candidate => candidate.kind === entry.sourceKind && candidate.target === entry.sourceTarget);
-        return {
-          uid: nextUid++,
-          kind: entry.sourceKind,
-          target: entry.sourceTarget,
-          label: entry.label || option?.name || entry.sourceTarget,
-          naturalWidth: option?.width || entry.width,
-          naturalHeight: option?.height || entry.height,
-          audio: !!entry.audioEnabled,
-          autoSized: false,
-          x: entry.x, y: entry.y, w: entry.width, h: entry.height
-        };
-      })
+      items: items.map((entry, index) => asSlots ? slotOf(entry, index) : sourceOf(entry))
     };
     nameBox.value = scene.name;
-    scenesBox.value = scene.pkid === null ? "" : String(scene.pkid);
+    scenesBox.value = layoutPkid === null ? "" : String(layoutPkid);
     setSizeBox();
     markClean();
     render();
   };
 
   const drawScenes = () => {
-    const current = scene.pkid === null ? "" : String(scene.pkid);
+    const current = layoutPkid === null ? "" : String(layoutPkid);
     scenesBox.replaceChildren(new Option(word("new"), ""));
     for (const saved of scenes) scenesBox.append(new Option(saved.name, String(saved.pkid)));
     scenesBox.value = current;
   };
 
+  // Only the layouts: the scene a live went on air with belongs to that live.
   const loadScenes = async () => {
     try {
-      const response = await fetch("/scene/all");
+      const response = await fetch("/scene/layouts");
       if (response.ok) scenes = await response.json();
     } catch {
       scenes = [];
@@ -900,21 +1026,24 @@
     render();
   });
 
+  // A layout sends its slots and nothing else. The scene of a live sends its sources: a slot left
+  // empty is a rectangle with nothing in it, which on air is the black of the canvas anyway.
   const requestOf = () => ({
     pkid: scene.pkid,
     name: scene.name.trim(),
     description: null,
     width: scene.width,
     height: scene.height,
-    items: scene.items.map(item => ({
-      sourceKind: item.kind,
+    isLayout: layoutMode,
+    items: (layoutMode ? slots() : sources()).map(item => ({
+      sourceKind: isSlot(item) ? Kind.File : item.kind,
       sourceTarget: item.target,
       label: item.label,
       x: hasPicture(item.kind) ? item.x : 0,
       y: hasPicture(item.kind) ? item.y : 0,
       width: hasPicture(item.kind) ? item.w : 0,
       height: hasPicture(item.kind) ? item.h : 0,
-      audioEnabled: canCarrySound(item.kind) && item.audio
+      audioEnabled: !isSlot(item) && canCarrySound(item.kind) && item.audio
     }))
   });
 
@@ -922,10 +1051,24 @@
   // errors: the first text found is the one worth showing.
   const messageOf = payload => payload?.message || Object.values(payload || {}).find(value => typeof value === "string") || "";
 
+  const setBusy = busy => {
+    if (saveButton) saveButton.disabled = busy;
+    if (startButton) startButton.disabled = busy;
+  };
+
   const save = async () => {
-    if (pictures().length === 0) {
+    if (layoutMode && slots().length === 0) {
+      notify("error", word("needs-slot"));
+      return false;
+    }
+    if (!layoutMode && !sources().some(item => hasPicture(item.kind))) {
       notify("error", word("needs-picture"));
       return false;
+    }
+    // The scene of a live goes by the layout it was filled from unless it was given a name: it is
+    // what the row of the live is called, not something to pick from a list.
+    if (!layoutMode && !scene.name.trim()) {
+      scene.name = nameBox.value = nameBox.placeholder;
     }
     if (!scene.name.trim()) {
       nameBox.focus();
@@ -933,8 +1076,7 @@
       return false;
     }
 
-    saveButton.disabled = true;
-    startButton.disabled = true;
+    setBusy(true);
     try {
       const response = await fetch("/scene/save", {
         method: "POST",
@@ -948,30 +1090,34 @@
       }
       scene.pkid = payload.pkid ?? scene.pkid;
       markClean();
-      await loadScenes();
+      if (layoutMode) {
+        layoutPkid = scene.pkid;
+        await loadScenes();
+        notify("success", messageOf(payload));
+      }
       render();
-      notify("success", messageOf(payload));
       return true;
     } catch {
       notify("error", word("ko"));
       return false;
     } finally {
-      saveButton.disabled = false;
-      startButton.disabled = false;
+      setBusy(false);
     }
   };
 
-  saveButton.addEventListener("click", save);
+  saveButton?.addEventListener("click", save);
 
-  // Starting always streams what is on screen: a layout with changes is saved first, so the live
-  // cannot go out with the version the user was looking at before the last drag.
-  startButton.addEventListener("click", async () => {
+  root.querySelector("[data-composer-add-slot]")?.addEventListener("click", () => addSlot());
+
+  // Starting always streams what is on screen: the scene is saved first, as the scene of this live
+  // only, so the live cannot go out with the version the user was looking at before the last drag.
+  startButton?.addEventListener("click", async () => {
     if ((dirty || scene.pkid === null) && !(await save())) return;
     document.querySelector("[data-composer-start-pkid]").value = String(scene.pkid);
     startForm?.requestSubmit();
   });
 
-  deleteButton.addEventListener("click", () => {
+  deleteButton?.addEventListener("click", () => {
     if (scene.pkid === null) return;
     const dialog = document.getElementById("confirm-dialog");
     dialog.querySelector("[data-text]").textContent = deleteButton.dataset.confirmText;
@@ -999,11 +1145,24 @@
 
   // ---------- Start ----------
 
+  // The scene asked for by the address: a layout on the layout page, and in the live wizard the
+  // scene of a start that was refused, which is not among the layouts and is read on its own.
+  const wantedScene = async wanted => {
+    if (!wanted) return null;
+    const listed = scenes.find(entry => entry.pkid === wanted);
+    if (listed || layoutMode) return listed || null;
+    try {
+      const response = await fetch(`/scene/${wanted}`);
+      return response.ok ? await response.json() : null;
+    } catch {
+      return null;
+    }
+  };
+
   const boot = async () => {
     render();
-    await Promise.all([loadCatalog(), loadScenes()]);
-    const wanted = Number(root.dataset.scene || 0);
-    const saved = scenes.find(entry => entry.pkid === wanted);
+    await Promise.all([layoutMode ? null : loadCatalog(), loadScenes()]);
+    const saved = await wantedScene(Number(root.dataset.scene || 0));
     if (saved) loadScene(saved);
   };
 

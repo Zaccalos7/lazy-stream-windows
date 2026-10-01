@@ -4,6 +4,7 @@ using Microsoft.Extensions.DependencyInjection;
 using Orbis.Stream.Core.Contracts;
 using Orbis.Stream.Core.Data;
 using Orbis.Stream.Core.Domain;
+using Orbis.Stream.Core.Http;
 using Orbis.Stream.Core.Services;
 using Orbis.Stream.Core.Streaming;
 using Xunit.Abstractions;
@@ -94,9 +95,13 @@ public sealed class SceneLiveTests : IAsyncLifetime
         Assert.True(await WaitForAsync(() => Row().Status != LiveStatus.Live), "the stop of the row did not reach the canvas");
         Assert.True(await WaitForAsync(() => frames.Read(basePkid) is null), "a stopped live left its preview frame behind");
 
-        // The rows carry everything the live needs (sources, places, setting): with the scene gone
-        // from the composer, the play of the row still puts the same canvas back on air.
-        _host.Services.GetRequiredService<SceneService>().Delete(scenePkid);
+        // The scene a live went on air with is what it restarts from: it cannot be deleted on its own.
+        Assert.Throws<LiveException>(() => _host.Services.GetRequiredService<SceneService>().Delete(scenePkid));
+
+        // The rows still carry everything the live needs (sources, places, setting): with the scene
+        // gone all the same (a database from before layouts), the play of the row puts the same
+        // canvas back on air.
+        _host.Services.GetRequiredService<SceneRepository>().Delete(scenePkid);
         streaming.StartVideo(_host.Services.GetRequiredService<VideoService>().FindVideo(basePkid));
         Assert.True(await WaitForAsync(() => Row().Status == LiveStatus.Live), "the row did not restart without its scene: " + Row().Video.Message);
         streaming.StopVideoStreamingByPkid(basePkid);

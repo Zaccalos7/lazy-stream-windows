@@ -271,15 +271,16 @@ public sealed class LiveLinkTests
     }
 
     [Fact]
-    public void UrlOf_YouTubeIsTheLiveTabOfTheHandle()
+    public void UrlOf_YouTubeIsThePageOfTheHandle()
     {
-        Assert.Equal("https://www.youtube.com/@reproChannel/live", LiveLinkView.UrlOf(YouTube, "reproChannel", null));
+        Assert.Equal("https://www.youtube.com/@reproChannel", LiveLinkView.UrlOf(YouTube, "reproChannel", null));
+        Assert.Equal("https://www.youtube.com/@madajeeita207", LiveLinkView.UrlOf(YouTube, "madajeeita207", null));
     }
 
     [Fact]
     public void UrlOf_YouTubeDoesNotDoubleTheAtOfTheHandle()
     {
-        Assert.Equal("https://www.youtube.com/@reproChannel/live", LiveLinkView.UrlOf(YouTube, "@reproChannel", null));
+        Assert.Equal("https://www.youtube.com/@reproChannel", LiveLinkView.UrlOf(YouTube, "@reproChannel", null));
     }
 
     [Fact]
@@ -301,7 +302,7 @@ public sealed class LiveLinkTests
         // The form of the configuration stores the platform in the field named platform stream
         // name, and the channel in the channel name: following the wrong one gave twitch.tv/twitch.
         Assert.Equal("https://www.twitch.tv/ciclovisione", LiveLinkView.UrlOf(Twitch, "ciclovisione", "twitch"));
-        Assert.Equal("https://www.youtube.com/@ciclovisione/live", LiveLinkView.UrlOf(YouTube, "ciclovisione", "youtube"));
+        Assert.Equal("https://www.youtube.com/@ciclovisione", LiveLinkView.UrlOf(YouTube, "ciclovisione", "youtube"));
     }
 
     [Fact]

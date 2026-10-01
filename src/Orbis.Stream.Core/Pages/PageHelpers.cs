@@ -15,8 +15,12 @@ public sealed record PagerModel(int Current, int Total, Func<int, string> Href)
     }
 }
 
-/// <summary>The scene composer: the scene it opens on, if any (after a save or a refused start).</summary>
-public sealed record SceneComposerModel(long? Scene);
+/// <summary>
+/// The scene composer: the scene it opens on, if any (after a refused start), and what it edits.
+/// A <see cref="Layout"/> composer draws the empty slots of a layout and saves them for later; the
+/// one of the live wizard fills the slots of a layout with sources and starts the live from them.
+/// </summary>
+public sealed record SceneComposerModel(long? Scene, bool Layout = false);
 
 public static class LiveStatusView
 {
@@ -72,9 +76,9 @@ public static class LiveLinkView
     public static string GlyphOf(string? platform) => platform == "twitch" ? "\uE93E" : "\uE714";
 
     /// <summary>
-    /// Page of the live of a platform channel: on Twitch it is the channel, on YouTube the live
-    /// tab of the handle. A YouTube channel has no public page keyed by its ingest data, so the
-    /// handle is what the user typed in the configuration.
+    /// Page of a platform channel: on Twitch the channel, on YouTube the page of the handle
+    /// (<c>https://www.youtube.com/@handle</c>). A YouTube channel has no public page keyed by its
+    /// ingest data, so the handle is what the user typed in the configuration.
     /// </summary>
     /// <param name="channelName">
     /// The channel of the configuration. The form of the configuration keeps the platform in the
@@ -95,7 +99,8 @@ public static class LiveLinkView
         return PlatformOf(streamUrl) switch
         {
             "twitch" => "https://www.twitch.tv/" + Uri.EscapeDataString(name),
-            "youtube" => "https://www.youtube.com/@" + Uri.EscapeDataString(name.StartsWith('@') ? name[1..] : name) + "/live",
+            // Always the same base plus the channel: a "@" typed by the user is not doubled.
+            "youtube" => "https://www.youtube.com/@" + Uri.EscapeDataString(name.TrimStart('@')),
             _ => null
         };
     }

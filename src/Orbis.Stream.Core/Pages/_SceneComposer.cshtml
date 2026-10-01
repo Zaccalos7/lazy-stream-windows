@@ -1,11 +1,15 @@
 @model SceneComposerModel
 @{
     (int Width, int Height)[] sizes = [(1280, 720), (1920, 1080), (2560, 1440), (3840, 2160)];
+    var layout = Model.Layout;
 }
-@* The canvas the next live is put together on. Everything here is drawn by the script: the sources
-   are asked for when the page opens (enumerating cameras runs ffmpeg), and the scene is only a
-   layout until it is saved. The words it needs travel as data attributes, in the page language. *@
-<div class="composer" data-composer
+@* The canvas, in one of two modes. In the layout page it draws a skeleton: empty slots, saved to
+   be started from later. In the live wizard it opens a layout as those slots, the sources are
+   dropped into them, and what is on it when the live starts is saved as the scene of that live
+   only: it never joins the layouts. Everything here is drawn by the script: the sources are asked
+   for when the page opens (enumerating cameras runs ffmpeg). The words it needs travel as data
+   attributes, in the page language. *@
+<div class="composer" data-composer data-mode="@(layout ? "layout" : "compose")"
      data-scene="@Model.Scene"
      data-w-screens="@T["sourcesScreens"]" data-w-cameras="@T["sourcesCameras"]"
      data-w-microphones="@T["sourcesMicrophones"]" data-w-files="@T["sourcesFiles"]"
@@ -13,50 +17,64 @@
      data-w-failed="@T["sourcesFailed"]" data-w-video-group="@T["sourcesVideoGroup"]" data-w-audio-group="@T["sourcesAudioGroup"]"
      data-w-add="@T["addToCanvas"]" data-w-up="@T["bringForward"]" data-w-down="@T["sendBackward"]"
      data-w-fill="@T["fillCanvas"]" data-w-remove="@T["removeSource"]" data-w-sound="@T["soundOn"]"
-     data-w-audio-only="@T["audioOnly"]" data-w-new="@T["newScene"]" data-w-unsaved="@T["unsavedChanges"]"
-     data-w-needs-picture="@T["sceneNeedsPicture"]" data-w-needs-name="@T["sceneNeedsName"]"
+     data-w-audio-only="@T["audioOnly"]" data-w-new="@(T[layout ? "newLayout" : "blankLayout"])" data-w-unsaved="@T["unsavedChanges"]"
+     data-w-needs-picture="@T["sceneNeedsPicture"]" data-w-needs-name="@T["sceneNeedsName"]" data-w-needs-slot="@T["layoutNeedsSlot"]"
+     data-w-slot="@T["slot"]" data-w-slot-empty="@T["slotEmpty"]" data-w-slot-hint="@T["slotHint"]"
      data-w-twice="@T["alreadyOnCanvas"]" data-w-ok="@T["success"]" data-w-ko="@T["error"]" data-w-warning="@T["warning"]">
 
-    <aside class="composer-sidebar" aria-label="@T["sources"]">
-        <div class="card composer-sources" aria-label="@T["usedSources"]">
-            <div class="composer-head">
-                <h3>@T["usedSources"]</h3>
+    <aside class="composer-sidebar" aria-label="@(T[layout ? "slots" : "sources"])">
+        @if (layout)
+        {
+            <div class="card composer-sources">
+                <div class="composer-head">
+                    <h3>@T["slots"]</h3>
+                </div>
+                <p class="caption">@T["slotsHint"]</p>
+                <button type="button" class="btn" data-composer-add-slot><i class="icon">&#xE710;</i>@T["addSlot"]</button>
             </div>
-            <div class="composer-catalog" data-composer-used>
-                <p class="caption composer-none">@T["sourcesEmptyUsed"]</p>
+        }
+        else
+        {
+            <div class="card composer-sources" aria-label="@T["usedSources"]">
+                <div class="composer-head">
+                    <h3>@T["usedSources"]</h3>
+                </div>
+                <div class="composer-catalog" data-composer-used>
+                    <p class="caption composer-none">@T["sourcesEmptyUsed"]</p>
+                </div>
             </div>
-        </div>
 
-        <div class="card composer-sources" aria-label="@T["availableSources"]">
-            <div class="composer-head">
-                <h3>@T["availableSources"]</h3>
-                <button type="button" class="btn subtle icon-only" data-composer-refresh title="@T["refreshSources"]" aria-label="@T["refreshSources"]"><i class="icon">&#xE72C;</i></button>
+            <div class="card composer-sources" aria-label="@T["availableSources"]">
+                <div class="composer-head">
+                    <h3>@T["availableSources"]</h3>
+                    <button type="button" class="btn subtle icon-only" data-composer-refresh title="@T["refreshSources"]" aria-label="@T["refreshSources"]"><i class="icon">&#xE72C;</i></button>
+                </div>
+                <div class="composer-catalog" data-composer-catalog data-state="loading">
+                    <div class="composer-loading"><span class="spinner"></span><span class="caption">@T["loading"]</span></div>
+                </div>
+                <label class="field dropzone composer-file">
+                    <span>@T["addVideoFile"]</span>
+                    <span class="composer-file-row">
+                        <input class="input" data-drop-path data-composer-path placeholder="C:\Video\intro.mp4" />
+                        <button type="button" class="btn" data-composer-add-path>@T["add"]</button>
+                    </span>
+                    <small><i class="icon">&#xE8B5;</i><span>@T["addVideoFileHint"]</span></small>
+                </label>
             </div>
-            <div class="composer-catalog" data-composer-catalog data-state="loading">
-                <div class="composer-loading"><span class="spinner"></span><span class="caption">@T["loading"]</span></div>
-            </div>
-            <label class="field dropzone composer-file">
-                <span>@T["addVideoFile"]</span>
-                <span class="composer-file-row">
-                    <input class="input" data-drop-path data-composer-path placeholder="C:\Video\intro.mp4" />
-                    <button type="button" class="btn" data-composer-add-path>@T["add"]</button>
-                </span>
-                <small><i class="icon">&#xE8B5;</i><span>@T["addVideoFileHint"]</span></small>
-            </label>
-        </div>
+        }
     </aside>
 
     <section class="composer-main">
         <div class="card composer-bar">
             <label class="field">
-                <span class="caption">@T["scene"]</span>
+                <span class="caption">@T["layout"]</span>
                 <select class="input" data-composer-scenes>
-                    <option value="">@T["newScene"]</option>
+                    <option value="">@(T[layout ? "newLayout" : "blankLayout"])</option>
                 </select>
             </label>
             <label class="field grow">
-                <span class="caption">@T["sceneName"]</span>
-                <input class="input" data-composer-name maxlength="255" placeholder="@T["newScene"]" />
+                <span class="caption">@(T[layout ? "layoutName" : "sceneName"])</span>
+                <input class="input" data-composer-name maxlength="255" placeholder="@(T[layout ? "newLayout" : "newScene"])" />
             </label>
             <label class="field">
                 <span class="caption">@T["resolution"]</span>
@@ -69,10 +87,16 @@
             </label>
             <div class="composer-actions">
                 <span class="caption composer-dirty" data-composer-dirty hidden>@T["unsavedChanges"]</span>
-                <button type="button" class="btn subtle icon-only danger" data-composer-delete hidden
-                        data-confirm-text="@T["deleteSceneConfirm"]" title="@T["deleteScene"]" aria-label="@T["deleteScene"]"><i class="icon">&#xE74D;</i></button>
-                <button type="button" class="btn" data-composer-save><i class="icon">&#xE74E;</i>@T["saveScene"]</button>
-                <button type="button" class="btn accent" data-composer-start><i class="icon">&#xE768;</i>@T["startSceneLive"]</button>
+                @if (layout)
+                {
+                    <button type="button" class="btn subtle icon-only danger" data-composer-delete hidden
+                            data-confirm-text="@T["deleteLayoutConfirm"]" title="@T["deleteLayout"]" aria-label="@T["deleteLayout"]"><i class="icon">&#xE74D;</i></button>
+                    <button type="button" class="btn accent" data-composer-save><i class="icon">&#xE74E;</i>@T["saveLayout"]</button>
+                }
+                else
+                {
+                    <button type="button" class="btn accent" data-composer-start><i class="icon">&#xE768;</i>@T["startSceneLive"]</button>
+                }
             </div>
         </div>
 
@@ -83,9 +107,9 @@
                 <div class="composer-guide x" data-guide="x" hidden></div>
                 <div class="composer-guide y" data-guide="y" hidden></div>
                 <div class="composer-blank" data-composer-blank>
-                    <i class="icon">&#xE7F4;</i>
+                    <i class="icon">@Html.Raw(layout ? "&#xE80A;" : "&#xE7F4;")</i>
                     <strong>@T["canvasEmpty"]</strong>
-                    <span class="caption">@T["canvasEmptyHint"]</span>
+                    <span class="caption">@(T[layout ? "layoutEmptyHint" : "canvasEmptyHint"])</span>
                 </div>
             </div>
         </div>

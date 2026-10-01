@@ -1,0 +1,14 @@
+@page "/orbis/mainLayout"
+@{
+    ViewData["Title"] = T["layouts"];
+}
+<div class="page-header">
+    <div>
+        <h1>@T["layouts"]</h1>
+        <p class="subtitle">@T["layoutsDescription"]</p>
+    </div>
+</div>
+
+@* The skeletons a live is started from: slots only, no source. The live wizard opens one of them
+   empty and the sources are dropped into it there; what goes on air never comes back here. *@
+<partial name="_SceneComposer" model="new SceneComposerModel(null, Layout: true)" />

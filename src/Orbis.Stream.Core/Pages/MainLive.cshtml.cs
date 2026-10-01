@@ -146,7 +146,10 @@ public sealed class MainLiveModel(
         {
             LinkPkid = link;
             LinkHistory = linkHistory;
-            Form = new VideoSettingForm();
+            // The dialog opens on the setting the row already streams with: saving edits that one.
+            Form = Try(() => videoSettings.FindSettingOf(link, linkHistory)) is { } current
+                ? VideoSettingForm.From(current)
+                : new VideoSettingForm();
         }
     }
 

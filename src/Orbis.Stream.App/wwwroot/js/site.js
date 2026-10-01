@@ -158,7 +158,7 @@ const previewFrameUrl = previewFrame ? `/preview/live/${Number(preview.dataset.p
 
 // The rate ffmpeg writes the preview at. The page asks at this rate and never faster: a question
 // that would have to wait for a frame that is not there yet is a frame the page does not need.
-const previewFrameRate = 15;
+const previewFrameRate = 30;
 
 // How long before the next frame is asked for, measured from when the last one was drawn, so a
 // request that takes its time does not shorten the wait and turn into a tight loop.

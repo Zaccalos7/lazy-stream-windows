@@ -68,6 +68,77 @@ public sealed class LivePreviewTests : IAsyncLifetime
     }
 
     [Fact]
+    public async Task Preview_KeepsUpWithTheFramesFfmpegWrites()
+    {
+        if (!await StartLiveAsync())
+        {
+            return;
+        }
+
+        await WaitForLiveAsync();
+
+        // What the preview page does, and what it is judged on: ask for the newest frame, as often
+        // as ffmpeg writes one, and count how many different pictures arrive. ffmpeg writes thirty
+        // a second, so a page that follows the live closely gets close to thirty; a page that is
+        // falling behind shows a live in slow motion, which is the fault this guards against.
+        const int Seconds = 6;
+        var clock = Stopwatch.StartNew();
+        var served = 0;
+        var notModified = 0;
+        var repeated = 0;
+        var previous = string.Empty;
+        string? stamp = null;
+
+        while (clock.Elapsed < TimeSpan.FromSeconds(Seconds))
+        {
+            using var request = new HttpRequestMessage(HttpMethod.Get, $"/preview/live/{_pkid}/frame");
+            if (stamp is not null)
+            {
+                request.Headers.TryAddWithoutValidation("If-None-Match", stamp);
+            }
+
+            using var answer = await _host.Client.SendAsync(request);
+            if (answer.StatusCode == HttpStatusCode.NotModified)
+            {
+                // Nothing new to show: the stamp is how the server says so without the picture.
+                notModified++;
+                await Task.Delay(40);
+                continue;
+            }
+
+            Assert.Equal(HttpStatusCode.OK, answer.StatusCode);
+            var digest = Convert.ToHexString(System.Security.Cryptography.SHA256.HashData(
+                await answer.Content.ReadAsByteArrayAsync()));
+            if (digest == previous)
+            {
+                // The server answered with the frame the page already asked for: the stamp is
+                // supposed to keep that from happening, so a page would be drawing the same picture.
+                repeated++;
+            }
+
+            previous = digest;
+            served++;
+            stamp = answer.Headers.GetValues(FrameStampHeader).First();
+            await Task.Delay(30);
+        }
+
+        clock.Stop();
+
+        // The rate is the point. Ten of the thirty frames a second ffmpeg writes is a preview that
+        // is being missed by a third, which on a picture is judder nobody can watch.
+        var perSecond = served / clock.Elapsed.TotalSeconds;
+        Assert.True(perSecond >= 20, $"the preview served {perSecond:0.0} frames a second over {clock.Elapsed.TotalSeconds:0.0}s");
+
+        // The stamp is what stops the same frame being sent twice, which on a live is a picture
+        // standing still for a frame's worth of time.
+        Assert.Equal(0, repeated);
+
+        // Asking between two frames of the live is answered without a picture, which is what keeps
+        // a page that is slightly ahead of the live from costing anything.
+        Assert.True(notModified > 0 || served >= 20, $"the page was never ahead of the live ({notModified} of {served + notModified})");
+    }
+
+    [Fact]
     public async Task Preview_ChangesTheParametersOfARunningLive()
     {
         if (!await StartLiveAsync())
@@ -314,9 +385,9 @@ public sealed class LivePreviewTests : IAsyncLifetime
 
         Assert.Equal(4, frames.Count);
 
-        // ffmpeg writes fifteen frames a second: a page that has to wait for the next one of them
+        // ffmpeg writes thirty frames a second: a page that has to wait for the next one of them
         // is what makes the picture judder.
-        Assert.True(stopwatch.Elapsed < TimeSpan.FromSeconds(3), $"four frames took {stopwatch.Elapsed}");
+        Assert.True(stopwatch.Elapsed < TimeSpan.FromSeconds(1.5), $"four frames took {stopwatch.Elapsed}");
 
         // Most of the frames of a live that is running are pictures that are not there yet: the
         // server answered four questions with four frames rather than repeating the one it had.

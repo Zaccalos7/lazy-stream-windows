@@ -242,6 +242,7 @@
   "playlistOnlyVideos": "Seuls les fichiers vidéo du dossier seront diffusés, l'un après l'autre par ordre de nom. Les autres fichiers sont ignorés. Extensions reconnues :",
   "playlistPosition": "Vidéo {0} sur {1}",
   "playlistDetails": "Détails de la playlist",
+  "sceneDetails": "Détails de la scène",
   "playlistVideoCount": "{0} vidéos",
   "playlistStoppedAt": "Arrêtée à",
   "deletePlaylist": "Supprimer la playlist",

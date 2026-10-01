@@ -242,6 +242,7 @@
   "playlistOnlyVideos": "Solo se transmitirán los archivos de vídeo de la carpeta, uno tras otro por orden de nombre. Los demás archivos se ignoran. Extensiones reconocidas:",
   "playlistPosition": "Vídeo {0} de {1}",
   "playlistDetails": "Detalles de la playlist",
+  "sceneDetails": "Detalles de la escena",
   "playlistVideoCount": "{0} vídeos",
   "playlistStoppedAt": "Detenido en",
   "deletePlaylist": "Eliminar playlist",

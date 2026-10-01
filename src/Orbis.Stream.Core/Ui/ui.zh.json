@@ -242,6 +242,7 @@
   "playlistOnlyVideos": "只会按名称顺序依次推流文件夹中的视频文件，其他文件将被忽略。支持的扩展名：",
   "playlistPosition": "视频 {0} / {1}",
   "playlistDetails": "播放列表详情",
+  "sceneDetails": "场景详情",
   "playlistVideoCount": "{0} 个视频",
   "playlistStoppedAt": "停止于",
   "deletePlaylist": "删除播放列表",

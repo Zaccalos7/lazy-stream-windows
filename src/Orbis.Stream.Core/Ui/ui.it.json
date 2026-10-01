@@ -242,6 +242,7 @@
   "playlistOnlyVideos": "Verranno avviati solo i file video della cartella, uno dopo l'altro in ordine di nome. Gli altri file vengono ignorati. Estensioni riconosciute:",
   "playlistPosition": "Video {0} di {1}",
   "playlistDetails": "Dettagli playlist",
+  "sceneDetails": "Dettagli scena",
   "playlistVideoCount": "{0} video",
   "playlistStoppedAt": "Fermato a",
   "deletePlaylist": "Elimina playlist",

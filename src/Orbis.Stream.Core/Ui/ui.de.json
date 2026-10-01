@@ -242,6 +242,7 @@
   "playlistOnlyVideos": "Nur die Videodateien des Ordners werden gestreamt, nacheinander nach Namen sortiert. Andere Dateien werden ignoriert. Erkannte Endungen:",
   "playlistPosition": "Video {0} von {1}",
   "playlistDetails": "Playlist-Details",
+  "sceneDetails": "Szenendetails",
   "playlistVideoCount": "{0} Videos",
   "playlistStoppedAt": "Gestoppt bei",
   "deletePlaylist": "Playlist löschen",

@@ -242,6 +242,7 @@
   "playlistOnlyVideos": "Only the video files in the folder will be streamed, one after another in name order. Other files are ignored. Recognised extensions:",
   "playlistPosition": "Video {0} of {1}",
   "playlistDetails": "Playlist details",
+  "sceneDetails": "Scene details",
   "playlistVideoCount": "{0} videos",
   "playlistStoppedAt": "Stopped at",
   "deletePlaylist": "Delete playlist",

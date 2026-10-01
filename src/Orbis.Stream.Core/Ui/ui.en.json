@@ -1,5 +1,7 @@
 {
   "success": "Success",
+  "ffmpegProcessesDetails": "FFmpeg processes details",
+  "noActiveFfmpegProcess": "No active FFmpeg process.",
   "error": "Error",
   "unLockVideo": "Unlock video",
   "hereYouCanUnlockVideos": "Here you can unlock videos, which have been locked for the following reasons",

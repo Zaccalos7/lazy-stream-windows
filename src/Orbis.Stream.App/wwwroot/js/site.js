@@ -122,6 +122,20 @@ if (watchStats && stream) {
 
     // The first sample ends the loading the page was drawn with.
     for (const region of document.querySelectorAll("[data-stats][data-state]")) delete region.dataset.state;
+
+    if (values.ffmpeg_processes) {
+      const container = document.getElementById("ffmpeg-stats-container");
+      if (container) {
+        if (values.ffmpeg_processes.length === 0) {
+          container.innerHTML = `<p class='caption'>${container.dataset.noFfmpegMessage || "Nessun processo FFmpeg attivo."}</p>`;
+        } else {
+          container.innerHTML = "<ul style='list-style: none; padding: 0; margin: 0;'>" + values.ffmpeg_processes.map(p =>
+            "<li style='padding: 8px 0; border-bottom: 1px solid var(--gray-lighter); display: flex; justify-content: space-between;'>" +
+            "<span><strong>PID:</strong> " + p.Pid + "</span> <span><strong>CPU:</strong> " + p.Cpu + "%</span> <span><strong>RAM:</strong> " + p.Ram + "%</span>" +
+            "</li>").join("") + "</ul>";
+        }
+      }
+    }
   });
 }
 

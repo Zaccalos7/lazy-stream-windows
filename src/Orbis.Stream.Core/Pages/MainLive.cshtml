@@ -12,12 +12,11 @@
         <p class="subtitle">@T["liveManagementDescription"]</p>
     </div>
     <div class="actions">
-        <a class="btn" href="/orbis/mainLiveHistory"><i class="icon">&#xE81C;</i>@T["liveHistory"]</a>
         @if (Model.Locked.Count > 0)
         {
             <button class="btn" commandfor="unlock-dialog" command="show-modal"><i class="icon">&#xE785;</i>@T["unLockVideo"]</button>
         }
-        <button class="btn" style="font-size: 1.1em; padding: 10px 20px;" commandfor="playlist-dialog" command="show-modal"><i class="icon">&#xE90B;</i>@T["startPlaylistButton"]</button>
+        <button class="btn" style="font-size: 1.1em; padding: 10px 20px;" commandfor="playlist-dialog" command="show-modal"><i class="icon">&#xE8FD;</i>@T["startPlaylistButton"]</button>
         <button class="btn accent" style="font-size: 1.1em; padding: 10px 20px;" commandfor="start-dialog" command="show-modal"><i class="icon">&#xE768;</i>@T["startLiveButton"]</button>
     </div>
 </div>

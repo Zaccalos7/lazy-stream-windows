@@ -60,7 +60,7 @@ public static class FfmpegCommandBuilder
     /// JPEG. It costs next to nothing next to the live encode, and it is what is on air (the
     /// composed canvas, the scaled file) rather than the source the page would otherwise replay.
     /// </summary>
-    private const string PreviewFilter = "fps=5,scale=w='min(640,iw)':h=-2";
+    private const string PreviewFilter = "fps=24,scale=w='min(426,iw)':h=-2";
 
     public static IReadOnlyList<string> Build(FfmpegStreamRequest request)
     {

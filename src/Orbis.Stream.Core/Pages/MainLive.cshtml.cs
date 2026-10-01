@@ -297,7 +297,7 @@ public sealed class MainLiveModel(
         }
 
         return started
-            ? RedirectToPage("/Countdown")
+            ? RedirectToPage(Filters)
             : RedirectToPage(new { LiveStatus, ChannelName, p = PageIndex, compose = scenePkid, settingId, configurationId });
     }
 
@@ -312,7 +312,7 @@ public sealed class MainLiveModel(
         });
 
         return started
-            ? RedirectToPage("/Countdown")
+            ? RedirectToPage(Filters)
             : RedirectToPage(new { LiveStatus, ChannelName, p = PageIndex, playlist = 1, folder = videoFolder });
     }
 

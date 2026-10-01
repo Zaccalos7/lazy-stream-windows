@@ -60,8 +60,11 @@ else
                         <div class="actions">
                             @if (row.HasDetails)
                             {
+                                @* What the dialog opens is the composition for a scene and the
+                                   playlist for a folder, so it is called by the name it has here. *@
+                                var detailsLabel = T[row.IsScene ? "sceneDetails" : "playlistDetails"];
                                 <a class="btn subtle icon-only" href="@Url.Page("/MainLive", new { Model.LiveStatus, Model.ChannelName, p = Model.PageIndex, details = historyPkid })"
-                                   title="@T["playlistDetails"]" aria-label="@T["playlistDetails"]"><i class="icon">&#xE8FD;</i></a>
+                                   title="@detailsLabel" aria-label="@detailsLabel"><i class="icon">&#xE8FD;</i></a>
                             }
                             @if (liveUrl is not null)
                             {

@@ -37,19 +37,21 @@
     }
 </div>
 
-@* More than one live on air: which one to watch, one click away, not hidden in a list. *@
-@if (live.Running.Count > 1)
-{
-    <nav class="toolbar live-picker" aria-label="@T["runningLives"]">
-        <span class="caption">@T["runningLives"]</span>
-        @foreach (var option in live.Running)
-        {
-            <a class="btn @(option.IsWatching ? "accent" : "")" href="/orbis/mainPreview?live=@option.VideoPkid" aria-current="@(option.IsWatching ? "true" : null)">
-                <i class="icon">&#xE7F4;</i>@option.ChannelName · @option.VideoName
-            </a>
-        }
-    </nav>
-}
+@* The lives on air, when there is more than one: the page watches one of them and this is how it
+   says which, a list instead of a row of buttons across the page. The control is on the page from
+   the start and the push channel fills it, so a live that starts while the page is open shows up in
+   it at once, and it goes away again when the others are over and there is nothing left to pick. *@
+<div class="toolbar live-picker" data-live-picker hidden="@(live.Running.Count <= 1)">
+    <label class="field">
+        <span>@T["runningLives"]</span>
+        <select class="input" aria-label="@T["runningLives"]">
+            @foreach (var option in live.Running)
+            {
+                <option value="@option.VideoPkid" selected="@option.IsWatching">@option.ChannelName · @option.VideoName</option>
+            }
+        </select>
+    </label>
+</div>
 
 @* The words the script needs to answer without asking the server: the page is drawn in the
    language of the request, and a fetch has to speak the same one. *@
@@ -77,11 +79,18 @@
 else
 {
     var parameters = live.Parameters;
+
+    @* The stage takes the shape of what is on air: a canvas that is not 16:9 (a vertical one, a
+       square one) inside a 16:9 box is a small picture with black bars, which is the wrong thing to
+       be looking at while checking the live. *@
+    var shape = live.Output.Width > 0 && live.Output.Height > 0
+        ? $"aspect-ratio: {live.Output.Width.ToString(CultureInfo.InvariantCulture)} / {live.Output.Height.ToString(CultureInfo.InvariantCulture)}"
+        : null;
     <div class="preview">
         <div class="preview-stage card">
             @* What is on air, made light: a few small frames a second that ffmpeg writes next to the
                live, not a second copy of it. The cover under it shows until the first frame lands. *@
-            <div class="preview-screen">
+            <div class="preview-screen" style="@shape">
                 <div class="preview-cover">
                     <span class="spinner"></span>
                     <p class="muted">@T["previewWaiting"]</p>

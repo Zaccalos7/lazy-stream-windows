@@ -5,12 +5,12 @@
     var page = Model.Videos.Page;
     var pager = new PagerModel(page.Number, page.TotalPages, index => Url.Page("/MainLiveHistory", new { p = index })!);
 }
+@* Storico Live è una pagina a sé: nel menu c'è già la voce, quindi nessun "indietro" né il
+   collegamento a Gestione Live nell'intestazione. *@
 <div class="page-header">
     <div>
         <h1>@T["liveHistory"]</h1>
-        <p class="subtitle"><a href="/orbis/mainLive">@T["liveManagement"]</a> › @T["liveHistory"]</p>
     </div>
-    <a class="btn" href="/orbis/mainLive"><i class="icon">&#xE72B;</i>@T["back"]</a>
 </div>
 
 @if (Model.Videos.Content.Count == 0)

@@ -664,6 +664,9 @@ dialog.x-wide table.list td.path { max-width: 720px; }
 table.list.roomy td.nowrap { white-space: nowrap; }
 .platform { display: inline-flex; align-items: center; gap: 6px; white-space: nowrap; }
 .platform .icon { font-size: 15px; color: var(--accent-text); }
+/* Beside a name, the mark is the size of the name rather than the size of a button. */
+.platform .platform-mark { width: 16px; height: 16px; }
+.platform .platform-mark svg { width: 15px; height: 15px; }
 
 .toolbar { display: flex; gap: 10px; align-items: end; flex-wrap: wrap; margin-bottom: 14px; }
 .toolbar label.field { min-width: 160px; }
@@ -937,6 +940,56 @@ dialog.dialog.compose .dialog-body { flex: 1; min-height: 0; max-height: none; }
 }
 .btn.coffee:hover { filter: brightness(1.05); }
 
+/* The weasel banner at the foot of the dashboard: as wide as the page and tall enough to be a
+   banner, with the two ends anchored and the words centred between them. */
+.coffee-banner {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: 18px;
+  width: 100%;
+  padding: 26px 32px;
+  color: #ffffff;
+  font-size: 22px;
+  font-weight: 600;
+  text-align: center;
+  text-decoration: none;
+  background: linear-gradient(180deg, #ff9500 0%, #e07b00 100%);
+  border: 1px solid transparent;
+  border-radius: var(--radius-sm);
+  box-shadow: 0 2px 10px rgba(255, 149, 0, 0.3);
+  transition: filter 120ms ease, transform 120ms ease;
+}
+.coffee-banner:hover { filter: brightness(1.05); text-decoration: none; }
+.coffee-banner:active { transform: translateY(1px); }
+
+/* The weasel, the words and the cup travel together in the middle: on a banner this wide, the two
+   ends pushed out to the corners read as two lonely icons rather than as one sign. */
+.coffee-banner-weasel,
+.coffee-banner-cup {
+  font-size: 34px;
+  line-height: 1;
+  flex: 0 0 auto;
+}
+
+/* The platform marks: the brand of the channel a live is going to, drawn in the brand's own colour.
+   Sized to stand as a peer of the icon buttons beside it rather than as a speck between them. */
+.platform-mark {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 26px;
+  height: 26px;
+  flex: 0 0 auto;
+  color: var(--text-2);
+}
+.platform-mark svg { display: block; width: 17px; height: 17px; fill: currentColor; }
+a > .platform-mark { border-radius: 6px; }
+a:hover > .platform-mark { background: var(--tint); }
+.platform-twitch { color: #9146ff; }
+.platform-youtube { color: #ff0000; }
+.platform-generic { color: var(--text-2); }
+
 [hidden] { display: none !important; }
 
 /* Spinner */
@@ -984,6 +1037,10 @@ dialog.dialog.compose .dialog-body { flex: 1; min-height: 0; max-height: none; }
 .btn.live-indicator:hover { filter: brightness(1.06); }
 .btn.live-indicator .icon { font-size: 14px; }
 .btn.live-indicator.is-live .icon { animation: pulse 1.6s ease-in-out infinite; }
+/* On the live button the mark sits on the red of the button, where the colour of the brand would be
+   unreadable: it takes the colour of the text it is on instead. */
+.btn.live-indicator .platform-mark { width: 18px; height: 18px; color: var(--on-accent); }
+.btn.live-indicator .platform-mark svg { width: 15px; height: 15px; }
 
 @keyframes pulse {
   0%, 100% { opacity: 1; }

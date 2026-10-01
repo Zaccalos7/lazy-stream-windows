@@ -16,7 +16,7 @@ Unicode true
 !include "x64.nsh"
 
 !ifndef APPVERSION
-  !define APPVERSION "1.0.19"
+  !define APPVERSION "1.0.21"
 !endif
 !ifndef PUBLISHDIR
   !define PUBLISHDIR "..\artifacts\publish"

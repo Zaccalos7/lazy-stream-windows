@@ -200,10 +200,10 @@
     </dialog>
 }
 
-@if (Model.LinkPkid is { } linkPkid && Model.Form is not null)
+@if ((Model.LinkPkid is not null || Model.LinkHistory is not null) && Model.Form is not null)
 {
     <dialog class="dialog wide" data-open>
-        <form method="post" asp-page-handler="Link" asp-all-route-data="Model.RowRoute(linkPkid)">
+        <form method="post" asp-page-handler="Link" asp-all-route-data="Model.LinkHistory is { } history ? Model.PlaylistRoute(history) : Model.RowRoute(Model.LinkPkid)">
             <div class="dialog-body">
                 <h2>@T["connectVideoSetting"]</h2>
                 <partial name="_VideoSettingFields" for="Form" />

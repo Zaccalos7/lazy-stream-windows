@@ -145,19 +145,113 @@ if (watchStats && stream) {
 // nothing while it watches.
 const preview = document.querySelector("[data-preview]");
 
-// The light picture of the live: a frame that cannot be had (the live ended between the page and
-// the request) leaves the cover under it, instead of a broken image.
+// The light picture of the live, drawn frame by frame on a canvas.
+//
+// It used to be an <img src="...multipart/x-mixed-replace">, which is the obvious way to show motion
+// JPEG and the wrong one here: a browser has no clock for a multipart image, so when the decode does
+// not keep up the frames queue up instead of being dropped, the picture drifts behind the live and
+// keeps drifting. That is the juddering, and the slow motion, this canvas is here to end. Asking for
+// the newest frame and drawing only that puts the page on the same clock as ffmpeg: a frame that
+// arrives late is not drawn late, it is the next one that is asked for.
 const previewFrame = preview?.querySelector("[data-preview-frame]");
-previewFrame?.addEventListener("error", event => { event.target.hidden = true; });
+const previewFrameUrl = previewFrame ? `/preview/live/${Number(preview.dataset.pkid || 0)}/frame` : null;
 
-// A tab in the background is one the browser stops reading the stream for, and the server gives the
-// answer up on rather than hold a page open that nobody is watching. Coming back to the page would
-// then leave the last frame frozen for good, so the stream is asked for again: same picture, only
-// the newest frame of it, and nothing about it has to be remembered.
+// The rate ffmpeg writes the preview at. The page asks at this rate and never faster: a question
+// that would have to wait for a frame that is not there yet is a frame the page does not need.
+const previewFrameRate = 15;
+
+// How long before the next frame is asked for, measured from when the last one was drawn, so a
+// request that takes its time does not shorten the wait and turn into a tight loop.
+const previewInterval = 1000 / previewFrameRate;
+
+// The stamp of the frame on the canvas. The server compares it with the one it has: the same frame
+// comes back as 304 without the JPEG, which is what a live that is still writing but has nothing new
+// for this page costs.
+let previewStamp = null;
+
+// An in-flight request, so the loop never has two questions open at once.
+let previewPending = false;
+
+// Set while the tab is hidden. A background tab is one the browser stops servicing, and a loop that
+// kept asking through it would only pile requests up behind a window nobody is looking at.
+let previewPaused = false;
+
+// The bitmaps are decoded off the main thread, so a frame is turned into pixels while the page keeps
+// painting and the numbers keep arriving. One is enough: the frame before the one being decoded is
+// already on the canvas, so a second would only cost memory.
+let previewDecoding = false;
+
+const drawPreviewFrame = blob => {
+  // A frame is already being decoded, so this one is behind a picture that is on its way to the
+  // canvas. Decoding it anyway would only make the newer one wait longer, and what the page would
+  // draw is the older of the two: a picture that skips is a picture that moves.
+  if (previewDecoding) return;
+
+  previewDecoding = true;
+  createImageBitmap(blob)
+    .then(picture => {
+      if (picture.width === 0 || picture.height === 0) return;
+
+      // The canvas is sized to the picture rather than stretched by the style, so the frame lands
+      // on it one pixel for one and is not resampled twice. Setting width and height clears the
+      // canvas, so it only happens when the shape of the live is actually a different one.
+      if (previewFrame.width !== picture.width || previewFrame.height !== picture.height) {
+        previewFrame.width = picture.width;
+        previewFrame.height = picture.height;
+      }
+
+      previewFrame.getContext("2d").drawImage(picture, 0, 0);
+      previewFrame.hidden = false;
+      picture.close();
+    })
+    .catch(() => {
+      // A frame that cannot be decoded is the one the page goes on without; the next question asks
+      // for a newer one anyway.
+    })
+    .finally(() => { previewDecoding = false; });
+};
+
+const fetchPreviewFrame = async () => {
+  if (previewPending || previewPaused || !previewFrameUrl) return;
+  previewPending = true;
+  try {
+    const headers = previewStamp ? { "If-None-Match": previewStamp } : {};
+    const response = await fetch(previewFrameUrl, { headers, cache: "no-store" });
+    // 304 is the answer to a frame the page already has: the live is writing, this page is just
+    // ahead of it.
+    if (response.ok) {
+      previewStamp = response.headers.get("X-Orbis-Frame") || previewStamp;
+      if (response.status !== 304) {
+        drawPreviewFrame(await response.blob());
+      }
+    }
+  } catch {
+    // The server is not answering (the live ended, the page is closing): the picture keeps the last
+    // frame it drew and the next tick tries again.
+  } finally {
+    previewPending = false;
+  }
+};
+
+// The loop is a chain of waits rather than a timer: the next question goes out after the last frame
+// has been dealt with, so a slow answer stretches the wait instead of stacking on top of it.
+const previewLoop = async () => {
+  while (true) {
+    const before = performance.now();
+    await fetchPreviewFrame();
+    const spent = performance.now() - before;
+    await new Promise(resolve => setTimeout(resolve, Math.max(0, previewInterval - spent)));
+  }
+};
+
+// Coming back to the tab: the frame the page was holding is a moment old and there is a good chance
+// the live has ended while nobody was looking, so the stamp is forgotten and the picture asked for
+// again from scratch. The cover under the canvas hides anything stale in the meantime.
 const armPreviewFrame = () => {
   if (!previewFrame) return;
-  previewFrame.hidden = false;
-  previewFrame.src = `${previewFrame.src.split("?")[0]}?t=${Date.now()}`;
+  previewStamp = null;
+  previewPaused = false;
+  previewFrame.hidden = true;
 };
 const previewVideo = preview?.querySelector("[data-preview-video]");
 const previewForm = preview?.querySelector("[data-preview-form]");
@@ -266,9 +360,13 @@ if (previewVideo) {
   });
 }
 
-if (previewFrame) {
+if (previewFrame && previewIsLive) {
+  previewLoop();
   document.addEventListener("visibilitychange", () => {
-    if (document.hidden || !previewIsLive) return;
+    // A tab nobody is looking at is not asked for frames: the browser stops servicing its work
+    // anyway, and what would pile up behind it is not a preview but a queue of stale pictures.
+    previewPaused = document.hidden;
+    if (document.hidden) return;
     armPreviewFrame();
   });
 }

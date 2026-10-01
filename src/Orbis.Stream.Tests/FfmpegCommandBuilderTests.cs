@@ -49,7 +49,7 @@ public sealed class FfmpegCommandBuilderTests
     }
 
     [Fact]
-    public void ThePreviewOfAFileIsFifteenSharpFramesASecond()
+    public void ThePreviewOfAFileIsThirtySharpFramesASecond()
     {
         // The picture of the file, slowed down and shrunk inside the graph, and written as the light
         // picture: one file overwritten over and over, a temporary one renamed over it so the page
@@ -61,7 +61,7 @@ public sealed class FfmpegCommandBuilderTests
 
         // The scale of the setting comes first: the preview gets the same picture the live does,
         // and shrinks it on its own.
-        Assert.Contains("fps=15,scale=w='min(640,iw)':h=-2", text, StringComparison.Ordinal);
+        Assert.Contains("fps=30,scale=w='min(640,iw)':h=-2", text, StringComparison.Ordinal);
         Assert.Contains("-an -sn -dn", text, StringComparison.Ordinal);
         Assert.Contains("-c:v mjpeg -q:v 6", text, StringComparison.Ordinal);
         Assert.Contains("-f image2 -update 1 -atomic_writing 1 /data/preview/7.jpg", text, StringComparison.Ordinal);
@@ -220,7 +220,7 @@ public sealed class FfmpegCompositionTests
         new(items, "rtmp://ingest/live/key", Setting(), width, height, CanvasFrameRate: 30d, PreviewPath: previewPath);
 
     [Fact]
-    public void ThePreviewOfACanvasIsFifteenSharpFramesASecond()
+    public void ThePreviewOfACanvasIsThirtySharpFramesASecond()
     {
         // The composed picture is split in two: the whole of it goes on air, and the copy is shrunk
         // and slowed down inside the graph, before it is written as the light picture.
@@ -230,7 +230,7 @@ public sealed class FfmpegCompositionTests
         var graph = GraphOf(command);
 
         Assert.Contains("split=2", graph, StringComparison.Ordinal);
-        Assert.Contains("fps=15,scale=w='min(640,iw)':h=-2", graph, StringComparison.Ordinal);
+        Assert.Contains("fps=30,scale=w='min(640,iw)':h=-2", graph, StringComparison.Ordinal);
 
         // It is one file overwritten over and over: a temporary one renamed over it, so the page
         // never reads half a frame, and no audio rides along with it.

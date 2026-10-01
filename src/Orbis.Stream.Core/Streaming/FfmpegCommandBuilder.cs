@@ -66,7 +66,7 @@ public static class FfmpegCommandBuilder
     /// second is enough for the eye to read as motion. Encoding a frame this size costs a few
     /// milliseconds, so the preview stays a small slice of a core next to the live encode.
     /// </summary>
-    private const string PreviewFilter = "fps=15,scale=w='min(640,iw)':h=-2";
+    private const string PreviewFilter = "fps=30,scale=w='min(640,iw)':h=-2";
 
     public static IReadOnlyList<string> Build(FfmpegStreamRequest request)
     {

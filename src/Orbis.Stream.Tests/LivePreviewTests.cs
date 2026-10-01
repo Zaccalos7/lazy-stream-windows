@@ -77,8 +77,8 @@ public sealed class LivePreviewTests : IAsyncLifetime
         await WaitForLiveAsync();
 
         // What the preview page does, and what it is judged on: ask for the newest frame, as often
-        // as ffmpeg writes one, and count how many different pictures arrive. ffmpeg writes fifteen
-        // a second, so a page that follows the live closely gets close to fifteen; a page that is
+        // as ffmpeg writes one, and count how many different pictures arrive. ffmpeg writes thirty
+        // a second, so a page that follows the live closely gets close to thirty; a page that is
         // falling behind shows a live in slow motion, which is the fault this guards against.
         const int Seconds = 6;
         var clock = Stopwatch.StartNew();
@@ -118,15 +118,15 @@ public sealed class LivePreviewTests : IAsyncLifetime
             previous = digest;
             served++;
             stamp = answer.Headers.GetValues(FrameStampHeader).First();
-            await Task.Delay(60);
+            await Task.Delay(30);
         }
 
         clock.Stop();
 
-        // The rate is the point. Ten of the fifteen frames a second ffmpeg writes is a preview that
+        // The rate is the point. Ten of the thirty frames a second ffmpeg writes is a preview that
         // is being missed by a third, which on a picture is judder nobody can watch.
         var perSecond = served / clock.Elapsed.TotalSeconds;
-        Assert.True(perSecond >= 10, $"the preview served {perSecond:0.0} frames a second over {clock.Elapsed.TotalSeconds:0.0}s");
+        Assert.True(perSecond >= 20, $"the preview served {perSecond:0.0} frames a second over {clock.Elapsed.TotalSeconds:0.0}s");
 
         // The stamp is what stops the same frame being sent twice, which on a live is a picture
         // standing still for a frame's worth of time.
@@ -134,7 +134,7 @@ public sealed class LivePreviewTests : IAsyncLifetime
 
         // Asking between two frames of the live is answered without a picture, which is what keeps
         // a page that is slightly ahead of the live from costing anything.
-        Assert.True(notModified > 0 || served >= 10, $"the page was never ahead of the live ({notModified} of {served + notModified})");
+        Assert.True(notModified > 0 || served >= 20, $"the page was never ahead of the live ({notModified} of {served + notModified})");
     }
 
     [Fact]
@@ -377,9 +377,9 @@ public sealed class LivePreviewTests : IAsyncLifetime
 
         Assert.Equal(4, frames.Count);
 
-        // ffmpeg writes fifteen frames a second: a page that has to wait for the next one of them
+        // ffmpeg writes thirty frames a second: a page that has to wait for the next one of them
         // is what makes the picture judder.
-        Assert.True(stopwatch.Elapsed < TimeSpan.FromSeconds(3), $"four frames took {stopwatch.Elapsed}");
+        Assert.True(stopwatch.Elapsed < TimeSpan.FromSeconds(1.5), $"four frames took {stopwatch.Elapsed}");
 
         // Most of the frames of a live that is running are pictures that are not there yet: the
         // server answered four questions with four frames rather than repeating the one it had.

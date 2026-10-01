@@ -5,6 +5,8 @@ using System.Net.Http.Json;
 using System.Text.Json;
 using System.Text.RegularExpressions;
 using Orbis.Stream.Core.Configuration;
+using Orbis.Stream.Core.Data;
+using Orbis.Stream.Core.Domain;
 using Orbis.Stream.Core.Hosting;
 using Orbis.Stream.Core.Services;
 using Orbis.Stream.Core.SystemInfo;
@@ -348,6 +350,69 @@ public sealed class EndToEndApiTests : IClassFixture<ApplicationFixture>
         using var response = await _fixture.Client.GetAsync("/css/fluent.css");
         Assert.Equal(HttpStatusCode.OK, response.StatusCode);
         Assert.True(response.Headers.CacheControl!.NoCache);
+    }
+
+    [Fact]
+    public async Task TheLiveHistoryPagesLikeTheLiveGridDoes()
+    {
+        // Enough history for more than one page: the history shows twenty a page, so twenty-five is
+        // two pages and the pager has something to page through.
+        var history = _fixture.Services.GetRequiredService<VideoLiveHistoryRepository>();
+        var videos = _fixture.Services.GetRequiredService<VideoRepository>();
+        long lastHistory = 0;
+        for (var index = 0; index < 25; index++)
+        {
+            lastHistory = history.Insert(new VideoLiveHistoryEntity
+            {
+                FolderOfVideoToStream = "/clips",
+                LocalDateTimeStartLive = new DateTime(2026, 2, 1, 10, 0, 0, DateTimeKind.Local).AddMinutes(index),
+                StreamUrl = "rtmp://ingest/live",
+                StreamKey = "key",
+                PlatformStreamName = "channel-history",
+                UserName = "orbis"
+            });
+
+            videos.Insert(new VideoEntity
+            {
+                Name = $"clip-{index:00}",
+                VideoPath = $"/clips/clip-{index:00}.mp4",
+                Extension = "mp4",
+                VideoLiveHistoryId = lastHistory,
+                LiveStatus = LiveStatus.Ended,
+                ShouldBeStop = false,
+                StartDateLive = new DateTime(2026, 2, 1, 10, 0, 0, DateTimeKind.Local).AddMinutes(index),
+                ChannelName = "channel-history",
+                VideoSettingId = 1
+            });
+        }
+
+        using var page = await _fixture.Client.GetAsync("/orbis/mainLiveHistory");
+        Assert.Equal(HttpStatusCode.OK, page.StatusCode);
+        var html = await page.Content.ReadAsStringAsync();
+
+        // The pager, in the same place and the same shape the live grid has it: a bar of its own at
+        // the foot of the table, with the number of every page on it.
+        Assert.Contains("pager-fixed", html, StringComparison.Ordinal);
+        Assert.Contains("live-rows-container", html, StringComparison.Ordinal);
+        Assert.Contains("<nav class=\"pager\"", html, StringComparison.Ordinal);
+
+        // Both pages are offered, and the first is the one being shown.
+        Assert.Contains(">1</a>", html, StringComparison.Ordinal);
+        Assert.Contains(">2</a>", html, StringComparison.Ordinal);
+        Assert.Contains("aria-current=\"page\"", html, StringComparison.Ordinal);
+
+        // And the second page answers, so the numbers are links rather than decoration.
+        // The history is newest first, so the twenty newest lives are on the first page and the
+        // oldest five on the second: the numbers page through the history rather than repeat it.
+        Assert.Contains("clip-24", html, StringComparison.Ordinal);
+        Assert.Contains("clip-05", html, StringComparison.Ordinal);
+        Assert.DoesNotContain("clip-00", html, StringComparison.Ordinal);
+
+        using var second = await _fixture.Client.GetAsync("/orbis/mainLiveHistory?p=1");
+        Assert.Equal(HttpStatusCode.OK, second.StatusCode);
+        var secondHtml = await second.Content.ReadAsStringAsync();
+        Assert.Contains("clip-00", secondHtml, StringComparison.Ordinal);
+        Assert.DoesNotContain("clip-24", secondHtml, StringComparison.Ordinal);
     }
 
     [Theory]

@@ -96,6 +96,59 @@ public sealed class SceneLiveTests : IAsyncLifetime
         Assert.True(await WaitForAsync(() => Row().Status != LiveStatus.Live), "the restarted canvas did not stop");
     }
 
+    [Fact]
+    public async Task SceneLive_StoppedFromAnyOfItsRows_StopsTheWholeComposition()
+    {
+        var ffmpeg = Tool("ffmpeg");
+        if (ffmpeg is null || Tool("ffprobe") is null)
+        {
+            _output.WriteLine("ffmpeg/ffprobe are not installed: the scene live test is skipped.");
+            return;
+        }
+
+        var folder = Path.Combine(_host.DataDirectory, "sources");
+        Directory.CreateDirectory(folder);
+        Directory.CreateDirectory(Path.Combine(_host.DataDirectory, "output"));
+        var background = Path.Combine(folder, "background.mp4");
+        var overlay = Path.Combine(folder, "overlay.mp4");
+        await RunAsync(ffmpeg, $"-y -f lavfi -i testsrc=size=320x180:rate=15 -t 30 -pix_fmt yuv420p \"{background}\"");
+        await RunAsync(ffmpeg, $"-y -f lavfi -i testsrc2=size=160x90:rate=15 -t 30 -pix_fmt yuv420p \"{overlay}\"");
+
+        var (_, scenePkid) = _host.Services.GetRequiredService<SceneService>().Save(new SceneRequest(
+            null, "Test scene", null, 640, 360,
+            [
+                new SceneItemRequest(SourceKind.File, background, "Background", 0, 0, 640, 360, false),
+                new SceneItemRequest(SourceKind.File, overlay, "Overlay", 400, 20, 220, 124, false)
+            ]));
+
+        var streaming = _host.Services.GetRequiredService<StreamingService>();
+        var repository = _host.Services.GetRequiredService<VideoRepository>();
+        streaming.StartSceneLive(new StartSceneLiveRequest(
+            scenePkid,
+            new Uri(Path.Combine(_host.DataDirectory, "output")).AbsoluteUri,
+            "scene.flv",
+            "scene-platform",
+            "scene-channel",
+            Setting()));
+
+        LiveRow Row() => Assert.Single(_host.Services.GetRequiredService<VideoService>()
+            .GetLivePage(null, "scene-channel", new PageRequest(0, 10, [])).Content);
+        Assert.True(await WaitForAsync(() => Row().Status == LiveStatus.Live), "the canvas never went live: " + Row().Video.Message);
+
+        // The stop can come from any row of the composition, not only from the one its ffmpeg runs on.
+        var rows = repository.FindByLiveStatusAndChannelName(LiveStatus.Live, "scene-channel");
+        Assert.Equal(2, rows.Count);
+        var otherRow = Assert.Single(rows, row => row.Pkid != rows[0].Pkid);
+
+        streaming.StopVideoStreamingByPkid(otherRow.Pkid);
+        Assert.True(await WaitForAsync(() => Row().Status != LiveStatus.Live), "stopping a row of the canvas left it on air");
+
+        // And it leaves no flag behind for the next play of the same composition.
+        var historyPkid = otherRow.VideoLiveHistoryId!.Value;
+        Assert.All(repository.FindByLiveHistoryId(historyPkid), row =>
+            Assert.False(row.ShouldBeStop, $"row {row.Pkid} ({row.Name}) kept its stop flag"));
+    }
+
     private static VideoSettingsRequest Setting() => JsonSerializer.Deserialize<VideoSettingsRequest>(
         """
         {

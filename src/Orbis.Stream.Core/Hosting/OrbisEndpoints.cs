@@ -74,11 +74,17 @@ public static class OrbisEndpoints
         // One still per tile. No content is an answer, not an error: a camera that is busy in
         // another application still goes on the canvas, it just shows its icon instead.
         app.MapGet("/preview/sources/snapshot", async (
+            HttpContext context,
             string? kind,
             string? target,
             SourceSnapshotService service,
             CancellationToken cancellationToken) =>
         {
+            // The URL of a source never changes, so a still that could not be grabbed would be
+            // the answer for ever: 204 is cacheable, and the tile of a scene saved yesterday would
+            // keep showing its icon even with the source back. A still is a moment, asked again.
+            context.Response.Headers.CacheControl = "no-store";
+
             if (!SourceKindExtensions.TryParse(kind, out var sourceKind))
             {
                 return Results.NoContent();

@@ -141,13 +141,23 @@ public sealed class StreamingService
     public void StopVideoStreamingByPkid(int videoLivePkid)
     {
         var video = CheckIfExistsAndReturnEntity(videoLivePkid);
-        video.ShouldBeStop = true;
-        SaveFlagToStopLive(video);
+
+        // The sources of a canvas go on air together, under the row its ffmpeg runs on: a stop asked
+        // for from any other row of the composition has to reach that one, or the canvas stays live.
+        var drivingRow = DrivingRowOf(video);
+
+        // Only the row that drives the live is flagged. A flag left on another one would sit there
+        // for the next play, and kill it the moment the composition reaches that row.
+        foreach (var row in RowsOfComposition(video))
+        {
+            _videoRepository.SetStopFlag(row.Pkid, row.Pkid == drivingRow.Pkid);
+        }
+
         _notifier.Raise();
 
         // The row flag is what the streaming loop polls; signalling the process makes the stop
         // immediate for the user interface too.
-        if (_sessions.TryGet(videoLivePkid, out var session) && session is not null)
+        if (_sessions.TryGet(drivingRow.Pkid, out var session) && session is not null)
         {
             _ = session.StopAsync();
         }
@@ -156,9 +166,27 @@ public sealed class StreamingService
     public void ResetFlag(int videoLivePkid)
     {
         var video = CheckIfExistsAndReturnEntity(videoLivePkid);
-        video.ShouldBeStop = false;
-        SaveFlagToStopLive(video);
+        foreach (var row in RowsOfComposition(video))
+        {
+            _videoRepository.SetStopFlag(row.Pkid, false);
+        }
     }
+
+    /// <summary>
+    /// The rows a stop asked for a row reaches. A plain video and a playlist video stand for
+    /// themselves, while the rows of a canvas are one live and are stopped as a whole.
+    /// </summary>
+    private List<VideoEntity> RowsOfComposition(VideoEntity video) =>
+        video.ScenePkid is not null && video.VideoLiveHistoryId is { } historyPkid
+            ? _videoRepository.FindByLiveHistoryId(historyPkid)
+            : [video];
+
+    /// <summary>
+    /// The row the ffmpeg of a live is keyed on, the one whose flag the streaming loop polls. For a
+    /// canvas it is the first source with a picture, exactly as the composer put the live together.
+    /// </summary>
+    private VideoEntity DrivingRowOf(VideoEntity video) =>
+        RowsOfComposition(video).FirstOrDefault(row => row.SourceKind.HasPicture()) ?? video;
 
     /// <summary>
     /// Forgets where every video of a live history was stopped, so the next play starts the
@@ -404,8 +432,6 @@ public sealed class StreamingService
 
         return video;
     }
-
-    private void SaveFlagToStopLive(VideoEntity video) => _videoRepository.Update(video);
 
     private VideoLiveHistoryEntity RetrievedVideoLiveHistorySaved(string videoFileAbsolutePath, DateTime timeStartLive)
     {

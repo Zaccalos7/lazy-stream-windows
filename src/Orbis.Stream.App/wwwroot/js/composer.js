@@ -201,8 +201,16 @@
 
   // ---------- Drawing ----------
 
+  // Every still is asked for at its own URL: the address of a source never changes, so without
+  // this the WebView would answer a scene saved yesterday with the answer it gave then.
+  let stillAsked = 0;
   const snapshotUrl = item =>
-    `/preview/sources/snapshot?kind=${item.kind}&target=${encodeURIComponent(item.target)}`;
+    `/preview/sources/snapshot?kind=${item.kind}&target=${encodeURIComponent(item.target)}&v=${++stillAsked}`;
+
+  // How many times a tile asks again before settling for its icon. A source that cannot be grabbed
+  // on the first try is normal rather than broken: ffmpeg may still be listing the devices, and a
+  // camera can be busy in another application for a moment.
+  const stillAttempts = 2;
 
   const glyphIcon = glyph => {
     const icon = document.createElement("i");
@@ -231,6 +239,14 @@
     still.alt = "";
     still.draggable = false;
     still.hidden = true;
+    tile.still = still;
+
+    let tries = 0;
+    // The picture that is already there stays up until the new one arrives: a tile never blinks
+    // back to its icon because a frame is on its way.
+    const ask = () => { still.src = snapshotUrl(item); };
+    ask();
+
     still.addEventListener("load", () => {
       still.hidden = false;
       cover.hidden = true;
@@ -244,7 +260,14 @@
         render();
       }
     });
-    still.src = snapshotUrl(item);
+
+    // The server answers "no content" when it cannot open the source, which the browser reads as
+    // a broken image. That is a moment, not a verdict: the tile asks again, and the tile of a
+    // scene that was saved on a machine that was asleep still opens with pictures on it.
+    still.addEventListener("error", () => {
+      if (!still.isConnected || tries++ >= stillAttempts) return;
+      setTimeout(() => still.isConnected && ask(), 500 * tries);
+    });
 
     const label = document.createElement("span");
     label.className = "composer-tile-label";
@@ -262,6 +285,15 @@
     tile.addEventListener("dblclick", () => fill(item.uid));
     tiles.set(item.uid, tile);
     return tile;
+  };
+
+  // A new frame of everything already on the canvas: a still is a moment, and the source that
+  // could not be grabbed a minute ago is usually there now.
+  const refreshStills = () => {
+    for (const item of scene.items) {
+      const tile = tiles.get(item.uid);
+      if (tile) tile.still.src = snapshotUrl(item);
+    }
   };
 
   const placeTile = (tile, item) => {
@@ -713,7 +745,12 @@
     }
   };
 
-  root.querySelector("[data-composer-refresh]")?.addEventListener("click", loadCatalog);
+  // Asking again is for the sources the page does not know yet, and for the pictures of the ones
+  // already on the canvas: a still that failed once is worth another try.
+  root.querySelector("[data-composer-refresh]")?.addEventListener("click", () => {
+    refreshStills();
+    loadCatalog();
+  });
 
   // ---------- Scenes ----------
 

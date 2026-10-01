@@ -67,13 +67,41 @@ public static class LiveLinkView
         return platform.Label is null ? null : platform.Value;
     }
 
+    /// <summary>
+    /// The platform mark, as the outline of an SVG so it is drawn in the colour of the page rather
+    /// than as a glyph of an icon font: the Twitch and the YouTube mark are brands of their own and
+    /// the Segoe glyphs they were drawn with were neither.
+    /// </summary>
+    public static string MarkupOf(string? platform) => platform switch
+    {
+        "twitch" => TwitchMark,
+        "youtube" => YoutubeMark,
+        _ => PlayMark
+    };
+
+    /// <summary>The class that colours the mark of a platform.</summary>
+    public static string ClassOf(string? platform) => platform switch
+    {
+        "twitch" => "platform-twitch",
+        "youtube" => "platform-youtube",
+        _ => "platform-generic"
+    };
+
+    /// <summary>The Twitch mark.</summary>
+    private const string TwitchMark =
+        "M11.571 4.714h1.715v5.143H11.57zm4.715 0H18v5.143h-1.714zM6 0L1.714 4.286v15.428h5.143V24l4.286-4.286h3.428L22.286 12V0zm14.571 11.143l-3.428 3.428h-3.429l-3 3v-3H6.857V1.714h13.714Z";
+
+    /// <summary>The YouTube mark.</summary>
+    private const string YoutubeMark =
+        "M23.498 6.186a3.016 3.016 0 0 0-2.122-2.136C19.505 3.545 12 3.545 12 3.545s-7.505 0-9.377.505A3.017 3.017 0 0 0 .502 6.186C0 8.07 0 12 0 12s0 3.93.502 5.814a3.016 3.016 0 0 0 2.122 2.136c1.871.505 9.376.505 9.376.505s7.505 0 9.377-.505a3.015 3.015 0 0 0 2.122-2.136C24 15.93 24 12 24 12s0-3.93-.502-5.814zM9.545 15.568V8.432L15.818 12l-6.273 3.568z";
+
+    /// <summary>The play mark of a platform this application does not know.</summary>
+    private const string PlayMark = "M8 5v14l11-7z";
+
     /// <summary>Name the platform shows in its own interface (Twitch, YouTube).</summary>
     public static string? LabelOf(string? platform) =>
         MainChannelSettingModel.Platforms
             .FirstOrDefault(known => known.Value == platform).Label;
-
-    /// <summary>Icon of the platform: the Twitch mark, the YouTube play mark, the generic play.</summary>
-    public static string GlyphOf(string? platform) => platform == "twitch" ? "\uE93E" : "\uE714";
 
     /// <summary>
     /// Page of a platform channel: on Twitch the channel, on YouTube the page of the handle

@@ -94,6 +94,11 @@ public sealed class SystemInfoService
         return _provider.GetAppNetworkPercent();
     }
 
+    public IReadOnlyList<FfmpegProcessStat> GetFfmpegProcessStats()
+    {
+        return _provider.GetFfmpegProcessStats();
+    }
+
     /// <summary>-1 is how a provider says the machine has no sensor, the dash the meter would show.</summary>
     private int Temperature(int celsius, string read, string missing)
     {

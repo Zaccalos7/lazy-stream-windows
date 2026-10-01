@@ -519,7 +519,7 @@ public static class OrbisEndpoints
     /// </summary>
     private static string StatsJson(SystemInfoService systemInfo)
     {
-        var values = new Dictionary<string, int>(MeterKeys.Count, StringComparer.Ordinal);
+        var values = new Dictionary<string, object>(MeterKeys.Count + 1, StringComparer.Ordinal);
         foreach (var stat in systemInfo.GetAllSystemInfo())
         {
             if (stat.Field is { } field && MeterKeys.TryGetValue(field, out var key))
@@ -527,6 +527,8 @@ public static class OrbisEndpoints
                 values[key] = stat.Value;
             }
         }
+
+        values["ffmpeg_processes"] = systemInfo.GetFfmpegProcessStats();
 
         return JsonSerializer.Serialize(values);
     }

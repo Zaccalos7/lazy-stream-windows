@@ -21,3 +21,24 @@
         </div>
     }
 </div>
+
+<details class="section" style="margin-top: 1.5rem; padding: 10px 24px; border: 1px solid var(--gray-lighter); border-radius: 8px;">
+    <summary style="cursor: pointer; font-weight: bold; list-style: none; display: flex; align-items: center; gap: 8px;">
+        <i class="icon" style="font-size: 12px; transition: transform 0.2s;">&#xE96E;</i>
+        @T["ffmpegProcessesDetails"]
+    </summary>
+    <div id="ffmpeg-stats-container" style="margin-top: 1rem;" data-no-ffmpeg-message="@T["noActiveFfmpegProcess"]">
+        <p class="caption">
+            <span class="spinner" aria-hidden="true"></span>&nbsp; @T["loading"]
+        </p>
+    </div>
+</details>
+
+<style>
+    details > summary::marker {
+        display: none;
+    }
+    details[open] > summary i.icon {
+        transform: rotate(90deg);
+    }
+</style>

@@ -26,20 +26,11 @@ public static class OrbisEndpoints
     private const int ReconnectMilliseconds = 2000;
 
     /// <summary>
-    /// How often the preview looks for a frame ffmpeg has written since the last one it sent. ffmpeg
-    /// writes fifteen a second, so anything longer drops frames on the way to the page.
+    /// The name of the header that carries the stamp of the frame, which is what tells two frames of
+    /// the same live apart. The stamp is the moment ffmpeg wrote the file, so a page that asks for
+    /// the frame it has already seen gets told so without the JPEG being sent again.
     /// </summary>
-    private const int PollMilliseconds = 25;
-
-    /// <summary>
-    /// How long a page that has stopped reading is waited for before the answer is given up on.
-    /// Long enough for a slow machine to catch up, short enough that a tab nobody looks at is not
-    /// an open request for as long as the live runs.
-    /// </summary>
-    private static readonly TimeSpan WriteTimeout = TimeSpan.FromSeconds(10);
-
-    /// <summary>The blank line that closes a part of the motion JPEG, written once for all of them.</summary>
-    private static readonly byte[] EndOfPart = "\r\n"u8.ToArray();
+    private const string FrameStampHeader = "X-Orbis-Frame";
 
     public static IEndpointRouteBuilder MapOrbisEndpoints(this IEndpointRouteBuilder app)
     {
@@ -281,61 +272,48 @@ public static class OrbisEndpoints
             return Results.File(file.Path, file.ContentType, enableRangeProcessing: true);
         });
 
-        // The light picture of a live: the JPEGs its ffmpeg writes next to the stream, pushed as
-        // motion JPEG, which an <img> plays on its own. A frame goes out only when there is a new
-        // one, and the answer ends with the live, so an open page costs nothing once it is over.
-        group.MapGet("/live/{pkid:int}/stream", async (
+        // One frame of the light picture, as a whole JPEG. This is what the preview page draws, and
+        // it is the endpoint the picture is judged on: a page that keeps asking for the newest
+        // frame gets the newest frame, and a frame it did not get in time is simply gone instead of
+        // arriving late and dragging the picture behind the live. The answer is short (the picture
+        // is 640 pixels wide), and the stamp in the header lets a page that already has this exact
+        // frame be answered without the bytes at all.
+        group.MapGet("/live/{pkid:int}/frame", (
             int pkid,
             HttpContext context,
             LivePreviewFrames frames,
-            StreamingSessionRegistry sessions,
-            CancellationToken token) =>
+            StreamingSessionRegistry sessions) =>
         {
-            const string Boundary = "orbisframe";
-            context.Response.ContentType = $"multipart/x-mixed-replace; boundary={Boundary}";
+            // A live that is over has no frame: the page covers the picture rather than leaving the
+            // last one standing as if it were still on air.
+            if (!sessions.TryGet(pkid, out _))
+            {
+                return Results.NotFound();
+            }
+
+            var frame = frames.Read(pkid);
+            if (frame is null)
+            {
+                return Results.NotFound();
+            }
+
+            // The stamp is the write time, so it moves with every frame ffmpeg writes. The page sends
+            // back the one it is holding; if it is the same frame, there is nothing to draw.
+            var stamp = frames.LastWrite(pkid).Ticks.ToString(CultureInfo.InvariantCulture);
             context.Response.Headers.CacheControl = "no-store";
-            // A proxy in between would sit on the frames to see whether more are coming, which on a
-            // preview is the whole picture arriving late.
-            context.Response.Headers["X-Accel-Buffering"] = "no";
-            context.Features.Get<Microsoft.AspNetCore.Http.Features.IHttpResponseBodyFeature>()?.DisableBuffering();
+            context.Response.Headers[FrameStampHeader] = stamp;
 
-            var sent = DateTime.MinValue;
-
-            // A page that stopped reading (a tab in the background, a window being dragged out) would
-            // otherwise hold this connection open for as long as the live lasts. The answer is given
-            // up instead: the picture is not worth a request that never ends.
-            using var write = CancellationTokenSource.CreateLinkedTokenSource(token);
-            try
+            if (context.Request.Headers.IfNoneMatch.Any(value => value == stamp))
             {
-                while (!token.IsCancellationRequested && sessions.TryGet(pkid, out _))
-                {
-                    var written = frames.LastWrite(pkid);
-                    if (written != sent && frames.Read(pkid) is { } frame)
-                    {
-                        sent = written;
-                        var header = System.Text.Encoding.ASCII.GetBytes(
-                            $"--{Boundary}\r\nContent-Type: image/jpeg\r\nContent-Length: {frame.Length}\r\n\r\n");
-                        write.CancelAfter(WriteTimeout);
-                        await context.Response.Body.WriteAsync(header, write.Token).ConfigureAwait(false);
-                        await context.Response.Body.WriteAsync(frame, write.Token).ConfigureAwait(false);
-                        await context.Response.Body.WriteAsync(EndOfPart, write.Token).ConfigureAwait(false);
-                        await context.Response.Body.FlushAsync(write.Token).ConfigureAwait(false);
-                    }
+                return Results.StatusCode(StatusCodes.Status304NotModified);
+            }
 
-                    // Short enough that every frame ffmpeg writes is on its way before the next one
-                    // is ready: frames written between two polls used to be dropped, and a preview
-                    // that shows one frame out of three is the juddering the page was faulted for.
-                    // The loop only ever waits on the newest frame, so a page that falls behind
-                    // skips pictures instead of collecting them.
-                    await Task.Delay(PollMilliseconds, token).ConfigureAwait(false);
-                }
-            }
-            catch (OperationCanceledException)
-            {
-                // The page went away, or it stopped reading: nothing to finish.
-            }
+            return Results.File(frame, "image/jpeg");
         });
 
+        // The light picture of a live: the JPEGs its ffmpeg writes next to the stream, pushed as
+        // motion JPEG, which an <img> plays on its own. A frame goes out only when there is a new
+        // one, and the answer ends with the live, so an open page costs nothing once it is over.
         group.MapPut("/live/{pkid:int}/parameters", (
             int pkid,
             LiveParameterRequest? request,

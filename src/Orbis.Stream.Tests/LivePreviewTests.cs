@@ -67,6 +67,77 @@ public sealed class LivePreviewTests : IAsyncLifetime
     }
 
     [Fact]
+    public async Task Preview_KeepsUpWithTheFramesFfmpegWrites()
+    {
+        if (!await StartLiveAsync())
+        {
+            return;
+        }
+
+        await WaitForLiveAsync();
+
+        // What the preview page does, and what it is judged on: ask for the newest frame, as often
+        // as ffmpeg writes one, and count how many different pictures arrive. ffmpeg writes fifteen
+        // a second, so a page that follows the live closely gets close to fifteen; a page that is
+        // falling behind shows a live in slow motion, which is the fault this guards against.
+        const int Seconds = 6;
+        var clock = Stopwatch.StartNew();
+        var served = 0;
+        var notModified = 0;
+        var repeated = 0;
+        var previous = string.Empty;
+        string? stamp = null;
+
+        while (clock.Elapsed < TimeSpan.FromSeconds(Seconds))
+        {
+            using var request = new HttpRequestMessage(HttpMethod.Get, $"/preview/live/{_pkid}/frame");
+            if (stamp is not null)
+            {
+                request.Headers.TryAddWithoutValidation("If-None-Match", stamp);
+            }
+
+            using var answer = await _host.Client.SendAsync(request);
+            if (answer.StatusCode == HttpStatusCode.NotModified)
+            {
+                // Nothing new to show: the stamp is how the server says so without the picture.
+                notModified++;
+                await Task.Delay(40);
+                continue;
+            }
+
+            Assert.Equal(HttpStatusCode.OK, answer.StatusCode);
+            var digest = Convert.ToHexString(System.Security.Cryptography.SHA256.HashData(
+                await answer.Content.ReadAsByteArrayAsync()));
+            if (digest == previous)
+            {
+                // The server answered with the frame the page already asked for: the stamp is
+                // supposed to keep that from happening, so a page would be drawing the same picture.
+                repeated++;
+            }
+
+            previous = digest;
+            served++;
+            stamp = answer.Headers.GetValues(FrameStampHeader).First();
+            await Task.Delay(60);
+        }
+
+        clock.Stop();
+
+        // The rate is the point. Ten of the fifteen frames a second ffmpeg writes is a preview that
+        // is being missed by a third, which on a picture is judder nobody can watch.
+        var perSecond = served / clock.Elapsed.TotalSeconds;
+        Assert.True(perSecond >= 10, $"the preview served {perSecond:0.0} frames a second over {clock.Elapsed.TotalSeconds:0.0}s");
+
+        // The stamp is what stops the same frame being sent twice, which on a live is a picture
+        // standing still for a frame's worth of time.
+        Assert.Equal(0, repeated);
+
+        // Asking between two frames of the live is answered without a picture, which is what keeps
+        // a page that is slightly ahead of the live from costing anything.
+        Assert.True(notModified > 0 || served >= 10, $"the page was never ahead of the live ({notModified} of {served + notModified})");
+    }
+
+    [Fact]
     public async Task Preview_ChangesTheParametersOfARunningLive()
     {
         if (!await StartLiveAsync())
@@ -251,123 +322,73 @@ public sealed class LivePreviewTests : IAsyncLifetime
         using var live = await _host.Client.GetAsync($"/orbis/mainPreview?live={_pkid}");
         Assert.Equal(HttpStatusCode.OK, live.StatusCode);
         var page = await live.Content.ReadAsStringAsync();
-        Assert.Contains($"/preview/live/{_pkid}/stream", page, StringComparison.Ordinal);
+        // The picture is drawn on a canvas, not an <img>: a browser has no clock for a multipart stream,
+        // so frames that arrive faster than it decodes queue up and play late, which is the slow
+        // motion the preview is judged on. The page carries the canvas the frames are drawn on.
         Assert.Contains("data-preview-frame", page, StringComparison.Ordinal);
+        Assert.Contains("<canvas", page, StringComparison.Ordinal);
+        Assert.DoesNotContain("/stream", page, StringComparison.Ordinal);
 
         // The stage is the shape of what is on air, so a canvas that is not 16:9 is not watched
         // inside a 16:9 box.
         Assert.Contains("aspect-ratio: ", page, StringComparison.Ordinal);
 
-        // The light picture is what is on air, pushed as motion JPEG: whole frames, one after the
-        // other. One frame proves the stream opens; several prove the picture moves instead of
-        // standing still, which is what the page is judged on.
-        using var request = new HttpRequestMessage(HttpMethod.Get, $"/preview/live/{_pkid}/stream");
-        using var stream = await _host.Client.SendAsync(request, HttpCompletionOption.ResponseHeadersRead);
-        Assert.StartsWith("multipart/x-mixed-replace", stream.Content.Headers.ContentType?.ToString());
-        await using var body = await stream.Content.ReadAsStreamAsync();
-
+        // The light picture is what is on air, one whole frame at a time: the page asks for the
+        // newest frame and draws that one, rather than letting a browser with no clock for a
+        // multipart stream queue the frames up and play them late.
         var stopwatch = Stopwatch.StartNew();
-        var frames = await ReadFramesAsync(body, wanted: 4, TimeSpan.FromSeconds(20));
-        stopwatch.Stop();
+        var frames = new List<byte[]>();
+        string? stamp = null;
+        while (frames.Count < 4 && stopwatch.Elapsed < TimeSpan.FromSeconds(20))
+        {
+            using var request = new HttpRequestMessage(HttpMethod.Get, $"/preview/live/{_pkid}/frame");
+            if (stamp is not null)
+            {
+                request.Headers.TryAddWithoutValidation("If-None-Match", stamp);
+            }
+
+            using var answer = await _host.Client.SendAsync(request);
+            if (answer.StatusCode == HttpStatusCode.NotModified)
+            {
+                // The live is writing and this page is simply ahead of it: the stamp is how the
+                // server says so without sending the picture again. Wait for the next frame rather
+                // than spinning on the same one.
+                await Task.Delay(40);
+                continue;
+            }
+
+            Assert.Equal(HttpStatusCode.OK, answer.StatusCode);
+            Assert.Equal("image/jpeg", answer.Content.Headers.ContentType?.MediaType);
+
+            var bytes = await answer.Content.ReadAsByteArrayAsync();
+            Assert.True(bytes.Length > 0, "a frame arrived with nothing in it");
+
+            // A whole JPEG, markers and all: a part cut short would be the picture the page shows as
+            // a torn or grey rectangle.
+            Assert.Equal(0xFF, bytes[0]);
+            Assert.Equal(0xD8, bytes[1]);
+            Assert.Equal(0xFF, bytes[^2]);
+            Assert.Equal(0xD9, bytes[^1]);
+
+            frames.Add(bytes);
+            stamp = answer.Headers.GetValues(FrameStampHeader).First();
+            Assert.False(string.IsNullOrEmpty(stamp), "a frame arrived with no stamp to compare the next one with");
+        }
 
         Assert.Equal(4, frames.Count);
 
         // ffmpeg writes fifteen frames a second: a page that has to wait for the next one of them
         // is what makes the picture judder.
         Assert.True(stopwatch.Elapsed < TimeSpan.FromSeconds(3), $"four frames took {stopwatch.Elapsed}");
-        foreach (var frame in frames)
-        {
-            // A whole JPEG, markers and all: a part cut short would be the picture the page shows as
-            // a torn or grey rectangle.
-            Assert.Equal(0xFF, frame[0]);
-            Assert.Equal(0xD8, frame[1]);
-            Assert.Equal(0xFF, frame[^2]);
-            Assert.Equal(0xD9, frame[^1]);
-        }
+
+        // Most of the frames of a live that is running are pictures that are not there yet: the
+        // server answered four questions with four frames rather than repeating the one it had.
+        Assert.True(frames.Distinct().Count() >= 2, $"four frames of a running live were {frames.Distinct().Count()} distinct pictures");
     }
 
-    /// <summary>
-    /// Reads whole parts of a motion JPEG stream: the headers they open with, the bytes those
-    /// headers announce and the blank line that closes them. Returns what arrived before the timeout
-    /// or the wanted number of frames, whichever comes first.
-    /// </summary>
-    private static async Task<List<byte[]>> ReadFramesAsync(System.IO.Stream body, int wanted, TimeSpan timeout)
-    {
-        var frames = new List<byte[]>();
-        var chunk = new byte[16 * 1024];
-        var pending = Array.Empty<byte>();
-        using var cancel = new CancellationTokenSource(timeout);
+    /// <summary>The header that carries the stamp of a preview frame.</summary>
+    private const string FrameStampHeader = "X-Orbis-Frame";
 
-        while (frames.Count < wanted)
-        {
-            var read = await body.ReadAtLeastAsync(chunk.AsMemory(0, 1), 1, throwOnEndOfStream: false, cancel.Token);
-            if (read == 0)
-            {
-                break;
-            }
-
-            var arrived = new byte[read];
-            Array.Copy(chunk, arrived, read);
-            pending = pending.Length == 0 ? arrived : [.. pending, .. arrived];
-
-            var bytes = pending.AsSpan();
-            while (TakeFrame(bytes, out var frame, out var consumed))
-            {
-                frames.Add(frame);
-                bytes = bytes[consumed..];
-                if (frames.Count >= wanted)
-                {
-                    return frames;
-                }
-            }
-
-            // Whatever is left is the beginning of a part that has not arrived whole yet.
-            pending = bytes.ToArray();
-        }
-
-        return frames;
-    }
-
-    private static bool TakeFrame(ReadOnlySpan<byte> bytes, out byte[] frame, out int consumed)
-    {
-        frame = [];
-        consumed = 0;
-
-        var headers = bytes.IndexOf("--orbisframe\r\n"u8);
-        if (headers < 0)
-        {
-            return false;
-        }
-
-        var from = headers + "--orbisframe\r\n".Length;
-        var to = bytes[from..].IndexOf("\r\n\r\n"u8);
-        if (to < 0)
-        {
-            return false;
-        }
-
-        var head = System.Text.Encoding.ASCII.GetString(bytes[from..(from + to)]);
-        var announced = head
-            .Split("\r\n", StringSplitOptions.RemoveEmptyEntries)
-            .FirstOrDefault(line => line.StartsWith("Content-Length:", StringComparison.Ordinal))
-            ?.Split(':')[1]
-            .Trim();
-
-        if (!int.TryParse(announced, NumberStyles.Integer, CultureInfo.InvariantCulture, out var length))
-        {
-            return false;
-        }
-
-        var body = from + to + 4;
-        if (bytes.Length < body + length + 2)
-        {
-            return false;
-        }
-
-        frame = bytes.Slice(body, length).ToArray();
-        consumed = body + length + 2;
-        return true;
-    }
 
     [Fact]
     public async Task WithTwoLivesOnAir_ThePreviewPageOffersThemInAList()

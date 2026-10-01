@@ -95,7 +95,7 @@ else
                     <span class="spinner"></span>
                     <p class="muted">@T["previewWaiting"]</p>
                 </div>
-                <img data-preview-frame src="@MainPreviewModel.FramesUrlOf(live.VideoPkid)" alt="@live.VideoName" />
+                <canvas data-preview-frame role="img" aria-label="@live.VideoName"></canvas>
             </div>
             <div class="preview-bar">
                 <div class="preview-id">

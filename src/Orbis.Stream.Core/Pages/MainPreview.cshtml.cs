@@ -34,8 +34,8 @@ public sealed class MainPreviewModel(LivePreviewService preview) : OrbisPageMode
 
     public string LiveGlyph => LiveLinkView.GlyphOf(LiveLinkView.PlatformOf(Snapshot.StreamUrl));
 
-    /// <summary>Where the light picture of a live is pushed from, for the preview image.</summary>
-    public static string FramesUrlOf(int pkid) => $"/preview/live/{pkid}/stream";
+    /// <summary>Where the light picture of a live is fetched from, one frame at a time.</summary>
+    public static string FramesUrlOf(int pkid) => $"/preview/live/{pkid}/frame";
 
     public IActionResult OnGet() =>
         string.IsNullOrEmpty(Compose) ? Page() : Redirect("/orbis/mainLive?start=1");

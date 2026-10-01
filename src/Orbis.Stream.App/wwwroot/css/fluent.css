@@ -672,6 +672,50 @@ table.list.roomy td.nowrap { white-space: nowrap; }
 .pager .btn { min-width: 28px; padding: 0 8px; }
 .pager .btn[aria-current="page"] { color: var(--on-accent); background: var(--accent); border-color: transparent; }
 
+.live-rows-container {
+  display: flex;
+  flex-direction: column;
+  height: 65vh;
+  min-height: 400px;
+  max-height: 800px;
+  background: var(--card);
+  border: 1px solid var(--stroke);
+  border-radius: var(--radius-lg);
+  box-shadow: var(--shadow-card);
+  overflow: hidden;
+}
+
+.table-wrap-scrollable {
+  flex: 1;
+  overflow-y: auto;
+  overflow-x: hidden;
+}
+
+.table-wrap-scrollable .table-wrap {
+  border-radius: 0;
+  border: none;
+  box-shadow: none;
+  background: transparent;
+}
+
+.table-wrap-scrollable table.list th {
+  position: sticky;
+  top: 0;
+  z-index: 1;
+}
+
+.pager-fixed {
+  flex-shrink: 0;
+  padding: 12px 16px;
+  border-top: 1px solid var(--stroke);
+  background: var(--card);
+}
+
+.pager-fixed .pager {
+  margin-top: 0;
+  justify-content: center;
+}
+
 /* ---------- Apple Pill Badges ---------- */
 
 .badge {

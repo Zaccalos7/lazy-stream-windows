@@ -42,6 +42,9 @@ public sealed class MainLiveModel(
     /// <summary>Video whose setting is being linked (<c>?link={pkid}</c>).</summary>
     public int? LinkPkid { get; private set; }
 
+    /// <summary>Playlist whose setting is being linked (<c>?linkHistory={history}</c>).</summary>
+    public long? LinkHistory { get; private set; }
+
     [BindProperty]
     public VideoSettingForm? Form { get; set; }
 
@@ -130,7 +133,7 @@ public sealed class MainLiveModel(
         return route;
     }
 
-    public void OnGet(int? link)
+    public void OnGet(int? link, long? linkHistory)
     {
         LoadVideos();
         LoadDetails();
@@ -139,9 +142,10 @@ public sealed class MainLiveModel(
         ActiveSettings = videoSettings.GetAllVideoSettings(new Dictionary<string, string> { ["isVideoAndAudioSettingActive"] = "true" });
         ActiveConfigurations = settings.RetrieveSettings(new Dictionary<string, string> { ["isActive"] = "true" });
 
-        if (link is not null)
+        if (link is not null || linkHistory is not null)
         {
             LinkPkid = link;
+            LinkHistory = linkHistory;
             Form = new VideoSettingForm();
         }
     }
@@ -249,11 +253,15 @@ public sealed class MainLiveModel(
         return RedirectToPage(Filters);
     }
 
-    public IActionResult OnPostLink(int pkid)
+    public IActionResult OnPostLink(int pkid, long? history)
     {
         if (Form is null || !Form.IsComplete)
         {
             SetNotice(NoticeKind.Error, localizer.PrintMessage("not.valid.input"));
+        }
+        else if (history is not null)
+        {
+            Run(() => videoSettings.LinkAndSaveSettingsPlaylist(Form.ToRequest(), history.Value));
         }
         else
         {

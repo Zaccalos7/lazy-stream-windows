@@ -69,6 +69,36 @@ else
                                     <i class="icon">@LiveLinkView.GlyphOf(livePlatform)</i>
                                 </a>
                             }
+                            @if (hasSetting)
+                            {
+                                if (row.IsPlaylist)
+                                {
+                                    <a class="btn subtle icon-only" href="@Url.Page("/MainLive", new { Model.LiveStatus, Model.ChannelName, p = Model.PageIndex, linkHistory = historyPkid })" title="@T["connectVideoSetting"]" aria-label="@T["connectVideoSetting"]">
+                                        <i class="icon">&#xE713;</i>
+                                    </a>
+                                }
+                                else
+                                {
+                                    <a class="btn subtle icon-only" href="@Url.Page("/MainLive", new { Model.LiveStatus, Model.ChannelName, p = Model.PageIndex, link = video.Pkid })" title="@T["connectVideoSetting"]" aria-label="@T["connectVideoSetting"]">
+                                        <i class="icon">&#xE713;</i>
+                                    </a>
+                                }
+                            }
+                            else
+                            {
+                                if (row.IsPlaylist)
+                                {
+                                    <a class="btn subtle" href="@Url.Page("/MainLive", new { Model.LiveStatus, Model.ChannelName, p = Model.PageIndex, linkHistory = historyPkid })">
+                                        <i class="icon">&#xE71B;</i>@T["connectVideoSetting"]
+                                    </a>
+                                }
+                                else
+                                {
+                                    <a class="btn subtle" href="@Url.Page("/MainLive", new { Model.LiveStatus, Model.ChannelName, p = Model.PageIndex, link = video.Pkid })">
+                                        <i class="icon">&#xE71B;</i>@T["connectVideoSetting"]
+                                    </a>
+                                }
+                            }
                             @if (hasSetting && !row.IsPlaylist)
                             {
                                 <form method="post" asp-page="/MainLive" asp-page-handler="Stop" asp-all-route-data="Model.RowRoute(video.Pkid)" data-confirm="@T["stopLive"]">
@@ -80,12 +110,6 @@ else
                                 <form method="post" asp-page="/MainLive" asp-page-handler="Restart" asp-all-route-data="Model.RowRoute(video.Pkid)" data-confirm="@T["restartLiveAlert"]">
                                     <button class="btn subtle icon-only caution" title="@T["restartLiveIconLabel"]" aria-label="@T["restartLiveIconLabel"]"><i class="icon">&#xE72C;</i></button>
                                 </form>
-                            }
-                            else
-                            {
-                                <a class="btn subtle" href="@Url.Page("/MainLive", new { Model.LiveStatus, Model.ChannelName, p = Model.PageIndex, link = video.Pkid })">
-                                    <i class="icon">&#xE71B;</i>@T["connectVideoSetting"]
-                                </a>
                             }
                             @* A running live cannot be deleted: its ffmpeg still reads the row to know when to stop.
                                On a playlist row the bin takes the whole playlist; one video goes from the details dialog. *@

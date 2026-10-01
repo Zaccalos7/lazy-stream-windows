@@ -65,6 +65,34 @@ public sealed class VideoSettingService
         return _responses.Build("success.operations", StatusCodes.Status201Created);
     }
 
+    public MessageResponse LinkAndSaveSettingsPlaylist(VideoSettingsRequest request, long videoLiveHistoryPkid)
+    {
+        ArgumentNullException.ThrowIfNull(request);
+
+        var videos = _videoRepository.FindByLiveHistoryId(videoLiveHistoryPkid);
+        if (videos.Count == 0)
+        {
+            throw new NotFoundCustomException("video.to.link.not.found");
+        }
+
+        var setting = request.ToEntity();
+        setting.LastModified = DateTime.Now;
+        var settingId = _videoSettingRepository.Insert(setting);
+
+        foreach (var video in videos)
+        {
+            video.VideoSettingId = settingId;
+            _videoRepository.Update(video);
+        }
+
+        _notifier.Raise();
+
+        _logger.LogInformation("{Message}", _localizer.PrintMessage("video.settings.saved"));
+        _logger.LogInformation("{Message}", _localizer.PrintMessage("success.operations"));
+
+        return _responses.Build("success.operations", StatusCodes.Status201Created);
+    }
+
     public List<VideoSettingsRequest> GetAllVideoSettings(IReadOnlyDictionary<string, string> filters) =>
         _videoSettingRepository.FindAll(filters).Select(VideoSettingsRequest.FromEntity).ToList();
 

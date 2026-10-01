@@ -1,4 +1,5 @@
 using System.Diagnostics;
+using System.Globalization;
 using System.Net;
 using System.Net.Http.Json;
 using System.Text.Json;
@@ -235,6 +236,11 @@ public sealed class LivePreviewTests : IAsyncLifetime
         using var compose = await _host.NoRedirectClient.GetAsync("/orbis/mainPreview?compose=1");
         Assert.Equal("/orbis/mainLive?start=1", compose.Headers.Location?.OriginalString);
 
+        // The list of the lives on air is on the page from the start, hidden while there is nothing
+        // to pick: what fills it is the push channel, so a second live shows up without a reload.
+        Assert.Contains("data-live-picker hidden", html, StringComparison.Ordinal);
+        Assert.Contains("<select", html, StringComparison.Ordinal);
+
         if (!await StartLiveAsync())
         {
             return;
@@ -248,17 +254,206 @@ public sealed class LivePreviewTests : IAsyncLifetime
         Assert.Contains($"/preview/live/{_pkid}/stream", page, StringComparison.Ordinal);
         Assert.Contains("data-preview-frame", page, StringComparison.Ordinal);
 
-        // The light picture is what is on air, pushed as motion JPEG: the first part is a frame.
+        // The stage is the shape of what is on air, so a canvas that is not 16:9 is not watched
+        // inside a 16:9 box.
+        Assert.Contains("aspect-ratio: ", page, StringComparison.Ordinal);
+
+        // The light picture is what is on air, pushed as motion JPEG: whole frames, one after the
+        // other. One frame proves the stream opens; several prove the picture moves instead of
+        // standing still, which is what the page is judged on.
         using var request = new HttpRequestMessage(HttpMethod.Get, $"/preview/live/{_pkid}/stream");
         using var stream = await _host.Client.SendAsync(request, HttpCompletionOption.ResponseHeadersRead);
         Assert.StartsWith("multipart/x-mixed-replace", stream.Content.Headers.ContentType?.ToString());
         await using var body = await stream.Content.ReadAsStreamAsync();
-        var head = new byte[256];
-        using var timeout = new CancellationTokenSource(TimeSpan.FromSeconds(15));
-        var read = await body.ReadAtLeastAsync(head, 64, throwOnEndOfStream: false, timeout.Token);
-        var text = System.Text.Encoding.ASCII.GetString(head, 0, read);
-        Assert.Contains("--orbisframe", text, StringComparison.Ordinal);
-        Assert.Contains("Content-Type: image/jpeg", text, StringComparison.Ordinal);
+
+        var stopwatch = Stopwatch.StartNew();
+        var frames = await ReadFramesAsync(body, wanted: 4, TimeSpan.FromSeconds(20));
+        stopwatch.Stop();
+
+        Assert.Equal(4, frames.Count);
+
+        // ffmpeg writes fifteen frames a second: a page that has to wait for the next one of them
+        // is what makes the picture judder.
+        Assert.True(stopwatch.Elapsed < TimeSpan.FromSeconds(3), $"four frames took {stopwatch.Elapsed}");
+        foreach (var frame in frames)
+        {
+            // A whole JPEG, markers and all: a part cut short would be the picture the page shows as
+            // a torn or grey rectangle.
+            Assert.Equal(0xFF, frame[0]);
+            Assert.Equal(0xD8, frame[1]);
+            Assert.Equal(0xFF, frame[^2]);
+            Assert.Equal(0xD9, frame[^1]);
+        }
+    }
+
+    /// <summary>
+    /// Reads whole parts of a motion JPEG stream: the headers they open with, the bytes those
+    /// headers announce and the blank line that closes them. Returns what arrived before the timeout
+    /// or the wanted number of frames, whichever comes first.
+    /// </summary>
+    private static async Task<List<byte[]>> ReadFramesAsync(System.IO.Stream body, int wanted, TimeSpan timeout)
+    {
+        var frames = new List<byte[]>();
+        var chunk = new byte[16 * 1024];
+        var pending = Array.Empty<byte>();
+        using var cancel = new CancellationTokenSource(timeout);
+
+        while (frames.Count < wanted)
+        {
+            var read = await body.ReadAtLeastAsync(chunk.AsMemory(0, 1), 1, throwOnEndOfStream: false, cancel.Token);
+            if (read == 0)
+            {
+                break;
+            }
+
+            var arrived = new byte[read];
+            Array.Copy(chunk, arrived, read);
+            pending = pending.Length == 0 ? arrived : [.. pending, .. arrived];
+
+            var bytes = pending.AsSpan();
+            while (TakeFrame(bytes, out var frame, out var consumed))
+            {
+                frames.Add(frame);
+                bytes = bytes[consumed..];
+                if (frames.Count >= wanted)
+                {
+                    return frames;
+                }
+            }
+
+            // Whatever is left is the beginning of a part that has not arrived whole yet.
+            pending = bytes.ToArray();
+        }
+
+        return frames;
+    }
+
+    private static bool TakeFrame(ReadOnlySpan<byte> bytes, out byte[] frame, out int consumed)
+    {
+        frame = [];
+        consumed = 0;
+
+        var headers = bytes.IndexOf("--orbisframe\r\n"u8);
+        if (headers < 0)
+        {
+            return false;
+        }
+
+        var from = headers + "--orbisframe\r\n".Length;
+        var to = bytes[from..].IndexOf("\r\n\r\n"u8);
+        if (to < 0)
+        {
+            return false;
+        }
+
+        var head = System.Text.Encoding.ASCII.GetString(bytes[from..(from + to)]);
+        var announced = head
+            .Split("\r\n", StringSplitOptions.RemoveEmptyEntries)
+            .FirstOrDefault(line => line.StartsWith("Content-Length:", StringComparison.Ordinal))
+            ?.Split(':')[1]
+            .Trim();
+
+        if (!int.TryParse(announced, NumberStyles.Integer, CultureInfo.InvariantCulture, out var length))
+        {
+            return false;
+        }
+
+        var body = from + to + 4;
+        if (bytes.Length < body + length + 2)
+        {
+            return false;
+        }
+
+        frame = bytes.Slice(body, length).ToArray();
+        consumed = body + length + 2;
+        return true;
+    }
+
+    [Fact]
+    public async Task WithTwoLivesOnAir_ThePreviewPageOffersThemInAList()
+    {
+        if (!await StartLiveAsync())
+        {
+            return;
+        }
+
+        await WaitForLiveAsync();
+        var second = await StartSecondLiveAsync();
+        if (second is null)
+        {
+            return;
+        }
+
+        using var page = await _host.Client.GetAsync("/orbis/mainPreview");
+        var html = await page.Content.ReadAsStringAsync();
+
+        // With something to pick the list is there for the picking...
+        Assert.DoesNotContain("data-live-picker hidden", html, StringComparison.Ordinal);
+        Assert.Contains("<select", html, StringComparison.Ordinal);
+
+        // ...it holds one option per live on air, and the watched one is the chosen one, which with
+        // no ?live= is the live that started last. A row of buttons would put the two of them side by
+        // side instead, and take more room with every live that starts.
+        var list = html.IndexOf("data-live-picker", StringComparison.Ordinal);
+        var options = html[list..html.IndexOf("</select>", list, StringComparison.Ordinal)];
+
+        Assert.Equal(2, options.Split("<option").Length - 1);
+        Assert.Contains($"value=\"{second}\" selected", options, StringComparison.Ordinal);
+        Assert.Contains($"value=\"{_pkid}\"", options, StringComparison.Ordinal);
+        Assert.DoesNotContain($"value=\"{_pkid}\" selected", options, StringComparison.Ordinal);
+    }
+
+    /// <summary>A second live, on another channel: one channel at a time is the rule.</summary>
+    private async Task<int?> StartSecondLiveAsync()
+    {
+        var clips = Path.Combine(_host.DataDirectory, "other-clips");
+        Directory.CreateDirectory(clips);
+
+        var clip = Path.Combine(clips, "other.mp4");
+        await RunAsync(_ffmpeg!, "-y -f lavfi -i testsrc=size=320x240:rate=30 -t 30 -pix_fmt yuv420p " + Quote(clip));
+
+        using var started = await _host.Client.PostAsJsonAsync("/live/start-live", new
+        {
+            streamUrl = new Uri(Path.Combine(_host.DataDirectory, "output")).AbsoluteUri.TrimEnd('/'),
+            streamKey = "other.flv",
+            videoPath = clips,
+            platformStreamName = "channel-other",
+            channelName = "channel-other",
+            videoSettingsRecord = new
+            {
+                id = TwitchVideoSettingId,
+                title = "Default Twitch",
+                isDefaultConfiguration = true,
+                defaultPlatformConfiguration = "Twitch",
+                videoCodec = 27,
+                videoCodecName = "libx264",
+                pixelFormat = 0,
+                videoBitrate = 5_000_000,
+                videoFormat = "flv",
+                gopSize = 2,
+                isVideoAndAudioSettingActive = true,
+                audioSettingRecord = new { audioCodec = 86018, audioBitrate = 128_000 }
+            }
+        });
+        Assert.Equal(HttpStatusCode.Accepted, started.StatusCode);
+
+        // The snapshot follows the live that started last, which is the one just asked for.
+        var deadline = DateTime.UtcNow.AddSeconds(20);
+        while (DateTime.UtcNow < deadline)
+        {
+            var snapshot = await SnapshotAsync();
+            var running = snapshot.GetProperty("running").EnumerateArray().ToList();
+            if (running.Count == 2 && running.Any(option => option.GetProperty("channelName").GetString() == "channel-other"))
+            {
+                return running.First(option => option.GetProperty("channelName").GetString() == "channel-other")
+                    .GetProperty("videoPkid").GetInt32();
+            }
+
+            await Task.Delay(200);
+        }
+
+        Assert.Fail("the second live did not go on air within the time the test allows for it");
+        return null;
     }
 
     private async Task<JsonElement> SnapshotAsync()

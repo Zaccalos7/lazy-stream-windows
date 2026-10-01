@@ -75,6 +75,13 @@ public sealed class SceneLiveTests : IAsyncLifetime
 
         Assert.True(await WaitForAsync(() => Row().Status == LiveStatus.Live), "the canvas never went live: " + Row().Video.Message);
 
+        // The dialog that opens from the row shows the composition, so it is called a scene there and
+        // not a playlist: the row is not one folder of videos that played one after the other.
+        var words = _host.Services.GetRequiredService<Orbis.Stream.Core.I18n.UiText>();
+        var page = await _host.Client.GetStringAsync("/orbis/mainLive?channelName=scene-channel");
+        Assert.Contains($"title=\"{words["sceneDetails"]}\"", page, StringComparison.Ordinal);
+        Assert.DoesNotContain($"title=\"{words["playlistDetails"]}\"", page, StringComparison.Ordinal);
+
         // The composed picture is split in the graph: the preview frame is written next to the live.
         var frames = _host.Services.GetRequiredService<LivePreviewFrames>();
         var basePkid = Row().Video.Pkid!.Value;

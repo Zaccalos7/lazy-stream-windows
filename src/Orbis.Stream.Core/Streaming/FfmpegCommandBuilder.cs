@@ -56,11 +56,17 @@ public static class FfmpegCommandBuilder
     private const string PreviewLabel = "orbisp";
 
     /// <summary>
-    /// The preview is a picture to look at, not a second live: a few frames a second, small, as
+    /// The preview is a picture to look at, not a second live: fifteen frames a second, small, as
     /// JPEG. It costs next to nothing next to the live encode, and it is what is on air (the
     /// composed canvas, the scaled file) rather than the source the page would otherwise replay.
+    ///
+    /// The size is what makes it read well: at 426 pixels wide the frame was stretched over a stage
+    /// twice as wide, and a blurred mosaic moving in steps is worse to watch than a sharp picture
+    /// moving smoothly. 640 is as wide as the stage, so nothing is scaled up, and fifteen frames a
+    /// second is enough for the eye to read as motion. Encoding a frame this size costs a few
+    /// milliseconds, so the preview stays a small slice of a core next to the live encode.
     /// </summary>
-    private const string PreviewFilter = "fps=24,scale=w='min(426,iw)':h=-2";
+    private const string PreviewFilter = "fps=15,scale=w='min(640,iw)':h=-2";
 
     public static IReadOnlyList<string> Build(FfmpegStreamRequest request)
     {
@@ -224,8 +230,10 @@ public static class FfmpegCommandBuilder
 
         arguments.Add("-c:v");
         arguments.Add("mjpeg");
+        // Quality 6 at this size: a quality a step lower costs more bytes than it buys, and a step
+        // higher is the banding the small picture the page stretches it over would show.
         arguments.Add("-q:v");
-        arguments.Add("8");
+        arguments.Add("6");
         arguments.Add("-f");
         arguments.Add("image2");
         arguments.Add("-update");

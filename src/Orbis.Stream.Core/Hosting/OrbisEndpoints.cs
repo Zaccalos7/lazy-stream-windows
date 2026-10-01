@@ -25,6 +25,22 @@ public static class OrbisEndpoints
     /// <summary>How long the browser waits before trying again after a dropped stream.</summary>
     private const int ReconnectMilliseconds = 2000;
 
+    /// <summary>
+    /// How often the preview looks for a frame ffmpeg has written since the last one it sent. ffmpeg
+    /// writes fifteen a second, so anything longer drops frames on the way to the page.
+    /// </summary>
+    private const int PollMilliseconds = 25;
+
+    /// <summary>
+    /// How long a page that has stopped reading is waited for before the answer is given up on.
+    /// Long enough for a slow machine to catch up, short enough that a tab nobody looks at is not
+    /// an open request for as long as the live runs.
+    /// </summary>
+    private static readonly TimeSpan WriteTimeout = TimeSpan.FromSeconds(10);
+
+    /// <summary>The blank line that closes a part of the motion JPEG, written once for all of them.</summary>
+    private static readonly byte[] EndOfPart = "\r\n"u8.ToArray();
+
     public static IEndpointRouteBuilder MapOrbisEndpoints(this IEndpointRouteBuilder app)
     {
         ArgumentNullException.ThrowIfNull(app);
@@ -278,9 +294,17 @@ public static class OrbisEndpoints
             const string Boundary = "orbisframe";
             context.Response.ContentType = $"multipart/x-mixed-replace; boundary={Boundary}";
             context.Response.Headers.CacheControl = "no-store";
+            // A proxy in between would sit on the frames to see whether more are coming, which on a
+            // preview is the whole picture arriving late.
+            context.Response.Headers["X-Accel-Buffering"] = "no";
             context.Features.Get<Microsoft.AspNetCore.Http.Features.IHttpResponseBodyFeature>()?.DisableBuffering();
 
             var sent = DateTime.MinValue;
+
+            // A page that stopped reading (a tab in the background, a window being dragged out) would
+            // otherwise hold this connection open for as long as the live lasts. The answer is given
+            // up instead: the picture is not worth a request that never ends.
+            using var write = CancellationTokenSource.CreateLinkedTokenSource(token);
             try
             {
                 while (!token.IsCancellationRequested && sessions.TryGet(pkid, out _))
@@ -291,18 +315,24 @@ public static class OrbisEndpoints
                         sent = written;
                         var header = System.Text.Encoding.ASCII.GetBytes(
                             $"--{Boundary}\r\nContent-Type: image/jpeg\r\nContent-Length: {frame.Length}\r\n\r\n");
-                        await context.Response.Body.WriteAsync(header, token).ConfigureAwait(false);
-                        await context.Response.Body.WriteAsync(frame, token).ConfigureAwait(false);
-                        await context.Response.Body.WriteAsync("\r\n"u8.ToArray(), token).ConfigureAwait(false);
-                        await context.Response.Body.FlushAsync(token).ConfigureAwait(false);
+                        write.CancelAfter(WriteTimeout);
+                        await context.Response.Body.WriteAsync(header, write.Token).ConfigureAwait(false);
+                        await context.Response.Body.WriteAsync(frame, write.Token).ConfigureAwait(false);
+                        await context.Response.Body.WriteAsync(EndOfPart, write.Token).ConfigureAwait(false);
+                        await context.Response.Body.FlushAsync(write.Token).ConfigureAwait(false);
                     }
 
-                    await Task.Delay(100, token).ConfigureAwait(false);
+                    // Short enough that every frame ffmpeg writes is on its way before the next one
+                    // is ready: frames written between two polls used to be dropped, and a preview
+                    // that shows one frame out of three is the juddering the page was faulted for.
+                    // The loop only ever waits on the newest frame, so a page that falls behind
+                    // skips pictures instead of collecting them.
+                    await Task.Delay(PollMilliseconds, token).ConfigureAwait(false);
                 }
             }
             catch (OperationCanceledException)
             {
-                // The page went away: nothing to finish.
+                // The page went away, or it stopped reading: nothing to finish.
             }
         });
 

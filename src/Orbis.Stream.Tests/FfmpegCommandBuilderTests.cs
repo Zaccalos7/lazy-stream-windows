@@ -48,6 +48,25 @@ public sealed class FfmpegCommandBuilderTests
         Assert.EndsWith(" rtmp://ingest/live/key", command, StringComparison.Ordinal);
     }
 
+    [Fact]
+    public void ThePreviewOfAFileIsFifteenSharpFramesASecond()
+    {
+        // The picture of the file, slowed down and shrunk inside the graph, and written as the light
+        // picture: one file overwritten over and over, a temporary one renamed over it so the page
+        // never reads half a frame, and no audio rides along with it.
+        var command = FfmpegCommandBuilder.Build(new FfmpegStreamRequest(
+            "/videos/clip.mp4", "rtmp://ingest/live/key", Probe(), Setting(), PreviewPath: "/data/preview/7.jpg"));
+
+        var text = string.Join(' ', command);
+
+        // The scale of the setting comes first: the preview gets the same picture the live does,
+        // and shrinks it on its own.
+        Assert.Contains("fps=15,scale=w='min(640,iw)':h=-2", text, StringComparison.Ordinal);
+        Assert.Contains("-an -sn -dn", text, StringComparison.Ordinal);
+        Assert.Contains("-c:v mjpeg -q:v 6", text, StringComparison.Ordinal);
+        Assert.Contains("-f image2 -update 1 -atomic_writing 1 /data/preview/7.jpg", text, StringComparison.Ordinal);
+    }
+
     [Theory]
     [InlineData(30d, 2, 60)]
     [InlineData(29.97d, 2, 59)]
@@ -196,8 +215,30 @@ public sealed class FfmpegCompositionTests
     private static FfmpegCompositionRequest Request(
         IReadOnlyList<FfmpegCompositionItem> items,
         int width = 1920,
-        int height = 1080) =>
-        new(items, "rtmp://ingest/live/key", Setting(), width, height, CanvasFrameRate: 30d);
+        int height = 1080,
+        string? previewPath = null) =>
+        new(items, "rtmp://ingest/live/key", Setting(), width, height, CanvasFrameRate: 30d, PreviewPath: previewPath);
+
+    [Fact]
+    public void ThePreviewOfACanvasIsFifteenSharpFramesASecond()
+    {
+        // The composed picture is split in two: the whole of it goes on air, and the copy is shrunk
+        // and slowed down inside the graph, before it is written as the light picture.
+        var command = FfmpegCommandBuilder.BuildComposition(
+            Request([Camera(0, 0, 640, 480)], previewPath: "/data/preview/7.jpg"));
+
+        var graph = GraphOf(command);
+
+        Assert.Contains("split=2", graph, StringComparison.Ordinal);
+        Assert.Contains("fps=15,scale=w='min(640,iw)':h=-2", graph, StringComparison.Ordinal);
+
+        // It is one file overwritten over and over: a temporary one renamed over it, so the page
+        // never reads half a frame, and no audio rides along with it.
+        var text = string.Join(' ', command);
+
+        Assert.Contains("-an -sn -dn -c:v mjpeg -q:v 6", text, StringComparison.Ordinal);
+        Assert.Contains("-f image2 -update 1 -atomic_writing 1 /data/preview/7.jpg", text, StringComparison.Ordinal);
+    }
 
     private static string GraphOf(IReadOnlyList<string> command) =>
         command[command.ToList().IndexOf("-filter_complex") + 1];

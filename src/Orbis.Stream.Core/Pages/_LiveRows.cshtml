@@ -69,7 +69,7 @@ else
                                     <i class="icon">@LiveLinkView.GlyphOf(livePlatform)</i>
                                 </a>
                             }
-                            @if (hasSetting)
+                            @if (hasSetting && !row.IsPlaylist)
                             {
                                 <form method="post" asp-page="/MainLive" asp-page-handler="Stop" asp-all-route-data="Model.RowRoute(video.Pkid)" data-confirm="@T["stopLive"]">
                                     <button class="btn subtle icon-only danger" disabled="@(!live)" title="@T["stopLiveIconLabel"]" aria-label="@T["stopLiveIconLabel"]"><i class="icon">&#xE71A;</i></button>

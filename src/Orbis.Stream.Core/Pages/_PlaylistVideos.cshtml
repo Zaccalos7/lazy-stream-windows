@@ -43,8 +43,14 @@
                         <td class="num">@(position > 0 && status != LiveStatus.Ended ? TimeSpan.FromMilliseconds(position).ToString(@"hh\:mm\:ss") : "–")</td>
                         <td>
                             <div class="actions">
+                                <form method="post" asp-page="/MainLive" asp-page-handler="Stop" asp-all-route-data="Model.DetailsRowRoute(video.Pkid)" data-confirm="@T["stopLive"]">
+                                    <button class="btn subtle icon-only danger" disabled="@(!live)" title="@T["stopLiveIconLabel"]" aria-label="@T["stopLiveIconLabel"]"><i class="icon">&#xE71A;</i></button>
+                                </form>
                                 <form method="post" asp-page="/MainLive" asp-page-handler="ReplayFrom" asp-all-route-data="Model.DetailsRowRoute(video.Pkid)" data-confirm="@string.Format(T["playlistStartFromConfirm"], index + 1)">
                                     <button class="btn subtle icon-only success" disabled="@playlistLive" title="@T["playlistStartFrom"]" aria-label="@T["playlistStartFrom"]"><i class="icon">&#xE768;</i></button>
+                                </form>
+                                <form method="post" asp-page="/MainLive" asp-page-handler="Restart" asp-all-route-data="Model.DetailsRowRoute(video.Pkid)" data-confirm="@T["restartLiveAlert"]">
+                                    <button class="btn subtle icon-only caution" title="@T["restartLiveIconLabel"]" aria-label="@T["restartLiveIconLabel"]"><i class="icon">&#xE72C;</i></button>
                                 </form>
                                 <form method="post" asp-page="/MainLive" asp-page-handler="Delete" asp-all-route-data="Model.DetailsRowRoute(video.Pkid)" data-confirm="@T["deleteLiveRowConfirm"]">
                                     <button class="btn subtle icon-only danger" disabled="@live" title="@T["deleteLiveRow"]" aria-label="@T["deleteLiveRow"]"><i class="icon">&#xE74D;</i></button>

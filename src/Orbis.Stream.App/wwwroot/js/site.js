@@ -133,7 +133,18 @@ const preview = document.querySelector("[data-preview]");
 
 // The light picture of the live: a frame that cannot be had (the live ended between the page and
 // the request) leaves the cover under it, instead of a broken image.
-preview?.querySelector("[data-preview-frame]")?.addEventListener("error", event => { event.target.hidden = true; });
+const previewFrame = preview?.querySelector("[data-preview-frame]");
+previewFrame?.addEventListener("error", event => { event.target.hidden = true; });
+
+// A tab in the background is one the browser stops reading the stream for, and the server gives the
+// answer up on rather than hold a page open that nobody is watching. Coming back to the page would
+// then leave the last frame frozen for good, so the stream is asked for again: same picture, only
+// the newest frame of it, and nothing about it has to be remembered.
+const armPreviewFrame = () => {
+  if (!previewFrame) return;
+  previewFrame.hidden = false;
+  previewFrame.src = `${previewFrame.src.split("?")[0]}?t=${Date.now()}`;
+};
 const previewVideo = preview?.querySelector("[data-preview-video]");
 const previewForm = preview?.querySelector("[data-preview-form]");
 
@@ -157,6 +168,34 @@ const previewDirty = new Map();
 
 const previewWords = preview?.querySelector("[data-preview-words]") || {};
 const previewMark = (key, fallback) => previewWords.dataset?.[key] || fallback;
+
+// The lives on air, when there is more than one: a list to pick the watched one from, repainted by
+// the push channel so a live that starts while the page is open is in it at once, and hidden again
+// when the others are over, since there is nothing left to pick.
+const livePicker = document.querySelector("[data-live-picker]");
+const livePickerSelect = livePicker?.querySelector("select");
+
+const paintLivePicker = running => {
+  if (!livePicker || !livePickerSelect) return;
+  if (running.length <= 1) {
+    livePicker.hidden = true;
+    return;
+  }
+
+  livePicker.hidden = false;
+  livePickerSelect.replaceChildren(...running.map(option => {
+    const entry = document.createElement("option");
+    entry.value = String(option.videoPkid);
+    entry.textContent = `${option.channelName} · ${option.videoName}`;
+    entry.selected = option.videoPkid === previewPkid;
+    return entry;
+  }));
+};
+
+livePickerSelect?.addEventListener("change", event => {
+  const pkid = Number(event.target.value);
+  if (pkid > 0 && pkid !== previewPkid) location.href = `/orbis/mainPreview?live=${pkid}`;
+});
 
 const previewClock = milliseconds => {
   const total = Math.max(0, Math.floor(milliseconds / 1000));
@@ -213,6 +252,13 @@ if (previewVideo) {
   });
 }
 
+if (previewFrame) {
+  document.addEventListener("visibilitychange", () => {
+    if (document.hidden || !previewIsLive) return;
+    armPreviewFrame();
+  });
+}
+
 const paintPreview = state => {
   if (!preview) return;
   const position = state.positionMilliseconds;
@@ -225,6 +271,8 @@ const paintPreview = state => {
     location.reload();
     return;
   }
+
+  paintLivePicker(state.running || []);
 
   if (!previewForm) return;
 

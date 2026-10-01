@@ -35,7 +35,6 @@ else
                         var platform = video.VideoLiveHistory?.PlatformStreamName;
 
                         var knownPlatform = LiveLinkView.PlatformOf(video.VideoLiveHistory?.StreamUrl);
-                        var iconColor = knownPlatform == "twitch" ? "color: green;" : (knownPlatform == "youtube" ? "color: red;" : "");
                         var liveUrl = live ? LiveLinkView.UrlOf(video.VideoLiveHistory?.StreamUrl, video.ChannelName, platform) : null;
                         <tr data-row>
                             <td><span class="badge @LiveStatusView.Css(status)">@T[LiveStatusView.Key(status)]</span></td>
@@ -55,24 +54,29 @@ else
                                 <div class="caption truncate" title="@source">@(string.IsNullOrEmpty(platform) ? "" : platform + " · ")@source</div>
                             </td>
                             <td>
-                                @if (knownPlatform != null)
-                                {
-                                    if (liveUrl != null)
-                                    {
-                                        <a href="@liveUrl" target="_blank" rel="noopener noreferrer" style="text-decoration: none;">
-                                            <i class="icon" style="@iconColor margin-right: 4px; vertical-align: middle;">@LiveLinkView.GlyphOf(knownPlatform)</i>
-                                        </a>
-                                    }
-                                    else
-                                    {
-                                        <i class="icon" style="@iconColor margin-right: 4px; vertical-align: middle;">@LiveLinkView.GlyphOf(knownPlatform)</i>
-                                    }
-                                }
                                 @(video.ChannelName ?? "N/A")
                             </td>
                             <td>@LiveStatusView.Date(video.StartDateLive, "dd/MM/yyyy HH:mm:ss")</td>
                             <td>
                                 <div class="actions">
+                                    @* The mark of the platform the row is on air on, with the other
+                                       icons rather than beside the channel name: it is what the icons
+                                       are about, and the channel name is long enough on its own. *@
+                                    @if (knownPlatform != null)
+                                    {
+                                        var markClass = "platform-mark " + LiveLinkView.ClassOf(knownPlatform);
+                                        var platformName = LiveLinkView.LabelOf(knownPlatform) ?? knownPlatform;
+                                        if (liveUrl != null)
+                                        {
+                                            <a href="@liveUrl" target="_blank" rel="noopener noreferrer" title="@platformName" aria-label="@platformName">
+                                                <span class="@markClass"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="@LiveLinkView.MarkupOf(knownPlatform)" /></svg></span>
+                                            </a>
+                                        }
+                                        else
+                                        {
+                                            <span class="@markClass" title="@platformName"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="@LiveLinkView.MarkupOf(knownPlatform)" /></svg></span>
+                                        }
+                                    }
                                     @if (row.HasDetails)
                                     {
                                         @* What the dialog opens is the composition for a scene and the

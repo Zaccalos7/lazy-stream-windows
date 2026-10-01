@@ -382,7 +382,7 @@ public sealed class EndToEndApiTests : IClassFixture<ApplicationFixture>
         choose.Headers.Referrer = new Uri(_fixture.Client.BaseAddress!, "/orbis/mainLive?p=1");
         using var chosen = await _fixture.NoRedirectClient.SendAsync(choose);
 
-        Assert.Equal(HttpStatusCode.Redirect, chosen.StatusCode);
+Assert.Equal(HttpStatusCode.Redirect, chosen.StatusCode);
         Assert.Equal("/orbis/mainLive?p=1", chosen.Headers.Location?.OriginalString);
         var cookie = chosen.Headers.GetValues("Set-Cookie").Single().Split(";")[0];
 
@@ -391,8 +391,29 @@ public sealed class EndToEndApiTests : IClassFixture<ApplicationFixture>
         using var italian = await _fixture.NoRedirectClient.SendAsync(page);
         var html = await italian.Content.ReadAsStringAsync();
 
+        Assert.Equal(HttpStatusCode.OK, italian.StatusCode);
         Assert.Contains("<html lang=\"it\"", html, StringComparison.Ordinal);
         Assert.Contains("Gestione Live", html, StringComparison.Ordinal);
+    }
+
+    [Fact]
+    public async Task TheDashboardAsksForAWeaselWithABanner()
+    {
+        using var page = await _fixture.Client.GetAsync("/orbis/mainMenu");
+        var html = await page.Content.ReadAsStringAsync();
+
+        // The weasel is a banner across the foot of the dashboard, not a small button: the page
+        // carries the banner itself and the words inside it.
+        Assert.Contains("coffee-banner", html, StringComparison.Ordinal);
+        Assert.Contains("https://buymeacoffee.com/zaccalos", html, StringComparison.Ordinal);
+
+        // The words inside it are translated like the rest of the page, and in the language the page
+        // is being served in rather than the one it was written in.
+        Assert.Contains("Pay me a weasel", html, StringComparison.Ordinal);
+
+        // It goes out to the coffee page in a new tab, and the tab it leaves behind must not be able
+        // to reach the window it opened.
+        Assert.Contains("rel=\"noopener noreferrer\"", html, StringComparison.Ordinal);
     }
 
     [Fact]

@@ -32,7 +32,10 @@ public sealed class MainPreviewModel(LivePreviewService preview) : OrbisPageMode
 
     public string LivePlatform => LiveLinkView.LabelOf(LiveLinkView.PlatformOf(Snapshot.StreamUrl)) ?? string.Empty;
 
-    public string LiveGlyph => LiveLinkView.GlyphOf(LiveLinkView.PlatformOf(Snapshot.StreamUrl));
+    public string LiveGlyph => LiveLinkView.MarkupOf(LiveLinkView.PlatformOf(Snapshot.StreamUrl));
+
+    /// <summary>The class that colours the mark of the platform.</summary>
+    public string LiveGlyphClass => LiveLinkView.ClassOf(LiveLinkView.PlatformOf(Snapshot.StreamUrl));
 
     /// <summary>Where the light picture of a live is fetched from, one frame at a time.</summary>
     public static string FramesUrlOf(int pkid) => $"/preview/live/{pkid}/frame";

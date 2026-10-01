@@ -19,8 +19,9 @@
 }
 else
 {
-    <div style="display: flex; flex-direction: column; height: calc(100vh - 130px);">
-    <div class="table-wrap" style="flex: 1; overflow-y: auto;">
+    <div class="live-rows-container history-rows-container">
+    <div class="table-wrap-scrollable">
+    <div class="table-wrap">
         <table class="list roomy">
             <thead>
             <tr>
@@ -46,7 +47,7 @@ else
                     <td>
                         @if (platform is not null)
                         {
-                            <span class="platform"><i class="icon">@LiveLinkView.GlyphOf(platform)</i>@platformLabel</span>
+                            <span class="platform"><span class="platform-mark @LiveLinkView.ClassOf(platform)"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="@LiveLinkView.MarkupOf(platform)" /></svg></span>@platformLabel</span>
                         }
                         else
                         {
@@ -61,7 +62,8 @@ else
             </tbody>
         </table>
     </div>
-    <div style="flex-shrink: 0; padding-bottom: 10px;">
+    </div>
+    <div class="pager-fixed">
         <partial name="_Pager" model="pager" />
     </div>
     </div>

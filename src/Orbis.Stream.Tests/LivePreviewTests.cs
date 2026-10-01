@@ -4,6 +4,7 @@ using System.Net;
 using System.Net.Http.Json;
 using System.Text.Json;
 using Orbis.Stream.Core.Domain;
+using Microsoft.Extensions.DependencyInjection;
 using Xunit.Abstractions;
 
 namespace Orbis.Stream.Tests;
@@ -357,6 +358,13 @@ public sealed class LivePreviewTests : IAsyncLifetime
                 continue;
             }
 
+            if (answer.StatusCode == HttpStatusCode.NotFound)
+            {
+                // The clip ran out while the test was watching it, so there is no picture left to
+                // count: the page would be covering it, and there is nothing here to assert.
+                Assert.Fail("the live ended before four frames had been served");
+            }
+
             Assert.Equal(HttpStatusCode.OK, answer.StatusCode);
             Assert.Equal("image/jpeg", answer.Content.Headers.ContentType?.MediaType);
 
@@ -389,6 +397,42 @@ public sealed class LivePreviewTests : IAsyncLifetime
     /// <summary>The header that carries the stamp of a preview frame.</summary>
     private const string FrameStampHeader = "X-Orbis-Frame";
 
+    [Fact]
+    public async Task ALiveRowShowsTheMarkOfItsPlatformWithTheOtherIcons()
+    {
+        if (!await StartLiveAsync())
+        {
+            return;
+        }
+
+        await WaitForLiveAsync();
+
+        // The live of this test writes to a folder, which is not an ingest of any platform, so the
+        // row would carry no mark at all. Pointing the history at the Twitch ingest is what a live
+        // started against Twitch looks like to the page, and the platform is read from this field
+        // alone.
+        using (var connection = _host.Services.GetRequiredService<Orbis.Stream.Core.Data.SqliteConnectionFactory>().Open())
+        using (var command = connection.CreateCommand())
+        {
+            command.CommandText = "UPDATE video_live_history SET stream_url = 'rtmp://live.twitch.tv/app';";
+            command.ExecuteNonQuery();
+        }
+
+        using var page = await _host.Client.GetAsync("/orbis/mainLive");
+        Assert.Equal(HttpStatusCode.OK, page.StatusCode);
+        var html = await page.Content.ReadAsStringAsync();
+
+        // The mark of the platform, as its own brand rather than as a glyph of an icon font: a row is
+        // read at a glance by which mark it carries.
+        Assert.Contains("platform-mark", html, StringComparison.Ordinal);
+        Assert.Contains("platform-twitch", html, StringComparison.Ordinal);
+        Assert.Contains("viewBox=\"0 0 24 24\"", html, StringComparison.Ordinal);
+
+        // The cell of the channel holds the name and nothing else: the mark stands with the icons of
+        // the row, which are what it is about.
+        var channelCell = html.Split("<td>").First(cell => cell.Contains("channel-preview", StringComparison.Ordinal));
+        Assert.DoesNotContain("platform-mark", channelCell, StringComparison.Ordinal);
+    }
 
     [Fact]
     public async Task WithTwoLivesOnAir_ThePreviewPageOffersThemInAList()

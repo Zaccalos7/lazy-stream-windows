@@ -166,6 +166,34 @@
     render();
   };
 
+  const replaceSource = (uid, option) => {
+    const existing = scene.items.find(item => sameSource(item, option));
+    if (existing) {
+      notify("warning", word("twice"));
+      select(existing.uid);
+      return;
+    }
+
+    const targetIndex = scene.items.findIndex(item => item.uid === uid);
+    if (targetIndex < 0) return;
+    const targetItem = scene.items[targetIndex];
+
+    const newItem = itemFrom(option);
+    newItem.x = targetItem.x;
+    newItem.y = targetItem.y;
+    newItem.w = targetItem.w;
+    newItem.h = targetItem.h;
+    newItem.autoSized = false;
+
+    scene.items[targetIndex] = newItem;
+    tiles.get(uid)?.remove();
+    tiles.delete(uid);
+
+    select(newItem.uid);
+    markDirty();
+    render();
+  };
+
   const removeItem = uid => {
     scene.items = scene.items.filter(item => item.uid !== uid);
     tiles.get(uid)?.remove();
@@ -590,6 +618,7 @@
 
   const sourceType = "application/x-orbis-source";
   let pendingDrop = null;
+  let pendingDropUid = null;
 
   stage.addEventListener("dragover", event => {
     const types = [...(event.dataTransfer?.types || [])];
@@ -597,20 +626,43 @@
     event.preventDefault();
     event.dataTransfer.dropEffect = "copy";
     stage.classList.add("is-over");
+
+    // Highlight drop target if hovering over a tile
+    const tile = event.target.closest(".composer-tile");
+    stage.querySelectorAll(".composer-tile.is-drag-over").forEach(t => {
+      if (t !== tile) t.classList.remove("is-drag-over");
+    });
+    if (tile) tile.classList.add("is-drag-over");
   });
 
   stage.addEventListener("dragleave", event => {
-    if (!stage.contains(event.relatedTarget)) stage.classList.remove("is-over");
+    if (!stage.contains(event.relatedTarget)) {
+      stage.classList.remove("is-over");
+      stage.querySelectorAll(".composer-tile.is-drag-over").forEach(t => t.classList.remove("is-drag-over"));
+    } else {
+      const tile = event.relatedTarget?.closest(".composer-tile");
+      stage.querySelectorAll(".composer-tile.is-drag-over").forEach(t => {
+        if (t !== tile) t.classList.remove("is-drag-over");
+      });
+    }
   });
 
   stage.addEventListener("drop", event => {
     stage.classList.remove("is-over");
+
+    const targetTile = event.target.closest(".composer-tile");
+    if (targetTile) targetTile.classList.remove("is-drag-over");
+    const dropUid = targetTile ? Number(targetTile.dataset.uid) : null;
+
     const at = pointOnCanvas(event);
     const id = event.dataTransfer?.getData(sourceType);
     if (id) {
       event.preventDefault();
       const option = catalog.find(candidate => candidate.id === id);
-      if (option) addSource(option, at);
+      if (option) {
+        if (dropUid !== null) replaceSource(dropUid, option);
+        else addSource(option, at);
+      }
       return;
     }
 
@@ -620,6 +672,7 @@
     if (files?.length && window.chrome?.webview) {
       event.preventDefault();
       pendingDrop = at;
+      pendingDropUid = dropUid;
       window.chrome.webview.postMessageWithAdditionalObjects("dropPath", files);
     }
   });
@@ -627,8 +680,10 @@
   window.chrome?.webview?.addEventListener("message", event => {
     if (!pendingDrop || typeof event.data !== "string") return;
     const at = pendingDrop;
+    const dropUid = pendingDropUid;
     pendingDrop = null;
-    addFile(event.data, at);
+    pendingDropUid = null;
+    addFile(event.data, at, dropUid);
   });
 
   const fileOption = path => ({
@@ -638,7 +693,7 @@
     target: path
   });
 
-  const addFile = (path, at) => {
+  const addFile = (path, at, replaceUid = null) => {
     const trimmed = path.trim().replace(/^"(.*)"$/, "$1");
     if (!trimmed) return;
     let option = catalog.find(candidate => candidate.kind === Kind.File && candidate.target === trimmed);
@@ -647,7 +702,8 @@
       catalog.push(option);
       drawCatalog();
     }
-    addSource(option, at);
+    if (replaceUid !== null) replaceSource(replaceUid, option);
+    else addSource(option, at);
   };
 
   root.querySelector("[data-composer-add-path]")?.addEventListener("click", () => {

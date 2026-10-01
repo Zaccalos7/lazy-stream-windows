@@ -1153,6 +1153,7 @@ dialog.dialog.compose .dialog-body { flex: 1; min-height: 0; max-height: none; }
 }
 .composer-tile-label .icon { font-size: 10px; }
 .composer-tile.is-selected { outline: 2px solid var(--accent); z-index: 1; }
+.composer-tile.is-drag-over { outline: 2px dashed var(--accent); opacity: 0.8; z-index: 2; }
 
 .composer-handle {
   position: absolute;

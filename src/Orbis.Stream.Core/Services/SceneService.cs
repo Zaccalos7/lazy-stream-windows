@@ -32,10 +32,11 @@ public sealed class SceneService
         _logger = logger;
     }
 
-    public IReadOnlyList<SceneRequest> GetAll()
+    /// <summary>The layouts only: the scene of a live belongs to its row in the history.</summary>
+    public IReadOnlyList<SceneRequest> GetLayouts()
     {
         _logger.LogInformation("{Message}", _localizer.PrintMessage("scene.retrieved"));
-        return [.. _sceneRepository.FindAll().Select(SceneRequest.FromEntity)];
+        return [.. _sceneRepository.FindLayouts().Select(SceneRequest.FromEntity)];
     }
 
     public SceneRequest GetOne(long pkid)
@@ -45,17 +46,33 @@ public sealed class SceneService
         return SceneRequest.FromEntity(scene);
     }
 
+    /// <summary>
+    /// A save never writes over what it is not meant to. A layout and the scene of a live are kept
+    /// apart, so a save that names one as the other makes a new one; and the scene a live already
+    /// went on air with is what that live restarts from, so changing it makes a new one too.
+    /// </summary>
     public (MessageResponse Response, long Pkid) Save(SceneRequest request)
     {
         ArgumentNullException.ThrowIfNull(request);
 
         if (request.Pkid is { } pkid)
         {
-            FindByPkid(pkid);
+            var existing = FindByPkid(pkid);
+            if (existing.IsLayout != request.IsLayout || (!existing.IsLayout && _sceneRepository.IsOnAir(pkid)))
+            {
+                request = request with { Pkid = null };
+            }
         }
 
         var scene = request.ToEntity();
-        CheckLayout(scene);
+        if (scene.IsLayout)
+        {
+            CheckSlots(scene);
+        }
+        else
+        {
+            CheckLayout(scene);
+        }
 
         var saved = _sceneRepository.Save(scene);
         _logger.LogInformation("{Message}", _localizer.PrintMessage("scene.saved", [scene.Name]));
@@ -63,9 +80,15 @@ public sealed class SceneService
         return (_responses.Build("scene.saved", StatusCodes.Status201Created, [scene.Name]), saved);
     }
 
+    /// <summary>Only what no live depends on: a live restarts from the scene it went on air with.</summary>
     public MessageResponse Delete(long pkid)
     {
-        FindByPkid(pkid);
+        var scene = FindByPkid(pkid);
+        if (!scene.IsLayout && _sceneRepository.IsOnAir(pkid))
+        {
+            throw new LiveException("scene.on.air", [scene.Name]);
+        }
+
         _sceneRepository.Delete(pkid);
         _logger.LogInformation("{Message}", _localizer.PrintMessage("delete.successful"));
         return _responses.Build("delete.successful", StatusCodes.Status200OK);
@@ -129,6 +152,43 @@ public sealed class SceneService
                     || item.X + item.Width > scene.Width || item.Y + item.Height > scene.Height))
             {
                 throw new NotFoundCustomException("scene.item.out.of.canvas", [item.Label ?? item.SourceTarget]);
+            }
+        }
+    }
+
+    /// <summary>
+    /// A layout is only rectangles: a name, a canvas, and at least one slot that stays inside it.
+    /// The sources are checked later, on the scene filled from it.
+    /// </summary>
+    private static void CheckSlots(SceneEntity scene)
+    {
+        if (string.IsNullOrWhiteSpace(scene.Name))
+        {
+            throw new NotFoundCustomException("scene.name.required");
+        }
+
+        if (scene.Width is not { } width || width <= 0 || scene.Height is not { } height || height <= 0)
+        {
+            throw new NotFoundCustomException("scene.size.required");
+        }
+
+        if (scene.Items.Count == 0)
+        {
+            throw new NotFoundCustomException("layout.empty");
+        }
+
+        var position = 0;
+        foreach (var item in scene.Items)
+        {
+            var name = item.Label ?? (++position).ToString(System.Globalization.CultureInfo.InvariantCulture);
+            if (item.Width <= 0 || item.Height <= 0)
+            {
+                throw new NotFoundCustomException("scene.item.no.size", [name]);
+            }
+
+            if (item.X < 0 || item.Y < 0 || item.X + item.Width > width || item.Y + item.Height > height)
+            {
+                throw new NotFoundCustomException("scene.item.out.of.canvas", [name]);
             }
         }
     }

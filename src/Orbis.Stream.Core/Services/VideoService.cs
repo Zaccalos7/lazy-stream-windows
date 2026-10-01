@@ -110,6 +110,16 @@ public sealed class VideoService
         }
 
         _videoRepository.DeleteByLiveHistoryId(videoLiveHistoryPkid);
+
+        // The scene of a live is only there to restart it: gone with its last row, never a layout.
+        foreach (var scenePkid in videos.Select(video => video.ScenePkid).OfType<long>().Distinct())
+        {
+            if (_sceneRepository.FindByPkid(scenePkid) is { IsLayout: false } && !_sceneRepository.IsOnAir(scenePkid))
+            {
+                _sceneRepository.Delete(scenePkid);
+            }
+        }
+
         _notifier.Raise();
         _logger.LogInformation("{Message}", _localizer.PrintMessage("delete.successful"));
         return _responses.Build("delete.successful", StatusCodes.Status200OK);

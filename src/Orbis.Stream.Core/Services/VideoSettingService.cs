@@ -44,54 +44,91 @@ public sealed class VideoSettingService
         return _responses.Build("video.settings.saved", StatusCodes.Status201Created);
     }
 
+    /// <summary>
+    /// The setting of a row of the live page, for the link dialog to open on: the one the row
+    /// streams with, not a blank form. Null when the row has none yet.
+    /// </summary>
+    public VideoSettingsRequest? FindSettingOf(int? videoPkid, long? videoLiveHistoryPkid)
+    {
+        var settingId = RowsToLink(videoPkid, videoLiveHistoryPkid).Select(row => row.VideoSettingId).FirstOrDefault(id => id is not null);
+        return settingId is { } id && _videoSettingRepository.FindById(id) is { } setting
+            ? VideoSettingsRequest.FromEntity(setting)
+            : null;
+    }
+
     public MessageResponse LinkAndSaveSettingsVideo(VideoSettingsRequest request, int videoPkidToLink)
     {
         ArgumentNullException.ThrowIfNull(request);
 
-        var video = FindVideoByPkid(videoPkidToLink);
+        var rows = RowsToLink(videoPkidToLink, null);
         _logger.LogInformation("{Message}", _localizer.PrintMessage("video.to.link.found"));
-
-        var setting = request.ToEntity();
-        setting.LastModified = DateTime.Now;
-        var settingId = _videoSettingRepository.Insert(setting);
-
-        video.VideoSettingId = settingId;
-        _videoRepository.Update(video);
-        _notifier.Raise();
-
-        _logger.LogInformation("{Message}", _localizer.PrintMessage("video.settings.saved"));
-        _logger.LogInformation("{Message}", _localizer.PrintMessage("success.operations"));
-
-        return _responses.Build("success.operations", StatusCodes.Status201Created);
+        return LinkSetting(request, rows);
     }
 
     public MessageResponse LinkAndSaveSettingsPlaylist(VideoSettingsRequest request, long videoLiveHistoryPkid)
     {
         ArgumentNullException.ThrowIfNull(request);
+        return LinkSetting(request, RowsToLink(null, videoLiveHistoryPkid));
+    }
 
-        var videos = _videoRepository.FindByLiveHistoryId(videoLiveHistoryPkid);
-        if (videos.Count == 0)
+    /// <summary>
+    /// The rows one link reaches: a playlist as a whole, and a video on its own, unless it is a
+    /// source of a canvas, whose rows are one live and stream with one setting.
+    /// </summary>
+    private IReadOnlyList<VideoEntity> RowsToLink(int? videoPkid, long? videoLiveHistoryPkid)
+    {
+        if (videoLiveHistoryPkid is { } history)
         {
-            throw new NotFoundCustomException("video.to.link.not.found");
+            var playlist = _videoRepository.FindByLiveHistoryId(history);
+            return playlist.Count > 0 ? playlist : throw new NotFoundCustomException("video.to.link.not.found");
         }
 
+        var video = FindVideoByPkid(videoPkid ?? 0);
+        return video.ScenePkid is not null && video.VideoLiveHistoryId is { } canvas
+            ? _videoRepository.FindByLiveHistoryId(canvas)
+            : [video];
+    }
+
+    /// <summary>
+    /// The setting of the rows is edited where it is, so the row keeps its own setting instead of
+    /// collecting a new one per save. Unless it is not only theirs: a seeded default, a setting the
+    /// live wizard offers, or one another live streams with would change under the feet of
+    /// everything else that uses it, so those rows get a copy of their own instead.
+    /// </summary>
+    private MessageResponse LinkSetting(VideoSettingsRequest request, IReadOnlyList<VideoEntity> rows)
+    {
         var setting = request.ToEntity();
         setting.LastModified = DateTime.Now;
-        var settingId = _videoSettingRepository.Insert(setting);
 
-        foreach (var video in videos)
+        var current = rows.Select(row => row.VideoSettingId).OfType<int>().Distinct().ToList();
+        if (current.Count == 1 && IsOnlyOf(current[0], rows))
         {
-            video.VideoSettingId = settingId;
-            _videoRepository.Update(video);
+            setting.Id = current[0];
+            _videoSettingRepository.Update(setting);
+            _logger.LogInformation("{Message}", _localizer.PrintMessage("video.settings.modified"));
+        }
+        else
+        {
+            setting.Id = null;
+            // A copy for one live is not a choice of the wizard: it stays with the rows it was made for.
+            setting.IsVideoAndAudioSettingActive = false;
+            setting.Id = _videoSettingRepository.Insert(setting);
+            _logger.LogInformation("{Message}", _localizer.PrintMessage("video.settings.saved"));
+        }
+
+        foreach (var row in rows.Where(row => row.VideoSettingId != setting.Id))
+        {
+            _videoRepository.SetVideoSetting(row.Pkid, setting.Id);
         }
 
         _notifier.Raise();
-
-        _logger.LogInformation("{Message}", _localizer.PrintMessage("video.settings.saved"));
         _logger.LogInformation("{Message}", _localizer.PrintMessage("success.operations"));
-
         return _responses.Build("success.operations", StatusCodes.Status201Created);
     }
+
+    private bool IsOnlyOf(int settingId, IReadOnlyList<VideoEntity> rows) =>
+        _videoSettingRepository.FindById(settingId) is { IsDefaultConfiguration: not true, IsVideoAndAudioSettingActive: not true }
+        && _videoRepository.FindPkidsByVideoSettingId(settingId).All(pkid => rows.Any(row => row.Pkid == pkid));
 
     public List<VideoSettingsRequest> GetAllVideoSettings(IReadOnlyDictionary<string, string> filters) =>
         _videoSettingRepository.FindAll(filters).Select(VideoSettingsRequest.FromEntity).ToList();

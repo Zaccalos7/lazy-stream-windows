@@ -66,7 +66,7 @@ public static class OrbisEndpoints
     {
         var group = app.MapGroup("/scene");
 
-        group.MapGet("/all", (SceneService service) => Results.Ok(service.GetAll()));
+        group.MapGet("/layouts", (SceneService service) => Results.Ok(service.GetLayouts()));
         group.MapGet("/{pkid:long}", (long pkid, SceneService service) => Results.Ok(service.GetOne(pkid)));
         group.MapPost("/save", (SceneRequest? request, SceneService service) =>
         {

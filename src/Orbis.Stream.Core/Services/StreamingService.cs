@@ -309,8 +309,10 @@ public sealed class StreamingService
 
         CheckIfALiveAlreadyStreamingForAChannel(channelName, platformStreamName);
 
-        var scene = _sceneRepository.FindByPkid(request.ScenePkid)
-            ?? throw new NotFoundCustomException("scene.not.found", [request.ScenePkid.ToString(System.Globalization.CultureInfo.InvariantCulture)]);
+        // A layout is only slots: what goes on air is the scene filled from it, saved on its own.
+        var scene = _sceneRepository.FindByPkid(request.ScenePkid) is { IsLayout: false } found
+            ? found
+            : throw new NotFoundCustomException("scene.not.found", [request.ScenePkid.ToString(System.Globalization.CultureInfo.InvariantCulture)]);
 
         var sources = scene.Items.Where(item => item.SourceKind.HasPicture() || item.AudioEnabled).ToList();
         if (!sources.Any(item => item.SourceKind.HasPicture()))

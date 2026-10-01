@@ -216,6 +216,74 @@ public sealed class EndToEndApiTests : IClassFixture<ApplicationFixture>
         Assert.False(duplicated.IsSuccessStatusCode);
     }
 
+    /// <summary>
+    /// A layout is a skeleton: whatever source comes with a slot is dropped and only the rectangle
+    /// stays, so a file that is not there is no reason to refuse it. The scene a live is filled
+    /// with is saved apart and never listed with the layouts.
+    /// </summary>
+    [Fact]
+    public async Task ALayout_KeepsOnlyItsSlots_AndTheScenesOfTheLivesAreNotListed()
+    {
+        using var layout = await _fixture.Client.PostAsJsonAsync("/scene/save", new
+        {
+            pkid = (long?)null,
+            name = "Full + corner",
+            width = 1920,
+            height = 1080,
+            isLayout = true,
+            items = new object[]
+            {
+                new { sourceKind = 0, sourceTarget = "C:\\nowhere\\missing.mp4", label = "Main", x = 0, y = 0, width = 1920, height = 1080, audioEnabled = true },
+                new { sourceKind = 2, sourceTarget = "video=Cam", label = "Corner", x = 1440, y = 20, width = 460, height = 260, audioEnabled = false }
+            }
+        });
+        Assert.Equal(HttpStatusCode.Created, layout.StatusCode);
+        var layoutPkid = (await layout.Content.ReadFromJsonAsync<JsonElement>()).GetProperty("pkid").GetInt64();
+
+        using var live = await _fixture.Client.PostAsJsonAsync("/scene/save", new
+        {
+            pkid = (long?)null,
+            name = "Tonight",
+            width = 1920,
+            height = 1080,
+            items = new object[]
+            {
+                new { sourceKind = 1, sourceTarget = "desktop", label = "Desktop", x = 0, y = 0, width = 1920, height = 1080, audioEnabled = false }
+            }
+        });
+        Assert.Equal(HttpStatusCode.Created, live.StatusCode);
+        var livePkid = (await live.Content.ReadFromJsonAsync<JsonElement>()).GetProperty("pkid").GetInt64();
+
+        var listed = await _fixture.Client.GetFromJsonAsync<JsonElement>("/scene/layouts");
+        var pkids = listed.EnumerateArray().Select(entry => entry.GetProperty("pkid").GetInt64()).ToList();
+        Assert.Contains(layoutPkid, pkids);
+        Assert.DoesNotContain(livePkid, pkids);
+
+        var stored = listed.EnumerateArray().Single(entry => entry.GetProperty("pkid").GetInt64() == layoutPkid);
+        Assert.True(stored.GetProperty("isLayout").GetBoolean());
+        var slots = stored.GetProperty("items").EnumerateArray().ToList();
+        Assert.Equal(["Main", "Corner"], slots.Select(slot => slot.GetProperty("label").GetString()));
+        Assert.All(slots, slot => Assert.Equal(string.Empty, slot.GetProperty("sourceTarget").GetString()));
+        Assert.All(slots, slot => Assert.False(slot.GetProperty("audioEnabled").GetBoolean()));
+
+        // Saving the scene of a live over the layout it came from makes a new scene instead.
+        using var over = await _fixture.Client.PostAsJsonAsync("/scene/save", new
+        {
+            pkid = layoutPkid,
+            name = "Tonight 2",
+            width = 1920,
+            height = 1080,
+            items = new object[]
+            {
+                new { sourceKind = 1, sourceTarget = "desktop", label = "Desktop", x = 0, y = 0, width = 1920, height = 1080, audioEnabled = false }
+            }
+        });
+        Assert.Equal(HttpStatusCode.Created, over.StatusCode);
+        Assert.NotEqual(layoutPkid, (await over.Content.ReadFromJsonAsync<JsonElement>()).GetProperty("pkid").GetInt64());
+        var again = await _fixture.Client.GetFromJsonAsync<JsonElement>($"/scene/{layoutPkid}");
+        Assert.Equal("Full + corner", again.GetProperty("name").GetString());
+    }
+
     [Fact]
     public async Task Root_RedirectsToTheClientRouter()
     {

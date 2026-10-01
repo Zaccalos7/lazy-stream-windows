@@ -298,7 +298,7 @@ public sealed class FfmpegVideoPlaylistStreamer : IVideoPlaylistStreamer
                 var exitCode = await session.WaitForExitAsync(cancellationToken).ConfigureAwait(false);
                 var errorOutput = await session.ReadErrorAsync().ConfigureAwait(false);
 
-                if (exitCode != 0 && _videoRepository.FindByPkid(videoKey)?.ShouldBeStop == true)
+                if (session.StopRequested || (exitCode != 0 && _videoRepository.FindByPkid(videoKey)?.ShouldBeStop == true))
                 {
                     await StopAndRecordAsync(session, videoKey, videoLiveHistoryPkid, inputPath).ConfigureAwait(false);
                     return true;
@@ -501,6 +501,13 @@ public sealed class FfmpegVideoPlaylistStreamer : IVideoPlaylistStreamer
                 var exitCode = await session.WaitForExitAsync(cancellationToken).ConfigureAwait(false);
                 var errorOutput = await session.ReadErrorAsync().ConfigureAwait(false);
 
+                if (session.StopRequested || (exitCode != 0 && _videoRepository.FindByPkid(videoKey)?.ShouldBeStop == true))
+                {
+                    var stopped = _localizer.PrintMessage("live.stopped");
+                    MarkRows(rows, LiveStatus.Stopped, stopped);
+                    return;
+                }
+
                 var failure = _localizer.PrintMessage("error.during.streaming.video", [description, videoLiveHistoryPkid])
                     + "\n"
                     + (string.IsNullOrWhiteSpace(errorOutput) ? $"ffmpeg exited with code {exitCode}" : errorOutput.Trim());
@@ -610,16 +617,16 @@ public sealed class FfmpegVideoPlaylistStreamer : IVideoPlaylistStreamer
                 return StreamOutcome.Reconfigured;
             }
 
+            if (session.HasExited)
+            {
+                return StreamOutcome.Finished;
+            }
+
             try
             {
                 await Task.Delay(StopFlagPollInterval, cancellationToken).ConfigureAwait(false);
             }
             catch (OperationCanceledException)
-            {
-                return StreamOutcome.Finished;
-            }
-
-            if (session.HasExited)
             {
                 return StreamOutcome.Finished;
             }

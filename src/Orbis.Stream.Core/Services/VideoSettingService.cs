@@ -110,7 +110,9 @@ public sealed class VideoSettingService
         else
         {
             setting.Id = null;
-            // A copy for one live is not a choice of the wizard: it stays with the rows it was made for.
+            // A copy for one live is neither a default nor a choice of the wizard: it stays with the
+            // rows it was made for.
+            setting.IsDefaultConfiguration = false;
             setting.IsVideoAndAudioSettingActive = false;
             setting.Id = _videoSettingRepository.Insert(setting);
             _logger.LogInformation("{Message}", _localizer.PrintMessage("video.settings.saved"));

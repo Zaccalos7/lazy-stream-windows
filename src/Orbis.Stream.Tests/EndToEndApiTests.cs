@@ -284,6 +284,51 @@ public sealed class EndToEndApiTests : IClassFixture<ApplicationFixture>
         Assert.Equal("Full + corner", again.GetProperty("name").GetString());
     }
 
+    /// <summary>
+    /// The setting of a row is opened as it is and saved where it is. Only a setting the row does
+    /// not own alone (here the seeded Twitch default, which every live may use) is copied first, so
+    /// editing a live never edits the default under the other lives.
+    /// </summary>
+    [Fact]
+    public void LinkingASetting_EditsTheOneOfTheRow_AndCopiesASharedOneOnce()
+    {
+        var settings = _fixture.Services.GetRequiredService<VideoSettingService>();
+        var settingRepository = _fixture.Services.GetRequiredService<Orbis.Stream.Core.Data.VideoSettingRepository>();
+        var videoRepository = _fixture.Services.GetRequiredService<Orbis.Stream.Core.Data.VideoRepository>();
+
+        var twitch = settingRepository.FindByIsDefaultConfigurationTrueAndDefaultPlatformConfiguration("Twitch")[0];
+        var pkid = videoRepository.Insert(new Orbis.Stream.Core.Domain.VideoEntity
+        {
+            Name = "link-row",
+            VideoPath = "/videos/link-row.mp4",
+            Extension = "mp4",
+            ChannelName = "link-channel",
+            StartDateLive = DateTime.Now,
+            VideoSettingId = twitch.Id
+        });
+
+        // The dialog opens on what the row streams with, not on a blank form.
+        var opened = settings.FindSettingOf(pkid, null);
+        Assert.NotNull(opened);
+        Assert.Equal(twitch.Id, opened!.Id);
+
+        // The default is shared: the first save gives the row a copy and leaves the default alone.
+        // Through the form, the way the dialog sends it.
+        var form = Orbis.Stream.Core.Pages.VideoSettingForm.From(opened);
+        form.Title = "Mine";
+        settings.LinkAndSaveSettingsVideo(form.ToRequest(), pkid);
+        var copy = videoRepository.FindByPkid(pkid)!.VideoSettingId;
+        Assert.NotEqual(twitch.Id, copy);
+        Assert.Equal(twitch.Title, settingRepository.FindById(twitch.Id!.Value)!.Title);
+
+        // The copy is the row's own: the next save edits it instead of adding another one.
+        var again = Orbis.Stream.Core.Pages.VideoSettingForm.From(settings.FindSettingOf(pkid, null)!);
+        again.Title = "Mine again";
+        settings.LinkAndSaveSettingsVideo(again.ToRequest(), pkid);
+        Assert.Equal(copy, videoRepository.FindByPkid(pkid)!.VideoSettingId);
+        Assert.Equal("Mine again", settingRepository.FindById(copy!.Value)!.Title);
+    }
+
     [Fact]
     public async Task Root_RedirectsToTheClientRouter()
     {
@@ -311,6 +356,7 @@ public sealed class EndToEndApiTests : IClassFixture<ApplicationFixture>
     [InlineData("/orbis/mainLive?liveStatus=LIVE&p=3")]
     [InlineData("/orbis/mainLive?handler=Rows")]
     [InlineData("/orbis/mainLive?link=1")]
+    [InlineData("/orbis/mainLayout")]
     [InlineData("/orbis/mainLiveHistory")]
     [InlineData("/orbis/mainSetting")]
     [InlineData("/orbis/mainVideoSetting")]

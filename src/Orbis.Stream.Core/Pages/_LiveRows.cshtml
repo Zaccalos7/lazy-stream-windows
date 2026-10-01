@@ -32,11 +32,9 @@ else
                 var live = status == LiveStatus.Live;
                 var platform = video.VideoLiveHistory?.PlatformStreamName;
 
-                // Only a live that is running can be watched, and only a known platform has a page.
-                var livePlatform = live ? LiveLinkView.PlatformOf(video.VideoLiveHistory?.StreamUrl) : null;
-                var liveUrl = livePlatform is null ? null : LiveLinkView.UrlOf(video.VideoLiveHistory?.StreamUrl, video.ChannelName, platform);
-                var liveLabel = LiveLinkView.LabelOf(livePlatform);
-                var liveTitle = T["openLivePage"] + (string.IsNullOrEmpty(liveLabel) ? "" : " (" + liveLabel + ")");
+                var knownPlatform = LiveLinkView.PlatformOf(video.VideoLiveHistory?.StreamUrl);
+                var iconColor = knownPlatform == "twitch" ? "color: green;" : (knownPlatform == "youtube" ? "color: red;" : "");
+                var liveUrl = live ? LiveLinkView.UrlOf(video.VideoLiveHistory?.StreamUrl, video.ChannelName, platform) : null;
                 <tr data-row>
                     <td><span class="badge @LiveStatusView.Css(status)">@T[LiveStatusView.Key(status)]</span></td>
                     <td class="path">
@@ -54,7 +52,22 @@ else
                         @{ var source = row.IsPlaylist ? video.VideoLiveHistory?.FolderOfVideoToStream : row.IsScene ? video.Name : video.VideoPath; }
                         <div class="caption truncate" title="@source">@(string.IsNullOrEmpty(platform) ? "" : platform + " · ")@source</div>
                     </td>
-                    <td>@(video.ChannelName ?? "N/A")</td>
+                    <td>
+                        @if (knownPlatform != null)
+                        {
+                            if (liveUrl != null)
+                            {
+                                <a href="@liveUrl" target="_blank" rel="noopener noreferrer" style="text-decoration: none;">
+                                    <i class="icon" style="@iconColor margin-right: 4px; vertical-align: middle;">@LiveLinkView.GlyphOf(knownPlatform)</i>
+                                </a>
+                            }
+                            else
+                            {
+                                <i class="icon" style="@iconColor margin-right: 4px; vertical-align: middle;">@LiveLinkView.GlyphOf(knownPlatform)</i>
+                            }
+                        }
+                        @(video.ChannelName ?? "N/A")
+                    </td>
                     <td>@LiveStatusView.Date(video.StartDateLive, "dd/MM/yyyy HH:mm:ss")</td>
                     <td>
                         <div class="actions">
@@ -65,12 +78,6 @@ else
                                 var detailsLabel = T[row.IsScene ? "sceneDetails" : "playlistDetails"];
                                 <a class="btn subtle icon-only" href="@Url.Page("/MainLive", new { Model.LiveStatus, Model.ChannelName, p = Model.PageIndex, details = historyPkid })"
                                    title="@detailsLabel" aria-label="@detailsLabel"><i class="icon">&#xE8FD;</i></a>
-                            }
-                            @if (liveUrl is not null)
-                            {
-                                <a class="btn subtle icon-only" href="@liveUrl" target="_blank" rel="noopener noreferrer" title="@liveTitle" aria-label="@liveTitle">
-                                    <i class="icon">@LiveLinkView.GlyphOf(livePlatform)</i>
-                                </a>
                             }
                             @if (hasSetting)
                             {

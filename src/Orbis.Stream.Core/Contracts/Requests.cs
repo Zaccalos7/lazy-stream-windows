@@ -283,14 +283,18 @@ public sealed record SceneItemRequest(
     };
 }
 
-/// <summary>A canvas, with the sources on it in stacking order.</summary>
+/// <summary>
+/// A canvas, with the sources on it in stacking order. A layout (<see cref="IsLayout"/>) carries
+/// slots instead: the rectangles are kept and whatever source came with them is dropped.
+/// </summary>
 public sealed record SceneRequest(
     long? Pkid,
     string? Name,
     string? Description,
     int? Width,
     int? Height,
-    IReadOnlyList<SceneItemRequest>? Items)
+    IReadOnlyList<SceneItemRequest>? Items,
+    bool IsLayout = false)
 {
     public static SceneRequest FromEntity(SceneEntity scene) => new(
         scene.Pkid,
@@ -306,7 +310,8 @@ public sealed record SceneRequest(
             item.Y,
             item.Width,
             item.Height,
-            item.AudioEnabled))]);
+            item.AudioEnabled))],
+        scene.IsLayout);
 
     /// <summary>
     /// The items carry the id the scene has, or 0 on a first save: the repository writes them
@@ -323,8 +328,18 @@ public sealed record SceneRequest(
             Width = Width,
             Height = Height,
             LastModified = DateTime.Now,
-            Items = [.. (Items ?? []).Select(item => item.ToEntity(scenePkid))]
+            IsLayout = IsLayout,
+            Items = [.. (Items ?? []).Select(item => IsLayout ? AsSlot(item.ToEntity(scenePkid)) : item.ToEntity(scenePkid))]
         };
+    }
+
+    /// <summary>A slot is a rectangle and nothing else: no source to open, nothing to hear.</summary>
+    private static SceneItemEntity AsSlot(SceneItemEntity item)
+    {
+        item.SourceKind = SourceKind.File;
+        item.SourceTarget = string.Empty;
+        item.AudioEnabled = false;
+        return item;
     }
 }
 

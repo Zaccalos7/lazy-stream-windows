@@ -212,6 +212,49 @@ public sealed class DatabaseSchemaTests
         }
     }
 
+    /// <summary>
+    /// Before layouts, one scene was both the layout and the scene of the live started from it.
+    /// The one no live used becomes a layout; the one a live went on air with stays that live's,
+    /// untouched, and leaves a copy as a layout. A layout keeps rectangles only, so the sources go
+    /// and the microphone, which has no rectangle, goes with them.
+    /// </summary>
+    [Fact]
+    public void EnsureCreated_TurnsTheOldScenesIntoLayouts()
+    {
+        using var database = new TemporaryDatabase();
+        using (var legacy = new SqliteConnection($"Data Source={database.DatabasePath}"))
+        {
+            legacy.Open();
+            Execute(legacy, "ALTER TABLE stream_scene DROP COLUMN is_layout;");
+            Execute(legacy,
+                """
+                INSERT INTO stream_scene (pkid, name, width, height) VALUES (1, 'Never started', 1920, 1080), (2, 'On air', 1920, 1080);
+                INSERT INTO stream_scene_item (scene_pkid, source_kind, source_target, label, x, y, width, height, audio_enabled) VALUES
+                    (1, 1, 'desktop', 'Desktop', 0, 0, 1920, 1080, 0),
+                    (2, 0, 'C:/Video/intro.mp4', 'Intro', 0, 0, 1920, 1080, 1),
+                    (2, 2, 'video=Cam', 'Webcam', 1440, 20, 460, 260, 0),
+                    (2, 3, 'audio=Mic', 'Mic', 0, 0, 0, 0, 1);
+                INSERT INTO video (name, video_path, extension, scene_pkid, source_kind) VALUES ('Intro', 'C:/Video/intro.mp4', 'mp4', 2, 0);
+                """);
+
+            DatabaseSchema.EnsureCreated(legacy, NullLogger.Instance);
+        }
+
+        var scenes = database.Repository<SceneRepository>();
+        var layouts = scenes.FindLayouts();
+        Assert.Equal(["Never started", "On air"], layouts.Select(layout => layout.Name));
+        Assert.Equal(1L, layouts[0].Pkid);
+        Assert.NotEqual(2L, layouts[1].Pkid);
+        Assert.All(layouts.SelectMany(layout => layout.Items), slot => Assert.Equal(string.Empty, slot.SourceTarget));
+        Assert.Equal([(0, 0, 1920, 1080), (1440, 20, 460, 260)], layouts[1].Items.Select(slot => (slot.X, slot.Y, slot.Width, slot.Height)));
+
+        var onAir = scenes.FindByPkid(2);
+        Assert.NotNull(onAir);
+        Assert.False(onAir!.IsLayout);
+        Assert.Equal(["C:/Video/intro.mp4", "video=Cam", "audio=Mic"], onAir.Items.Select(item => item.SourceTarget));
+        Assert.True(scenes.IsOnAir(2));
+    }
+
     private static void Execute(SqliteConnection connection, string statement)
     {
         using var command = connection.CreateCommand();
@@ -222,6 +265,41 @@ public sealed class DatabaseSchemaTests
 
 public sealed class SceneRepositoryTests
 {
+    [Fact]
+    public void FindLayouts_LeavesTheScenesOfTheLivesOut()
+    {
+        using var database = new TemporaryDatabase();
+        var scenes = database.Repository<SceneRepository>();
+
+        var layout = scenes.Insert(new SceneEntity
+        {
+            Name = "Full + corner",
+            IsLayout = true,
+            Width = 1920,
+            Height = 1080,
+            Items =
+            [
+                new SceneItemEntity { X = 0, Y = 0, Width = 1920, Height = 1080 },
+                new SceneItemEntity { X = 1440, Y = 20, Width = 460, Height = 260 }
+            ]
+        });
+        scenes.Insert(new SceneEntity
+        {
+            Name = "Tonight",
+            Width = 1920,
+            Height = 1080,
+            Items = [new SceneItemEntity { SourceKind = SourceKind.Screen, SourceTarget = "desktop", Width = 1920, Height = 1080 }]
+        });
+
+        var layouts = scenes.FindLayouts();
+        Assert.Single(layouts);
+        Assert.Equal(layout, layouts[0].Pkid);
+        Assert.True(layouts[0].IsLayout);
+        Assert.Equal(2, layouts[0].Items.Count);
+        Assert.Equal(2, scenes.FindAll().Count);
+        Assert.False(scenes.IsOnAir(layout));
+    }
+
     [Fact]
     public void Insert_ThenUpdate_ReplacesTheItemsInOrder()
     {

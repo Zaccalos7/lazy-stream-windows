@@ -167,13 +167,21 @@ public sealed class VideoEntity
 }
 
 /// <summary>
-/// A saved layout of sources: the blank canvas the user fills before starting a live. The rows of
-/// <see cref="SceneItemEntity"/> are in the order they are stacked, so the first one is the base
-/// the others are laid over.
+/// A canvas and the rows of <see cref="SceneItemEntity"/> on it, in the order they are stacked, so
+/// the first one is the base the others are laid over. It is one of two things: a layout, the
+/// skeleton of empty slots a live is started from, or the scene of one live, the sources that went
+/// on air, which is what that live is restarted from.
 /// </summary>
 public sealed class SceneEntity
 {
     public long Pkid { get; set; }
+
+    /// <summary>
+    /// A layout only has slots, rectangles with nothing in them yet: its items have no source. A
+    /// scene filled from it at the start of a live is saved apart, so the layout stays a skeleton
+    /// and the live keeps what it was started with whatever happens to the layout later.
+    /// </summary>
+    public bool IsLayout { get; set; }
 
     public string Name { get; set; } = string.Empty;
 

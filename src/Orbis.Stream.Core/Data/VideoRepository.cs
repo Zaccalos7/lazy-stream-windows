@@ -309,6 +309,24 @@ public sealed class VideoRepository
         command.ExecuteNonQuery();
     }
 
+    /// <summary>Every row that streams with this setting, whatever live it belongs to.</summary>
+    public IReadOnlyList<int> FindPkidsByVideoSettingId(int videoSettingId)
+    {
+        using var connection = _connectionFactory.Open();
+        using var command = connection.CreateCommand();
+        command.CommandText = "SELECT t.pkid FROM video t WHERE t.video_setting_id = @setting ORDER BY t.pkid;";
+        command.Parameters.AddWithValue("@setting", videoSettingId);
+
+        var pkids = new List<int>();
+        using var reader = command.ExecuteReader();
+        while (reader.Read())
+        {
+            pkids.Add(reader.GetInt32(0));
+        }
+
+        return pkids;
+    }
+
     public void SetVideoSetting(int pkid, int? videoSettingId)
     {
         using var connection = _connectionFactory.Open();

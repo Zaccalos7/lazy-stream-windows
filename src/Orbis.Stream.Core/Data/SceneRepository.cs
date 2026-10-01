@@ -5,13 +5,14 @@ using Orbis.Stream.Core.Domain;
 namespace Orbis.Stream.Core.Data;
 
 /// <summary>
-/// The saved canvases: a named layout of sources, and the items stacked on it. There is no Java
-/// counterpart, the previous version having no concept of a source that is not a file.
+/// The saved canvases: the layouts a live is started from, and the scene each live went on air
+/// with, both with the items stacked on them. There is no Java counterpart, the previous version
+/// having no concept of a source that is not a file.
 /// </summary>
 public sealed class SceneRepository
 {
     private const string BaseColumns =
-        "t.pkid, t.name, t.description, t.width, t.height, t.last_modified";
+        "t.pkid, t.name, t.description, t.width, t.height, t.last_modified, t.is_layout";
 
     private const string ItemColumns =
         "t.pkid, t.scene_pkid, t.source_kind, t.source_target, t.label, t.x, t.y, t.width, t.height, t.audio_enabled";
@@ -27,10 +28,25 @@ public sealed class SceneRepository
     /// Every canvas with its items attached. The item list is what the command builder turns into
     /// a composition, so the order it comes back in is the order the sources are stacked in.
     /// </summary>
-    public List<SceneEntity> FindAll()
+    public List<SceneEntity> FindAll() => FindWhere(null);
+
+    /// <summary>The skeletons to start a live from: the scenes of the lives are not among them.</summary>
+    public List<SceneEntity> FindLayouts() => FindWhere("t.is_layout = 1");
+
+    /// <summary>Whether a live went on air with this scene: its rows are restarted from it.</summary>
+    public bool IsOnAir(long pkid)
     {
         using var connection = _connectionFactory.Open();
-        var scenes = ReadAll(connection);
+        using var command = connection.CreateCommand();
+        command.CommandText = "SELECT EXISTS (SELECT 1 FROM video v WHERE v.scene_pkid = @pkid);";
+        command.Parameters.AddWithValue("@pkid", pkid);
+        return Convert.ToInt64(command.ExecuteScalar(), CultureInfo.InvariantCulture) != 0;
+    }
+
+    private List<SceneEntity> FindWhere(string? where)
+    {
+        using var connection = _connectionFactory.Open();
+        var scenes = ReadAll(connection, where);
 
         foreach (var scene in scenes)
         {
@@ -107,7 +123,8 @@ public sealed class SceneRepository
                     description = @description,
                     width = @width,
                     height = @height,
-                    last_modified = @lastModified
+                    last_modified = @lastModified,
+                    is_layout = @isLayout
                 WHERE pkid = @pkid;
                 """;
             command.Parameters.AddWithValue("@name", scene.Name);
@@ -115,6 +132,7 @@ public sealed class SceneRepository
             command.Parameters.AddWithValue("@width", SqliteValue.From(scene.Width));
             command.Parameters.AddWithValue("@height", SqliteValue.From(scene.Height));
             command.Parameters.AddWithValue("@lastModified", SqliteValue.From(scene.LastModified));
+            command.Parameters.AddWithValue("@isLayout", scene.IsLayout ? 1 : 0);
             command.Parameters.AddWithValue("@pkid", scene.Pkid);
             command.ExecuteNonQuery();
         }
@@ -146,8 +164,8 @@ public sealed class SceneRepository
         command.Transaction = transaction;
         command.CommandText =
             """
-            INSERT INTO stream_scene (name, description, width, height, last_modified)
-            VALUES (@name, @description, @width, @height, @lastModified);
+            INSERT INTO stream_scene (name, description, width, height, last_modified, is_layout)
+            VALUES (@name, @description, @width, @height, @lastModified, @isLayout);
             SELECT last_insert_rowid();
             """;
         command.Parameters.AddWithValue("@name", scene.Name);
@@ -155,6 +173,7 @@ public sealed class SceneRepository
         command.Parameters.AddWithValue("@width", SqliteValue.From(scene.Width));
         command.Parameters.AddWithValue("@height", SqliteValue.From(scene.Height));
         command.Parameters.AddWithValue("@lastModified", SqliteValue.From(scene.LastModified));
+        command.Parameters.AddWithValue("@isLayout", scene.IsLayout ? 1 : 0);
         return Convert.ToInt64(command.ExecuteScalar(), CultureInfo.InvariantCulture);
     }
 
@@ -208,10 +227,11 @@ public sealed class SceneRepository
         return items;
     }
 
-    private static List<SceneEntity> ReadAll(SqliteConnection connection)
+    private static List<SceneEntity> ReadAll(SqliteConnection connection, string? where)
     {
         using var command = connection.CreateCommand();
-        command.CommandText = $"SELECT {BaseColumns} FROM stream_scene t ORDER BY t.pkid;";
+        var filter = where is null ? string.Empty : $" WHERE {where}";
+        command.CommandText = $"SELECT {BaseColumns} FROM stream_scene t{filter} ORDER BY t.pkid;";
         return ReadScene(command);
     }
 
@@ -228,7 +248,8 @@ public sealed class SceneRepository
                 Description = SqliteValue.ToText(reader.GetValue(2)),
                 Width = SqliteValue.ToNullableInt32(reader.GetValue(3)),
                 Height = SqliteValue.ToNullableInt32(reader.GetValue(4)),
-                LastModified = SqliteValue.ToNullableDateTime(reader.GetValue(5))
+                LastModified = SqliteValue.ToNullableDateTime(reader.GetValue(5)),
+                IsLayout = SqliteValue.ToBoolean(reader.GetValue(6))
             });
         }
 

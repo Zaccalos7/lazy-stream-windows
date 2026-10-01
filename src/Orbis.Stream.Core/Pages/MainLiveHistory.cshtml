@@ -19,7 +19,8 @@
 }
 else
 {
-    <div class="table-wrap">
+    <div style="display: flex; flex-direction: column; height: calc(100vh - 130px);">
+    <div class="table-wrap" style="flex: 1; overflow-y: auto;">
         <table class="list roomy">
             <thead>
             <tr>
@@ -60,5 +61,8 @@ else
             </tbody>
         </table>
     </div>
-    <partial name="_Pager" model="pager" />
+    <div style="flex-shrink: 0; padding-bottom: 10px;">
+        <partial name="_Pager" model="pager" />
+    </div>
+    </div>
 }

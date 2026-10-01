@@ -1,7 +1,7 @@
 @{
     var path = Context.Request.Path.Value ?? string.Empty;
     string? Current(params string[] pages) =>
-        pages.Any(page => path.StartsWith("/orbis/" + page, StringComparison.OrdinalIgnoreCase)) ? "page" : null;
+        pages.Any(page => path.Equals("/orbis/" + page, StringComparison.OrdinalIgnoreCase) || path.StartsWith("/orbis/" + page + "/", StringComparison.OrdinalIgnoreCase)) ? "page" : null;
     var notice = ViewContext.ViewData.Model as OrbisPageModel;
 }
 <!DOCTYPE html>

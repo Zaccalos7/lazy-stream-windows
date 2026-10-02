@@ -85,9 +85,12 @@ public sealed class MainChannelSettingModel(SettingService settings, RequestVali
         return BackToList();
     }
 
-    public IActionResult OnPostToggle(int id, bool current)
+public IActionResult OnPostToggle(int id, bool current)
     {
-        Run(() => settings.ModifySetting(id, new SettingRequest(null, null, null, null, null, !current, null)));
+        // A toggle only flips IsActive. The auto cleanup fields are not nullable on the request,
+        // so they cannot be told from "left alone" here; ModifySetting does not write them, which
+        // is what keeps this from wiping the cleanup settings of the row being toggled.
+        Run(() => settings.ModifySetting(id, new SettingRequest(null, null, null, null, null, !current, null, false, 0, 0)));
         return BackToList();
     }
 

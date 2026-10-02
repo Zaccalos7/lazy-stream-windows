@@ -83,8 +83,8 @@ public sealed class AutoCleanupService : BackgroundService
 
         try
         {
-            var result = await videoService.DeleteOldLiveHistory(activeConfig.AutoCleanupOlderThanMonths);
-            logger.LogInformation("Auto cleanup: {Message}", result.Message);
+            var result = videoService.DeleteOldLiveHistory(activeConfig.AutoCleanupOlderThanMonths);
+            logger.LogInformation("Auto cleanup: {Message}", result.Body.Message);
         }
         catch (Exception ex)
         {

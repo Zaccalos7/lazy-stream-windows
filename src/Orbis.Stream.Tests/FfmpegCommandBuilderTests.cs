@@ -256,8 +256,8 @@ public sealed class FfmpegCompositionTests
 
         // Each capture device is opened with the device ffmpeg knows it by.
         Assert.Contains("-f gdigrab -framerate 30 -i desktop", text, StringComparison.Ordinal);
-        Assert.Contains("-f dshow -i video=Integrated Camera", text, StringComparison.Ordinal);
-        Assert.Contains("-f dshow -i audio=Microphone", text, StringComparison.Ordinal);
+        Assert.Contains("-f dshow -rtbufsize 256M -thread_queue_size 1024 -i video=Integrated Camera", text, StringComparison.Ordinal);
+        Assert.Contains("-f dshow -rtbufsize 256M -thread_queue_size 1024 -i audio=Microphone", text, StringComparison.Ordinal);
 
         // Every picture is scaled into the rectangle it was dropped on.
         Assert.Contains("scale=1920:1080:force_original_aspect_ratio=decrease", text, StringComparison.Ordinal);
@@ -269,6 +269,29 @@ public sealed class FfmpegCompositionTests
         Assert.Contains("overlay=1400:700", text, StringComparison.Ordinal);
         Assert.Contains("[2:a]asetpts=PTS-STARTPTS", text, StringComparison.Ordinal);
         Assert.EndsWith("rtmp://ingest/live/key", text, StringComparison.Ordinal);
+    }
+
+    [Fact]
+    public void ADeviceGetsARealTimeBufferLargerThanAFrame()
+    {
+        // The default 3 MB of dshow is less than one raw 1080p frame: the RTMP handshake alone
+        // filled it, and the live went on air dropping every frame of the webcam.
+        var command = FfmpegCommandBuilder.BuildComposition(Request([Camera(0, 0, 640, 480), Microphone()]));
+
+        Assert.Equal(2, command.Count(argument => argument == "-rtbufsize"));
+        Assert.All(
+            command.Select((argument, index) => (argument, index)).Where(entry => entry.argument == "-rtbufsize"),
+            entry => Assert.Equal("256M", command[entry.index + 1]));
+    }
+
+    [Theory]
+    [InlineData("rtmp://live.twitch.tv/app/live_477413959_abcdef", "Error opening output rtmp://live.twitch.tv/app/live_477413959_abcdef: I/O error", "Error opening output rtmp://live.twitch.tv/app/****: I/O error")]
+    [InlineData("rtmp://a.rtmp.youtube.com/live2/abcd-efgh-ijkl/", "abcd-efgh-ijkl twice abcd-efgh-ijkl", "**** twice ****")]
+    [InlineData("C:/videos/out.flv", "C:/videos/out.flv: I/O error", "C:/videos/out.flv: I/O error")]
+    [InlineData("rtmp://ingest/live/key", "rtmp://ingest/live/key", "rtmp://ingest/live/key")]
+    public void TheStreamKeyNeverReachesAnErrorMessage(string outputUrl, string error, string expected)
+    {
+        Assert.Equal(expected, FfmpegStreamingSession.RedactStreamKey(error, outputUrl));
     }
 
     [Fact]

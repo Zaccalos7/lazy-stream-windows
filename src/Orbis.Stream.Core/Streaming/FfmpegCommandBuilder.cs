@@ -68,6 +68,12 @@ public static class FfmpegCommandBuilder
     /// </summary>
     private const string PreviewFilter = "fps=15,scale=w='min(640,iw)':h=-2";
 
+    /// <summary>
+    /// The real-time buffer of a dshow device: a couple of seconds of raw 1080p, enough to ride out
+    /// the start of the live and a slow moment of the encoder (see <see cref="AppendInput"/>).
+    /// </summary>
+    private const string DeviceBufferSize = "256M";
+
     public static IReadOnlyList<string> Build(FfmpegStreamRequest request)
     {
         ArgumentNullException.ThrowIfNull(request);
@@ -380,6 +386,16 @@ public static class FfmpegCommandBuilder
             case SourceKind.Microphone:
                 arguments.Add("-f");
                 arguments.Add("dshow");
+
+                // dshow pushes raw frames into a buffer of its own whether or not ffmpeg reads them,
+                // and the default (3 MB) holds less than one 1080p frame of a webcam. Every stall
+                // fills it - above all the seconds the RTMP handshake takes before the first frame
+                // is read - and from there every frame is dropped. The size is a ceiling, not an
+                // allocation: memory is only taken while the reader is behind.
+                arguments.Add("-rtbufsize");
+                arguments.Add(DeviceBufferSize);
+                arguments.Add("-thread_queue_size");
+                arguments.Add("1024");
                 arguments.Add("-i");
                 arguments.Add(item.Target);
                 break;

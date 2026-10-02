@@ -24,6 +24,15 @@ public sealed class SettingEntity
     /// files. Null keeps the previous behaviour, so no existing configuration changes meaning.
     /// </summary>
     public long? ScenePkid { get; set; }
+
+    /// <summary>Whether automatic cleanup of old live history rows is enabled.</summary>
+    public bool AutoCleanupEnabled { get; set; }
+
+    /// <summary>How often to run the cleanup (in months). 0 = disabled.</summary>
+    public int AutoCleanupIntervalMonths { get; set; }
+
+    /// <summary>Delete live history rows older than this many months.</summary>
+    public int AutoCleanupOlderThanMonths { get; set; }
 }
 
 /// <summary>Port of <c>com.orbis.stream.model.VideoLiveHistory</c>.</summary>

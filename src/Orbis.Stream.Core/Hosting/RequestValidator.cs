@@ -33,6 +33,20 @@ public sealed class RequestValidator
         AddIfNull(errors, "streamKey", request.StreamKey, "not.valid.input");
         AddIfNull(errors, "platformStreamName", request.PlatformStreamName, "not.valid.input");
         AddIfNull(errors, "channelName", request.ChannelName, "not.valid.input");
+
+        // Auto-cleanup validation
+        if (request.AutoCleanupEnabled)
+        {
+            if (request.AutoCleanupIntervalMonths <= 0)
+            {
+                errors["autoCleanupIntervalMonths"] = Message("not.valid.input");
+            }
+            if (request.AutoCleanupOlderThanMonths <= 0)
+            {
+                errors["autoCleanupOlderThanMonths"] = Message("not.valid.input");
+            }
+        }
+
         Throw(errors);
     }
 

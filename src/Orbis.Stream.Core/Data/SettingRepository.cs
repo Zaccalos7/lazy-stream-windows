@@ -9,7 +9,7 @@ public sealed class SettingRepository
 {
     private const string BaseColumns =
         "t.id, t.stream_url, t.stream_key, t.platform_stream_name, t.description, t.video_folder, t.is_active, t.channel_name, "
-        + "t.scene_pkid";
+        + "t.scene_pkid, t.auto_cleanup_enabled, t.auto_cleanup_interval_months, t.auto_cleanup_older_than_months";
 
     private readonly SqliteConnectionFactory _connectionFactory;
 
@@ -64,8 +64,10 @@ public sealed class SettingRepository
         using var command = connection.CreateCommand();
         command.CommandText =
             """
-            INSERT INTO setting (stream_url, stream_key, platform_stream_name, description, video_folder, is_active, channel_name, scene_pkid)
-            VALUES (@streamUrl, @streamKey, @platform, @description, @videoFolder, @isActive, @channelName, @scenePkid);
+            INSERT INTO setting (stream_url, stream_key, platform_stream_name, description, video_folder, is_active, channel_name, scene_pkid,
+                                 auto_cleanup_enabled, auto_cleanup_interval_months, auto_cleanup_older_than_months)
+            VALUES (@streamUrl, @streamKey, @platform, @description, @videoFolder, @isActive, @channelName, @scenePkid,
+                    @autoCleanupEnabled, @autoCleanupIntervalMonths, @autoCleanupOlderThanMonths);
             SELECT last_insert_rowid();
             """;
         command.Parameters.AddWithValue("@streamUrl", setting.StreamUrl);
@@ -76,13 +78,12 @@ public sealed class SettingRepository
         command.Parameters.AddWithValue("@isActive", SqliteValue.From(setting.IsActive));
         command.Parameters.AddWithValue("@channelName", setting.ChannelName);
         command.Parameters.AddWithValue("@scenePkid", SqliteValue.From(setting.ScenePkid));
+        command.Parameters.AddWithValue("@autoCleanupEnabled", setting.AutoCleanupEnabled ? 1 : 0);
+        command.Parameters.AddWithValue("@autoCleanupIntervalMonths", setting.AutoCleanupIntervalMonths);
+        command.Parameters.AddWithValue("@autoCleanupOlderThanMonths", setting.AutoCleanupOlderThanMonths);
         return Convert.ToInt32(command.ExecuteScalar(), CultureInfo.InvariantCulture);
     }
 
-    /// <summary>
-    /// Mirrors <c>SettingRecordMapper#updateSettingFromSettingRecord</c>, whose MapStruct
-    /// configuration ignored null properties: a null field keeps the stored value.
-    /// </summary>
     public void Update(SettingEntity setting)
     {
         using var connection = _connectionFactory.Open();
@@ -97,7 +98,10 @@ public sealed class SettingRepository
                 video_folder = COALESCE(@videoFolder, video_folder),
                 is_active = COALESCE(@isActive, is_active),
                 channel_name = COALESCE(@channelName, channel_name),
-                scene_pkid = COALESCE(@scenePkid, scene_pkid)
+                scene_pkid = COALESCE(@scenePkid, scene_pkid),
+                auto_cleanup_enabled = COALESCE(@autoCleanupEnabled, auto_cleanup_enabled),
+                auto_cleanup_interval_months = COALESCE(@autoCleanupIntervalMonths, auto_cleanup_interval_months),
+                auto_cleanup_older_than_months = COALESCE(@autoCleanupOlderThanMonths, auto_cleanup_older_than_months)
             WHERE id = @id;
             """;
         command.Parameters.AddWithValue("@streamUrl", (object?)setting.StreamUrl ?? DBNull.Value);
@@ -108,6 +112,9 @@ public sealed class SettingRepository
         command.Parameters.AddWithValue("@isActive", SqliteValue.From(setting.IsActive));
         command.Parameters.AddWithValue("@channelName", (object?)setting.ChannelName ?? DBNull.Value);
         command.Parameters.AddWithValue("@scenePkid", SqliteValue.From(setting.ScenePkid));
+        command.Parameters.AddWithValue("@autoCleanupEnabled", setting.AutoCleanupEnabled ? 1 : 0);
+        command.Parameters.AddWithValue("@autoCleanupIntervalMonths", setting.AutoCleanupIntervalMonths);
+        command.Parameters.AddWithValue("@autoCleanupOlderThanMonths", setting.AutoCleanupOlderThanMonths);
         command.Parameters.AddWithValue("@id", setting.Id);
         command.ExecuteNonQuery();
     }
@@ -137,7 +144,10 @@ public sealed class SettingRepository
                 VideoFolder = reader.GetString(5),
                 IsActive = reader.IsDBNull(6) ? null : SqliteValue.ToBoolean(reader.GetValue(6)),
                 ChannelName = reader.GetString(7),
-                ScenePkid = SqliteValue.ToNullableInt64(reader.GetValue(8))
+                ScenePkid = SqliteValue.ToNullableInt64(reader.GetValue(8)),
+                AutoCleanupEnabled = reader.IsDBNull(9) ? false : SqliteValue.ToBoolean(reader.GetValue(9)),
+                AutoCleanupIntervalMonths = reader.IsDBNull(10) ? 0 : reader.GetInt32(10),
+                AutoCleanupOlderThanMonths = reader.IsDBNull(11) ? 0 : reader.GetInt32(11)
             });
         }
 

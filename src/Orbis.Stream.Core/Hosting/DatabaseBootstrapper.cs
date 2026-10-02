@@ -42,6 +42,13 @@ public sealed class DatabaseBootstrapper : IHostedService
     private void AddDefaultVideoAndAudioSetting()
     {
         _logger.LogInformation("Initializing default VideoSetting...");
+
+        var oldLowCpuTwitch = _videoSettingRepository.FindByTitleAndPlatform("Low CPU Default Twitch", "Twitch");
+        if (oldLowCpuTwitch != null) _videoSettingRepository.Delete(oldLowCpuTwitch.Id!.Value);
+
+        var oldLowCpuYoutube = _videoSettingRepository.FindByTitleAndPlatform("Low CPU Default Youtube", "Youtube");
+        if (oldLowCpuYoutube != null) _videoSettingRepository.Delete(oldLowCpuYoutube.Id!.Value);
+
         InitializeDefaultVideoSetting("Twitch", createHighQuality: true);
         InitializeDefaultVideoSetting("Twitch", createHighQuality: false);
         InitializeDefaultVideoSetting("Youtube", createHighQuality: true);

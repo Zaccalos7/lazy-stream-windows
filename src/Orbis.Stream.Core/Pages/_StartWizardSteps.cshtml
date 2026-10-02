@@ -23,7 +23,7 @@ else
                 <input type="radio" name="settingId" value="@setting.Id" required />
                 <span class="grow">
                     <strong>@displayTitle</strong>
-                    @if (setting.IsDefaultConfiguration == true)
+                    @if (setting.IsDefaultConfiguration == true || (!string.IsNullOrEmpty(setting.DefaultPlatformConfiguration) && setting.Title == "Default Low " + setting.DefaultPlatformConfiguration))
                     {
                         <span class="badge">@setting.DefaultPlatformConfiguration</span>
                     }

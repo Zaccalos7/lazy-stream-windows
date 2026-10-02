@@ -280,5 +280,7 @@
   "sceneSources": "场景 · {0} 个源",
   "deleteSceneLiveConfirm": "您确定要删除此直播（{0} 个源）吗？",
   "defaultLowTwitch": "Default Low Twitch",
-  "defaultLowYouTube": "Default Low YouTube"
+  "defaultLowYouTube": "Default Low YouTube",
+  "ffmpegProcessesDetails": "FFmpeg 进程详情",
+  "noActiveFfmpegProcess": "没有活动的 FFmpeg 进程。"
 }

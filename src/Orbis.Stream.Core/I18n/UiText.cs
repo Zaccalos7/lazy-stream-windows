@@ -21,8 +21,12 @@ public sealed class UiText
         ("de", "Deutsch"),
         ("es", "Español"),
         ("fr", "Français"),
+        ("pt", "Português"),
         ("ru", "Русский"),
-        ("zh", "中文")
+        ("zh", "中文"),
+        ("ko", "한국어"),
+        ("ja", "日本語"),
+        ("tlh", "tlhIngan Hol")
     ];
 
     private static readonly FrozenDictionary<string, FrozenDictionary<string, string>> Bundles = Load();

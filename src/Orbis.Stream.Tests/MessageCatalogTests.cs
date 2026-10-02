@@ -17,7 +17,9 @@ public sealed class MessageCatalogTests
     [InlineData("IT_it", "it")]
     [InlineData("zh-CN", "zh")]
     [InlineData("en-US", "en")]
-    [InlineData("pt-BR", "en")]
+    [InlineData("pt-BR", "pt")]
+    [InlineData("ko-KR", "ko")]
+    [InlineData("ar-EG", "en")]
     [InlineData(null, "en")]
     public void ResolveLanguage_MapsToAnAvailableBundle(string? requested, string expected)
     {
@@ -59,7 +61,7 @@ public sealed class MessageCatalogTests
         var catalog = CreateCatalog();
         var english = PropertiesBundle.Parse(File.ReadAllText(EnglishPath()));
 
-        Assert.Equal(7, catalog.SupportedLanguages.Count);
+        Assert.Equal(11, catalog.SupportedLanguages.Count);
 
         foreach (var language in catalog.SupportedLanguages)
         {

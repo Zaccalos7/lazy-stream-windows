@@ -280,5 +280,7 @@
   "sceneSources": "Сцена · источников: {0}",
   "deleteSceneLiveConfirm": "Вы уверены, что хотите удалить этот эфир (источников: {0})?",
   "defaultLowTwitch": "Default Low Twitch",
-  "defaultLowYouTube": "Default Low YouTube"
+  "defaultLowYouTube": "Default Low YouTube",
+  "ffmpegProcessesDetails": "Сведения о процессах FFmpeg",
+  "noActiveFfmpegProcess": "Нет активного процесса FFmpeg."
 }

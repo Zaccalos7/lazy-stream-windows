@@ -11,7 +11,7 @@ public sealed class VideoSettingRepository
     private const string BaseColumns =
         "t.id, t.title, t.video_codec, t.video_codec_name, t.pixel_format, t.video_bitrate, t.video_format, " +
         "t.last_modified, t.is_default_configuration, t.default_platform_configuration, t.gop_size, " +
-        "t.is_video_and_audio_setting_active, t.audio_setting_id";
+        "t.is_video_and_audio_setting_active, t.audio_setting_id, t.video_width, t.video_height, t.frame_rate";
 
     private readonly SqliteConnectionFactory _connectionFactory;
 
@@ -100,6 +100,9 @@ public sealed class VideoSettingRepository
                     is_default_configuration = @isDefault,
                     default_platform_configuration = @platform,
                     gop_size = @gopSize,
+                    video_width = @videoWidth,
+                    video_height = @videoHeight,
+                    frame_rate = @frameRate,
                     is_video_and_audio_setting_active = @isActive,
                     audio_setting_id = @audioSettingId
                 WHERE id = @id;
@@ -114,6 +117,9 @@ public sealed class VideoSettingRepository
             command.Parameters.AddWithValue("@isDefault", SqliteValue.From(setting.IsDefaultConfiguration));
             command.Parameters.AddWithValue("@platform", (object?)setting.DefaultPlatformConfiguration ?? DBNull.Value);
             command.Parameters.AddWithValue("@gopSize", SqliteValue.From(setting.GopSize));
+            command.Parameters.AddWithValue("@videoWidth", SqliteValue.From(setting.VideoWidth));
+            command.Parameters.AddWithValue("@videoHeight", SqliteValue.From(setting.VideoHeight));
+            command.Parameters.AddWithValue("@frameRate", SqliteValue.From(setting.FrameRate));
             command.Parameters.AddWithValue("@isActive", SqliteValue.From(setting.IsVideoAndAudioSettingActive));
             command.Parameters.AddWithValue("@audioSettingId", audioSettingId is null ? DBNull.Value : audioSettingId.Value);
             command.Parameters.AddWithValue("@id", setting.Id ?? 0);
@@ -229,9 +235,12 @@ public sealed class VideoSettingRepository
             """
             INSERT INTO video_setting (title, video_codec, video_codec_name, pixel_format, video_bitrate, video_format,
                                        last_modified, is_default_configuration, default_platform_configuration, gop_size,
+                                       video_width, video_height, frame_rate,
                                        is_video_and_audio_setting_active, audio_setting_id)
             VALUES (@title, @videoCodec, @videoCodecName, @pixelFormat, @videoBitrate, @videoFormat,
-                    @lastModified, @isDefault, @platform, @gopSize, @isActive, @audioSettingId);
+                    @lastModified, @isDefault, @platform, @gopSize,
+                    @videoWidth, @videoHeight, @frameRate,
+                    @isActive, @audioSettingId);
             SELECT last_insert_rowid();
             """;
         command.Parameters.AddWithValue("@title", (object?)setting.Title ?? DBNull.Value);
@@ -244,6 +253,9 @@ public sealed class VideoSettingRepository
         command.Parameters.AddWithValue("@isDefault", SqliteValue.From(setting.IsDefaultConfiguration));
         command.Parameters.AddWithValue("@platform", (object?)setting.DefaultPlatformConfiguration ?? DBNull.Value);
         command.Parameters.AddWithValue("@gopSize", SqliteValue.From(setting.GopSize));
+        command.Parameters.AddWithValue("@videoWidth", SqliteValue.From(setting.VideoWidth));
+        command.Parameters.AddWithValue("@videoHeight", SqliteValue.From(setting.VideoHeight));
+        command.Parameters.AddWithValue("@frameRate", SqliteValue.From(setting.FrameRate));
         command.Parameters.AddWithValue("@isActive", SqliteValue.From(setting.IsVideoAndAudioSettingActive));
         command.Parameters.AddWithValue("@audioSettingId", audioSettingId is null ? DBNull.Value : audioSettingId.Value);
         return Convert.ToInt32(command.ExecuteScalar(), CultureInfo.InvariantCulture);
@@ -290,7 +302,10 @@ public sealed class VideoSettingRepository
                     DefaultPlatformConfiguration = SqliteValue.ToText(reader.GetValue(9)),
                     GopSize = SqliteValue.ToNullableInt32(reader.GetValue(10)),
                     IsVideoAndAudioSettingActive = reader.IsDBNull(11) ? null : SqliteValue.ToBoolean(reader.GetValue(11)),
-                    AudioSettingId = SqliteValue.ToNullableInt32(reader.GetValue(12))
+                    AudioSettingId = SqliteValue.ToNullableInt32(reader.GetValue(12)),
+                    VideoWidth = SqliteValue.ToNullableInt32(reader.GetValue(13)),
+                    VideoHeight = SqliteValue.ToNullableInt32(reader.GetValue(14)),
+                    FrameRate = SqliteValue.ToNullableDouble(reader.GetValue(15))
                 });
             }
         }

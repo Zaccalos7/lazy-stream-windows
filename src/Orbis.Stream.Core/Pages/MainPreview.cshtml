@@ -1,0 +1,205 @@
+@page "/orbis/mainPreview"
+@model MainPreviewModel
+@using System.Globalization
+@using Orbis.Stream.Core.Services
+@{
+    ViewData["Title"] = T["livePreviewTitle"];
+    var live = Model.Snapshot;
+
+    string Fps(double value) => value <= 0 ? "–" : value.ToString("0.###", CultureInfo.InvariantCulture) + " fps";
+    string Size(LiveMedia media) => media.Width > 0 ? $"{media.Width}×{media.Height}" : "–";
+    string Time(long milliseconds)
+    {
+        var span = TimeSpan.FromMilliseconds(Math.Max(0, milliseconds));
+        return span.TotalHours >= 1
+            ? span.ToString(@"h\:mm\:ss", CultureInfo.InvariantCulture)
+            : span.ToString(@"m\:ss", CultureInfo.InvariantCulture);
+    }
+}
+<div class="page-header">
+    <div>
+        <h1>@T["livePreviewTitle"]</h1>
+        <p class="subtitle">@T["livePreviewSubtitle"]</p>
+    </div>
+    @if (live.IsLive)
+    {
+        if (Model.LiveUrl is { } liveUrl)
+        {
+            <a class="btn live-indicator is-live" href="@liveUrl" target="_blank" rel="noopener noreferrer"
+               title="@T["openLivePage"]@(" (" + Model.LivePlatform + ")")" aria-label="@T["liveNow"]">
+                <span class="platform-mark @Model.LiveGlyphClass"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="@Model.LiveGlyph" /></svg></span>@T["liveNow"]
+            </a>
+        }
+        else
+        {
+            <span class="btn live-indicator is-live" title="@T["liveNow"]"><i class="icon">&#xE7F4;</i>@T["liveNow"]</span>
+        }
+    }
+</div>
+
+@* The lives on air, when there is more than one: the page watches one of them and this is how it
+   says which, a list instead of a row of buttons across the page. The control is on the page from
+   the start and the push channel fills it, so a live that starts while the page is open shows up in
+   it at once, and it goes away again when the others are over and there is nothing left to pick. *@
+<div class="toolbar live-picker" data-live-picker hidden="@(live.Running.Count <= 1)">
+    <label class="field">
+        <span>@T["runningLives"]</span>
+        <select class="input" aria-label="@T["runningLives"]">
+            @foreach (var option in live.Running)
+            {
+                <option value="@option.VideoPkid" selected="@option.IsWatching">@option.ChannelName · @option.VideoName</option>
+            }
+        </select>
+    </label>
+</div>
+
+@* The words the script needs to answer without asking the server: the page is drawn in the
+   language of the request, and a fetch has to speak the same one. *@
+<p data-preview-words hidden
+   data-ok="@T["success"]" data-ko="@T["error"]"
+   data-applied="@T["parametersApplied"]" data-failed="@T["parametersFailed"]"
+   data-no="@T["noAudioTrack"]"></p>
+
+<div data-preview
+     data-pkid="@live.VideoPkid"
+     data-live="@(live.IsLive ? "1" : "0")"
+     data-position="@live.PositionMilliseconds"
+     data-playable="@(live.IsPlayable ? "1" : "0")">
+
+@* Nothing on air: the page waits for one (the push channel reloads it when a live starts), and
+   the canvas to start one is in the live wizard. *@
+@if (!live.IsLive)
+{
+    <div class="card empty">
+        <i class="icon">&#xE7F4;</i>
+        <p>@T["noLiveRunning"]</p>
+        <a class="btn accent" href="/orbis/mainLive?start=1"><i class="icon">&#xE768;</i>@T["startLiveButton"]</a>
+    </div>
+}
+else
+{
+    var parameters = live.Parameters;
+
+    @* The stage takes the shape of what is on air: a canvas that is not 16:9 (a vertical one, a
+       square one) inside a 16:9 box is a small picture with black bars, which is the wrong thing to
+       be looking at while checking the live. *@
+    var shape = live.Output.Width > 0 && live.Output.Height > 0
+        ? $"aspect-ratio: {live.Output.Width.ToString(CultureInfo.InvariantCulture)} / {live.Output.Height.ToString(CultureInfo.InvariantCulture)}"
+        : null;
+    <div class="preview">
+        <div class="preview-stage card">
+            @* What is on air, made light: a few small frames a second that ffmpeg writes next to the
+               live, not a second copy of it. The cover under it shows until the first frame lands. *@
+            <div class="preview-screen" style="@shape">
+                <div class="preview-cover">
+                    <span class="spinner"></span>
+                    <p class="muted">@T["previewWaiting"]</p>
+                </div>
+                <canvas data-preview-frame role="img" aria-label="@live.VideoName"></canvas>
+            </div>
+            <div class="preview-bar">
+                <div class="preview-id">
+                    <strong class="truncate">@live.VideoName</strong>
+                    <span class="caption truncate">@live.ChannelName@(string.IsNullOrEmpty(live.PlatformStreamName) ? "" : " · " + live.PlatformStreamName)</span>
+                </div>
+                <span class="spinner" data-preview-restart hidden title="@T["reconfiguring"]"></span>
+                <span class="caption preview-time" data-preview-position>@Time(live.PositionMilliseconds) / @Time(live.DurationMilliseconds)</span>
+            </div>
+        </div>
+
+        <form class="card preview-params" data-preview-form>
+            <h3 class="section">@T["liveOutput"]</h3>
+            <div class="preview-facts">
+                <div><span class="caption">@T["resolution"]</span><strong data-preview-fact="output.size">@Size(live.Output)</strong></div>
+                <div><span class="caption">@T["frameRate"]</span><strong data-preview-fact="output.fps">@Fps(live.Output.FrameRate)</strong></div>
+                <div><span class="caption">@T["codec"]</span><strong data-preview-fact="output.codec" title="@parameters.VideoCodecName">@parameters.VideoCodecName</strong></div>
+                <div><span class="caption">@T["sourceVideo"]</span><strong data-preview-fact="source.size">@Size(live.Source)</strong></div>
+                <div><span class="caption">@T["frameRate"]</span><strong data-preview-fact="source.fps">@Fps(live.Source.FrameRate)</strong></div>
+                <div><span class="caption">@T["audioChannels"]</span><strong data-preview-fact="audio.channels">@(live.Source.AudioChannels > 0 ? live.Source.AudioChannels.ToString(CultureInfo.InvariantCulture) : T["noAudioTrack"])</strong></div>
+            </div>
+
+            <h3 class="section">@T["videoParameters"]</h3>
+            <div class="form-grid">
+                <label class="field">
+                    <span>@T["codec"]</span>
+                    <select class="input" data-param="videoCodec">
+                        <option value="">@T["selectACodec"]</option>
+                        @foreach (var option in VideoSettingForm.Items(FfmpegCodecCatalog.VideoCodecs))
+                        {
+                            <option value="@option.Value" selected="@(option.Value == parameters.VideoCodec?.ToString(CultureInfo.InvariantCulture))">@option.Text</option>
+                        }
+                    </select>
+                </label>
+                <label class="field">
+                    <span>@T["videoCodecName"]</span>
+                    <select class="input" data-param="videoCodecName">
+                        <option value="">@T["selectVideoCodecName"]</option>
+                        @foreach (var option in VideoSettingForm.CodecNameItems())
+                        {
+                            <option value="@option.Value" selected="@(option.Value == parameters.VideoCodecName)">@option.Text</option>
+                        }
+                    </select>
+                </label>
+                <label class="field">
+                    <span>@T["pixelFormat"]</span>
+                    <select class="input" data-param="pixelFormat">
+                        <option value="">@T["selectAPixelFormat"]</option>
+                        @foreach (var option in VideoSettingForm.Items(FfmpegCodecCatalog.PixelFormats))
+                        {
+                            <option value="@option.Value" selected="@(option.Value == parameters.PixelFormat?.ToString(CultureInfo.InvariantCulture))">@option.Text</option>
+                        }
+                    </select>
+                </label>
+                <label class="field">
+                    <span>@T["bitrate"]</span>
+                    <input class="input" data-param="videoBitrate" type="number" min="1" step="1"
+                           value="@parameters.VideoBitrate" placeholder="@T["exampleBitrate"]" required />
+                    <small>bps</small>
+                </label>
+                <label class="field">
+                    <span>@T["gopSize"]</span>
+                    <input class="input" data-param="gopSize" type="number" min="1" step="1" value="@parameters.GopSize" disabled />
+                    <small>@T["gopNotEditable"]</small>
+                </label>
+            </div>
+
+            <h3 class="section">@T["resolution"] · @T["frameRate"]</h3>
+            <div class="form-grid">
+                <label class="field">
+                    <span>@T["sourceVideo"]</span>
+                    <label class="toggle">
+                        <input type="checkbox" data-param="keepSource" checked="@(parameters.VideoWidth is null)" />
+                        <span class="muted">@T["keepSource"]</span>
+                    </label>
+                </label>
+                <label class="field" data-source-off hidden="@(parameters.VideoWidth is not null)">
+                    <span>@T["width"]</span>
+                    <input class="input" data-param="videoWidth" type="number" min="2" step="2" value="@parameters.VideoWidth" />
+                </label>
+                <label class="field" data-source-off hidden="@(parameters.VideoHeight is not null)">
+                    <span>@T["height"]</span>
+                    <input class="input" data-param="videoHeight" type="number" min="2" step="2" value="@parameters.VideoHeight" />
+                </label>
+                <label class="field">
+                    <span>@T["frameRate"]</span>
+                    <input class="input" data-param="frameRate" type="number" min="1" max="240" step="0.001"
+                           value="@parameters.FrameRate" placeholder="@T["keepSource"]" />
+                    <small>fps</small>
+                </label>
+            </div>
+
+            <h3 class="section">@T["audio"]</h3>
+            <div class="form-grid">
+                <label class="field">
+                    <span>@T["audioBitrate"]</span>
+                    <input class="input" data-param="audioBitrate" type="number" min="1" step="1"
+                           value="@parameters.AudioBitrate" disabled="@(!live.Source.HasAudio)" required />
+                    <small>bps</small>
+                </label>
+            </div>
+
+            <p class="caption preview-note"><i class="icon">&#xE946;</i>@T["applyNote"]</p>
+        </form>
+    </div>
+}
+</div>

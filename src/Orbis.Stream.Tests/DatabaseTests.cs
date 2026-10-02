@@ -109,6 +109,279 @@ public sealed class DatabaseSchemaTests
 
         Assert.Single(settings.FindAll(new Dictionary<string, string>()));
     }
+
+    /// <summary>
+    /// A database written by 1.0.15 has no source columns and no scene tables. The migration has
+    /// to add them without touching the rows the previous version wrote, because those rows are
+    /// the lives the user is watching.
+    /// </summary>
+    [Fact]
+    public void EnsureCreated_MigratesAPreviousDatabase()
+    {
+        var directory = Path.Combine(Path.GetTempPath(), "orbis-tests", Guid.NewGuid().ToString("N"));
+        System.IO.Directory.CreateDirectory(directory);
+        var path = Path.Combine(directory, "stream.db");
+
+        try
+        {
+            using (var legacy = new SqliteConnection($"Data Source={path}"))
+            {
+                legacy.Open();
+                Execute(legacy,
+                    """
+                    CREATE TABLE video (
+                        pkid INTEGER PRIMARY KEY AUTOINCREMENT,
+                        name VARCHAR(255) NOT NULL,
+                        video_path VARCHAR(255) NOT NULL,
+                        extension VARCHAR(255) NOT NULL,
+                        live_status INTEGER DEFAULT '1' NOT NULL,
+                        last_time_stamp_before_stop BIGINT DEFAULT '0',
+                        message TEXT,
+                        should_be_stop BOOLEAN DEFAULT 'false',
+                        start_date_live TIMESTAMP,
+                        channel_name VARCHAR(512) DEFAULT 'Zingy' NOT NULL,
+                        video_live_history_pkid BIGINT,
+                        video_setting_id INTEGER
+                    );
+                    """);
+                Execute(legacy,
+                    """
+                    CREATE TABLE setting (
+                        id INTEGER PRIMARY KEY AUTOINCREMENT,
+                        stream_url VARCHAR(512) NOT NULL,
+                        stream_key VARCHAR(512) NOT NULL,
+                        platform_stream_name VARCHAR(255),
+                        description TEXT,
+                        video_folder VARCHAR(255) DEFAULT '/' NOT NULL,
+                        is_active BOOLEAN DEFAULT 'false',
+                        channel_name TEXT DEFAULT 'Zingy' NOT NULL
+                    );
+                    """);
+                Execute(legacy,
+                    "INSERT INTO video (name, video_path, extension, live_status) VALUES ('clip.mp4', '/videos/clip.mp4', 'mp4', 0);");
+            }
+
+            using var connection = new SqliteConnection($"Data Source={path}");
+            connection.Open();
+            Execute(connection, "PRAGMA foreign_keys = ON;");
+            DatabaseSchema.EnsureCreated(connection, NullLogger.Instance);
+
+            // A row that predates the feature still reads back as what it always was: a file.
+            var factory = new SqliteConnectionFactory(path);
+            var videos = new VideoRepository(factory).FindByScenePkid(0);
+            Assert.Empty(videos);
+
+            using var command = connection.CreateCommand();
+            command.CommandText = "SELECT source_kind, source_target, audio_enabled FROM video WHERE name = 'clip.mp4';";
+            using var reader = command.ExecuteReader();
+            Assert.True(reader.Read());
+            Assert.Equal(0L, reader.GetInt64(0));
+            Assert.True(reader.IsDBNull(1));
+            Assert.False(reader.GetBoolean(2));
+
+            foreach (var table in new[] { "stream_scene", "stream_scene_item" })
+            {
+                using var exists = connection.CreateCommand();
+                exists.CommandText = "SELECT COUNT(*) FROM sqlite_master WHERE type = 'table' AND name = @name;";
+                exists.Parameters.AddWithValue("@name", table);
+                Assert.Equal(1L, Convert.ToInt64(exists.ExecuteScalar(), System.Globalization.CultureInfo.InvariantCulture));
+            }
+
+            using var sceneColumn = connection.CreateCommand();
+            sceneColumn.CommandText = "PRAGMA table_info(setting);";
+            using var columns = sceneColumn.ExecuteReader();
+            var names = new List<string>();
+            while (columns.Read())
+            {
+                names.Add(columns.GetString(1));
+            }
+
+            Assert.Contains("scene_pkid", names);
+        }
+        finally
+        {
+            SqliteConnection.ClearAllPools();
+            try
+            {
+                System.IO.Directory.Delete(directory, recursive: true);
+            }
+            catch (IOException)
+            {
+                // A file the pool still holds open is not a test failure.
+            }
+        }
+    }
+
+    /// <summary>
+    /// Before layouts, one scene was both the layout and the scene of the live started from it.
+    /// The one no live used becomes a layout; the one a live went on air with stays that live's,
+    /// untouched, and leaves a copy as a layout. A layout keeps rectangles only, so the sources go
+    /// and the microphone, which has no rectangle, goes with them.
+    /// </summary>
+    [Fact]
+    public void EnsureCreated_TurnsTheOldScenesIntoLayouts()
+    {
+        using var database = new TemporaryDatabase();
+        using (var legacy = new SqliteConnection($"Data Source={database.DatabasePath}"))
+        {
+            legacy.Open();
+            Execute(legacy, "ALTER TABLE stream_scene DROP COLUMN is_layout;");
+            Execute(legacy,
+                """
+                INSERT INTO stream_scene (pkid, name, width, height) VALUES (1, 'Never started', 1920, 1080), (2, 'On air', 1920, 1080);
+                INSERT INTO stream_scene_item (scene_pkid, source_kind, source_target, label, x, y, width, height, audio_enabled) VALUES
+                    (1, 1, 'desktop', 'Desktop', 0, 0, 1920, 1080, 0),
+                    (2, 0, 'C:/Video/intro.mp4', 'Intro', 0, 0, 1920, 1080, 1),
+                    (2, 2, 'video=Cam', 'Webcam', 1440, 20, 460, 260, 0),
+                    (2, 3, 'audio=Mic', 'Mic', 0, 0, 0, 0, 1);
+                INSERT INTO video (name, video_path, extension, scene_pkid, source_kind) VALUES ('Intro', 'C:/Video/intro.mp4', 'mp4', 2, 0);
+                """);
+
+            DatabaseSchema.EnsureCreated(legacy, NullLogger.Instance);
+        }
+
+        var scenes = database.Repository<SceneRepository>();
+        var layouts = scenes.FindLayouts();
+        Assert.Equal(["Never started", "On air"], layouts.Select(layout => layout.Name));
+        Assert.Equal(1L, layouts[0].Pkid);
+        Assert.NotEqual(2L, layouts[1].Pkid);
+        Assert.All(layouts.SelectMany(layout => layout.Items), slot => Assert.Equal(string.Empty, slot.SourceTarget));
+        Assert.Equal([(0, 0, 1920, 1080), (1440, 20, 460, 260)], layouts[1].Items.Select(slot => (slot.X, slot.Y, slot.Width, slot.Height)));
+
+        var onAir = scenes.FindByPkid(2);
+        Assert.NotNull(onAir);
+        Assert.False(onAir!.IsLayout);
+        Assert.Equal(["C:/Video/intro.mp4", "video=Cam", "audio=Mic"], onAir.Items.Select(item => item.SourceTarget));
+        Assert.True(scenes.IsOnAir(2));
+    }
+
+    private static void Execute(SqliteConnection connection, string statement)
+    {
+        using var command = connection.CreateCommand();
+        command.CommandText = statement;
+        command.ExecuteNonQuery();
+    }
+}
+
+public sealed class SceneRepositoryTests
+{
+    [Fact]
+    public void FindLayouts_LeavesTheScenesOfTheLivesOut()
+    {
+        using var database = new TemporaryDatabase();
+        var scenes = database.Repository<SceneRepository>();
+
+        var layout = scenes.Insert(new SceneEntity
+        {
+            Name = "Full + corner",
+            IsLayout = true,
+            Width = 1920,
+            Height = 1080,
+            Items =
+            [
+                new SceneItemEntity { X = 0, Y = 0, Width = 1920, Height = 1080 },
+                new SceneItemEntity { X = 1440, Y = 20, Width = 460, Height = 260 }
+            ]
+        });
+        scenes.Insert(new SceneEntity
+        {
+            Name = "Tonight",
+            Width = 1920,
+            Height = 1080,
+            Items = [new SceneItemEntity { SourceKind = SourceKind.Screen, SourceTarget = "desktop", Width = 1920, Height = 1080 }]
+        });
+
+        var layouts = scenes.FindLayouts();
+        Assert.Single(layouts);
+        Assert.Equal(layout, layouts[0].Pkid);
+        Assert.True(layouts[0].IsLayout);
+        Assert.Equal(2, layouts[0].Items.Count);
+        Assert.Equal(2, scenes.FindAll().Count);
+        Assert.False(scenes.IsOnAir(layout));
+    }
+
+    [Fact]
+    public void Insert_ThenUpdate_ReplacesTheItemsInOrder()
+    {
+        using var database = new TemporaryDatabase();
+        var scenes = database.Repository<SceneRepository>();
+
+        var pkid = scenes.Insert(new SceneEntity
+        {
+            Name = "Intro",
+            Description = "desktop with the camera on top",
+            Width = 1920,
+            Height = 1080,
+            LastModified = new DateTime(2026, 3, 1, 9, 0, 0),
+            Items =
+            [
+                new SceneItemEntity { SourceKind = SourceKind.Screen, SourceTarget = "desktop", X = 0, Y = 0, Width = 1920, Height = 1080 },
+                new SceneItemEntity { SourceKind = SourceKind.Camera, SourceTarget = "Integrated Camera", Label = "Webcam", X = 1400, Y = 700, Width = 480, Height = 270, AudioEnabled = true }
+            ]
+        });
+
+        var scene = scenes.FindByPkid(pkid);
+        Assert.NotNull(scene);
+        Assert.Equal(1920, scene!.Width);
+        Assert.Equal(2, scene.Items.Count);
+        Assert.Equal(SourceKind.Screen, scene.Items[0].SourceKind);
+        Assert.Equal(SourceKind.Camera, scene.Items[1].SourceKind);
+        Assert.True(scene.Items[1].AudioEnabled);
+
+        // Dropping the camera has to leave one item, not two with a flag on one of them.
+        scene.Items.RemoveAt(1);
+        scenes.Update(scene);
+
+        var after = scenes.FindByPkid(pkid);
+        Assert.NotNull(after);
+        Assert.Single(after!.Items);
+        Assert.Equal(SourceKind.Screen, after.Items[0].SourceKind);
+    }
+
+    [Fact]
+    public void Delete_TakesTheItemsWithIt()
+    {
+        using var database = new TemporaryDatabase();
+        var scenes = database.Repository<SceneRepository>();
+
+        var pkid = scenes.Insert(new SceneEntity
+        {
+            Name = "Temp",
+            Items = [new SceneItemEntity { SourceKind = SourceKind.Camera, SourceTarget = "Cam", Width = 640, Height = 480 }]
+        });
+
+        scenes.Delete(pkid);
+
+        Assert.Null(scenes.FindByPkid(pkid));
+        Assert.Empty(scenes.FindItemsOf(pkid));
+    }
+
+    [Fact]
+    public void FindAll_ReturnsTheItemsInStackingOrder()
+    {
+        using var database = new TemporaryDatabase();
+        var scenes = database.Repository<SceneRepository>();
+
+        var first = scenes.Insert(new SceneEntity { Name = "A", Items = [new SceneItemEntity { SourceTarget = "desktop" }] });
+        scenes.Insert(new SceneEntity
+        {
+            Name = "B",
+            Items =
+            [
+                new SceneItemEntity { SourceTarget = "desktop" },
+                new SceneItemEntity { SourceTarget = "cam" }
+            ]
+        });
+
+        var all = scenes.FindAll();
+        Assert.Equal(2, all.Count);
+        Assert.Equal("A", all[0].Name);
+        Assert.Single(all[0].Items);
+        Assert.Equal(2, all[1].Items.Count);
+        Assert.Equal("desktop", all[1].Items[0].SourceTarget);
+        Assert.Equal("cam", all[1].Items[1].SourceTarget);
+        Assert.True(first > 0);
+    }
 }
 
 public sealed class VideoRepositoryTests

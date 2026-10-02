@@ -110,7 +110,8 @@ public sealed class SettingService
         StreamKey = request.StreamKey!,
         PlatformStreamName = request.PlatformStreamName,
         Description = request.Description,
-        VideoFolder = request.VideoFolder!,
+        // The column is NOT NULL for the rows written before the folder left the form.
+        VideoFolder = request.VideoFolder ?? string.Empty,
         IsActive = request.IsActive,
         ChannelName = request.ChannelName!
     };

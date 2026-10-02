@@ -15,6 +15,13 @@ public sealed record MediaProbeResult(
     int AudioChannels,
     double DurationSeconds);
 
+/// <summary>
+/// What an encoder is asked to produce: the source as it is, unless the setting overrides the
+/// resolution or the frame rate. The transcode is built on it and the preview shows it next to
+/// the source, so the two are computed in one place only.
+/// </summary>
+public sealed record MediaOutput(int Width, int Height, double FrameRate);
+
 /// <summary>Port of the <c>FFmpegFrameGrabber</c> probing performed before every stream.</summary>
 public sealed class FfmpegProbe
 {

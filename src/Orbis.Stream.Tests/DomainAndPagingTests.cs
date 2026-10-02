@@ -53,13 +53,14 @@ public sealed class LiveStatusTests
     [Fact]
     public void VideoExtensions_AcceptTheSupportedContainers()
     {
-        foreach (var extension in new[] { "mp4", "flv", "mov", "webm", "vp9", "mkv" })
+        foreach (var extension in new[] { "mp4", "flv", "mov", "webm", "vp9", "mkv", "avi", "wmv", "m2ts", "mpg" })
         {
             Assert.True(VideoExtensions.IsVideoExtensionPresent(extension));
             Assert.True(VideoExtensions.IsVideoExtensionPresent(extension.ToUpperInvariant()));
         }
 
-        Assert.False(VideoExtensions.IsVideoExtensionPresent("avi"));
+        Assert.False(VideoExtensions.IsVideoExtensionPresent("srt"));
+        Assert.False(VideoExtensions.IsVideoExtensionPresent("jpg"));
         Assert.False(VideoExtensions.IsVideoExtensionPresent(""));
         Assert.False(VideoExtensions.IsVideoExtensionPresent(null));
     }
@@ -270,15 +271,16 @@ public sealed class LiveLinkTests
     }
 
     [Fact]
-    public void UrlOf_YouTubeIsTheLiveTabOfTheHandle()
+    public void UrlOf_YouTubeIsThePageOfTheHandle()
     {
-        Assert.Equal("https://www.youtube.com/@reproChannel/live", LiveLinkView.UrlOf(YouTube, "reproChannel", null));
+        Assert.Equal("https://www.youtube.com/@reproChannel", LiveLinkView.UrlOf(YouTube, "reproChannel", null));
+        Assert.Equal("https://www.youtube.com/@madajeeita207", LiveLinkView.UrlOf(YouTube, "madajeeita207", null));
     }
 
     [Fact]
     public void UrlOf_YouTubeDoesNotDoubleTheAtOfTheHandle()
     {
-        Assert.Equal("https://www.youtube.com/@reproChannel/live", LiveLinkView.UrlOf(YouTube, "@reproChannel", null));
+        Assert.Equal("https://www.youtube.com/@reproChannel", LiveLinkView.UrlOf(YouTube, "@reproChannel", null));
     }
 
     [Fact]
@@ -300,7 +302,7 @@ public sealed class LiveLinkTests
         // The form of the configuration stores the platform in the field named platform stream
         // name, and the channel in the channel name: following the wrong one gave twitch.tv/twitch.
         Assert.Equal("https://www.twitch.tv/ciclovisione", LiveLinkView.UrlOf(Twitch, "ciclovisione", "twitch"));
-        Assert.Equal("https://www.youtube.com/@ciclovisione/live", LiveLinkView.UrlOf(YouTube, "ciclovisione", "youtube"));
+        Assert.Equal("https://www.youtube.com/@ciclovisione", LiveLinkView.UrlOf(YouTube, "ciclovisione", "youtube"));
     }
 
     [Fact]
@@ -311,14 +313,33 @@ public sealed class LiveLinkTests
     }
 
     [Fact]
-    public void LabelAndGlyph_AreTheOnesOfTheConfigurationForm()
+    public void LabelAndMark_AreTheOnesOfTheConfigurationForm()
     {
         Assert.Equal("Twitch", LiveLinkView.LabelOf("twitch"));
         Assert.Equal("YouTube", LiveLinkView.LabelOf("youtube"));
-        Assert.Equal("\uE93E", LiveLinkView.GlyphOf("twitch"));
-        Assert.Equal("\uE714", LiveLinkView.GlyphOf("youtube"));
-        Assert.Equal("\uE714", LiveLinkView.GlyphOf("anythingElse"));
         Assert.Null(LiveLinkView.LabelOf("anythingElse"));
+    }
+
+    [Fact]
+    public void EachPlatformHasItsOwnMarkAndItsOwnColour()
+    {
+        // The brand of the platform, not a glyph of an icon font that happens to look like it: a
+        // channel row is read at a glance by which mark it carries.
+        Assert.NotEqual(LiveLinkView.MarkupOf("twitch"), LiveLinkView.MarkupOf("youtube"));
+        Assert.NotEqual(LiveLinkView.MarkupOf("twitch"), LiveLinkView.MarkupOf("anythingElse"));
+
+        // The Twitch mark is the outline of the speech bubble with the two bars; the YouTube one the
+        // rounded rectangle with the play triangle. Both are paths, so a page can draw them itself.
+        Assert.StartsWith("M11.571 4.714", LiveLinkView.MarkupOf("twitch"), StringComparison.Ordinal);
+        Assert.StartsWith("M23.498 6.186", LiveLinkView.MarkupOf("youtube"), StringComparison.Ordinal);
+
+        // A platform the application does not know gets the plain play, in the colour of the text.
+        Assert.StartsWith("M8 5v14", LiveLinkView.MarkupOf("anythingElse"), StringComparison.Ordinal);
+        Assert.StartsWith("M8 5v14", LiveLinkView.MarkupOf(null), StringComparison.Ordinal);
+
+        Assert.Equal("platform-twitch", LiveLinkView.ClassOf("twitch"));
+        Assert.Equal("platform-youtube", LiveLinkView.ClassOf("youtube"));
+        Assert.Equal("platform-generic", LiveLinkView.ClassOf("anythingElse"));
     }
 }
 

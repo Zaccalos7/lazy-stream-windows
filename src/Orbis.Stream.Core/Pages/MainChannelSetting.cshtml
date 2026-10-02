@@ -50,7 +50,7 @@
             {
                 <div class="caption truncate">@configuration.Description</div>
             }
-            <div class="caption truncate">@configuration.StreamUrl · @configuration.VideoFolder</div>
+            <div class="caption truncate">@configuration.StreamUrl</div>
         </div>
         <div class="actions">
             <span class="badge @(active ? "ended" : "")">@(active ? T["active"] : T["deactive"])</span>
@@ -103,16 +103,10 @@
                             </button>
                         </div>
                     </label>
-                    <label class="field dropzone">
-                        <span>@T["videoPathFolder"]</span>
-                        <input class="input" name="videoFolder" value="@editing.VideoFolder" placeholder="C:\Video" required
-                               data-drop-path data-drop-done="@T["dropVideoFolderDone"]" />
-                        <small><i class="icon">&#xE8B7;</i><span>@T["dropVideoFolderHint"]</span></small>
-                    </label>
                 </div>
                 <label class="field section">
                     <span>@T["description"]</span>
-                    <textarea class="input" name="description" rows="3" required>@editing.Description</textarea>
+                    <textarea class="input" name="description" rows="3">@editing.Description</textarea>
                 </label>
             </div>
             <div class="dialog-footer">

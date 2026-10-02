@@ -48,6 +48,8 @@ public sealed record SystemFact(string Key, string Value)
         : uptime.ToString("d\\.hh\\:mm\\:ss", System.Globalization.CultureInfo.InvariantCulture);
 }
 
+public sealed record FfmpegProcessStat(int Pid, string Name, int Cpu, int Ram, int Disk);
+
 /// <summary>
 /// Port of the OSHI calls behind <c>TaskManagerInfoComponent</c>. The contract (percentages as
 /// integers, <c>-1</c> when a value is not available) is preserved for the React build.
@@ -78,6 +80,8 @@ public interface ISystemInfoProvider
 
     int GetAppNetworkPercent();
 
+    IReadOnlyList<FfmpegProcessStat> GetFfmpegProcessStats();
+
     /// <summary>What the machine is, as opposed to the counters above: read once per page.</summary>
     IReadOnlyList<SystemFact> GetFacts();
 }
@@ -92,6 +96,57 @@ public static class SystemInfoProviderFactory
 
 internal static class AppMetricsHelper
 {
+    private static readonly Dictionary<int, TimeSpan> _lastFfmpegCpuTimes = new();
+    private static DateTime _lastFfmpegReadTime;
+    private static readonly object _ffmpegLock = new();
+
+    public static IReadOnlyList<FfmpegProcessStat> GetFfmpegProcessStats(long totalPhysBytes, int cpuCount)
+    {
+        lock (_ffmpegLock)
+        {
+            var currentReadTime = DateTime.UtcNow;
+            var elapsedMs = _lastFfmpegReadTime == default ? 0 : (currentReadTime - _lastFfmpegReadTime).TotalMilliseconds;
+            var stats = new List<FfmpegProcessStat>();
+            var currentFfmpegCpuTimes = new Dictionary<int, TimeSpan>();
+
+            foreach (var process in Process.GetProcessesByName("ffmpeg"))
+            {
+                try
+                {
+                    var pid = process.Id;
+                    var ram = totalPhysBytes > 0 ? (int)((process.WorkingSet64 * 100.0) / totalPhysBytes) : 0;
+                    var currentCpuTime = process.TotalProcessorTime;
+                    currentFfmpegCpuTimes[pid] = currentCpuTime;
+
+                    var cpuPercent = 0;
+                    if (elapsedMs > 0 && _lastFfmpegCpuTimes.TryGetValue(pid, out var lastCpuTime))
+                    {
+                        var elapsedAppCpu = (currentCpuTime - lastCpuTime).TotalMilliseconds;
+                        var load = (elapsedAppCpu / (cpuCount * elapsedMs)) * 100.0;
+                        cpuPercent = (int)Math.Max(0, Math.Min(100, load));
+                    }
+
+                    // Disk IO per process would require OS specific calls per process, which is costly. Let's keep it 0 for now.
+                    stats.Add(new FfmpegProcessStat(pid, process.ProcessName, cpuPercent, ram, 0));
+                }
+                catch
+                {
+                    // Process might have exited
+                }
+                finally
+                {
+                    process.Dispose();
+                }
+            }
+
+            _lastFfmpegCpuTimes.Clear();
+            foreach (var kvp in currentFfmpegCpuTimes) _lastFfmpegCpuTimes[kvp.Key] = kvp.Value;
+            _lastFfmpegReadTime = currentReadTime;
+
+            return stats;
+        }
+    }
+
     private static ulong _lastNetworkBytes;
     private static DateTime _lastNetworkTime;
     private static readonly object _appNetworkLock = new();
@@ -274,8 +329,18 @@ public sealed class WindowsSystemInfoProvider : ISystemInfoProvider
         {
             try
             {
-                using var process = Process.GetCurrentProcess();
-                var currentAppCpuTime = process.TotalProcessorTime;
+                TimeSpan currentAppCpuTime;
+                using (var process = Process.GetCurrentProcess())
+                {
+                    currentAppCpuTime = process.TotalProcessorTime;
+                }
+                foreach (var process in Process.GetProcessesByName("ffmpeg"))
+                {
+                    using (process)
+                    {
+                        try { currentAppCpuTime += process.TotalProcessorTime; } catch { }
+                    }
+                }
                 var currentReadTime = DateTime.UtcNow;
 
                 if (_lastAppCpuReadTime == default)
@@ -345,8 +410,15 @@ public sealed class WindowsSystemInfoProvider : ISystemInfoProvider
                 return 0;
             }
 
-            using var process = Process.GetCurrentProcess();
-            var workingSet = process.WorkingSet64;
+            long workingSet = 0;
+            using (var process = Process.GetCurrentProcess())
+            {
+                workingSet += process.WorkingSet64;
+            }
+            foreach (var process in Process.GetProcessesByName("ffmpeg"))
+            {
+                using (process) { try { workingSet += process.WorkingSet64; } catch { } }
+            }
             return (int)((workingSet * 100.0) / total);
         }
         catch
@@ -395,6 +467,16 @@ public sealed class WindowsSystemInfoProvider : ISystemInfoProvider
     }
 
     public int GetAppNetworkPercent() => AppMetricsHelper.GetAppNetworkMbps();
+
+    public IReadOnlyList<FfmpegProcessStat> GetFfmpegProcessStats()
+    {
+        long totalRam = 0;
+        if (TryGetMemoryStatus(out var memory))
+        {
+            totalRam = (long)memory.TotalPhys;
+        }
+        return AppMetricsHelper.GetFfmpegProcessStats(totalRam, Environment.ProcessorCount);
+    }
 
     /// <summary>
     /// The two in one reading: they are read together because the same round trip answers both, and
@@ -899,8 +981,18 @@ public sealed class PortableSystemInfoProvider : ISystemInfoProvider
         {
             try
             {
-                using var process = Process.GetCurrentProcess();
-                var currentAppCpuTime = process.TotalProcessorTime;
+                TimeSpan currentAppCpuTime;
+                using (var process = Process.GetCurrentProcess())
+                {
+                    currentAppCpuTime = process.TotalProcessorTime;
+                }
+                foreach (var process in Process.GetProcessesByName("ffmpeg"))
+                {
+                    using (process)
+                    {
+                        try { currentAppCpuTime += process.TotalProcessorTime; } catch { }
+                    }
+                }
                 var currentReadTime = DateTime.UtcNow;
 
                 if (_lastAppCpuReadTime == default)
@@ -947,8 +1039,15 @@ public sealed class PortableSystemInfoProvider : ISystemInfoProvider
                 return 0;
             }
 
-            using var process = Process.GetCurrentProcess();
-            var workingSetKilobytes = process.WorkingSet64 / 1024;
+            long workingSetKilobytes = 0;
+            using (var process = Process.GetCurrentProcess())
+            {
+                workingSetKilobytes += process.WorkingSet64 / 1024;
+            }
+            foreach (var process in Process.GetProcessesByName("ffmpeg"))
+            {
+                using (process) { try { workingSetKilobytes += process.WorkingSet64 / 1024; } catch { } }
+            }
             return (int)((workingSetKilobytes * 100.0) / totalKilobytes);
         }
         catch
@@ -993,6 +1092,16 @@ public sealed class PortableSystemInfoProvider : ISystemInfoProvider
     }
 
     public int GetAppNetworkPercent() => AppMetricsHelper.GetAppNetworkMbps();
+
+    public IReadOnlyList<FfmpegProcessStat> GetFfmpegProcessStats()
+    {
+        long totalRam = 0;
+        if (TryReadLinuxMemory(out var totalKilobytes, out _))
+        {
+            totalRam = totalKilobytes * 1024;
+        }
+        return AppMetricsHelper.GetFfmpegProcessStats(totalRam, Environment.ProcessorCount);
+    }
 
     private static int ReadCpuTemperature()
     {

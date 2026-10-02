@@ -1,6 +1,7 @@
 using Microsoft.AspNetCore.Mvc;
 using Orbis.Stream.Core.Contracts;
 using Orbis.Stream.Core.Data;
+using Orbis.Stream.Core.Domain;
 using Orbis.Stream.Core.Hosting;
 using Orbis.Stream.Core.I18n;
 using Orbis.Stream.Core.Services;
@@ -28,7 +29,7 @@ public sealed class MainLiveModel(
     [BindProperty(SupportsGet = true, Name = "p")]
     public int PageIndex { get; set; }
 
-    public SpringPage<VideoRequest> Videos { get; private set; } = null!;
+    public SpringPage<LiveRow> Videos { get; private set; } = null!;
 
     public IReadOnlyCollection<string> Channels { get; private set; } = [];
 
@@ -40,6 +41,9 @@ public sealed class MainLiveModel(
 
     /// <summary>Video whose setting is being linked (<c>?link={pkid}</c>).</summary>
     public int? LinkPkid { get; private set; }
+
+    /// <summary>Playlist whose setting is being linked (<c>?linkHistory={history}</c>).</summary>
+    public long? LinkHistory { get; private set; }
 
     [BindProperty]
     public VideoSettingForm? Form { get; set; }
@@ -56,7 +60,36 @@ public sealed class MainLiveModel(
 
     public bool OpenStart => !string.IsNullOrEmpty(Start);
 
-    public object Filters => new { LiveStatus, ChannelName, p = PageIndex };
+    /// <summary>The composer comes back open on this scene, with the two picks of the first step,
+    /// when a start was refused (<c>?compose={scenePkid}&amp;settingId=…&amp;configurationId=…</c>).</summary>
+    [BindProperty(SupportsGet = true, Name = "compose")]
+    public long? ComposeScene { get; set; }
+
+    [BindProperty(SupportsGet = true)]
+    public int? SettingId { get; set; }
+
+    [BindProperty(SupportsGet = true)]
+    public int? ConfigurationId { get; set; }
+
+    /// <summary>The playlist wizard comes back open, with the folder it was given, when the folder
+    /// was refused (<c>?playlist=1&amp;folder=…</c>): the user fixes the path instead of retyping it.</summary>
+    [BindProperty(SupportsGet = true)]
+    public string? Playlist { get; set; }
+
+    [BindProperty(SupportsGet = true)]
+    public string? Folder { get; set; }
+
+    public bool OpenPlaylist => !string.IsNullOrEmpty(Playlist);
+
+    /// <summary>The playlist whose details dialog is open (<c>?details={historyPkid}</c>). It stays
+    /// in the address after an action taken inside the dialog, so the dialog comes back with it.</summary>
+    [BindProperty(SupportsGet = true)]
+    public long? Details { get; set; }
+
+    /// <summary>What the details dialog shows; null when no dialog is asked for, or the playlist is gone.</summary>
+    public PlaylistDetails? OpenedPlaylist { get; private set; }
+
+    public object Filters => new { LiveStatus, ChannelName, p = PageIndex, details = Details };
 
     /// <summary>
     /// The filters (and, when the form acts on a row, its key) as route data, so every action
@@ -69,10 +102,21 @@ public sealed class MainLiveModel(
     /// <summary>Filters plus the <c>pkid</c> of the row the form acts on.</summary>
     public Dictionary<string, string> RowRoute(int? pkid) => RouteOf("pkid", pkid);
 
+    /// <summary>Filters plus the <c>pkid</c> of a video of the open details dialog, which comes back open.</summary>
+    public Dictionary<string, string> DetailsRowRoute(int? pkid)
+    {
+        var route = RouteOf("pkid", pkid);
+        route["details"] = (Details ?? 0).ToString(System.Globalization.CultureInfo.InvariantCulture);
+        return route;
+    }
+
+    /// <summary>Filters plus the live history of the playlist the form acts on as a whole.</summary>
+    public Dictionary<string, string> PlaylistRoute(long? history) => RouteOf("history", history);
+
     /// <summary>Filters plus the <c>videoKey</c> of the locked video the unlock form acts on.</summary>
     public Dictionary<string, string> UnlockRoute(int? videoKey) => RouteOf("videoKey", videoKey);
 
-    private Dictionary<string, string> RouteOf(string? key = null, int? value = null)
+    private Dictionary<string, string> RouteOf(string? key = null, long? value = null)
     {
         var route = new Dictionary<string, string>
         {
@@ -89,18 +133,27 @@ public sealed class MainLiveModel(
         return route;
     }
 
-    public void OnGet(int? link)
+    public void OnGet(int? link, long? linkHistory)
     {
         LoadVideos();
+        LoadDetails();
         Channels = settings.RetrieveChannel(new Dictionary<string, string>());
         Locked = videos.GetLockedVideos();
         ActiveSettings = videoSettings.GetAllVideoSettings(new Dictionary<string, string> { ["isVideoAndAudioSettingActive"] = "true" });
         ActiveConfigurations = settings.RetrieveSettings(new Dictionary<string, string> { ["isActive"] = "true" });
 
-        if (link is not null)
+        if (link is not null || linkHistory is not null)
         {
             LinkPkid = link;
-            Form = new VideoSettingForm();
+            LinkHistory = linkHistory;
+            // The dialog opens on the setting the row already streams with: saving edits that one.
+            VideoSettingsRequest? current = null;
+            Try(() =>
+            {
+                current = videoSettings.FindSettingOf(link, linkHistory);
+                return true;
+            });
+            Form = current is null ? new VideoSettingForm() : VideoSettingForm.From(current);
         }
     }
 
@@ -108,6 +161,26 @@ public sealed class MainLiveModel(
     {
         LoadVideos();
         return Partial("_LiveRows", this);
+    }
+
+    /// <summary>The list of the details dialog, redrawn on every change like the rows are.</summary>
+    public PartialViewResult OnGetDetailsRows()
+    {
+        LoadDetails();
+        return Partial("_PlaylistVideos", this);
+    }
+
+    public IActionResult OnPostDeletePlaylist(long history)
+    {
+        Run(() => videos.DeletePlaylist(history));
+
+        LoadVideos();
+        if (Videos.Content.Count == 0 && PageIndex > 0)
+        {
+            PageIndex = Math.Max(Videos.Page.TotalPages - 1, 0);
+        }
+
+        return RedirectToPage(Filters);
     }
 
     public IActionResult OnPostStop(int pkid)
@@ -153,17 +226,49 @@ public sealed class MainLiveModel(
         return RedirectToPage(Filters);
     }
 
+    public IActionResult OnPostDelete(int pkid)
+    {
+        Run(() => videos.DeleteVideo(pkid));
+
+        // Deleting the only row of the last page would leave the view on a page that no longer exists.
+        LoadVideos();
+        if (Videos.Content.Count == 0 && PageIndex > 0)
+        {
+            PageIndex = Math.Max(Videos.Page.TotalPages - 1, 0);
+        }
+
+        return RedirectToPage(Filters);
+    }
+
+    /// <summary>"Start again from this video" of the playlist dialog: the ones before it count as
+    /// streamed, and the playlist goes on air from it. The dialog stays open to watch it start.</summary>
+    public IActionResult OnPostReplayFrom(int pkid)
+    {
+        Try(() =>
+        {
+            streaming.PrepareStartFrom(pkid);
+            var video = videos.FindVideo(pkid);
+            validator.RequireVideo(video);
+            return Run(() => streaming.StartVideo(video));
+        });
+        return RedirectToPage(Filters);
+    }
+
     public IActionResult OnPostUnlock(int videoKey)
     {
         Run(() => videos.UnlockVideo(videoKey));
         return RedirectToPage(Filters);
     }
 
-    public IActionResult OnPostLink(int pkid)
+    public IActionResult OnPostLink(int pkid, long? history)
     {
         if (Form is null || !Form.IsComplete)
         {
             SetNotice(NoticeKind.Error, localizer.PrintMessage("not.valid.input"));
+        }
+        else if (history is not null)
+        {
+            Run(() => videoSettings.LinkAndSaveSettingsPlaylist(Form.ToRequest(), history.Value));
         }
         else
         {
@@ -174,31 +279,77 @@ public sealed class MainLiveModel(
     }
 
     /// <summary>The wizard: one active video setting plus one active streaming configuration.</summary>
-    public IActionResult OnPostStart(int settingId, int configurationId)
+    /// <summary>
+    /// The live wizard: the setting and the destination of the first step, and the scene the
+    /// composer has just saved. The rows of the live keep every source of it (kind, target, place
+    /// on the canvas), so a play or a restart later needs nothing else.
+    /// </summary>
+    public IActionResult OnPostStartScene(long scenePkid, int settingId, int configurationId)
+    {
+        var setting = videoSettings.GetAllVideoSettings(new Dictionary<string, string> { ["id"] = settingId.ToString(System.Globalization.CultureInfo.InvariantCulture) }).FirstOrDefault();
+        var configuration = settings.RetrieveSettings(new Dictionary<string, string> { ["id"] = configurationId.ToString(System.Globalization.CultureInfo.InvariantCulture) }).FirstOrDefault();
+
+        var started = false;
+        if (setting is null || configuration is null)
+        {
+            SetNotice(NoticeKind.Error, localizer.PrintMessage("not.valid.input"));
+        }
+        else
+        {
+            var request = new StartSceneLiveRequest(
+                scenePkid,
+                configuration.StreamUrl,
+                configuration.StreamKey,
+                configuration.PlatformStreamName,
+                configuration.ChannelName,
+                setting);
+
+            started = Try(() =>
+            {
+                validator.RequireStartSceneLive(request);
+                return Run(() => streaming.StartSceneLive(request));
+            });
+        }
+
+        return started
+            ? RedirectToPage(Filters)
+            : RedirectToPage(new { LiveStatus, ChannelName, p = PageIndex, compose = scenePkid, settingId, configurationId });
+    }
+
+    /// <summary>The same wizard, with the folder picked here in place of the configuration's one.</summary>
+    public IActionResult OnPostPlaylist(int settingId, int configurationId, string? videoFolder)
+    {
+        var request = StartRequestOf(settingId, configurationId, videoFolder ?? string.Empty);
+        var started = request is not null && Try(() =>
+        {
+            validator.RequireStartLive(request);
+            return Run(() => streaming.StartPlaylist(request));
+        });
+
+        return started
+            ? RedirectToPage(Filters)
+            : RedirectToPage(new { LiveStatus, ChannelName, p = PageIndex, playlist = 1, folder = videoFolder });
+    }
+
+    /// <summary>What the playlist wizard picked, as a start request; null (with the notice set) when
+    /// either pick no longer exists.</summary>
+    private StartLiveRequest? StartRequestOf(int settingId, int configurationId, string folder)
     {
         var setting = videoSettings.GetAllVideoSettings(new Dictionary<string, string> { ["id"] = settingId.ToString(System.Globalization.CultureInfo.InvariantCulture) }).FirstOrDefault();
         var configuration = settings.RetrieveSettings(new Dictionary<string, string> { ["id"] = configurationId.ToString(System.Globalization.CultureInfo.InvariantCulture) }).FirstOrDefault();
         if (setting is null || configuration is null)
         {
             SetNotice(NoticeKind.Error, localizer.PrintMessage("not.valid.input"));
-            return RedirectToPage(Filters);
+            return null;
         }
 
-        var request = new StartLiveRequest(
+        return new StartLiveRequest(
             configuration.StreamUrl,
             configuration.StreamKey,
-            configuration.VideoFolder,
+            folder,
             configuration.PlatformStreamName,
             configuration.ChannelName,
             setting);
-
-        var started = Try(() =>
-        {
-            validator.RequireStartLive(request);
-            return Run(() => streaming.StartLive(request));
-        });
-
-        return started ? RedirectToPage("/Countdown") : RedirectToPage(Filters);
     }
 
     private void LoadVideos()
@@ -214,6 +365,19 @@ public sealed class MainLiveModel(
             filters["channelName"] = ChannelName;
         }
 
-        Videos = videos.GetAllVideoList(filters, new PageRequest(Math.Max(PageIndex, 0), PageSize, [new SortOrder("startDateLive", true)]));
+        Videos = videos.GetLivePage(
+            LiveStatusExtensions.TryParseWireValue(LiveStatus, out var status) ? status : null,
+            ChannelName,
+            new PageRequest(Math.Max(PageIndex, 0), PageSize, [new SortOrder("startDateLive", true)]));
+    }
+
+    private void LoadDetails()
+    {
+        if (Details is not { } history)
+        {
+            return;
+        }
+
+        OpenedPlaylist = videos.GetPlaylist(history);
     }
 }

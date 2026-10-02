@@ -9,6 +9,7 @@ using Orbis.Stream.Core.Domain;
 using Orbis.Stream.Core.Http;
 using Orbis.Stream.Core.I18n;
 using Orbis.Stream.Core.Services;
+using Orbis.Stream.Core.Streaming;
 
 namespace Orbis.Stream.Core.Hosting;
 
@@ -24,6 +25,13 @@ public static class OrbisEndpoints
     /// <summary>How long the browser waits before trying again after a dropped stream.</summary>
     private const int ReconnectMilliseconds = 2000;
 
+    /// <summary>
+    /// The name of the header that carries the stamp of the frame, which is what tells two frames of
+    /// the same live apart. The stamp is the moment ffmpeg wrote the file, so a page that asks for
+    /// the frame it has already seen gets told so without the JPEG being sent again.
+    /// </summary>
+    private const string FrameStampHeader = "X-Orbis-Frame";
+
     public static IEndpointRouteBuilder MapOrbisEndpoints(this IEndpointRouteBuilder app)
     {
         ArgumentNullException.ThrowIfNull(app);
@@ -34,13 +42,78 @@ public static class OrbisEndpoints
         MapVideoSettings(app);
         MapImage(app);
         MapTaskManager(app);
+        MapPreview(app);
+        MapScene(app);
         MapUpdates(app);
         return app;
+    }
+
+    /// <summary>
+    /// The canvases and the sources that can go on them. The catalog is a separate route from the
+    /// scenes because the page asks for it on every open, while the scenes are only fetched when
+    /// one is being edited.
+    /// </summary>
+    private static void MapScene(IEndpointRouteBuilder app)
+    {
+        var group = app.MapGroup("/scene");
+
+        group.MapGet("/layouts", (SceneService service) => Results.Ok(service.GetLayouts()));
+        group.MapGet("/{pkid:long}", (long pkid, SceneService service) => Results.Ok(service.GetOne(pkid)));
+        group.MapPost("/save", (SceneRequest? request, SceneService service) =>
+        {
+            if (request is null)
+            {
+                throw new RequestValidationException(new Dictionary<string, string>
+                {
+                    ["body"] = "input.not.valid"
+                });
+            }
+
+            var (response, pkid) = service.Save(request);
+            return Results.Json(
+                new SceneSavedResponse(response.Body.Response, response.Body.Message, pkid),
+                statusCode: response.StatusCode);
+        });
+        group.MapDelete("/{pkid:long}", (long pkid, SceneService service) => AsResult(service.Delete(pkid)));
+
+        app.MapGet("/preview/sources", (SourceCatalogService service) => Results.Ok(service.List()));
+
+        // One still per tile. No content is an answer, not an error: a camera that is busy in
+        // another application still goes on the canvas, it just shows its icon instead.
+        app.MapGet("/preview/sources/snapshot", async (
+            HttpContext context,
+            string? kind,
+            string? target,
+            SourceSnapshotService service,
+            CancellationToken cancellationToken) =>
+        {
+            // The URL of a source never changes, so a still that could not be grabbed would be
+            // the answer for ever: 204 is cacheable, and the tile of a scene saved yesterday would
+            // keep showing its icon even with the source back. A still is a moment, asked again.
+            context.Response.Headers.CacheControl = "no-store";
+
+            if (!SourceKindExtensions.TryParse(kind, out var sourceKind))
+            {
+                return Results.NoContent();
+            }
+
+            var frame = await service.GrabAsync(sourceKind, target, cancellationToken).ConfigureAwait(false);
+            return frame is null ? Results.NoContent() : Results.File(frame, "image/jpeg");
+        });
     }
 
     private static void MapLive(IEndpointRouteBuilder app)
     {
         var group = app.MapGroup("/live");
+
+        group.MapPost("/start-scene-live", (
+            StartSceneLiveRequest? request,
+            StreamingService service,
+            RequestValidator validator) =>
+        {
+            validator.RequireStartSceneLive(request);
+            return AsResult(service.StartSceneLive(request!));
+        });
 
         group.MapPost("/start-live", (
             StartLiveRequest? request,
@@ -181,11 +254,93 @@ public static class OrbisEndpoints
     }
 
     /// <summary>
+    /// The preview API: where the page reads the state of the live it is watching, the file behind
+    /// the player, and the endpoint that changes the parameters of a running transcode.
+    /// </summary>
+    private static void MapPreview(IEndpointRouteBuilder app)
+    {
+        var group = app.MapGroup("/preview");
+
+        group.MapGet("/live", (LivePreviewService service, HttpRequest request) =>
+            Results.Json(service.Snapshot(Watched(request))));
+
+        group.MapGet("/live/{pkid:int}/video", (int pkid, LivePreviewService service) =>
+        {
+            var file = service.FileOf(pkid);
+            // The player asks for ranges to seek, so the answer has to be a file result that knows
+            // about them: without this every seek would start the file over.
+            return Results.File(file.Path, file.ContentType, enableRangeProcessing: true);
+        });
+
+        // One frame of the light picture, as a whole JPEG. This is what the preview page draws, and
+        // it is the endpoint the picture is judged on: a page that keeps asking for the newest
+        // frame gets the newest frame, and a frame it did not get in time is simply gone instead of
+        // arriving late and dragging the picture behind the live. The answer is short (the picture
+        // is 640 pixels wide), and the stamp in the header lets a page that already has this exact
+        // frame be answered without the bytes at all.
+        group.MapGet("/live/{pkid:int}/frame", (
+            int pkid,
+            HttpContext context,
+            LivePreviewFrames frames,
+            StreamingSessionRegistry sessions) =>
+        {
+            // A live that is over has no frame: the page covers the picture rather than leaving the
+            // last one standing as if it were still on air.
+            if (!sessions.TryGet(pkid, out _))
+            {
+                return Results.NotFound();
+            }
+
+            var frame = frames.Read(pkid);
+            if (frame is null)
+            {
+                return Results.NotFound();
+            }
+
+            // The stamp is the write time, so it moves with every frame ffmpeg writes. The page sends
+            // back the one it is holding; if it is the same frame, there is nothing to draw.
+            var stamp = frames.LastWrite(pkid).Ticks.ToString(CultureInfo.InvariantCulture);
+            context.Response.Headers.CacheControl = "no-store";
+            context.Response.Headers[FrameStampHeader] = stamp;
+
+            if (context.Request.Headers.IfNoneMatch.Any(value => value == stamp))
+            {
+                return Results.StatusCode(StatusCodes.Status304NotModified);
+            }
+
+            return Results.File(frame, "image/jpeg");
+        });
+
+        // The light picture of a live: the JPEGs its ffmpeg writes next to the stream, pushed as
+        // motion JPEG, which an <img> plays on its own. A frame goes out only when there is a new
+        // one, and the answer ends with the live, so an open page costs nothing once it is over.
+        group.MapPut("/live/{pkid:int}/parameters", (
+            int pkid,
+            LiveParameterRequest? request,
+            LivePreviewService service,
+            RequestValidator validator) =>
+        {
+            validator.RequireLiveParameters(request);
+            return AsResult(service.ApplyParameters(pkid, request!));
+        });
+    }
+
+    /// <summary>The live a preview page is following, when it asked for one that is still running.</summary>
+    private static int? Watched(HttpRequest request)
+    {
+        var raw = request.Query["live"].FirstOrDefault();
+        return int.TryParse(raw, NumberStyles.Integer, CultureInfo.InvariantCulture, out var pkid) && pkid > 0
+            ? pkid
+            : null;
+    }
+
+    /// <summary>
     /// The push channel the pages listen to, so that they ask for what changed instead of asking
-    /// every few seconds. Two kinds of message: <c>rows</c> when a live row moved (the page redoes
-    /// its partial) and <c>stats</c> with the counters themselves (the page paints them, with no
-    /// request at all). The sampling stays on the server, where the value comes from anyway:
-    /// sampling is unavoidable, being asked again by every window is not.
+    /// every few seconds. Three kinds of message: <c>rows</c> when a live row moved (the page
+    /// redoes its partial), <c>stats</c> with the counters themselves and <c>live</c> with the
+    /// state of the live the page is watching (the page paints it, with no request at all). The
+    /// sampling stays on the server, where the value comes from anyway: sampling is unavoidable,
+    /// being asked again by every window is not.
     /// </summary>
     private static void MapUpdates(IEndpointRouteBuilder app)
     {
@@ -193,11 +348,13 @@ public static class OrbisEndpoints
             HttpContext context,
             LiveChangeNotifier notifier,
             SystemInfoService systemInfo,
+            LivePreviewService preview,
             CancellationToken token) =>
         {
             var watchRows = Watches(context.Request, "rows");
             var watchStats = Watches(context.Request, "stats");
-            if (!watchRows && !watchStats)
+            var watchLive = Watches(context.Request, "live");
+            if (!watchRows && !watchStats && !watchLive)
             {
                 return Results.Empty;
             }
@@ -220,7 +377,10 @@ public static class OrbisEndpoints
                 await response.Body.FlushAsync(token).ConfigureAwait(false);
             }
 
-            using var statsTimer = watchStats ? new PeriodicTimer(StatsInterval) : null;
+            // One timer for both sampled messages: they are both read once a second, and a page
+            // watching one of them is not paying for a tick that paints nothing.
+            using var sampler = watchStats || watchLive ? new PeriodicTimer(StatsInterval) : null;
+            var watched = watchLive ? Watched(context.Request) : null;
 
             try
             {
@@ -237,15 +397,20 @@ public static class OrbisEndpoints
                     await WriteAsync("stats", StatsJson(systemInfo)).ConfigureAwait(false);
                 }
 
-                // Both sources are awaited together: a change must not hold back the counters, and a
-                // counter tick must not be waited for by a page that does not want them. A source
-                // nobody watches stays pending until the client goes away.
+                if (watchLive)
+                {
+                    await WriteAsync("live", LiveJson(preview, watched)).ConfigureAwait(false);
+                }
+
+                // Every source is awaited together: a change must not hold back the samples, and a
+                // tick must not be waited for by a page that does not want it. A source nobody
+                // watches stays pending until the client goes away.
                 var rows = watchRows ? notifier.WaitAsync(version, token) : NeverRows(version, token);
-                var stats = statsTimer is not null ? statsTimer.WaitForNextTickAsync(token).AsTask() : NeverStats(token);
+                var sample = sampler is not null ? sampler.WaitForNextTickAsync(token).AsTask() : NeverStats(token);
 
                 while (true)
                 {
-                    var first = await Task.WhenAny(rows, stats).ConfigureAwait(false);
+                    var first = await Task.WhenAny(rows, sample).ConfigureAwait(false);
 
                     if (first == rows)
                     {
@@ -259,8 +424,17 @@ public static class OrbisEndpoints
                     }
                     else
                     {
-                        await WriteAsync("stats", StatsJson(systemInfo)).ConfigureAwait(false);
-                        stats = statsTimer is not null ? statsTimer.WaitForNextTickAsync(token).AsTask() : NeverStats(token);
+                        if (watchStats)
+                        {
+                            await WriteAsync("stats", StatsJson(systemInfo)).ConfigureAwait(false);
+                        }
+
+                        if (watchLive)
+                        {
+                            await WriteAsync("live", LiveJson(preview, watched)).ConfigureAwait(false);
+                        }
+
+                        sample = sampler is not null ? sampler.WaitForNextTickAsync(token).AsTask() : NeverStats(token);
                     }
                 }
             }
@@ -323,7 +497,7 @@ public static class OrbisEndpoints
     /// </summary>
     private static string StatsJson(SystemInfoService systemInfo)
     {
-        var values = new Dictionary<string, int>(MeterKeys.Count, StringComparer.Ordinal);
+        var values = new Dictionary<string, object>(MeterKeys.Count + 1, StringComparer.Ordinal);
         foreach (var stat in systemInfo.GetAllSystemInfo())
         {
             if (stat.Field is { } field && MeterKeys.TryGetValue(field, out var key))
@@ -332,8 +506,20 @@ public static class OrbisEndpoints
             }
         }
 
+        values["ffmpeg_processes"] = systemInfo.GetFfmpegProcessStats();
+
         return JsonSerializer.Serialize(values);
     }
+
+    /// <summary>
+    /// The state of a live as the preview page wants it: the same camel case the rest of the API
+    /// answers in, so the page reads one shape whether the first sample came from the endpoint or
+    /// from the stream.
+    /// </summary>
+    private static string LiveJson(LivePreviewService preview, int? watched) =>
+        JsonSerializer.Serialize(preview.Snapshot(watched), PreviewJson);
+
+    private static readonly JsonSerializerOptions PreviewJson = new(JsonSerializerDefaults.Web);
 
     /// <summary>Writes the <c>{ response, message }</c> envelope with the Spring status code.</summary>
     private static IResult AsResult(MessageResponse response) =>

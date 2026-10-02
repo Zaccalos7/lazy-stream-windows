@@ -9,74 +9,152 @@
 }
 else
 {
-    <div class="table-wrap">
-        <table class="list">
-            <thead>
-            <tr>
-                <th>@T["liveStatus"]</th>
-                <th>@T["title"]</th>
-                <th>@T["channel"]</th>
-                <th>@(T["startDate"].TrimEnd(' ', ':'))</th>
-                <th></th>
-            </tr>
-            </thead>
-            <tbody>
-            @foreach (var video in Model.Videos.Content)
-            {
-                var status = video.LiveStatus;
-                var hasSetting = video.VideoSetting is not null;
-                var live = status == LiveStatus.Live;
-                var platform = video.VideoLiveHistory?.PlatformStreamName;
+    <div class="live-rows-container">
+        <div class="table-wrap-scrollable">
+            <div class="table-wrap">
+                <table class="list">
+                    <thead>
+                    <tr>
+                        <th>@T["liveStatus"]</th>
+                        <th>@T["title"]</th>
+                        <th>@T["channel"]</th>
+                        <th>@(T["startDate"].TrimEnd(' ', ':'))</th>
+                        <th></th>
+                    </tr>
+                    </thead>
+                    <tbody>
+                    @foreach (var row in Model.Videos.Content)
+                    {
+                        // A playlist is one row: the video it got to stands for it, and its videos are in the details dialog.
+                        var video = row.Video;
+                        var historyPkid = video.VideoLiveHistory?.Pkid;
+                        // The status of the playlist, not of the video shown: LIVE while any is on air, ENDED at the end.
+                        var status = row.Status;
+                        var hasSetting = video.VideoSetting is not null;
+                        var live = status == LiveStatus.Live;
+                        var platform = video.VideoLiveHistory?.PlatformStreamName;
 
-                // Only a live that is running can be watched, and only a known platform has a page.
-                var livePlatform = live ? LiveLinkView.PlatformOf(video.VideoLiveHistory?.StreamUrl) : null;
-                var liveUrl = livePlatform is null ? null : LiveLinkView.UrlOf(video.VideoLiveHistory?.StreamUrl, video.ChannelName, platform);
-                var liveLabel = LiveLinkView.LabelOf(livePlatform);
-                var liveTitle = T["openLivePage"] + (string.IsNullOrEmpty(liveLabel) ? "" : " (" + liveLabel + ")");
-                <tr data-row>
-                    <td><span class="badge @LiveStatusView.Css(status)">@T[LiveStatusView.Key(status)]</span></td>
-                    <td class="path">
-                        <div class="truncate"><strong>@video.Name</strong></div>
-                        <div class="caption truncate" title="@video.VideoPath">@(string.IsNullOrEmpty(platform) ? "" : platform + " · ")@video.VideoPath</div>
-                    </td>
-                    <td>@(video.ChannelName ?? "N/A")</td>
-                    <td>@LiveStatusView.Date(video.StartDateLive, "dd/MM/yyyy HH:mm:ss")</td>
-                    <td>
-                        <div class="actions">
-                            @if (liveUrl is not null)
-                            {
-                                <a class="btn subtle icon-only" href="@liveUrl" target="_blank" rel="noopener noreferrer" title="@liveTitle" aria-label="@liveTitle">
-                                    <i class="icon">@LiveLinkView.GlyphOf(livePlatform)</i>
-                                </a>
-                            }
-                            @if (hasSetting)
-                            {
-                                <form method="post" asp-page="/MainLive" asp-page-handler="Stop" asp-all-route-data="Model.RowRoute(video.Pkid)" data-confirm="@T["stopLive"]">
-                                    <button class="btn subtle icon-only danger" disabled="@(!live)" title="@T["stopLiveIconLabel"]" aria-label="@T["stopLiveIconLabel"]"><i class="icon">&#xE71A;</i></button>
-                                </form>
-                                <form method="post" asp-page="/MainLive" asp-page-handler="Replay" asp-all-route-data="Model.RowRoute(video.Pkid)" data-confirm="@T["startLiveAlert"]">
-                                    <button class="btn subtle icon-only" disabled="@live" title="@T["startLiveIconLabel"]" aria-label="@T["startLiveIconLabel"]"><i class="icon">&#xE768;</i></button>
-                                </form>
-                                <form method="post" asp-page="/MainLive" asp-page-handler="Restart" asp-all-route-data="Model.RowRoute(video.Pkid)" data-confirm="@T["restartLiveAlert"]">
-                                    <button class="btn subtle icon-only" title="@T["restartLiveIconLabel"]" aria-label="@T["restartLiveIconLabel"]"><i class="icon">&#xE72C;</i></button>
-                                </form>
-                            }
-                            else
-                            {
-                                <a class="btn subtle" href="@Url.Page("/MainLive", new { Model.LiveStatus, Model.ChannelName, p = Model.PageIndex, link = video.Pkid })">
-                                    <i class="icon">&#xE71B;</i>@T["connectVideoSetting"]
-                                </a>
-                            }
-                            @* A start, a stop or a restart runs the server (ffmpeg included), so
-                               the answer takes a moment: this is what says the row is working,
-                               next to the icons that asked for it. *@
-                            <span class="spinner" data-while="busy" title="@T["loading"]"></span>
-                        </div>
-                    </td>
-                </tr>
-            }
-            </tbody>
-        </table>
+                        var knownPlatform = LiveLinkView.PlatformOf(video.VideoLiveHistory?.StreamUrl);
+                        var liveUrl = live ? LiveLinkView.UrlOf(video.VideoLiveHistory?.StreamUrl, video.ChannelName, platform) : null;
+                        <tr data-row>
+                            <td><span class="badge @LiveStatusView.Css(status)">@T[LiveStatusView.Key(status)]</span></td>
+                            <td class="path">
+                                <div class="truncate">
+                                    @if (row.IsPlaylist)
+                                    {
+                                        <span class="badge playlist">@string.Format(T["playlistPosition"], row.Position, row.Total)</span>
+                                    }
+                                    else if (row.IsScene)
+                                    {
+                                        <span class="badge playlist">@string.Format(T["sceneSources"], row.Total)</span>
+                                    }
+                                    <strong>@(row.SceneName ?? video.Name)</strong>
+                                </div>
+                                @{ var source = row.IsPlaylist ? video.VideoLiveHistory?.FolderOfVideoToStream : row.IsScene ? video.Name : video.VideoPath; }
+                                <div class="caption truncate" title="@source">@(string.IsNullOrEmpty(platform) ? "" : platform + " · ")@source</div>
+                            </td>
+                            <td>
+                                @(video.ChannelName ?? "N/A")
+                            </td>
+                            <td>@LiveStatusView.Date(video.StartDateLive, "dd/MM/yyyy HH:mm:ss")</td>
+                            <td>
+                                <div class="actions">
+                                    @* The mark of the platform the row is on air on, with the other
+                                       icons rather than beside the channel name: it is what the icons
+                                       are about, and the channel name is long enough on its own. *@
+                                    @if (knownPlatform != null)
+                                    {
+                                        var markClass = "platform-mark " + LiveLinkView.ClassOf(knownPlatform);
+                                        var platformName = LiveLinkView.LabelOf(knownPlatform) ?? knownPlatform;
+                                        if (liveUrl != null)
+                                        {
+                                            <a href="@liveUrl" target="_blank" rel="noopener noreferrer" title="@platformName" aria-label="@platformName">
+                                                <span class="@markClass"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="@LiveLinkView.MarkupOf(knownPlatform)" /></svg></span>
+                                            </a>
+                                        }
+                                        else
+                                        {
+                                            <span class="@markClass" title="@platformName"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="@LiveLinkView.MarkupOf(knownPlatform)" /></svg></span>
+                                        }
+                                    }
+                                    @if (row.HasDetails)
+                                    {
+                                        @* What the dialog opens is the composition for a scene and the
+                                           playlist for a folder, so it is called by the name it has here. *@
+                                        var detailsLabel = T[row.IsScene ? "sceneDetails" : "playlistDetails"];
+                                        <a class="btn subtle icon-only" href="@Url.Page("/MainLive", new { Model.LiveStatus, Model.ChannelName, p = Model.PageIndex, details = historyPkid })"
+                                           title="@detailsLabel" aria-label="@detailsLabel"><i class="icon">&#xE8FD;</i></a>
+                                    }
+                                    @if (hasSetting)
+                                    {
+                                        if (row.IsPlaylist)
+                                        {
+                                            <a class="btn subtle icon-only" href="@Url.Page("/MainLive", new { Model.LiveStatus, Model.ChannelName, p = Model.PageIndex, linkHistory = historyPkid })" title="@T["connectVideoSetting"]" aria-label="@T["connectVideoSetting"]">
+                                                <i class="icon">&#xE713;</i>
+                                            </a>
+                                        }
+                                        else
+                                        {
+                                            <a class="btn subtle icon-only" href="@Url.Page("/MainLive", new { Model.LiveStatus, Model.ChannelName, p = Model.PageIndex, link = video.Pkid })" title="@T["connectVideoSetting"]" aria-label="@T["connectVideoSetting"]">
+                                                <i class="icon">&#xE713;</i>
+                                            </a>
+                                        }
+                                    }
+                                    else
+                                    {
+                                        if (row.IsPlaylist)
+                                        {
+                                            <a class="btn subtle" href="@Url.Page("/MainLive", new { Model.LiveStatus, Model.ChannelName, p = Model.PageIndex, linkHistory = historyPkid })">
+                                                <i class="icon">&#xE71B;</i>@T["connectVideoSetting"]
+                                            </a>
+                                        }
+                                        else
+                                        {
+                                            <a class="btn subtle" href="@Url.Page("/MainLive", new { Model.LiveStatus, Model.ChannelName, p = Model.PageIndex, link = video.Pkid })">
+                                                <i class="icon">&#xE71B;</i>@T["connectVideoSetting"]
+                                            </a>
+                                        }
+                                    }
+                                    @if (hasSetting && !row.IsPlaylist)
+                                    {
+                                        <form method="post" asp-page="/MainLive" asp-page-handler="Stop" asp-all-route-data="Model.RowRoute(video.Pkid)" data-confirm="@T["stopLive"]">
+                                            <button class="btn subtle icon-only danger" disabled="@(!live)" title="@T["stopLiveIconLabel"]" aria-label="@T["stopLiveIconLabel"]"><i class="icon">&#xE71A;</i></button>
+                                        </form>
+                                        <form method="post" asp-page="/MainLive" asp-page-handler="Replay" asp-all-route-data="Model.RowRoute(video.Pkid)" data-confirm="@T["startLiveAlert"]">
+                                            <button class="btn subtle icon-only success" disabled="@live" title="@T["startLiveIconLabel"]" aria-label="@T["startLiveIconLabel"]"><i class="icon">&#xE768;</i></button>
+                                        </form>
+                                        <form method="post" asp-page="/MainLive" asp-page-handler="Restart" asp-all-route-data="Model.RowRoute(video.Pkid)" data-confirm="@T["restartLiveAlert"]">
+                                            <button class="btn subtle icon-only caution" title="@T["restartLiveIconLabel"]" aria-label="@T["restartLiveIconLabel"]"><i class="icon">&#xE72C;</i></button>
+                                        </form>
+                                    }
+                                    @* A running live cannot be deleted: its ffmpeg still reads the row to know when to stop.
+                                       On a playlist row the bin takes the whole playlist; one video goes from the details dialog. *@
+                                    @if (row.HasDetails)
+                                    {
+                                        <form method="post" asp-page="/MainLive" asp-page-handler="DeletePlaylist" asp-all-route-data="Model.PlaylistRoute(historyPkid)" data-confirm="@string.Format(T[row.IsScene ? "deleteSceneLiveConfirm" : "deletePlaylistConfirm"], row.Total)">
+                                            <button class="btn subtle icon-only danger" disabled="@live" title="@T["deletePlaylist"]" aria-label="@T["deletePlaylist"]"><i class="icon">&#xE74D;</i></button>
+                                        </form>
+                                    }
+                                    else
+                                    {
+                                        <form method="post" asp-page="/MainLive" asp-page-handler="Delete" asp-all-route-data="Model.RowRoute(video.Pkid)" data-confirm="@T["deleteLiveRowConfirm"]">
+                                            <button class="btn subtle icon-only danger" disabled="@live" title="@T["deleteLiveRow"]" aria-label="@T["deleteLiveRow"]"><i class="icon">&#xE74D;</i></button>
+                                        </form>
+                                    }
+                                    @* A start, a stop or a restart runs the server (ffmpeg included), so
+                                       the answer takes a moment: this is what says the row is working,
+                                       next to the icons that asked for it. *@
+                                    <span class="spinner" data-while="busy" title="@T["loading"]"></span>
+                                </div>
+                            </td>
+                        </tr>
+                    }
+                    </tbody>
+                </table>
+            </div>
+        </div>
+        <div class="pager-fixed">
+            <partial name="_Pager" model="pager" />
+        </div>
     </div>
-    <partial name="_Pager" model="pager" />
 }

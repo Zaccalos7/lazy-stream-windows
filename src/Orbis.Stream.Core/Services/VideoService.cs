@@ -14,6 +14,7 @@ public sealed class VideoService
     private readonly VideoRepository _videoRepository;
     private readonly VideoSettingRepository _videoSettingRepository;
     private readonly VideoLiveHistoryRepository _videoLiveHistoryRepository;
+    private readonly SceneRepository _sceneRepository;
     private readonly ResponseFactory _responses;
     private readonly Localizer _localizer;
     private readonly BackgroundTaskExecutor _executor;
@@ -24,6 +25,7 @@ public sealed class VideoService
         VideoRepository videoRepository,
         VideoSettingRepository videoSettingRepository,
         VideoLiveHistoryRepository videoLiveHistoryRepository,
+        SceneRepository sceneRepository,
         ResponseFactory responses,
         Localizer localizer,
         BackgroundTaskExecutor executor,
@@ -33,6 +35,7 @@ public sealed class VideoService
         _videoRepository = videoRepository;
         _videoSettingRepository = videoSettingRepository;
         _videoLiveHistoryRepository = videoLiveHistoryRepository;
+        _sceneRepository = sceneRepository;
         _responses = responses;
         _localizer = localizer;
         _executor = executor;
@@ -52,6 +55,74 @@ public sealed class VideoService
         var result = _videoRepository.FindPaged(filters, page);
         _logger.LogInformation("{Message}", _localizer.PrintMessage("recovered.video"));
         return SpringPageFactory.Create(Map(result, WithRelations), page.Sorts);
+    }
+
+    /// <summary>The live page, one row per playlist: see <see cref="VideoRepository.FindLivePage"/>.</summary>
+    public SpringPage<LiveRow> GetLivePage(LiveStatus? liveStatus, string? channelName, PageRequest page)
+    {
+        var result = _videoRepository.FindLivePage(liveStatus, channelName, page.Page, page.Size);
+        return SpringPageFactory.Create(
+            Map(result, row => new LiveRow(WithRelations(row.Video), row.Position, row.Total, row.Status, SceneNameOf(row.Video))),
+            page.Sorts);
+    }
+
+    /// <summary>The name a canvas live goes by: the scene it was started from, or a plain word for
+    /// one deleted since (its rows keep every source, so the live still restarts). Null for a file.</summary>
+    private string? SceneNameOf(VideoEntity video) => video.ScenePkid is not { } scenePkid
+        ? null
+        : _sceneRepository.FindByPkid(scenePkid)?.Name is { Length: > 0 } name ? name : "#" + scenePkid.ToString(System.Globalization.CultureInfo.InvariantCulture);
+
+    /// <summary>Every row of a live, in streaming order, for its details dialog.</summary>
+    public PlaylistDetails? GetPlaylist(long videoLiveHistoryPkid)
+    {
+        var history = _videoLiveHistoryRepository.FindByPkid(videoLiveHistoryPkid);
+        var rows = _videoRepository.FindByLiveHistoryId(videoLiveHistoryPkid);
+        var videos = rows.Select(VideoRequest.FromEntity).ToList();
+
+        if (history is null || videos.Count == 0)
+        {
+            return null;
+        }
+
+        // The same pick as the row of the page, asked of the same query, so the two never disagree.
+        var current = _videoRepository.FindLivePage(null, null, 0, 1, videoLiveHistoryPkid).Items.FirstOrDefault();
+        return new PlaylistDetails(
+            VideoLiveHistoryRequest.FromEntity(history),
+            videos,
+            current?.Video.Pkid,
+            current?.Status ?? LiveStatus.Offline,
+            rows.Count > 0 ? SceneNameOf(rows[0]) : null);
+    }
+
+    /// <summary>The whole playlist leaves the page. Refused while one of its videos is on air, for
+    /// the same reason as a single row: ffmpeg reads the row to know when to stop.</summary>
+    public MessageResponse DeletePlaylist(long videoLiveHistoryPkid)
+    {
+        var videos = _videoRepository.FindByLiveHistoryId(videoLiveHistoryPkid);
+        if (videos.Count == 0)
+        {
+            throw new NotFoundCustomException("video.not.found");
+        }
+
+        if (videos.Any(video => video.LiveStatus == LiveStatus.Live))
+        {
+            throw new LiveException("video.delete.live");
+        }
+
+        _videoRepository.DeleteByLiveHistoryId(videoLiveHistoryPkid);
+
+        // The scene of a live is only there to restart it: gone with its last row, never a layout.
+        foreach (var scenePkid in videos.Select(video => video.ScenePkid).OfType<long>().Distinct())
+        {
+            if (_sceneRepository.FindByPkid(scenePkid) is { IsLayout: false } && !_sceneRepository.IsOnAir(scenePkid))
+            {
+                _sceneRepository.Delete(scenePkid);
+            }
+        }
+
+        _notifier.Raise();
+        _logger.LogInformation("{Message}", _localizer.PrintMessage("delete.successful"));
+        return _responses.Build("delete.successful", StatusCodes.Status200OK);
     }
 
     /// <summary>One video with its live history and setting, the payload <c>/live/start-video-live</c> expects.</summary>
@@ -121,6 +192,22 @@ public sealed class VideoService
         _executor.Execute(() => _ = UnlockAsync(video));
 
         return _responses.Build("unlock.in.progress", StatusCodes.Status202Accepted);
+    }
+
+    /// <summary>Removes one row of the live list. A row still LIVE has an ffmpeg behind it that
+    /// reads this row to know when to stop, so it has to be stopped first.</summary>
+    public MessageResponse DeleteVideo(int pkid)
+    {
+        var video = FindVideoToUnlock(pkid);
+        if (video.LiveStatus == LiveStatus.Live)
+        {
+            throw new LiveException("video.delete.live");
+        }
+
+        _videoRepository.Delete(pkid);
+        _notifier.Raise();
+        _logger.LogInformation("{Message}", _localizer.PrintMessage("delete.successful"));
+        return _responses.Build("delete.successful", StatusCodes.Status200OK);
     }
 
     private async Task UnlockAsync(VideoEntity video)

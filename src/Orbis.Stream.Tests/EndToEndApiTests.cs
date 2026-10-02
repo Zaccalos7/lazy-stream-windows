@@ -5,6 +5,8 @@ using System.Net.Http.Json;
 using System.Text.Json;
 using System.Text.RegularExpressions;
 using Orbis.Stream.Core.Configuration;
+using Orbis.Stream.Core.Data;
+using Orbis.Stream.Core.Domain;
 using Orbis.Stream.Core.Hosting;
 using Orbis.Stream.Core.Services;
 using Orbis.Stream.Core.SystemInfo;
@@ -171,6 +173,165 @@ public sealed class EndToEndApiTests : IClassFixture<ApplicationFixture>
     }
 
     [Fact]
+    public async Task ANewScene_KeepsItsSourcesAndAnswersWithItsId()
+    {
+        // The desktop and one monitor are two sources of the same kind: both on one canvas is the
+        // layout of anyone streaming a second screen with the whole desktop behind it.
+        var scene = new
+        {
+            pkid = (long?)null,
+            name = "Desktop + webcam",
+            width = 1920,
+            height = 1080,
+            items = new object[]
+            {
+                new { sourceKind = 1, sourceTarget = "desktop", label = "Desktop", x = 0, y = 0, width = 1920, height = 1080, audioEnabled = false },
+                new { sourceKind = 1, sourceTarget = "monitor:1920,0,1280x1024", label = "Screen 2", x = 0, y = 0, width = 640, height = 512, audioEnabled = false },
+                new { sourceKind = 2, sourceTarget = "video=Integrated Camera", label = "Webcam", x = 1440, y = 810, width = 480, height = 270, audioEnabled = false },
+                new { sourceKind = 3, sourceTarget = "audio=Microphone", label = "Mic", x = 0, y = 0, width = 0, height = 0, audioEnabled = true }
+            }
+        };
+
+        using var saved = await _fixture.Client.PostAsJsonAsync("/scene/save", scene);
+        Assert.Equal(HttpStatusCode.Created, saved.StatusCode);
+        var pkid = (await saved.Content.ReadFromJsonAsync<JsonElement>()).GetProperty("pkid").GetInt64();
+        Assert.True(pkid > 0);
+
+        using var read = await _fixture.Client.GetAsync($"/scene/{pkid}");
+        var stored = await read.Content.ReadFromJsonAsync<JsonElement>();
+        var targets = stored.GetProperty("items").EnumerateArray()
+            .Select(item => item.GetProperty("sourceTarget").GetString())
+            .ToList();
+
+        // In the order they were stacked: the order ffmpeg lays them over each other.
+        Assert.Equal(["desktop", "monitor:1920,0,1280x1024", "video=Integrated Camera", "audio=Microphone"], targets);
+
+        // The same camera twice is still refused: dshow cannot open one device twice.
+        using var duplicated = await _fixture.Client.PostAsJsonAsync("/scene/save", new
+        {
+            pkid = (long?)null,
+            name = "Twice",
+            width = 1920,
+            height = 1080,
+            items = new object[] { scene.items[2], scene.items[2] }
+        });
+        Assert.False(duplicated.IsSuccessStatusCode);
+    }
+
+    /// <summary>
+    /// A layout is a skeleton: whatever source comes with a slot is dropped and only the rectangle
+    /// stays, so a file that is not there is no reason to refuse it. The scene a live is filled
+    /// with is saved apart and never listed with the layouts.
+    /// </summary>
+    [Fact]
+    public async Task ALayout_KeepsOnlyItsSlots_AndTheScenesOfTheLivesAreNotListed()
+    {
+        using var layout = await _fixture.Client.PostAsJsonAsync("/scene/save", new
+        {
+            pkid = (long?)null,
+            name = "Full + corner",
+            width = 1920,
+            height = 1080,
+            isLayout = true,
+            items = new object[]
+            {
+                new { sourceKind = 0, sourceTarget = "C:\\nowhere\\missing.mp4", label = "Main", x = 0, y = 0, width = 1920, height = 1080, audioEnabled = true },
+                new { sourceKind = 2, sourceTarget = "video=Cam", label = "Corner", x = 1440, y = 20, width = 460, height = 260, audioEnabled = false }
+            }
+        });
+        Assert.Equal(HttpStatusCode.Created, layout.StatusCode);
+        var layoutPkid = (await layout.Content.ReadFromJsonAsync<JsonElement>()).GetProperty("pkid").GetInt64();
+
+        using var live = await _fixture.Client.PostAsJsonAsync("/scene/save", new
+        {
+            pkid = (long?)null,
+            name = "Tonight",
+            width = 1920,
+            height = 1080,
+            items = new object[]
+            {
+                new { sourceKind = 1, sourceTarget = "desktop", label = "Desktop", x = 0, y = 0, width = 1920, height = 1080, audioEnabled = false }
+            }
+        });
+        Assert.Equal(HttpStatusCode.Created, live.StatusCode);
+        var livePkid = (await live.Content.ReadFromJsonAsync<JsonElement>()).GetProperty("pkid").GetInt64();
+
+        var listed = await _fixture.Client.GetFromJsonAsync<JsonElement>("/scene/layouts");
+        var pkids = listed.EnumerateArray().Select(entry => entry.GetProperty("pkid").GetInt64()).ToList();
+        Assert.Contains(layoutPkid, pkids);
+        Assert.DoesNotContain(livePkid, pkids);
+
+        var stored = listed.EnumerateArray().Single(entry => entry.GetProperty("pkid").GetInt64() == layoutPkid);
+        Assert.True(stored.GetProperty("isLayout").GetBoolean());
+        var slots = stored.GetProperty("items").EnumerateArray().ToList();
+        Assert.Equal(["Main", "Corner"], slots.Select(slot => slot.GetProperty("label").GetString()));
+        Assert.All(slots, slot => Assert.Equal(string.Empty, slot.GetProperty("sourceTarget").GetString()));
+        Assert.All(slots, slot => Assert.False(slot.GetProperty("audioEnabled").GetBoolean()));
+
+        // Saving the scene of a live over the layout it came from makes a new scene instead.
+        using var over = await _fixture.Client.PostAsJsonAsync("/scene/save", new
+        {
+            pkid = layoutPkid,
+            name = "Tonight 2",
+            width = 1920,
+            height = 1080,
+            items = new object[]
+            {
+                new { sourceKind = 1, sourceTarget = "desktop", label = "Desktop", x = 0, y = 0, width = 1920, height = 1080, audioEnabled = false }
+            }
+        });
+        Assert.Equal(HttpStatusCode.Created, over.StatusCode);
+        Assert.NotEqual(layoutPkid, (await over.Content.ReadFromJsonAsync<JsonElement>()).GetProperty("pkid").GetInt64());
+        var again = await _fixture.Client.GetFromJsonAsync<JsonElement>($"/scene/{layoutPkid}");
+        Assert.Equal("Full + corner", again.GetProperty("name").GetString());
+    }
+
+    /// <summary>
+    /// The setting of a row is opened as it is and saved where it is. Only a setting the row does
+    /// not own alone (here the seeded Twitch default, which every live may use) is copied first, so
+    /// editing a live never edits the default under the other lives.
+    /// </summary>
+    [Fact]
+    public void LinkingASetting_EditsTheOneOfTheRow_AndCopiesASharedOneOnce()
+    {
+        var settings = _fixture.Services.GetRequiredService<VideoSettingService>();
+        var settingRepository = _fixture.Services.GetRequiredService<Orbis.Stream.Core.Data.VideoSettingRepository>();
+        var videoRepository = _fixture.Services.GetRequiredService<Orbis.Stream.Core.Data.VideoRepository>();
+
+        var twitch = settingRepository.FindByIsDefaultConfigurationTrueAndDefaultPlatformConfiguration("Twitch")[0];
+        var pkid = videoRepository.Insert(new Orbis.Stream.Core.Domain.VideoEntity
+        {
+            Name = "link-row",
+            VideoPath = "/videos/link-row.mp4",
+            Extension = "mp4",
+            ChannelName = "link-channel",
+            StartDateLive = DateTime.Now,
+            VideoSettingId = twitch.Id
+        });
+
+        // The dialog opens on what the row streams with, not on a blank form.
+        var opened = settings.FindSettingOf(pkid, null);
+        Assert.NotNull(opened);
+        Assert.Equal(twitch.Id, opened!.Id);
+
+        // The default is shared: the first save gives the row a copy and leaves the default alone.
+        // Through the form, the way the dialog sends it.
+        var form = Orbis.Stream.Core.Pages.VideoSettingForm.From(opened);
+        form.Title = "Mine";
+        settings.LinkAndSaveSettingsVideo(form.ToRequest(), pkid);
+        var copy = videoRepository.FindByPkid(pkid)!.VideoSettingId;
+        Assert.NotEqual(twitch.Id, copy);
+        Assert.Equal(twitch.Title, settingRepository.FindById(twitch.Id!.Value)!.Title);
+
+        // The copy is the row's own: the next save edits it instead of adding another one.
+        var again = Orbis.Stream.Core.Pages.VideoSettingForm.From(settings.FindSettingOf(pkid, null)!);
+        again.Title = "Mine again";
+        settings.LinkAndSaveSettingsVideo(again.ToRequest(), pkid);
+        Assert.Equal(copy, videoRepository.FindByPkid(pkid)!.VideoSettingId);
+        Assert.Equal("Mine again", settingRepository.FindById(copy!.Value)!.Title);
+    }
+
+    [Fact]
     public async Task Root_RedirectsToTheClientRouter()
     {
         using var response = await _fixture.NoRedirectClient.GetAsync("/", HttpCompletionOption.ResponseHeadersRead);
@@ -191,12 +352,76 @@ public sealed class EndToEndApiTests : IClassFixture<ApplicationFixture>
         Assert.True(response.Headers.CacheControl!.NoCache);
     }
 
+    [Fact]
+    public async Task TheLiveHistoryPagesLikeTheLiveGridDoes()
+    {
+        // Enough history for more than one page: the history shows twenty a page, so twenty-five is
+        // two pages and the pager has something to page through.
+        var history = _fixture.Services.GetRequiredService<VideoLiveHistoryRepository>();
+        var videos = _fixture.Services.GetRequiredService<VideoRepository>();
+        long lastHistory = 0;
+        for (var index = 0; index < 25; index++)
+        {
+            lastHistory = history.Insert(new VideoLiveHistoryEntity
+            {
+                FolderOfVideoToStream = "/clips",
+                LocalDateTimeStartLive = new DateTime(2026, 2, 1, 10, 0, 0, DateTimeKind.Local).AddMinutes(index),
+                StreamUrl = "rtmp://ingest/live",
+                StreamKey = "key",
+                PlatformStreamName = "channel-history",
+                UserName = "orbis"
+            });
+
+            videos.Insert(new VideoEntity
+            {
+                Name = $"clip-{index:00}",
+                VideoPath = $"/clips/clip-{index:00}.mp4",
+                Extension = "mp4",
+                VideoLiveHistoryId = lastHistory,
+                LiveStatus = LiveStatus.Ended,
+                ShouldBeStop = false,
+                StartDateLive = new DateTime(2026, 2, 1, 10, 0, 0, DateTimeKind.Local).AddMinutes(index),
+                ChannelName = "channel-history",
+                VideoSettingId = 1
+            });
+        }
+
+        using var page = await _fixture.Client.GetAsync("/orbis/mainLiveHistory");
+        Assert.Equal(HttpStatusCode.OK, page.StatusCode);
+        var html = await page.Content.ReadAsStringAsync();
+
+        // The pager, in the same place and the same shape the live grid has it: a bar of its own at
+        // the foot of the table, with the number of every page on it.
+        Assert.Contains("pager-fixed", html, StringComparison.Ordinal);
+        Assert.Contains("live-rows-container", html, StringComparison.Ordinal);
+        Assert.Contains("<nav class=\"pager\"", html, StringComparison.Ordinal);
+
+        // Both pages are offered, and the first is the one being shown.
+        Assert.Contains(">1</a>", html, StringComparison.Ordinal);
+        Assert.Contains(">2</a>", html, StringComparison.Ordinal);
+        Assert.Contains("aria-current=\"page\"", html, StringComparison.Ordinal);
+
+        // And the second page answers, so the numbers are links rather than decoration.
+        // The history is newest first, so the twenty newest lives are on the first page and the
+        // oldest five on the second: the numbers page through the history rather than repeat it.
+        Assert.Contains("clip-24", html, StringComparison.Ordinal);
+        Assert.Contains("clip-05", html, StringComparison.Ordinal);
+        Assert.DoesNotContain("clip-00", html, StringComparison.Ordinal);
+
+        using var second = await _fixture.Client.GetAsync("/orbis/mainLiveHistory?p=1");
+        Assert.Equal(HttpStatusCode.OK, second.StatusCode);
+        var secondHtml = await second.Content.ReadAsStringAsync();
+        Assert.Contains("clip-00", secondHtml, StringComparison.Ordinal);
+        Assert.DoesNotContain("clip-24", secondHtml, StringComparison.Ordinal);
+    }
+
     [Theory]
     [InlineData("/orbis/mainMenu")]
     [InlineData("/orbis/mainLive")]
     [InlineData("/orbis/mainLive?liveStatus=LIVE&p=3")]
     [InlineData("/orbis/mainLive?handler=Rows")]
     [InlineData("/orbis/mainLive?link=1")]
+    [InlineData("/orbis/mainLayout")]
     [InlineData("/orbis/mainLiveHistory")]
     [InlineData("/orbis/mainSetting")]
     [InlineData("/orbis/mainVideoSetting")]
@@ -222,7 +447,7 @@ public sealed class EndToEndApiTests : IClassFixture<ApplicationFixture>
         choose.Headers.Referrer = new Uri(_fixture.Client.BaseAddress!, "/orbis/mainLive?p=1");
         using var chosen = await _fixture.NoRedirectClient.SendAsync(choose);
 
-        Assert.Equal(HttpStatusCode.Redirect, chosen.StatusCode);
+Assert.Equal(HttpStatusCode.Redirect, chosen.StatusCode);
         Assert.Equal("/orbis/mainLive?p=1", chosen.Headers.Location?.OriginalString);
         var cookie = chosen.Headers.GetValues("Set-Cookie").Single().Split(";")[0];
 
@@ -231,8 +456,29 @@ public sealed class EndToEndApiTests : IClassFixture<ApplicationFixture>
         using var italian = await _fixture.NoRedirectClient.SendAsync(page);
         var html = await italian.Content.ReadAsStringAsync();
 
-        Assert.Contains("<html lang=\"it\">", html, StringComparison.Ordinal);
+        Assert.Equal(HttpStatusCode.OK, italian.StatusCode);
+        Assert.Contains("<html lang=\"it\"", html, StringComparison.Ordinal);
         Assert.Contains("Gestione Live", html, StringComparison.Ordinal);
+    }
+
+    [Fact]
+    public async Task TheDashboardAsksForAWeaselWithABanner()
+    {
+        using var page = await _fixture.Client.GetAsync("/orbis/mainMenu");
+        var html = await page.Content.ReadAsStringAsync();
+
+        // The weasel is a banner across the foot of the dashboard, not a small button: the page
+        // carries the banner itself and the words inside it.
+        Assert.Contains("coffee-banner", html, StringComparison.Ordinal);
+        Assert.Contains("https://buymeacoffee.com/zaccalos", html, StringComparison.Ordinal);
+
+        // The words inside it are translated like the rest of the page, and in the language the page
+        // is being served in rather than the one it was written in.
+        Assert.Contains("Pay me a weasel", html, StringComparison.Ordinal);
+
+        // It goes out to the coffee page in a new tab, and the tab it leaves behind must not be able
+        // to reach the window it opened.
+        Assert.Contains("rel=\"noopener noreferrer\"", html, StringComparison.Ordinal);
     }
 
     [Fact]
@@ -570,14 +816,29 @@ public sealed class EndToEndApiTests : IClassFixture<ApplicationFixture>
         // that arrives with the link already shows it.
         using var plain = await _fixture.Client.GetAsync("/orbis/mainLive");
         var plainBody = await plain.Content.ReadAsStringAsync();
-        Assert.Contains("id=\"start-dialog\" data-busy-host>", plainBody, StringComparison.Ordinal);
+        // Razor writes a data-* attribute even when its value is null: closed has to be said ("0"),
+        // or every dialog of the page opened on arrival.
+        Assert.Contains("id=\"start-dialog\" data-open=\"0\"", plainBody, StringComparison.Ordinal);
+        Assert.Contains("id=\"playlist-dialog\" data-busy-host data-open=\"0\"", plainBody, StringComparison.Ordinal);
 
         using var asked = await _fixture.Client.GetAsync("/orbis/mainLive?start=1");
         var askedBody = await asked.Content.ReadAsStringAsync();
-        Assert.Contains("id=\"start-dialog\" data-busy-host open", askedBody, StringComparison.Ordinal);
+        Assert.Contains("id=\"start-dialog\" data-open=\"\"", askedBody, StringComparison.Ordinal);
 
-        // Starting a live walks the folder and starts ffmpeg on the server: the dialog says so
-        // next to its button instead of looking inert.
+        // The first step leads to the canvas, which is closed and has not listed any source yet:
+        // the composer only boots when its dialog opens.
+        Assert.Contains("data-wizard-next=\"compose-dialog\"", plainBody, StringComparison.Ordinal);
+        Assert.Contains("id=\"compose-dialog\" data-busy-host data-open=\"0\"", plainBody, StringComparison.Ordinal);
+        Assert.Contains("data-composer-start-form", plainBody, StringComparison.Ordinal);
+
+        // A refused start comes back on the canvas, with the scene and the two picks it was sent with.
+        using var refused = await _fixture.Client.GetAsync("/orbis/mainLive?compose=7&settingId=3&configurationId=4");
+        var refusedBody = await refused.Content.ReadAsStringAsync();
+        Assert.Contains("id=\"compose-dialog\" data-busy-host data-open=\"\"", refusedBody, StringComparison.Ordinal);
+        Assert.Contains("data-scene=\"7\"", refusedBody, StringComparison.Ordinal);
+        Assert.Contains("name=\"settingId\" value=\"3\"", refusedBody, StringComparison.Ordinal);
+
+        // Starting a live starts ffmpeg on the server: the dialog says so instead of looking inert.
         Assert.Contains("data-while=\"busy\"", plainBody, StringComparison.Ordinal);
     }
 

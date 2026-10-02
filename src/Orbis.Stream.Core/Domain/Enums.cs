@@ -55,7 +55,14 @@ public static class SystemInfoFieldExtensions
 /// <summary>Port of <c>com.orbis.stream.enums.VideoExtensionEnum</c>.</summary>
 public static class VideoExtensions
 {
-    private static readonly string[] Supported = ["mp4", "flv", "mov", "webm", "vp9", "mkv"];
+    /// <summary>The containers ffmpeg reads as video. A playlist folder is filtered by these, so
+    /// subtitles, covers and other files lying next to the videos are left out.</summary>
+    private static readonly string[] Supported =
+    [
+        "mp4", "m4v", "mov", "qt", "mkv", "webm", "vp9", "flv", "f4v", "avi", "divx", "wmv", "asf",
+        "mpg", "mpeg", "mpe", "m1v", "m2v", "vob", "ts", "mts", "m2ts", "3gp", "3g2", "ogv", "ogm",
+        "rm", "rmvb", "mxf", "dv", "nut", "y4m"
+    ];
 
     public static IReadOnlyList<string> All => Supported;
 
@@ -68,4 +75,27 @@ public static class VideoExtensions
 
         return Supported.Any(supported => supported.Equals(extension, StringComparison.OrdinalIgnoreCase));
     }
+
+    /// <summary>
+    /// Content type of the file the preview serves. It is not the one the container would like:
+    /// what matters is what the WebView can decode, and the values below are what Chromium
+    /// answers to for these extensions.
+    /// </summary>
+    public static string ContentTypeOf(string? extension) => extension?.ToLowerInvariant() switch
+    {
+        "mp4" or "m4v" => "video/mp4",
+        "mov" => "video/quicktime",
+        "webm" or "vp9" => "video/webm",
+        "flv" => "video/x-flv",
+        "mkv" => "video/x-matroska",
+        _ => "application/octet-stream"
+    };
+
+    /// <summary>
+    /// Whether the WebView can play the container on its own. Matroska and FLV are the two the
+    /// preview cannot show: they are still served, so the frame carries the reason instead of
+    /// failing on something the user cannot see.
+    /// </summary>
+    public static bool IsBrowserPlayable(string? extension) =>
+        extension?.ToLowerInvariant() is "mp4" or "m4v" or "mov" or "webm" or "vp9";
 }

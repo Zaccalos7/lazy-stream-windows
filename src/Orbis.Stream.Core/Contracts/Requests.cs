@@ -78,7 +78,10 @@ public sealed record VideoSettingsRequest(
     string? VideoFormat,
     AudioSettingsRequest? AudioSettingRecord,
     bool? IsDefaultConfiguration,
-    string? DefaultPlatformConfiguration)
+    string? DefaultPlatformConfiguration,
+    int? VideoWidth,
+    int? VideoHeight,
+    double? FrameRate)
 {
     public static VideoSettingsRequest FromEntity(VideoSettingEntity entity) => new(
         entity.Id,
@@ -94,7 +97,10 @@ public sealed record VideoSettingsRequest(
         entity.VideoFormat,
         AudioSettingsRequest.FromEntity(entity.AudioSetting),
         entity.IsDefaultConfiguration,
-        entity.DefaultPlatformConfiguration);
+        entity.DefaultPlatformConfiguration,
+        entity.VideoWidth,
+        entity.VideoHeight,
+        entity.FrameRate);
 
     public VideoSettingEntity ToEntity() => new()
     {
@@ -108,6 +114,9 @@ public sealed record VideoSettingsRequest(
         LastModified = LastModified,
         IsVideoAndAudioSettingActive = IsVideoAndAudioSettingActive,
         GopSize = GopSize,
+        VideoWidth = VideoWidth,
+        VideoHeight = VideoHeight,
+        FrameRate = FrameRate,
         IsDefaultConfiguration = IsDefaultConfiguration,
         DefaultPlatformConfiguration = DefaultPlatformConfiguration,
         AudioSetting = AudioSettingRecord is null
@@ -123,6 +132,23 @@ public sealed record VideoSettingsRequest(
             .ToList() ?? []
     };
 }
+
+/// <summary>
+/// The parameters the preview page can change while a live is running. Every field is optional:
+/// one that travels null is left as it is, so the page can send the single control that changed
+/// without having to know the whole configuration. Zero is a value and not an absence: it is how
+/// <see cref="VideoWidth"/>, <see cref="VideoHeight"/> and <see cref="FrameRate"/> ask for the source
+/// again, which the page could not do with a field it simply left out.
+/// </summary>
+public sealed record LiveParameterRequest(
+    int? VideoCodec,
+    string? VideoCodecName,
+    int? PixelFormat,
+    int? VideoBitrate,
+    int? AudioBitrate,
+    int? VideoWidth,
+    int? VideoHeight,
+    double? FrameRate);
 
 /// <summary>Port of <c>com.orbis.stream.record.VideoLiveHistoryRecord</c>.</summary>
 public sealed record VideoLiveHistoryRequest(
@@ -220,6 +246,109 @@ public sealed record StartLiveRequest(
     string? ChannelName,
     VideoSettingsRequest? VideoSettingsRecord);
 
+/// <summary>
+/// Starts a live from a saved canvas instead of a folder. There is no path on purpose: the sources
+/// are the rows of the scene, and the encoder setting is the same one a folder start takes.
+/// </summary>
+public sealed record StartSceneLiveRequest(
+    long ScenePkid,
+    string? StreamUrl,
+    string? StreamKey,
+    string? PlatformStreamName,
+    string? ChannelName,
+    VideoSettingsRequest? VideoSettingsRecord);
+
+/// <summary>One source on a canvas, as the page sends it.</summary>
+public sealed record SceneItemRequest(
+    SourceKind SourceKind,
+    string SourceTarget,
+    string? Label,
+    int X,
+    int Y,
+    int Width,
+    int Height,
+    bool AudioEnabled)
+{
+    public SceneItemEntity ToEntity(long scenePkid) => new()
+    {
+        ScenePkid = scenePkid,
+        SourceKind = SourceKind,
+        SourceTarget = SourceTarget,
+        Label = Label,
+        X = X,
+        Y = Y,
+        Width = Width,
+        Height = Height,
+        AudioEnabled = AudioEnabled
+    };
+}
+
+/// <summary>
+/// A canvas, with the sources on it in stacking order. A layout (<see cref="IsLayout"/>) carries
+/// slots instead: the rectangles are kept and whatever source came with them is dropped.
+/// </summary>
+public sealed record SceneRequest(
+    long? Pkid,
+    string? Name,
+    string? Description,
+    int? Width,
+    int? Height,
+    IReadOnlyList<SceneItemRequest>? Items,
+    bool IsLayout = false)
+{
+    public static SceneRequest FromEntity(SceneEntity scene) => new(
+        scene.Pkid,
+        scene.Name,
+        scene.Description,
+        scene.Width,
+        scene.Height,
+        [.. scene.Items.Select(item => new SceneItemRequest(
+            item.SourceKind,
+            item.SourceTarget,
+            item.Label,
+            item.X,
+            item.Y,
+            item.Width,
+            item.Height,
+            item.AudioEnabled))],
+        scene.IsLayout);
+
+    /// <summary>
+    /// The items carry the id the scene has, or 0 on a first save: the repository writes them
+    /// with the id it has just given the scene, so the caller never needs to know it in advance.
+    /// </summary>
+    public SceneEntity ToEntity()
+    {
+        var scenePkid = Pkid ?? 0;
+        return new SceneEntity
+        {
+            Pkid = scenePkid,
+            Name = Name ?? string.Empty,
+            Description = Description,
+            Width = Width,
+            Height = Height,
+            LastModified = DateTime.Now,
+            IsLayout = IsLayout,
+            Items = [.. (Items ?? []).Select(item => IsLayout ? AsSlot(item.ToEntity(scenePkid)) : item.ToEntity(scenePkid))]
+        };
+    }
+
+    /// <summary>A slot is a rectangle and nothing else: no source to open, nothing to hear.</summary>
+    private static SceneItemEntity AsSlot(SceneItemEntity item)
+    {
+        item.SourceKind = SourceKind.File;
+        item.SourceTarget = string.Empty;
+        item.AudioEnabled = false;
+        return item;
+    }
+}
+
+/// <summary>
+/// The answer to a save: the usual envelope, plus the id the canvas has now, which the page needs
+/// to start a live from a scene it has only just created.
+/// </summary>
+public sealed record SceneSavedResponse(string Response, string Message, long Pkid);
+
 /// <summary>Port of <c>com.orbis.stream.dto.SystemInfoDto</c>.</summary>
 public sealed record SystemInfoResponse(string? Field, int Value);
 
@@ -228,4 +357,29 @@ public sealed record ApiEnvelope(string Response, string Message)
 {
     public const string Success = "success";
     public const string Error = "error";
+}
+
+/// <summary>A row of the live page: one per live. <see cref="Video"/> is the video a playlist got
+/// to, or the base source of a canvas (<see cref="SceneName"/> set); <see cref="Status"/> is the
+/// status of the live as a whole, and <see cref="Total"/> how many rows it stands for.</summary>
+public sealed record LiveRow(VideoRequest Video, int Position, int Total, LiveStatus Status, string? SceneName = null)
+{
+    public bool IsScene => SceneName is not null;
+
+    public bool IsPlaylist => !IsScene && Total > 1;
+
+    /// <summary>The rows behind it are only reachable from its details dialog.</summary>
+    public bool HasDetails => Total > 1 || IsScene;
+}
+
+/// <summary>A live opened in its details dialog: where it streams from, all its rows in order (the
+/// videos of a playlist, the sources of a canvas) and the one its row on the page shows.</summary>
+public sealed record PlaylistDetails(
+    VideoLiveHistoryRequest History,
+    IReadOnlyList<VideoRequest> Videos,
+    int? CurrentPkid,
+    LiveStatus Status,
+    string? SceneName = null)
+{
+    public bool IsScene => SceneName is not null;
 }

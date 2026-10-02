@@ -18,6 +18,12 @@ public sealed class SettingEntity
     public bool? IsActive { get; set; }
 
     public string ChannelName { get; set; } = "Zingy";
+
+    /// <summary>
+    /// The canvas this channel streams, when it streams a composition instead of a folder of
+    /// files. Null keeps the previous behaviour, so no existing configuration changes meaning.
+    /// </summary>
+    public long? ScenePkid { get; set; }
 }
 
 /// <summary>Port of <c>com.orbis.stream.model.VideoLiveHistory</c>.</summary>
@@ -81,6 +87,22 @@ public sealed class VideoSettingEntity
 
     public int? GopSize { get; set; }
 
+    /// <summary>
+    /// Width the encoder is asked to produce. Null (the two of them) means "keep the resolution
+    /// of the file": the command builder only adds a <c>scale</c> filter when both are set, so a
+    /// half filled pair is a mistake rather than a default.
+    /// </summary>
+    public int? VideoWidth { get; set; }
+
+    /// <summary>Height the encoder is asked to produce; see <see cref="VideoWidth"/>.</summary>
+    public int? VideoHeight { get; set; }
+
+    /// <summary>
+    /// Frames per second the encoder is asked to produce. Null keeps the rate ffprobe read from
+    /// the file, which is what every stream did before this field existed.
+    /// </summary>
+    public double? FrameRate { get; set; }
+
     public bool? IsVideoAndAudioSettingActive { get; set; }
 
     public AudioSettingEntity? AudioSetting { get; set; }
@@ -117,4 +139,87 @@ public sealed class VideoEntity
     public long? VideoLiveHistoryId { get; set; }
 
     public int? VideoSettingId { get; set; }
+
+    /// <summary>
+    /// What this row is capturing. <see cref="SourceKind.File"/> is a file to play; the other two
+    /// are capture devices, and they have no <see cref="VideoPath"/> in the usual sense: the device
+    /// is named by <see cref="SourceTarget"/>.
+    /// </summary>
+    public SourceKind SourceKind { get; set; } = SourceKind.File;
+
+    /// <summary>The device to capture: a gdigrab target or a dshow name. Null for a file.</summary>
+    public string? SourceTarget { get; set; }
+
+    /// <summary>Where the row came from on a canvas, when the live streams a composition.</summary>
+    public long? ScenePkid { get; set; }
+
+    /// <summary>Tile rectangle on the composed output, in output pixels. Null fills the canvas.</summary>
+    public int? X { get; set; }
+
+    public int? Y { get; set; }
+
+    public int? Width { get; set; }
+
+    public int? Height { get; set; }
+
+    /// <summary>Whether this source contributes audio to the mix.</summary>
+    public bool AudioEnabled { get; set; }
+}
+
+/// <summary>
+/// A canvas and the rows of <see cref="SceneItemEntity"/> on it, in the order they are stacked, so
+/// the first one is the base the others are laid over. It is one of two things: a layout, the
+/// skeleton of empty slots a live is started from, or the scene of one live, the sources that went
+/// on air, which is what that live is restarted from.
+/// </summary>
+public sealed class SceneEntity
+{
+    public long Pkid { get; set; }
+
+    /// <summary>
+    /// A layout only has slots, rectangles with nothing in them yet: its items have no source. A
+    /// scene filled from it at the start of a live is saved apart, so the layout stays a skeleton
+    /// and the live keeps what it was started with whatever happens to the layout later.
+    /// </summary>
+    public bool IsLayout { get; set; }
+
+    public string Name { get; set; } = string.Empty;
+
+    public string? Description { get; set; }
+
+    /// <summary>Width of the composed output. Null means "follow the base source".</summary>
+    public int? Width { get; set; }
+
+    /// <summary>Height of the composed output. Null means "follow the base source".</summary>
+    public int? Height { get; set; }
+
+    public DateTime? LastModified { get; set; }
+
+    public List<SceneItemEntity> Items { get; set; } = [];
+}
+
+/// <summary>One source on a <see cref="SceneEntity"/>, and where it sits on it.</summary>
+public sealed class SceneItemEntity
+{
+    public long Pkid { get; set; }
+
+    public long ScenePkid { get; set; }
+
+    public SourceKind SourceKind { get; set; } = SourceKind.File;
+
+    /// <summary>A file path, a gdigrab target or a dshow device name, depending on the kind.</summary>
+    public string SourceTarget { get; set; } = string.Empty;
+
+    /// <summary>Shown on the tile, so a webcam does not have to be recognised by its device name.</summary>
+    public string? Label { get; set; }
+
+    public int X { get; set; }
+
+    public int Y { get; set; }
+
+    public int Width { get; set; }
+
+    public int Height { get; set; }
+
+    public bool AudioEnabled { get; set; }
 }

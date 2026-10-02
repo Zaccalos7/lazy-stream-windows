@@ -10,7 +10,8 @@ public sealed class VideoRepository
 {
     private const string BaseColumns =
         "t.pkid, t.name, t.video_path, t.extension, t.live_status, t.last_time_stamp_before_stop, " +
-        "t.message, t.should_be_stop, t.start_date_live, t.channel_name, t.video_live_history_pkid, t.video_setting_id";
+        "t.message, t.should_be_stop, t.start_date_live, t.channel_name, t.video_live_history_pkid, t.video_setting_id, " +
+        "t.source_kind, t.source_target, t.scene_pkid, t.x, t.y, t.width, t.height, t.audio_enabled";
 
     private readonly SqliteConnectionFactory _connectionFactory;
 
@@ -131,6 +132,20 @@ public sealed class VideoRepository
         return ReadAll(command).FirstOrDefault();
     }
 
+    /// <summary>
+    /// The rows a live streaming a canvas has, in stacking order. The playlist already comes back
+    /// ordered by pkid, and this is the same order the scene items were written in, so the first
+    /// row is the base the others are laid over.
+    /// </summary>
+    public IReadOnlyList<VideoEntity> FindByScenePkid(long scenePkid)
+    {
+        using var connection = _connectionFactory.Open();
+        using var command = connection.CreateCommand();
+        command.CommandText = $"SELECT {BaseColumns} FROM video t WHERE t.scene_pkid = @scene ORDER BY t.pkid;";
+        command.Parameters.AddWithValue("@scene", scenePkid);
+        return ReadAll(command);
+    }
+
     public int Insert(VideoEntity video)
     {
         using var connection = _connectionFactory.Open();
@@ -138,8 +153,10 @@ public sealed class VideoRepository
         command.CommandText =
             """
             INSERT INTO video (name, video_path, extension, live_status, last_time_stamp_before_stop, message,
-                               should_be_stop, start_date_live, channel_name, video_live_history_pkid, video_setting_id)
-            VALUES (@name, @path, @extension, @liveStatus, @lastTimeStamp, @message, @shouldBeStop, @startDateLive, @channelName, @history, @setting);
+                               should_be_stop, start_date_live, channel_name, video_live_history_pkid, video_setting_id,
+                               source_kind, source_target, scene_pkid, x, y, width, height, audio_enabled)
+            VALUES (@name, @path, @extension, @liveStatus, @lastTimeStamp, @message, @shouldBeStop, @startDateLive, @channelName, @history, @setting,
+                    @sourceKind, @sourceTarget, @scenePkid, @x, @y, @width, @height, @audioEnabled);
             SELECT last_insert_rowid();
             """;
         Bind(command, video);
@@ -163,7 +180,15 @@ public sealed class VideoRepository
                 start_date_live = @startDateLive,
                 channel_name = @channelName,
                 video_live_history_pkid = @history,
-                video_setting_id = @setting
+                video_setting_id = @setting,
+                source_kind = @sourceKind,
+                source_target = @sourceTarget,
+                scene_pkid = @scenePkid,
+                x = @x,
+                y = @y,
+                width = @width,
+                height = @height,
+                audio_enabled = @audioEnabled
             WHERE pkid = @pkid;
             """;
         Bind(command, video);
@@ -179,6 +204,127 @@ public sealed class VideoRepository
         command.Parameters.AddWithValue("@shouldBeStop", shouldBeStop ? 1 : 0);
         command.Parameters.AddWithValue("@pkid", pkid);
         command.ExecuteNonQuery();
+    }
+
+    /// <summary>
+    /// The live page: one row per live. A folder playlist shows the video it got to (the one on air,
+    /// else the last one that was played, else the first one), with where it stands in the playlist.
+    /// A canvas shows its base source, the first one with a picture: that is the row its ffmpeg is
+    /// registered under, so it is the row a stop has to be addressed to.
+    /// <para>The status of a playlist is its own, not the one of the video shown: LIVE while any video
+    /// is on air, ENDED once the last one was streamed through, else the one of the video it got to.
+    /// The status filter reads the same value.</para>
+    /// </summary>
+    public PagedResult<LiveRowEntity> FindLivePage(
+        LiveStatus? liveStatus, string? channelName, int page, int size, long? videoLiveHistoryPkid = null)
+    {
+        const string Grouped =
+            """
+            SELECT v.*,
+                   ROW_NUMBER() OVER (PARTITION BY v.grp ORDER BY v.pkid) AS position,
+                   COUNT(*) OVER (PARTITION BY v.grp) AS total,
+                   ROW_NUMBER() OVER (PARTITION BY v.grp ORDER BY
+                       CASE WHEN v.scene_pkid IS NOT NULL THEN (CASE WHEN v.source_kind = @microphone THEN 1 ELSE 0 END)
+                            WHEN v.live_status = @live THEN 0 WHEN v.live_status = @offline THEN 2 ELSE 1 END,
+                       CASE WHEN v.scene_pkid IS NOT NULL OR v.live_status = @offline THEN NULL ELSE v.start_date_live END DESC,
+                       CASE WHEN v.scene_pkid IS NOT NULL OR v.live_status = @offline THEN v.pkid ELSE -v.pkid END) AS pick,
+                   CASE
+                       WHEN MAX(CASE WHEN v.live_status = @live THEN 1 ELSE 0 END) OVER (PARTITION BY v.grp) = 1 THEN @live
+                       WHEN FIRST_VALUE(v.live_status) OVER (PARTITION BY v.grp ORDER BY v.pkid DESC) = @ended THEN @ended
+                   END AS group_status
+            FROM (SELECT x.*,
+                         CASE WHEN x.video_live_history_pkid IS NOT NULL
+                              THEN 'h' || x.video_live_history_pkid ELSE 'v' || x.pkid END AS grp
+                  FROM video x) v
+            """;
+
+        var where = "WHERE t.pick = 1"
+            + (liveStatus is null ? string.Empty : " AND COALESCE(t.group_status, t.live_status) = @status")
+            + (string.IsNullOrEmpty(channelName) ? string.Empty : " AND t.channel_name = @channel")
+            + (videoLiveHistoryPkid is null ? string.Empty : " AND t.video_live_history_pkid = @history");
+
+        void Bind(SqliteCommand command)
+        {
+            command.Parameters.AddWithValue("@live", LiveStatus.Live.ToStorageValue());
+            command.Parameters.AddWithValue("@offline", LiveStatus.Offline.ToStorageValue());
+            command.Parameters.AddWithValue("@ended", LiveStatus.Ended.ToStorageValue());
+            command.Parameters.AddWithValue("@microphone", (int)SourceKind.Microphone);
+            if (liveStatus is { } status)
+            {
+                command.Parameters.AddWithValue("@status", status.ToStorageValue());
+            }
+
+            if (!string.IsNullOrEmpty(channelName))
+            {
+                command.Parameters.AddWithValue("@channel", channelName);
+            }
+
+            if (videoLiveHistoryPkid is { } history)
+            {
+                command.Parameters.AddWithValue("@history", history);
+            }
+        }
+
+        using var connection = _connectionFactory.Open();
+
+        using var countCommand = connection.CreateCommand();
+        countCommand.CommandText = $"SELECT COUNT(*) FROM ({Grouped}) t {where};";
+        Bind(countCommand);
+        var total = Convert.ToInt64(countCommand.ExecuteScalar(), CultureInfo.InvariantCulture);
+
+        using var command = connection.CreateCommand();
+        command.CommandText =
+            $"SELECT {BaseColumns}, t.position, t.total, COALESCE(t.group_status, t.live_status) FROM ({Grouped}) t {where} " +
+            "ORDER BY t.start_date_live DESC, t.pkid DESC LIMIT @size OFFSET @offset;";
+        Bind(command);
+        command.Parameters.AddWithValue("@size", size);
+        command.Parameters.AddWithValue("@offset", (long)page * size);
+
+        var items = new List<LiveRowEntity>();
+        using var reader = command.ExecuteReader();
+        while (reader.Read())
+        {
+            items.Add(new LiveRowEntity(
+                Map(reader), reader.GetInt32(20), reader.GetInt32(21), LiveStatusExtensions.FromStorage(reader.GetValue(22))));
+        }
+
+        return new PagedResult<LiveRowEntity>(items, page, size, total);
+    }
+
+    public void DeleteByLiveHistoryId(long videoLiveHistoryPkid)
+    {
+        using var connection = _connectionFactory.Open();
+        using var command = connection.CreateCommand();
+        command.CommandText = "DELETE FROM video WHERE video_live_history_pkid = @pkid;";
+        command.Parameters.AddWithValue("@pkid", videoLiveHistoryPkid);
+        command.ExecuteNonQuery();
+    }
+
+    public void Delete(int pkid)
+    {
+        using var connection = _connectionFactory.Open();
+        using var command = connection.CreateCommand();
+        command.CommandText = "DELETE FROM video WHERE pkid = @pkid;";
+        command.Parameters.AddWithValue("@pkid", pkid);
+        command.ExecuteNonQuery();
+    }
+
+    /// <summary>Every row that streams with this setting, whatever live it belongs to.</summary>
+    public IReadOnlyList<int> FindPkidsByVideoSettingId(int videoSettingId)
+    {
+        using var connection = _connectionFactory.Open();
+        using var command = connection.CreateCommand();
+        command.CommandText = "SELECT t.pkid FROM video t WHERE t.video_setting_id = @setting ORDER BY t.pkid;";
+        command.Parameters.AddWithValue("@setting", videoSettingId);
+
+        var pkids = new List<int>();
+        using var reader = command.ExecuteReader();
+        while (reader.Read())
+        {
+            pkids.Add(reader.GetInt32(0));
+        }
+
+        return pkids;
     }
 
     public void SetVideoSetting(int pkid, int? videoSettingId)
@@ -204,6 +350,14 @@ public sealed class VideoRepository
         command.Parameters.AddWithValue("@channelName", video.ChannelName);
         command.Parameters.AddWithValue("@history", video.VideoLiveHistoryId is null ? DBNull.Value : video.VideoLiveHistoryId.Value);
         command.Parameters.AddWithValue("@setting", video.VideoSettingId is null ? DBNull.Value : video.VideoSettingId.Value);
+        command.Parameters.AddWithValue("@sourceKind", (int)video.SourceKind);
+        command.Parameters.AddWithValue("@sourceTarget", SqliteValue.From(video.SourceTarget));
+        command.Parameters.AddWithValue("@scenePkid", SqliteValue.From(video.ScenePkid));
+        command.Parameters.AddWithValue("@x", SqliteValue.From(video.X));
+        command.Parameters.AddWithValue("@y", SqliteValue.From(video.Y));
+        command.Parameters.AddWithValue("@width", SqliteValue.From(video.Width));
+        command.Parameters.AddWithValue("@height", SqliteValue.From(video.Height));
+        command.Parameters.AddWithValue("@audioEnabled", video.AudioEnabled ? 1 : 0);
     }
 
     private static List<VideoEntity> ReadAll(SqliteCommand command)
@@ -231,7 +385,17 @@ public sealed class VideoRepository
         StartDateLive = SqliteValue.ToNullableDateTime(reader.GetValue(8)),
         ChannelName = reader.GetString(9),
         VideoLiveHistoryId = SqliteValue.ToNullableInt64(reader.GetValue(10)),
-        VideoSettingId = SqliteValue.ToNullableInt32(reader.GetValue(11))
+        VideoSettingId = SqliteValue.ToNullableInt32(reader.GetValue(11)),
+        SourceKind = SourceKindExtensions.TryParse(SqliteValue.ToText(reader.GetValue(12)), out var kind)
+            ? kind
+            : SourceKind.File,
+        SourceTarget = SqliteValue.ToText(reader.GetValue(13)),
+        ScenePkid = SqliteValue.ToNullableInt64(reader.GetValue(14)),
+        X = SqliteValue.ToNullableInt32(reader.GetValue(15)),
+        Y = SqliteValue.ToNullableInt32(reader.GetValue(16)),
+        Width = SqliteValue.ToNullableInt32(reader.GetValue(17)),
+        Height = SqliteValue.ToNullableInt32(reader.GetValue(18)),
+        AudioEnabled = SqliteValue.ToBoolean(reader.GetValue(19))
     };
 }
 
@@ -281,6 +445,15 @@ internal static class SqliteValue
         _ => (int)ToInt64(value)
     };
 
+    public static double? ToNullableDouble(object? value) => value switch
+    {
+        null or DBNull => null,
+        double number => number,
+        long number => number,
+        int number => number,
+        var other => Convert.ToDouble(other, CultureInfo.InvariantCulture)
+    };
+
     public static bool ToBoolean(object? value) => value switch
     {
         null or DBNull => false,
@@ -300,3 +473,7 @@ internal static class SqliteValue
         _ => null
     };
 }
+
+/// <summary>A row of the live page: a video, or the video a playlist got to, with where it stands
+/// and the status of the whole playlist (the video's own one for a single file).</summary>
+public sealed record LiveRowEntity(VideoEntity Video, int Position, int Total, LiveStatus Status);

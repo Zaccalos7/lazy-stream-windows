@@ -37,7 +37,10 @@ public static class EntityFields
         ["startDateLive"] = new FilterField("start_date_live", FilterKind.DateTime),
         ["channelName"] = new FilterField("channel_name", FilterKind.Text),
         ["videoLiveHistory"] = new FilterField("video_live_history_pkid", FilterKind.Long),
-        ["videoSetting"] = new FilterField("video_setting_id", FilterKind.Integer)
+        ["videoSetting"] = new FilterField("video_setting_id", FilterKind.Integer),
+        ["sourceKind"] = new FilterField("source_kind", FilterKind.Integer),
+        ["sourceTarget"] = new FilterField("source_target", FilterKind.Text),
+        ["scenePkid"] = new FilterField("scene_pkid", FilterKind.Long)
     };
 
     public static readonly IReadOnlyDictionary<string, FilterField> Setting = new Dictionary<string, FilterField>(StringComparer.Ordinal)
@@ -51,7 +54,8 @@ public static class EntityFields
         ["isActive"] = new FilterField("is_active", FilterKind.Boolean),
         ["channelName"] = new FilterField("channel_name", FilterKind.Text),
         ["gopSize"] = new FilterField("gop_size", FilterKind.Integer),
-        ["lastModified"] = new FilterField("last_modified", FilterKind.DateTime)
+        ["lastModified"] = new FilterField("last_modified", FilterKind.DateTime),
+        ["scenePkid"] = new FilterField("scene_pkid", FilterKind.Long)
     };
 
     public static readonly IReadOnlyDictionary<string, FilterField> VideoSetting = new Dictionary<string, FilterField>(StringComparer.Ordinal)
@@ -67,6 +71,9 @@ public static class EntityFields
         ["isDefaultConfiguration"] = new FilterField("is_default_configuration", FilterKind.Boolean),
         ["defaultPlatformConfiguration"] = new FilterField("default_platform_configuration", FilterKind.Text),
         ["gopSize"] = new FilterField("gop_size", FilterKind.Integer),
+        ["videoWidth"] = new FilterField("video_width", FilterKind.Integer),
+        ["videoHeight"] = new FilterField("video_height", FilterKind.Integer),
+        ["frameRate"] = new FilterField("frame_rate", FilterKind.Double),
         ["isVideoAndAudioSettingActive"] = new FilterField("is_video_and_audio_setting_active", FilterKind.Boolean)
     };
 }

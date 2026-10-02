@@ -12,11 +12,11 @@
         <p class="subtitle">@T["liveManagementDescription"]</p>
     </div>
     <div class="actions">
-        <a class="btn" href="/orbis/mainLiveHistory"><i class="icon">&#xE81C;</i>@T["liveHistory"]</a>
         @if (Model.Locked.Count > 0)
         {
             <button class="btn" commandfor="unlock-dialog" command="show-modal"><i class="icon">&#xE785;</i>@T["unLockVideo"]</button>
         }
+        <button class="btn" style="font-size: 1.1em; padding: 10px 20px;" commandfor="playlist-dialog" command="show-modal"><i class="icon">&#xE8FD;</i>@T["startPlaylistButton"]</button>
         <button class="btn accent" style="font-size: 1.1em; padding: 10px 20px;" commandfor="start-dialog" command="show-modal"><i class="icon">&#xE768;</i>@T["startLiveButton"]</button>
     </div>
 </div>
@@ -51,80 +51,86 @@
     <partial name="_LiveRows" model="Model" />
 </div>
 
-@* Start a new live: one active video/audio setting + one active streaming configuration. *@
-<dialog class="dialog wide" id="start-dialog" data-busy-host open="@(Model.OpenStart ? "" : null)">
-    <form method="post" asp-page-handler="Start" asp-all-route-data="Model.FilterRoute">
+@* Start a new live, step one: an active video/audio setting and an active destination. What goes
+   on air is chosen next, on the canvas: this form is never sent, its two picks travel on. *@
+<dialog class="dialog wide" id="start-dialog" data-open="@(Model.OpenStart ? "" : "0")">
+    <form>
         <div class="dialog-body">
             <h2>@T["startNewLiveTitle"]</h2>
 
-            <h3>@T["wizardStep1Title"]</h3>
-            @if (Model.ActiveSettings.Count == 0)
-            {
-                <div class="infobar warning section">
-                    <i class="icon">&#xE7BA;</i>
-                    <p><strong>@T["noActiveSetting"]</strong><br />@T["wizardNoActiveSettingsMessage"]</p>
-                    <a class="btn" href="/orbis/mainVideoSetting">@T["activateVideoAudioSettings"]</a>
-                </div>
-            }
-            else
-            {
-                <div class="choice-list section" style="margin-top: 8px;">
-                    @foreach (var setting in Model.ActiveSettings)
-                    {
-                        <label class="choice">
-                            <input type="radio" name="settingId" value="@setting.Id" required />
-                            <span class="grow">
-                                <strong>@(string.IsNullOrWhiteSpace(setting.Title) ? T["untitled"] : setting.Title)</strong>
-                                @if (setting.IsDefaultConfiguration == true)
-                                {
-                                    <span class="badge">@setting.DefaultPlatformConfiguration</span>
-                                }
-                                <span class="caption" style="display: block;">
-                                    @setting.VideoCodecName · @VideoSettingForm.FormatBitrate(setting.VideoBitrate, T["milion"]) ·
-                                    @setting.VideoFormat?.ToUpperInvariant() · GOP @(setting.GopSize?.ToString() ?? "–") ·
-                                    @T["audioBitrate"] @(setting.AudioSettingRecord?.AudioBitrate?.ToString() ?? "N/A")
-                                </span>
-                            </span>
-                        </label>
-                    }
-                </div>
-            }
-
-            <h3 class="section">@T["wizardStep2Title"]</h3>
-            @if (Model.ActiveConfigurations.Count == 0)
-            {
-                <div class="infobar warning section">
-                    <i class="icon">&#xE7BA;</i>
-                    <p><strong>@T["noActiveStreamingConfiguration"]</strong><br />@T["wizardNoActiveConfigurationsMessage"]</p>
-                    <a class="btn" href="/orbis/mainChannelSetting">@T["activeConfigurationLabel"]</a>
-                </div>
-            }
-            else
-            {
-                <div class="choice-list" style="margin-top: 8px;">
-                    @foreach (var configuration in Model.ActiveConfigurations)
-                    {
-                        <label class="choice">
-                            <input type="radio" name="configurationId" value="@configuration.Id" required />
-                            <span class="grow">
-                                <strong>@configuration.ChannelName</strong> · @configuration.PlatformStreamName
-                                <span class="caption" style="display: block;">@configuration.VideoFolder · @configuration.StreamUrl</span>
-                                @if (!string.IsNullOrWhiteSpace(configuration.Description))
-                                {
-                                    <span class="caption" style="display: block;">@configuration.Description</span>
-                                }
-                            </span>
-                        </label>
-                    }
-                </div>
-            }
+            <partial name="_StartWizardSteps" model="Model" />
         </div>
         <div class="dialog-footer">
-            @* The wizard walks the folder and starts ffmpeg on the server: while it answers, the
-               button says so instead of leaving the dialog looking inert. *@
-            <span class="spinner" data-while="busy" title="@T["loading"]"></span>
-            <button class="btn accent" disabled="@(!canStart)">@T["startLiveButton"]</button>
+            <button class="btn accent" type="button" disabled="@(!canStart)"
+                    data-wizard-next="compose-dialog" data-wizard-fields="settingId configurationId">
+                @T["composeNext"]<i class="icon" style="margin: 0 0 0 6px;">&#xE72A;</i>
+            </button>
             <button class="btn" type="button" commandfor="start-dialog" command="close">@T["cancel"]</button>
+        </div>
+    </form>
+</dialog>
+
+@* Start a new live, step two: the scene composer, as big as the window allows. Its start button
+   saves the layout and sends this form with the two picks of step one. A refused start comes back
+   here, on the same scene and the same picks, with the reason on top. *@
+<dialog class="dialog compose" id="compose-dialog" data-busy-host data-open="@(Model.ComposeScene is not null ? "" : "0")">
+    <form method="post" asp-page-handler="StartScene" asp-all-route-data="Model.FilterRoute" data-composer-start-form>
+        <input type="hidden" name="settingId" value="@Model.SettingId" />
+        <input type="hidden" name="configurationId" value="@Model.ConfigurationId" />
+        <input type="hidden" name="scenePkid" value="@Model.ComposeScene" data-composer-start-pkid />
+    </form>
+    <div class="dialog-head">
+        <div class="grow">
+            <h2>@T["composeTitle"]</h2>
+            <p class="caption">@T["composeSubtitle"]</p>
+        </div>
+        <span class="spinner" data-while="busy" title="@T["loading"]"></span>
+        <button class="btn" type="button" data-wizard-back="start-dialog"><i class="icon">&#xE72B;</i>@T["back"]</button>
+        <button class="btn subtle icon-only" type="button" commandfor="compose-dialog" command="close" title="@T["cancel"]" aria-label="@T["cancel"]"><i class="icon">&#xE711;</i></button>
+    </div>
+    <div class="dialog-body" data-say-here>
+        @if (Model.ComposeScene is not null && Model.Notice is NoticeKind.Error && !string.IsNullOrEmpty(Model.NoticeText))
+        {
+            <div class="infobar error" role="alert">
+                <i class="icon">&#xEA39;</i>
+                <p>@Model.NoticeText</p>
+            </div>
+        }
+        <partial name="_SceneComposer" model="new SceneComposerModel(Model.ComposeScene)" />
+    </div>
+</dialog>
+
+@* Start a playlist: the same two picks, plus a folder whose videos are streamed one after the other. *@
+<dialog class="dialog wide" id="playlist-dialog" data-busy-host data-open="@(Model.OpenPlaylist ? "" : "0")">
+    <form method="post" asp-page-handler="Playlist" asp-all-route-data="Model.FilterRoute">
+        <div class="dialog-body">
+            <h2>@T["startPlaylistTitle"]</h2>
+            @* Reopened after a refused folder: the reason goes where the user is looking, not under the backdrop. *@
+            @if (Model.OpenPlaylist && Model.Notice is NoticeKind.Error && !string.IsNullOrEmpty(Model.NoticeText))
+            {
+                <div class="infobar error" role="alert">
+                    <i class="icon">&#xEA39;</i>
+                    <p>@Model.NoticeText</p>
+                </div>
+            }
+            <partial name="_StartWizardSteps" model="Model" />
+
+            <h3 class="section">@T["wizardStep3PlaylistTitle"]</h3>
+            <label class="field dropzone" style="margin-top: 8px;">
+                <span>@T["playlistFolder"]</span>
+                <input class="input" name="videoFolder" value="@Model.Folder" placeholder="C:\Video\Playlist" required
+                       data-drop-path data-drop-done="@T["dropVideoFolderDone"]" />
+                <small><i class="icon">&#xE8B7;</i><span>@T["dropPlaylistFolderHint"]</span></small>
+            </label>
+            <div class="infobar section">
+                <i class="icon">&#xE946;</i>
+                <p>@T["playlistOnlyVideos"]<br /><span class="caption">@string.Join(" · ", VideoExtensions.All)</span></p>
+            </div>
+        </div>
+        <div class="dialog-footer">
+            <span class="spinner" data-while="busy" title="@T["loading"]"></span>
+            <button class="btn accent" disabled="@(!canStart)">@T["startPlaylistButton"]</button>
+            <button class="btn" type="button" commandfor="playlist-dialog" command="close">@T["cancel"]</button>
         </div>
     </form>
 </dialog>
@@ -163,10 +169,40 @@
     </div>
 </dialog>
 
-@if (Model.LinkPkid is { } linkPkid && Model.Form is not null)
+@* The videos of one playlist: its row on the page stands for all of them. The list redraws on
+   every change like the rows do, so the dialog follows the playlist while it streams. *@
+@if (Model.OpenedPlaylist is { } opened)
 {
-    <dialog class="dialog wide" data-open>
-        <form method="post" asp-page-handler="Link" asp-all-route-data="Model.RowRoute(linkPkid)">
+    <dialog class="dialog x-wide" id="playlist-details" data-open>
+        <div class="dialog-body">
+            <h2>
+                @if (opened.IsScene)
+                {
+                    @opened.SceneName @:· @string.Format(T["sceneSources"], opened.Videos.Count)
+                }
+                else
+                {
+                    @T["playlistDetails"] @:· @string.Format(T["playlistVideoCount"], opened.Videos.Count)
+                }
+                <span class="badge @LiveStatusView.Css(opened.Status)" style="vertical-align: middle;">@T[LiveStatusView.Key(opened.Status)]</span>
+            </h2>
+            <p class="caption truncate" title="@opened.History.FolderOfVideoToStream">
+                @(string.IsNullOrEmpty(opened.History.PlatformStreamName) ? "" : opened.History.PlatformStreamName)@(opened.IsScene ? "" : " · " + opened.History.FolderOfVideoToStream)
+            </p>
+            <div data-refresh="@Url.Page("/MainLive", "DetailsRows", new { details = Model.Details })" data-since="@Model.ChangeVersion">
+                <partial name="_PlaylistVideos" model="Model" />
+            </div>
+        </div>
+        <div class="dialog-footer">
+            <a class="btn" href="@cancelLink">@T["back"]</a>
+        </div>
+    </dialog>
+}
+
+@if ((Model.LinkPkid is not null || Model.LinkHistory is not null) && Model.Form is not null)
+{
+    <dialog class="dialog x-wide" data-open>
+        <form method="post" asp-page-handler="Link" asp-all-route-data="Model.LinkHistory is { } history ? Model.PlaylistRoute(history) : Model.RowRoute(Model.LinkPkid)">
             <div class="dialog-body">
                 <h2>@T["connectVideoSetting"]</h2>
                 <partial name="_VideoSettingFields" for="Form" />

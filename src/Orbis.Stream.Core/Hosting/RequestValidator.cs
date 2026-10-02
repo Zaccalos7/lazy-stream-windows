@@ -32,8 +32,6 @@ public sealed class RequestValidator
         AddIfNull(errors, "streamUrl", request.StreamUrl, "not.valid.input");
         AddIfNull(errors, "streamKey", request.StreamKey, "not.valid.input");
         AddIfNull(errors, "platformStreamName", request.PlatformStreamName, "not.valid.input");
-        AddIfNull(errors, "description", request.Description, "not.valid.input");
-        AddIfNull(errors, "videoFolder", request.VideoFolder, "not.valid.input");
         AddIfNull(errors, "channelName", request.ChannelName, "not.valid.input");
         Throw(errors);
     }
@@ -57,6 +55,34 @@ public sealed class RequestValidator
         Throw(errors);
     }
 
+    /// <summary>
+    /// The same as a folder start, with a scene id where the path goes. A canvas carries its
+    /// sources, so there is no folder to validate and nothing to guess at.
+    /// </summary>
+    public void RequireStartSceneLive(StartSceneLiveRequest? request)
+    {
+        if (request is null)
+        {
+            throw new RequestValidationException(new Dictionary<string, string>
+            {
+                ["body"] = Message("input.not.valid")
+            });
+        }
+
+        var errors = new Dictionary<string, string>();
+        AddIfNull(errors, "streamUrl", request.StreamUrl, "not.valid.input");
+        AddIfNull(errors, "streamKey", request.StreamKey, "not.valid.input");
+        AddIfNull(errors, "platformStreamName", request.PlatformStreamName, "input.not.valid");
+        AddIfNull(errors, "channelName", request.ChannelName, "input.not.valid");
+
+        if (request.ScenePkid <= 0)
+        {
+            errors["scenePkid"] = Message("not.valid.input");
+        }
+
+        Throw(errors);
+    }
+
     public void RequireVideo(VideoRequest? request)
     {
         if (request is null)
@@ -77,6 +103,26 @@ public sealed class RequestValidator
         AddIfNull(errors, "videoSetting", request.VideoSetting, "input.not.valid");
         AddIfNull(errors, "channelName", request.ChannelName, "input.not.valid");
         Throw(errors);
+    }
+
+    /// <summary>
+    /// The preview sends one change at a time and every field of it is optional, so the only thing
+    /// to refuse is a request that carries nothing: it would answer as a success without having
+    /// touched anything.
+    /// </summary>
+    public void RequireLiveParameters(LiveParameterRequest? request)
+    {
+        if (request is null || request is
+            {
+                VideoCodec: null, VideoCodecName: null, PixelFormat: null, VideoBitrate: null,
+                AudioBitrate: null, VideoWidth: null, VideoHeight: null, FrameRate: null
+            })
+        {
+            throw new RequestValidationException(new Dictionary<string, string>
+            {
+                ["parameters"] = Message("live.parameters.empty")
+            });
+        }
     }
 
     public void RequireImage(IFormFile? image)

@@ -18,6 +18,7 @@ public sealed class StreamingService
     private readonly VideoRepository _videoRepository;
     private readonly VideoSettingRepository _videoSettingRepository;
     private readonly VideoLiveHistoryRepository _videoLiveHistoryRepository;
+    private readonly SceneRepository _sceneRepository;
     private readonly ResponseFactory _responses;
     private readonly Localizer _localizer;
     private readonly BackgroundTaskExecutor _executor;
@@ -31,6 +32,7 @@ public sealed class StreamingService
         VideoRepository videoRepository,
         VideoSettingRepository videoSettingRepository,
         VideoLiveHistoryRepository videoLiveHistoryRepository,
+        SceneRepository sceneRepository,
         ResponseFactory responses,
         Localizer localizer,
         BackgroundTaskExecutor executor,
@@ -42,6 +44,7 @@ public sealed class StreamingService
         _videoRepository = videoRepository;
         _videoSettingRepository = videoSettingRepository;
         _videoLiveHistoryRepository = videoLiveHistoryRepository;
+        _sceneRepository = sceneRepository;
         _responses = responses;
         _localizer = localizer;
         _executor = executor;
@@ -82,6 +85,31 @@ public sealed class StreamingService
     }
 
     /// <summary>
+    /// A live from a folder picked in the playlist wizard. Unlike <see cref="StartLive"/>, which also
+    /// takes a single file, the path has to be a folder: its videos (and nothing else lying in it)
+    /// become the playlist, one row each, in the order Explorer lists them.
+    /// </summary>
+    public MessageResponse StartPlaylist(StartLiveRequest request)
+    {
+        ArgumentNullException.ThrowIfNull(request);
+
+        var folder = NormalizeUserPath(request.VideoPath ?? string.Empty);
+        if (folder.Length == 0 || File.Exists(folder))
+        {
+            _logger.LogError("{Message}", _localizer.PrintMessage("playlist.not.a.folder", [folder]));
+            throw new NotFoundCustomException("playlist.not.a.folder", [folder]);
+        }
+
+        if (!Directory.Exists(folder))
+        {
+            _logger.LogError("{Message} {Path}", _localizer.PrintMessage("folder.not.found"), folder);
+            throw new NotFoundCustomException("folder.not.found");
+        }
+
+        return StartLive(request with { VideoPath = folder });
+    }
+
+    /// <summary>
     /// Port of <c>startVideo</c>: replays or restarts a single video whose details and settings
     /// are already stored, so no video row is created here.
     /// </summary>
@@ -113,13 +141,23 @@ public sealed class StreamingService
     public void StopVideoStreamingByPkid(int videoLivePkid)
     {
         var video = CheckIfExistsAndReturnEntity(videoLivePkid);
-        video.ShouldBeStop = true;
-        SaveFlagToStopLive(video);
+
+        // The sources of a canvas go on air together, under the row its ffmpeg runs on: a stop asked
+        // for from any other row of the composition has to reach that one, or the canvas stays live.
+        var drivingRow = DrivingRowOf(video);
+
+        // Only the row that drives the live is flagged. A flag left on another one would sit there
+        // for the next play, and kill it the moment the composition reaches that row.
+        foreach (var row in RowsOfComposition(video))
+        {
+            _videoRepository.SetStopFlag(row.Pkid, row.Pkid == drivingRow.Pkid);
+        }
+
         _notifier.Raise();
 
         // The row flag is what the streaming loop polls; signalling the process makes the stop
         // immediate for the user interface too.
-        if (_sessions.TryGet(videoLivePkid, out var session) && session is not null)
+        if (_sessions.TryGet(drivingRow.Pkid, out var session) && session is not null)
         {
             _ = session.StopAsync();
         }
@@ -128,9 +166,27 @@ public sealed class StreamingService
     public void ResetFlag(int videoLivePkid)
     {
         var video = CheckIfExistsAndReturnEntity(videoLivePkid);
-        video.ShouldBeStop = false;
-        SaveFlagToStopLive(video);
+        foreach (var row in RowsOfComposition(video))
+        {
+            _videoRepository.SetStopFlag(row.Pkid, false);
+        }
     }
+
+    /// <summary>
+    /// The rows a stop asked for a row reaches. A plain video and a playlist video stand for
+    /// themselves, while the rows of a canvas are one live and are stopped as a whole.
+    /// </summary>
+    private List<VideoEntity> RowsOfComposition(VideoEntity video) =>
+        video.ScenePkid is not null && video.VideoLiveHistoryId is { } historyPkid
+            ? _videoRepository.FindByLiveHistoryId(historyPkid)
+            : [video];
+
+    /// <summary>
+    /// The row the ffmpeg of a live is keyed on, the one whose flag the streaming loop polls. For a
+    /// canvas it is the first source with a picture, exactly as the composer put the live together.
+    /// </summary>
+    private VideoEntity DrivingRowOf(VideoEntity video) =>
+        RowsOfComposition(video).FirstOrDefault(row => row.SourceKind.HasPicture()) ?? video;
 
     /// <summary>
     /// Forgets where every video of a live history was stopped, so the next play starts the
@@ -141,17 +197,71 @@ public sealed class StreamingService
     {
         foreach (var video in _videoRepository.FindByLiveHistoryId(videoLiveHistoryPkid))
         {
-            if (video.LastTimeStampBeforeStop == 0)
+            // The status goes back too: an ENDED left over from the previous pass would make the
+            // playlist read as finished while it is starting over.
+            if (video.LastTimeStampBeforeStop == 0 && video.LiveStatus is LiveStatus.Offline or LiveStatus.Live)
             {
                 continue;
             }
 
             video.LastTimeStampBeforeStop = 0;
+            if (video.LiveStatus != LiveStatus.Live)
+            {
+                video.LiveStatus = LiveStatus.Offline;
+            }
+
             _videoRepository.Update(video);
         }
 
         _notifier.Raise();
     }
+
+    /// <summary>
+    /// "Start again from this video" of the playlist dialog: the videos before it count as streamed
+    /// (so a later play resumes after them, not from the first one), it and the ones after it
+    /// start over. The play itself is <see cref="StartVideo"/>, which then finds only these to stream.
+    /// </summary>
+    public void PrepareStartFrom(int pkid)
+    {
+        var target = CheckIfExistsAndReturnEntity(pkid);
+        if (target.VideoLiveHistoryId is not { } historyPkid)
+        {
+            throw new NotFoundCustomException("video.history.not.found");
+        }
+
+        // Checked before a row is touched: a refused start must leave the playlist as it was.
+        CheckIfALiveAlreadyStreamingForAChannel(target.ChannelName, GetPlatformStreamName(historyPkid));
+
+        var skipped = _localizer.PrintMessage("video.live.skipped", [target.Name]);
+        foreach (var video in _videoRepository.FindByLiveHistoryId(historyPkid).Where(video => video.ScenePkid is null))
+        {
+            if (video.Pkid < target.Pkid)
+            {
+                if (video.LiveStatus == LiveStatus.Ended && video.LastTimeStampBeforeStop > 0)
+                {
+                    continue;
+                }
+
+                // ENDED with a position is what the planner reads as "streamed through": the
+                // position only has to be there, the status is what makes it skip the file.
+                video.LiveStatus = LiveStatus.Ended;
+                video.LastTimeStampBeforeStop = Math.Max(video.LastTimeStampBeforeStop, SkippedPosition);
+                video.Message = skipped;
+            }
+            else
+            {
+                video.LiveStatus = LiveStatus.Offline;
+                video.LastTimeStampBeforeStop = 0;
+            }
+
+            _videoRepository.Update(video);
+        }
+
+        _notifier.Raise();
+    }
+
+    /// <summary>The position a skipped video is left at: any value above zero, see <see cref="PrepareStartFrom"/>.</summary>
+    private const long SkippedPosition = 1;
 
     public Task StopAllAsync() => _sessions.StopAllAsync();
 
@@ -181,6 +291,104 @@ public sealed class StreamingService
 
     private string GetPlatformStreamName(long videoLiveHistoryPkid) =>
         _videoLiveHistoryRepository.FindByPkid(videoLiveHistoryPkid)?.PlatformStreamName ?? string.Empty;
+
+    /// <summary>
+    /// Starts a live from a canvas instead of a folder. The scene is written out as one video row
+    /// per source, exactly the way a folder scan writes one row per file: everything downstream
+    /// (the live page, the history, the stop, the preview) reads rows and never learns that a
+    /// canvas and a playlist are not the same thing.
+    /// </summary>
+    public MessageResponse StartSceneLive(StartSceneLiveRequest request)
+    {
+        ArgumentNullException.ThrowIfNull(request);
+
+        var channelName = request.ChannelName!;
+        var platformStreamName = request.PlatformStreamName!;
+        var streamKey = request.StreamKey!;
+        var streamUrl = request.StreamUrl!;
+
+        CheckIfALiveAlreadyStreamingForAChannel(channelName, platformStreamName);
+
+        // A layout is only slots: what goes on air is the scene filled from it, saved on its own.
+        var scene = _sceneRepository.FindByPkid(request.ScenePkid) is { IsLayout: false } found
+            ? found
+            : throw new NotFoundCustomException("scene.not.found", [request.ScenePkid.ToString(System.Globalization.CultureInfo.InvariantCulture)]);
+
+        var sources = scene.Items.Where(item => item.SourceKind.HasPicture() || item.AudioEnabled).ToList();
+        if (!sources.Any(item => item.SourceKind.HasPicture()))
+        {
+            _logger.LogError("{Message}", _localizer.PrintMessage("scene.no.picture", [scene.Name]));
+            throw new NotFoundCustomException("scene.no.picture", [scene.Name]);
+        }
+
+        // The folder column is what the history is looked up by on a restart, so a scene is stored
+        // as a name of its own rather than as a path that does not exist on disk.
+        var source = SceneReference.Of(scene);
+
+        var timeStartLive = DateTime.Now;
+        SaveVideoLiveHistory(source, timeStartLive, streamUrl, streamKey, platformStreamName);
+        var videoLiveHistory = RetrievedVideoLiveHistorySaved(source, timeStartLive);
+
+        // Saved the way a folder start saves it: every row keeps the setting it went on air with, so
+        // a play or a restart of this live later reads it from the row and needs nothing else.
+        var videoSettingId = PersistVideoSetting(request.VideoSettingsRecord?.ToEntity());
+        SaveSceneSources(scene, sources, videoLiveHistory, videoSettingId, channelName);
+
+        var streamingUrl = FfmpegCommandBuilder.BuildStreamingUrl(streamUrl, streamKey);
+        return StreamingVideo(videoLiveHistory, streamingUrl);
+    }
+
+    private void SaveSceneSources(
+        SceneEntity scene,
+        IReadOnlyList<SceneItemEntity> items,
+        VideoLiveHistoryEntity videoLiveHistory,
+        int? videoSettingId,
+        string channelName)
+    {
+        foreach (var item in items)
+        {
+            var video = new VideoEntity
+            {
+                Name = string.IsNullOrWhiteSpace(item.Label) ? DescribeSource(item) : item.Label!,
+                // A file keeps its path here, the way every row the folder scan wrote does; a device
+                // has no path, so the tile carries the name the pages show and the target the
+                // command line opens.
+                VideoPath = item.SourceKind == SourceKind.File
+                    ? Path.GetFullPath(StreamingService.NormalizeUserPath(item.SourceTarget))
+                    : SceneReference.ItemPath(item.SourceKind, item.SourceTarget),
+                Extension = item.SourceKind == SourceKind.File
+                    ? ExtractExtensionFile(Path.GetFileName(item.SourceTarget))
+                    : item.SourceKind.ToWireValue().ToLowerInvariant(),
+                LastTimeStampBeforeStop = 0L,
+                LiveStatus = LiveStatus.Offline,
+                VideoLiveHistoryId = videoLiveHistory.Pkid,
+                ShouldBeStop = false,
+                StartDateLive = DateTime.Now,
+                ChannelName = channelName,
+                VideoSettingId = videoSettingId,
+                SourceKind = item.SourceKind,
+                SourceTarget = item.SourceKind == SourceKind.File ? null : item.SourceTarget,
+                ScenePkid = scene.Pkid,
+                X = item.X,
+                Y = item.Y,
+                Width = item.Width,
+                Height = item.Height,
+                AudioEnabled = item.AudioEnabled
+            };
+
+            _videoRepository.Insert(video);
+        }
+
+        _notifier.Raise();
+    }
+
+    private static string DescribeSource(SceneItemEntity item) => item.SourceKind switch
+    {
+        SourceKind.Screen => item.SourceTarget,
+        SourceKind.Camera => item.SourceTarget.Replace("video=", string.Empty, StringComparison.Ordinal),
+        SourceKind.Microphone => item.SourceTarget.Replace("audio=", string.Empty, StringComparison.Ordinal),
+        _ => Path.GetFileName(item.SourceTarget)
+    };
 
     private MessageResponse StreamingVideo(VideoLiveHistoryEntity videoLiveHistory, string streamingUrl)
     {
@@ -226,8 +434,6 @@ public sealed class StreamingService
 
         return video;
     }
-
-    private void SaveFlagToStopLive(VideoEntity video) => _videoRepository.Update(video);
 
     private VideoLiveHistoryEntity RetrievedVideoLiveHistorySaved(string videoFileAbsolutePath, DateTime timeStartLive)
     {
@@ -317,6 +523,9 @@ public sealed class StreamingService
 
                 return VideoExtensions.IsVideoExtensionPresent(fileName[(lastDotIndex + 1)..]);
             })
+            // The rows are streamed in pkid order, so the insert order is the playlist order: the
+            // file system gives no order at all, and "Episode 10" belongs after "Episode 2".
+            .Order(NaturalFileNameComparer.Instance)
             .ToList();
 
         if (videoList.Count == 0)

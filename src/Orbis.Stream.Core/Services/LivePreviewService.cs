@@ -138,6 +138,33 @@ public sealed class LivePreviewService
         var session = _sessions.Watched(videoPkid);
         if (session is null)
         {
+            // No live running - try to show the requested video or the last one with its stored duration
+            if (videoPkid is { } pkid)
+            {
+                var vid = _videoRepository.FindByPkid(pkid);
+                if (vid is not null)
+                {
+                    var running = Running(null);
+                    var durationMs = vid.DurationMilliseconds ?? 0;
+                    var isPlayable = vid.ScenePkid is null && VideoExtensions.IsBrowserPlayable(vid.Extension);
+                    return new LiveSnapshot(
+                        false,
+                        false,
+                        running,
+                        vid.Pkid,
+                        vid.Name,
+                        vid.VideoPath,
+                        vid.ChannelName,
+                        string.Empty,
+                        null,
+                        0,
+                        durationMs,
+                        isPlayable,
+                        new LiveMedia(0, 0, 0, false, 0),
+                        new LiveMedia(0, 0, 0, false, 0),
+                        LiveSnapshot.EmptyParameters);
+                }
+            }
             return LiveSnapshot.Offline(Running(null));
         }
 

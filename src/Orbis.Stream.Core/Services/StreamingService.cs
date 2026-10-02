@@ -27,6 +27,7 @@ public sealed class StreamingService
     private readonly CancellationTokenSource _shutdown = new();
     private readonly LiveChangeNotifier _notifier;
     private readonly ILogger<StreamingService> _logger;
+    private readonly FfmpegProbe _probe;
 
     public StreamingService(
         VideoRepository videoRepository,
@@ -39,7 +40,8 @@ public sealed class StreamingService
         IVideoPlaylistStreamer streamer,
         StreamingSessionRegistry sessions,
         LiveChangeNotifier notifier,
-        ILogger<StreamingService> logger)
+        ILogger<StreamingService> logger,
+        FfmpegProbe probe)
     {
         _videoRepository = videoRepository;
         _videoSettingRepository = videoSettingRepository;
@@ -52,6 +54,7 @@ public sealed class StreamingService
         _sessions = sessions;
         _notifier = notifier;
         _logger = logger;
+        _probe = probe;
     }
 
     public MessageResponse StartLive(StartLiveRequest request)
@@ -347,15 +350,20 @@ public sealed class StreamingService
     {
         foreach (var item in items)
         {
+            var videoPath = item.SourceKind == SourceKind.File
+                ? Path.GetFullPath(StreamingService.NormalizeUserPath(item.SourceTarget))
+                : SceneReference.ItemPath(item.SourceKind, item.SourceTarget);
+            var durationMs = item.SourceKind == SourceKind.File && File.Exists(videoPath)
+                ? ProbeDuration(videoPath)
+                : null;
+
             var video = new VideoEntity
             {
                 Name = string.IsNullOrWhiteSpace(item.Label) ? DescribeSource(item) : item.Label!,
                 // A file keeps its path here, the way every row the folder scan wrote does; a device
                 // has no path, so the tile carries the name the pages show and the target the
                 // command line opens.
-                VideoPath = item.SourceKind == SourceKind.File
-                    ? Path.GetFullPath(StreamingService.NormalizeUserPath(item.SourceTarget))
-                    : SceneReference.ItemPath(item.SourceKind, item.SourceTarget),
+                VideoPath = videoPath,
                 Extension = item.SourceKind == SourceKind.File
                     ? ExtractExtensionFile(Path.GetFileName(item.SourceTarget))
                     : item.SourceKind.ToWireValue().ToLowerInvariant(),
@@ -373,7 +381,8 @@ public sealed class StreamingService
                 Y = item.Y,
                 Width = item.Width,
                 Height = item.Height,
-                AudioEnabled = item.AudioEnabled
+                AudioEnabled = item.AudioEnabled,
+                DurationMilliseconds = durationMs
             };
 
             _videoRepository.Insert(video);
@@ -556,6 +565,7 @@ public sealed class StreamingService
         string channelName)
     {
         var fullPath = Path.GetFullPath(videoFile);
+        var durationMs = ProbeDuration(fullPath);
         return new VideoEntity
         {
             Name = Path.GetFileName(fullPath),
@@ -566,8 +576,28 @@ public sealed class StreamingService
             VideoLiveHistoryId = videoLiveHistory.Pkid,
             ShouldBeStop = false,
             StartDateLive = DateTime.Now,
-            ChannelName = channelName
+            ChannelName = channelName,
+            DurationMilliseconds = durationMs
         };
+    }
+
+    private long? ProbeDuration(string fullPath)
+    {
+        if (!File.Exists(fullPath))
+        {
+            return null;
+        }
+
+        try
+        {
+            var probe = _probe.ProbeAsync(fullPath, CancellationToken.None).GetAwaiter().GetResult();
+            return probe.DurationSeconds > 0 ? (long)(probe.DurationSeconds * 1000) : null;
+        }
+        catch (Exception ex)
+        {
+            _logger.LogWarning(ex, "Failed to probe duration for {Path}", fullPath);
+            return null;
+        }
     }
 
     /// <summary>

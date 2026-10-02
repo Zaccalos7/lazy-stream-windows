@@ -154,9 +154,9 @@ public sealed class VideoRepository
             """
             INSERT INTO video (name, video_path, extension, live_status, last_time_stamp_before_stop, message,
                                should_be_stop, start_date_live, channel_name, video_live_history_pkid, video_setting_id,
-                               source_kind, source_target, scene_pkid, x, y, width, height, audio_enabled)
+                               source_kind, source_target, scene_pkid, x, y, width, height, audio_enabled, duration_milliseconds)
             VALUES (@name, @path, @extension, @liveStatus, @lastTimeStamp, @message, @shouldBeStop, @startDateLive, @channelName, @history, @setting,
-                    @sourceKind, @sourceTarget, @scenePkid, @x, @y, @width, @height, @audioEnabled);
+                    @sourceKind, @sourceTarget, @scenePkid, @x, @y, @width, @height, @audioEnabled, @duration);
             SELECT last_insert_rowid();
             """;
         Bind(command, video);
@@ -188,7 +188,8 @@ public sealed class VideoRepository
                 y = @y,
                 width = @width,
                 height = @height,
-                audio_enabled = @audioEnabled
+                audio_enabled = @audioEnabled,
+                duration_milliseconds = @duration
             WHERE pkid = @pkid;
             """;
         Bind(command, video);

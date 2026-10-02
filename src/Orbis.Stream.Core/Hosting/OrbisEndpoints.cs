@@ -27,8 +27,9 @@ public static class OrbisEndpoints
 
     /// <summary>
     /// The name of the header that carries the stamp of the frame, which is what tells two frames of
-    /// the same live apart. The stamp is the moment ffmpeg wrote the file, so a page that asks for
-    /// the frame it has already seen gets told so without the JPEG being sent again.
+    /// the same live apart. The stamp is the picture and not the file it was written to (see
+    /// <see cref="LivePreviewFrames"/>), so a page that asks for the frame it is already holding is
+    /// answered with the next picture ffmpeg writes, and with nothing at all while there is none.
     /// </summary>
     private const string FrameStampHeader = "X-Orbis-Frame";
 
@@ -278,7 +279,13 @@ public static class OrbisEndpoints
         // arriving late and dragging the picture behind the live. The answer is short (the picture
         // is 640 pixels wide), and the stamp in the header lets a page that already has this exact
         // frame be answered without the bytes at all.
-        group.MapGet("/live/{pkid:int}/frame", (
+        //
+        // A page that says which frame it holds can also say how long it is willing to wait for the
+        // next one (?wait=): the request is then held open until ffmpeg has written a picture the
+        // page has not seen, which is what keeps the page and the encoder on one clock. Left out,
+        // the answer is immediate, which is what a page that would rather come back on its own
+        // timer asks for.
+        group.MapGet("/live/{pkid:int}/frame", async (
             int pkid,
             HttpContext context,
             LivePreviewFrames frames,
@@ -291,29 +298,27 @@ public static class OrbisEndpoints
                 return Results.NotFound();
             }
 
-            var frame = frames.Read(pkid);
+            var held = StampOf(context.Request);
+            var frame = await frames.NextAsync(pkid, held, WaitOf(context.Request), context.RequestAborted);
+
             if (frame is null)
             {
-                return Results.NotFound();
+                // Nothing new within the time the page was willing to give: a page that is ahead of
+                // the live is told so without the bytes, and a live that has written no frame at all
+                // is not there yet. A live that ended while the page waited has no session any more,
+                // and the page has to hear that rather than keep its picture waiting.
+                return sessions.TryGet(pkid, out _)
+                    ? Results.StatusCode(StatusCodes.Status304NotModified)
+                    : Results.NotFound();
             }
 
-            // The stamp is the write time, so it moves with every frame ffmpeg writes. The page sends
-            // back the one it is holding; if it is the same frame, there is nothing to draw.
-            var stamp = frames.LastWrite(pkid).Ticks.ToString(CultureInfo.InvariantCulture);
             context.Response.Headers.CacheControl = "no-store";
-            context.Response.Headers[FrameStampHeader] = stamp;
+            context.Response.Headers[FrameStampHeader] = frame.Stamp;
 
-            if (context.Request.Headers.IfNoneMatch.Any(value => value == stamp))
-            {
-                return Results.StatusCode(StatusCodes.Status304NotModified);
-            }
-
-            return Results.File(frame, "image/jpeg");
+            return Results.File(frame.Bytes, "image/jpeg");
         });
 
-        // The light picture of a live: the JPEGs its ffmpeg writes next to the stream, pushed as
-        // motion JPEG, which an <img> plays on its own. A frame goes out only when there is a new
-        // one, and the answer ends with the live, so an open page costs nothing once it is over.
+        // The last third of the preview: the encoder settings of a live that is already running.
         group.MapPut("/live/{pkid:int}/parameters", (
             int pkid,
             LiveParameterRequest? request,
@@ -332,6 +337,50 @@ public static class OrbisEndpoints
         return int.TryParse(raw, NumberStyles.Integer, CultureInfo.InvariantCulture, out var pkid) && pkid > 0
             ? pkid
             : null;
+    }
+
+    /// <summary>
+    /// The frame a page already holds, which is the <c>If-None-Match</c> stamp of the answer it was
+    /// given: the server looks for the next one instead of sending that picture again.
+    /// </summary>
+    private static string? StampOf(HttpRequest request)
+    {
+        foreach (var value in request.Headers.IfNoneMatch)
+        {
+            if (string.IsNullOrWhiteSpace(value))
+            {
+                continue;
+            }
+
+            // A page that quotes the stamp back, the way a browser quotes an ETag, is understood too.
+            var stamp = value.Trim();
+            if (stamp.Length > 1 && stamp[0] == '"' && stamp[^1] == '"')
+            {
+                stamp = stamp[1..^1];
+            }
+
+            if (stamp.Length > 0)
+            {
+                return stamp;
+            }
+        }
+
+        return null;
+    }
+
+    /// <summary>
+    /// How long a page is willing to be left waiting for the frame it does not have yet. No more than
+    /// <see cref="LivePreviewFrames.MaximumWait"/>, and nothing at all when the page did not ask.
+    /// </summary>
+    private static TimeSpan WaitOf(HttpRequest request)
+    {
+        var raw = request.Query["wait"].FirstOrDefault();
+        if (!int.TryParse(raw, NumberStyles.Integer, CultureInfo.InvariantCulture, out var milliseconds) || milliseconds <= 0)
+        {
+            return TimeSpan.Zero;
+        }
+
+        return TimeSpan.FromMilliseconds(Math.Min(milliseconds, LivePreviewFrames.MaximumWait.TotalMilliseconds));
     }
 
     /// <summary>

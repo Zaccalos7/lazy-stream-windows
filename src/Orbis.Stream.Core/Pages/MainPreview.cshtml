@@ -88,14 +88,15 @@ else
         : null;
     <div class="preview">
         <div class="preview-stage card">
-            @* What is on air, made light: a few small frames a second that ffmpeg writes next to the
-               live, not a second copy of it. The cover under it shows until the first frame lands. *@
+            @* What is on air, made light: the frames a few times a second that ffmpeg writes next to
+               the live, not a second copy of it. The canvas stays hidden, under the cover, until the
+               first of those frames has been decoded, so nothing empty or stale is ever shown. *@
             <div class="preview-screen" style="@shape">
                 <div class="preview-cover">
                     <span class="spinner"></span>
                     <p class="muted">@T["previewWaiting"]</p>
                 </div>
-                <canvas data-preview-frame role="img" aria-label="@live.VideoName"></canvas>
+                <canvas data-preview-frame role="img" aria-label="@live.VideoName" hidden></canvas>
             </div>
             <div class="preview-bar">
                 <div class="preview-id">

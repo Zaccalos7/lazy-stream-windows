@@ -164,12 +164,36 @@ public sealed class DatabaseBootstrapperTests
 
         Assert.Equal("libx264", twitch.VideoCodecName);
         Assert.Equal(27, twitch.VideoCodec);
-        Assert.Equal(5_000_000, twitch.VideoBitrate);
+        Assert.Equal(6_000_000, twitch.VideoBitrate);
         Assert.Equal("flv", twitch.VideoFormat);
         Assert.Equal(2, twitch.GopSize);
         Assert.Equal(86018, twitch.AudioSetting!.AudioCodec);
-        Assert.Equal(128_000, twitch.AudioSetting.AudioBitrate);
+        Assert.Equal(160_000, twitch.AudioSetting.AudioBitrate);
         Assert.NotEqual(twitch.Id, youtube.Id);
+
+        // The low CPU preset sits next to the default without being one: the wizard picks the default.
+        var lowCpu = settings.FindByTitleAndPlatform("Low CPU Default Twitch", "Twitch");
+        Assert.NotNull(lowCpu);
+        Assert.False(lowCpu.IsDefaultConfiguration);
+    }
+
+    [Fact]
+    public async Task StartAsync_RenamesThePlaceholderDefaultInsteadOfAddingAnother()
+    {
+        // An installation from the first versions: its default is called "test", and it is still the
+        // default the user streams with.
+        using var database = new TemporaryDatabase();
+        var settings = database.Repository<VideoSettingRepository>();
+        var original = Assert.Single(settings.FindByIsDefaultConfigurationTrueAndDefaultPlatformConfiguration("Twitch"));
+        original.Title = "test";
+        settings.Update(original);
+
+        await new DatabaseBootstrapper(database.ConnectionFactory, settings, NullLogger<DatabaseBootstrapper>.Instance)
+            .StartAsync(CancellationToken.None);
+
+        var twitch = Assert.Single(settings.FindByIsDefaultConfigurationTrueAndDefaultPlatformConfiguration("Twitch"));
+        Assert.Equal(original.Id, twitch.Id);
+        Assert.Equal("Default Twitch", twitch.Title);
     }
 
     [Fact]

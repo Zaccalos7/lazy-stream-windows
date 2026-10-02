@@ -67,6 +67,10 @@ public sealed class FfmpegCommandBuilderTests
         Assert.Contains("-c:v mjpeg -q:v 6", text, StringComparison.Ordinal);
         Assert.Contains("-f image2 -update 1 /data/preview/7.jpg", text, StringComparison.Ordinal);
         Assert.DoesNotContain("-atomic_writing", text, StringComparison.Ordinal);
+
+        // One thread for the preview, which is the whole of the isolation from the live: the two
+        // encoders are one process, and the live is the one being sent to the platform.
+        Assert.Contains("-q:v 6 -threads 1 -f image2", text, StringComparison.Ordinal);
     }
 
     [Theory]
@@ -239,6 +243,7 @@ public sealed class FfmpegCompositionTests
         var text = string.Join(' ', command);
 
         Assert.Contains("-an -sn -dn -c:v mjpeg -q:v 6", text, StringComparison.Ordinal);
+        Assert.Contains("-q:v 6 -threads 1 -f image2", text, StringComparison.Ordinal);
         Assert.Contains("-f image2 -update 1 /data/preview/7.jpg", text, StringComparison.Ordinal);
         Assert.DoesNotContain("-atomic_writing", text, StringComparison.Ordinal);
     }
@@ -411,7 +416,7 @@ public sealed class FfmpegCompositionTests
 
         var text = string.Join(' ', command);
 
-        Assert.Contains("-ss 12 -thread_queue_size 1024 -readrate 1 -i /videos/intro.mp4", text, StringComparison.Ordinal);
+        Assert.Contains("-ss 12 -thread_queue_size 512 -readrate 1 -i /videos/intro.mp4", text, StringComparison.Ordinal);
 
         // A capture device cannot be seeked into, so the position is only given to the file.
         Assert.DoesNotContain("-f dshow -ss", text, StringComparison.Ordinal);

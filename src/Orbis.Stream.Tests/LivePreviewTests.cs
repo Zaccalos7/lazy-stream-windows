@@ -139,6 +139,74 @@ public sealed class LivePreviewTests : IAsyncLifetime
     }
 
     [Fact]
+    public async Task Preview_AnswersWithTheFrameAsSoonAsItIsWritten()
+    {
+        if (!await StartLiveAsync())
+        {
+            return;
+        }
+
+        await WaitForLiveAsync();
+
+        // What the page does now: it asks for the frame it does not have and lets the server hold
+        // the question open until ffmpeg has written one, instead of asking again on a timer of its
+        // own. A timer on the page runs against the clock ffmpeg writes on, the two drift into each
+        // other, and the picture ends up held for one beat and then for three - which is a judder no
+        // amount of care on the drawing side takes out.
+        const int Seconds = 4;
+        var clock = Stopwatch.StartNew();
+        var served = 0;
+        var waited = 0;
+        var repeated = 0;
+        var previous = string.Empty;
+        string? stamp = null;
+
+        while (clock.Elapsed < TimeSpan.FromSeconds(Seconds))
+        {
+            using var request = new HttpRequestMessage(HttpMethod.Get, $"/preview/live/{_pkid}/frame?wait=250");
+            if (stamp is not null)
+            {
+                request.Headers.TryAddWithoutValidation("If-None-Match", stamp);
+            }
+
+            using var answer = await _host.Client.SendAsync(request);
+            if (answer.StatusCode == HttpStatusCode.NotModified)
+            {
+                waited++;
+                continue;
+            }
+
+            Assert.Equal(HttpStatusCode.OK, answer.StatusCode);
+
+            var digest = Convert.ToHexString(System.Security.Cryptography.SHA256.HashData(
+                await answer.Content.ReadAsByteArrayAsync()));
+            if (digest == previous)
+            {
+                // The picture before this one was already drawn, so the stamp did not do its work.
+                repeated++;
+            }
+
+            previous = digest;
+            served++;
+            stamp = answer.Headers.GetValues(FrameStampHeader).First();
+        }
+
+        clock.Stop();
+
+        // ffmpeg writes thirty frames a second and every one of them is a picture the page has not
+        // seen: a page that waits for the frame does not lose the ones in between.
+        var perSecond = served / clock.Elapsed.TotalSeconds;
+        Assert.True(perSecond >= 25, $"the preview served {perSecond:0.0} frames a second over {clock.Elapsed.TotalSeconds:0.0}s");
+        Assert.Equal(0, repeated);
+
+        // A live that is writing thirty a second has the next picture ready well inside the wait, so
+        // a page that is answered without one is a page that asked about a live nothing was written
+        // for. A couple of them on a machine that hiccuped are a hiccup; more than that is the wait
+        // not doing its job.
+        Assert.True(waited <= 2, $"the server had no frame for the page {waited} times in {served + waited} questions");
+    }
+
+    [Fact]
     public async Task Preview_ChangesTheParametersOfARunningLive()
     {
         if (!await StartLiveAsync())

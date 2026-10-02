@@ -20,8 +20,13 @@ public sealed class MessageCatalogTests
     [InlineData("pt-BR", "pt")]
     [InlineData("ko-KR", "ko")]
     [InlineData("ar-EG", "en")]
-    [InlineData("hi-IN", "hi")]
-    [InlineData("bn-BD", "bn")]
+    // Languages that were never translations, or were jokes, resolve to English like anything else
+    // the catalogue does not have: Klingon, Hodor and Latin answer in English, never in themselves.
+    [InlineData("tlh", "en")]
+    [InlineData("hod", "en")]
+    [InlineData("la", "en")]
+    [InlineData("hi-IN", "en")]
+    [InlineData("bn-BD", "en")]
     [InlineData(null, "en")]
     public void ResolveLanguage_MapsToAnAvailableBundle(string? requested, string expected)
     {
@@ -40,7 +45,32 @@ public sealed class MessageCatalogTests
     [Fact]
     public void GetMessage_FallsBackToEnglishForUnsupportedLanguages()
     {
-        Assert.Equal("Not valid field", CreateCatalog().GetMessage("pt-BR", "not.valid.input"));
+        var catalog = CreateCatalog();
+
+        Assert.Equal("Not valid field", catalog.GetMessage("ar-EG", "not.valid.input"));
+        Assert.Equal("Not valid field", catalog.GetMessage("hod", "not.valid.input"));
+    }
+
+    [Fact]
+    public void EverySupportedLanguageIsReallyTranslated()
+    {
+        // A bundle that is a copy of the English one ships an interface in two languages at once:
+        // nothing looks broken, every screen is simply in the wrong tongue. Portuguese, Korean and
+        // Japanese sat that way until this caught them.
+        var catalog = CreateCatalog();
+
+        foreach (var language in catalog.SupportedLanguages.Where(code => code != "en"))
+        {
+            var bundle = PropertiesBundle.Parse(File.ReadAllText(BundlePath(language)));
+            var english = PropertiesBundle.Parse(File.ReadAllText(BundlePath("en")));
+
+            foreach (var (code, text) in english.Values)
+            {
+                Assert.True(bundle.TryGetValue(code, out var translated), $"messages_{language}.properties is missing '{code}'");
+                Assert.False(text == translated, $"messages_{language}.properties leaves '{code}' in English");
+                Assert.DoesNotMatch(@"^\s*[\[(]", translated);
+            }
+        }
     }
 
     [Fact]
@@ -61,9 +91,9 @@ public sealed class MessageCatalogTests
     public void EveryBundleDefinesTheSameCodes()
     {
         var catalog = CreateCatalog();
-        var english = PropertiesBundle.Parse(File.ReadAllText(EnglishPath()));
+        var english = PropertiesBundle.Parse(File.ReadAllText(BundlePath("en")));
 
-        Assert.Equal(15, catalog.SupportedLanguages.Count);
+        Assert.Equal(10, catalog.SupportedLanguages.Count);
 
         foreach (var language in catalog.SupportedLanguages)
         {
@@ -77,6 +107,6 @@ public sealed class MessageCatalogTests
         }
     }
 
-    private static string EnglishPath() =>
-        Path.Combine(AppContext.BaseDirectory, "Messages", "messages_en.properties");
+    private static string BundlePath(string language) =>
+        Path.Combine(AppContext.BaseDirectory, "Messages", $"messages_{language}.properties");
 }

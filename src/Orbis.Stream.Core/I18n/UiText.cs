@@ -28,7 +28,7 @@ public sealed class UiText
         ("ja", "🇯🇵 日本語"),
         ("tlh", "🖖 tlhIngan Hol"),
         ("hi", "🇮🇳 हिन्दी"),
-        ("la", "🏛️ Latina"),
+        ("la", "SPQR Latina"),
         ("bn", "🇧🇩 বাংলা"),
         ("hod", "🚪 Hodor")
     ];

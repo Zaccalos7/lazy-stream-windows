@@ -125,6 +125,52 @@ public sealed class VideoService
         return _responses.Build("delete.successful", StatusCodes.Status200OK);
     }
 
+    /// <summary>Deletes a single live history row and all its video rows. Refused if any video is live.</summary>
+    public MessageResponse DeleteLiveHistory(long videoLiveHistoryPkid)
+    {
+        var videos = _videoRepository.FindByLiveHistoryId(videoLiveHistoryPkid);
+        if (videos.Count == 0)
+        {
+            throw new NotFoundCustomException("video.not.found");
+        }
+
+        if (videos.Any(video => video.LiveStatus == LiveStatus.Live))
+        {
+            throw new LiveException("video.delete.live");
+        }
+
+        _videoLiveHistoryRepository.DeleteByPkid(videoLiveHistoryPkid);
+
+        // The scene of a live is only there to restart it: gone with its last row, never a layout.
+        foreach (var scenePkid in videos.Select(video => video.ScenePkid).OfType<long>().Distinct())
+        {
+            if (_sceneRepository.FindByPkid(scenePkid) is { IsLayout: false } && !_sceneRepository.IsOnAir(scenePkid))
+            {
+                _sceneRepository.Delete(scenePkid);
+            }
+        }
+
+        _notifier.Raise();
+        _logger.LogInformation("{Message}", _localizer.PrintMessage("delete.successful"));
+        return _responses.Build("delete.successful", StatusCodes.Status200OK);
+    }
+
+    /// <summary>Deletes all live history rows older than the given number of months and their video rows.</summary>
+    public MessageResponse DeleteOldLiveHistory(int monthsOld)
+    {
+        if (monthsOld <= 0)
+        {
+            return _responses.Build("invalid.parameter", StatusCodes.Status400BadRequest);
+        }
+
+        var threshold = DateTime.Now.AddMonths(-monthsOld);
+        var deletedCount = _videoLiveHistoryRepository.DeleteOlderThan(threshold);
+
+        _notifier.Raise();
+        _logger.LogInformation("Deleted {Count} live history rows older than {Months} months", deletedCount, monthsOld);
+        return _responses.Build($"Deleted {deletedCount} live history rows older than {monthsOld} months", StatusCodes.Status200OK);
+    }
+
     /// <summary>One video with its live history and setting, the payload <c>/live/start-video-live</c> expects.</summary>
     public VideoRequest FindVideo(int pkid) => WithRelations(FindVideoToUnlock(pkid));
 

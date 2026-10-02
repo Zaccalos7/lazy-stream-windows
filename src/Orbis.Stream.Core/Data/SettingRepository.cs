@@ -199,6 +199,52 @@ public sealed class VideoLiveHistoryRepository
         return ReadAll(command).FirstOrDefault();
     }
 
+    /// <summary>Deletes a single live history row and all its video rows.</summary>
+    public void DeleteByPkid(long pkid)
+    {
+        using var connection = _connectionFactory.Open();
+        using var command = connection.CreateCommand();
+        command.CommandText = "DELETE FROM video WHERE video_live_history_pkid = @pkid;";
+        command.Parameters.AddWithValue("@pkid", pkid);
+        command.ExecuteNonQuery();
+
+        command.CommandText = "DELETE FROM video_live_history WHERE pkid = @pkid;";
+        command.ExecuteNonQuery();
+    }
+
+    /// <summary>Deletes all live history rows older than the given date and their video rows.</summary>
+    public int DeleteOlderThan(DateTime threshold)
+    {
+        using var connection = _connectionFactory.Open();
+        using var command = connection.CreateCommand();
+        // First collect pkids to delete
+        command.CommandText = "SELECT pkid FROM video_live_history WHERE local_date_time_start_live < @threshold;";
+        command.Parameters.AddWithValue("@threshold", SqliteValue.From(threshold));
+        var pkids = new List<long>();
+        using (var reader = command.ExecuteReader())
+        {
+            while (reader.Read())
+            {
+                pkids.Add(Convert.ToInt64(reader.GetValue(0), CultureInfo.InvariantCulture));
+            }
+        }
+
+        if (pkids.Count == 0) return 0;
+
+        var placeholders = string.Join(",", pkids.Select((_, i) => $"@pkid{i}"));
+        command.CommandText = $"DELETE FROM video WHERE video_live_history_pkid IN ({placeholders});";
+        for (var i = 0; i < pkids.Count; i++)
+        {
+            command.Parameters.AddWithValue($"@pkid{i}", pkids[i]);
+        }
+        command.ExecuteNonQuery();
+
+        command.CommandText = $"DELETE FROM video_live_history WHERE pkid IN ({placeholders});";
+        command.ExecuteNonQuery();
+
+        return pkids.Count;
+    }
+
     private static List<VideoLiveHistoryEntity> ReadAll(SqliteCommand command)
     {
         var items = new List<VideoLiveHistoryEntity>();

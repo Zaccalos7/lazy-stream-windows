@@ -164,6 +164,10 @@ public static class OrbisEndpoints
         group.MapGet("/getAllChannelWithVideoLive", (VideoService service) => Results.Ok(service.GetAllChannelOnline()));
 
         group.MapPut("/unlockVideo", (int videoKey, VideoService service) => AsResult(service.UnlockVideo(videoKey)));
+
+        // Live History endpoints
+        group.MapDelete("/live-history/{pkid:long}", (long pkid, VideoService service) => AsResult(service.DeleteLiveHistory(pkid)));
+        group.MapDelete("/live-history/older-than/{months:int}", (int months, VideoService service) => AsResult(service.DeleteOldLiveHistory(months)));
     }
 
     private static void MapSettings(IEndpointRouteBuilder app)

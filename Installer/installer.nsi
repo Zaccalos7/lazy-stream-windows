@@ -16,7 +16,7 @@ Unicode true
 !include "x64.nsh"
 
 !ifndef APPVERSION
-  !define APPVERSION "2.0.5"
+  !define APPVERSION "2.0.6"
 !endif
 !ifndef PUBLISHDIR
   !define PUBLISHDIR "..\artifacts\publish"
@@ -195,12 +195,3 @@ Function un.onInit
   ${EndIf}
 FunctionEnd
 !endif
-
-Section "Uninstall"
-  Delete "$DESKTOP\${APPNAME}.lnk"
-  RMDir "$SMPROGRAMS\${APPNAME}"
-  Delete "$INSTDIR\uninstall.exe"
-  RMDir /r "$INSTDIR"
-  DeleteRegKey HKCU "${UNINSTKEY}"
-  DeleteRegKey HKCU "${REGKEY}"
-SectionEnd

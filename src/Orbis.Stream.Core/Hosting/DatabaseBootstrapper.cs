@@ -62,20 +62,44 @@ public sealed class DatabaseBootstrapper : IHostedService
     private static bool IsPlaceholderTitle(string? title) =>
         string.IsNullOrWhiteSpace(title) || string.Equals(title.Trim(), "test", StringComparison.OrdinalIgnoreCase);
 
+    /// <summary>
+    /// Whether the platform already has its default setting, which is found by the flag and not by
+    /// its title: the title is the one thing the user may have changed, and an installation from the
+    /// first versions still calls it "test". Looked up by title, both were missed and a second default
+    /// was added next to them on every upgrade. The first of the duplicates stays, the others go: a
+    /// platform with two default settings would offer the wizard two identical rows.
+    /// </summary>
+    private bool KeepTheDefaultOf(string platform, string title)
+    {
+        var existing = _videoSettingRepository.FindByIsDefaultConfigurationTrueAndDefaultPlatformConfiguration(platform);
+        if (existing.Count == 0)
+        {
+            return false;
+        }
+
+        foreach (var duplicate in existing.Skip(1))
+        {
+            _videoSettingRepository.Delete(duplicate.Id!.Value);
+        }
+
+        var kept = existing[0];
+        if (IsPlaceholderTitle(kept.Title))
+        {
+            kept.Title = title;
+            kept.LastModified = DateTime.Now;
+            _videoSettingRepository.Update(kept);
+            _logger.LogInformation("Default VideoSetting of {Platform} renamed to {Title}", platform, title);
+        }
+
+        return true;
+    }
+
     private void InitializeDefaultVideoSetting(string platform, bool createHighQuality)
     {
         var title = createHighQuality ? TitleOf(platform) : "Low CPU " + TitleOf(platform);
-        
-        var existing = _videoSettingRepository.FindByTitleAndPlatform(title, platform);
-        if (existing is not null)
+
+        if (createHighQuality ? KeepTheDefaultOf(platform, title) : _videoSettingRepository.FindByTitleAndPlatform(title, platform) is not null)
         {
-            if (IsPlaceholderTitle(existing.Title))
-            {
-                existing.Title = title;
-                existing.LastModified = DateTime.Now;
-                _videoSettingRepository.Update(existing);
-                _logger.LogInformation("VideoSetting of {Platform} renamed to {Title}", platform, title);
-            }
             return;
         }
 

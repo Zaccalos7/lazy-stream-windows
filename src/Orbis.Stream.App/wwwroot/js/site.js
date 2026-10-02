@@ -150,97 +150,144 @@ const preview = document.querySelector("[data-preview]");
 // It used to be an <img src="...multipart/x-mixed-replace">, which is the obvious way to show motion
 // JPEG and the wrong one here: a browser has no clock for a multipart image, so when the decode does
 // not keep up the frames queue up instead of being dropped, the picture drifts behind the live and
-// keeps drifting. That is the juddering, and the slow motion, this canvas is here to end. Asking for
-// the newest frame and drawing only that puts the page on the same clock as ffmpeg: a frame that
-// arrives late is not drawn late, it is the next one that is asked for.
+// keeps drifting. That is the juddering, and the slow motion, this canvas is here to end. The page
+// keeps no queue either: it holds the newest picture and nothing else, and draws it on a clock of
+// its own that nothing but the picture can hurry or hold back.
 const previewFrame = preview?.querySelector("[data-preview-frame]");
 const previewFrameUrl = previewFrame ? `/preview/live/${Number(preview.dataset.pkid || 0)}/frame` : null;
 
-// The rate ffmpeg writes the preview at. The page asks at this rate and never faster: a question
-// that would have to wait for a frame that is not there yet is a frame the page does not need.
-const previewFrameRate = 30;
+// How long a question waits for its answer. ffmpeg writes the next picture every thirty third of a
+// second, and the server holds the request open until that picture exists instead of being asked
+// again on a timer of the page's own. That is the whole trick against the judder: two clocks, one
+// for the writing and one for the drawing, drift apart, and once they do, half the questions land
+// inside a frame that has already been sent and come back with nothing while the frame after them
+// waits. A picture is then held on the canvas for one beat and for three, and that uneven beat is
+// what judder is. The server answers with a picture as soon as there is one that is new, so the
+// page is on the clock of the live. The wait is capped there as well: an answer without a picture
+// costs nothing here but another question, which goes out at once.
+const previewWait = 250;
 
-// How long before the next frame is asked for, measured from when the last one was drawn, so a
-// request that takes its time does not shorten the wait and turn into a tight loop.
-const previewInterval = 1000 / previewFrameRate;
+// The gap between two questions when the answer said there was nothing new yet, and the gap when
+// there is no live to write pictures at all. Without the first one, an answer that says "nothing
+// new" straight away would turn the loop into a spin; the second keeps a page left open on a live
+// that is over from asking thirty times a second for a picture nobody writes.
+const previewFloor = 4;
+const previewIdle = 1000;
 
-// The stamp of the frame on the canvas. The server compares it with the one it has: the same frame
-// comes back as 304 without the JPEG, which is what a live that is still writing but has nothing new
-// for this page costs.
+// The stamp of the picture the page holds. The server compares it with the one it has: the same
+// picture comes back as 304 without the JPEG, which is what a live that is still writing but has
+// nothing new for this page costs.
 let previewStamp = null;
 
-// An in-flight request, so the loop never has two questions open at once.
+// An in-flight question, so the loop never has two open at once.
 let previewPending = false;
 
 // Set while the tab is hidden. A background tab is one the browser stops servicing, and a loop that
 // kept asking through it would only pile requests up behind a window nobody is looking at.
 let previewPaused = false;
 
-// The bitmaps are decoded off the main thread, so a frame is turned into pixels while the page keeps
-// painting and the numbers keep arriving. One is enough: the frame before the one being decoded is
-// already on the canvas, so a second would only cost memory.
-let previewDecoding = false;
+// The picture that has been decoded and is waiting for its turn on the canvas, and the one that is
+// on it. Only one picture is ever kept: the one before it is already on the screen and the one after
+// it is the newest, so a frame that is overtaken while it is being decoded is closed rather than
+// queued behind the others - a queue of pictures is a preview in slow motion.
+let previewPicture = null;
+let previewPainted = null;
 
-const drawPreviewFrame = blob => {
-  // A frame is already being decoded, so this one is behind a picture that is on its way to the
-  // canvas. Decoding it anyway would only make the newer one wait longer, and what the page would
-  // draw is the older of the two: a picture that skips is a picture that moves.
-  if (previewDecoding) return;
+// Puts the newest decoded picture on the canvas, on the refresh of the screen rather than in the
+// middle of one.
+//
+// No timer decides this and nothing is held back: the picture goes up as soon as the screen is
+// ready for it, which is the least the page can do about when a frame is due. The evenness of the
+// motion is not bought here, it comes from the other side - every question is answered with a
+// picture ffmpeg has just written, so there is never a frame to wait for and never the same picture
+// twice, and the only thing left to time is the screen's own refresh.
+//
+// The canvas is the size it is looked at, not the size the picture arrives in: ffmpeg shrinks the
+// preview to 640 pixels wide because that is what a frame costs almost nothing at, and the browser
+// is the one that stretches it over the stage. Painting it here at the size of the stage, with the
+// smoothing the browser does at its best, costs the same and keeps the picture as sharp as a scaled
+// frame can be.
+const paintPreviewPicture = () => {
+  if (!previewFrame) return;
 
-  previewDecoding = true;
-  createImageBitmap(blob)
-    .then(picture => {
-      if (picture.width === 0 || picture.height === 0) return;
+  requestAnimationFrame(paintPreviewPicture);
 
-      // The canvas is sized to the picture rather than stretched by the style, so the frame lands
-      // on it one pixel for one and is not resampled twice. Setting width and height clears the
-      // canvas, so it only happens when the shape of the live is actually a different one.
-      if (previewFrame.width !== picture.width || previewFrame.height !== picture.height) {
-        previewFrame.width = picture.width;
-        previewFrame.height = picture.height;
-      }
+  // Nothing decoded yet, or the picture on the canvas is the newest one: the screen is left alone.
+  const picture = previewPicture;
+  if (!picture || picture === previewPainted) return;
 
-      previewFrame.getContext("2d").drawImage(picture, 0, 0);
-      previewFrame.hidden = false;
-      picture.close();
-    })
-    .catch(() => {
-      // A frame that cannot be decoded is the one the page goes on without; the next question asks
-      // for a newer one anyway.
-    })
-    .finally(() => { previewDecoding = false; });
+  previewPainted = picture;
+
+  // The canvas is measured rather than set from the picture: setting its size clears it, and a
+  // canvas cleared thirty times a second is a canvas that flickers.
+  if (previewFrame.hidden) previewFrame.hidden = false;
+
+  const scale = window.devicePixelRatio || 1;
+  const width = Math.round(previewFrame.clientWidth * scale);
+  const height = Math.round(previewFrame.clientHeight * scale);
+  if (width > 0 && height > 0 && (previewFrame.width !== width || previewFrame.height !== height)) {
+    previewFrame.width = width;
+    previewFrame.height = height;
+  }
+
+  const context = previewFrame.getContext("2d");
+  if (!context) return;
+
+  context.imageSmoothingEnabled = true;
+  context.imageSmoothingQuality = "high";
+  context.drawImage(picture, 0, 0, previewFrame.width, previewFrame.height);
 };
 
+// Asks for the picture the page does not have and waits for it. What it answers with is what the
+// loop does next: a picture means another question at once, nothing new means another question
+// shortly, and no live at all means the page can rest until something changes.
 const fetchPreviewFrame = async () => {
-  if (previewPending || previewPaused || !previewFrameUrl) return;
+  if (previewPending || previewPaused || !previewFrameUrl) return "idle";
   previewPending = true;
   try {
     const headers = previewStamp ? { "If-None-Match": previewStamp } : {};
-    const response = await fetch(previewFrameUrl, { headers, cache: "no-store" });
-    // 304 is the answer to a frame the page already has: the live is writing, this page is just
-    // ahead of it.
-    if (response.ok) {
-      previewStamp = response.headers.get("X-Orbis-Frame") || previewStamp;
-      if (response.status !== 304) {
-        drawPreviewFrame(await response.blob());
-      }
+    const response = await fetch(`${previewFrameUrl}?wait=${previewWait}`, { headers, cache: "no-store" });
+
+    // 304 is the answer to a page that is ahead of the live: nothing new has been written while it
+    // was asking, and the question goes out again straight away.
+    if (response.status === 304) return "waiting";
+
+    // The live is over, or it has not written a frame yet: the page covers the picture and the push
+    // channel is what brings it back when there is something to see.
+    if (!response.ok) return "idle";
+
+    previewStamp = response.headers.get("X-Orbis-Frame") || previewStamp;
+
+    // The bitmaps are decoded off the main thread, so a frame is turned into pixels while the page
+    // keeps painting and the numbers keep arriving.
+    try {
+      const picture = await createImageBitmap(await response.blob());
+      const overtaken = previewPicture;
+      previewPicture = picture;
+      overtaken?.close();
+    } catch {
+      // A frame that cannot be decoded is the one the page goes on without; the next question asks
+      // for a newer one anyway.
     }
+
+    return "picture";
   } catch {
     // The server is not answering (the live ended, the page is closing): the picture keeps the last
     // frame it drew and the next tick tries again.
+    return "idle";
   } finally {
     previewPending = false;
   }
 };
 
-// The loop is a chain of waits rather than a timer: the next question goes out after the last frame
-// has been dealt with, so a slow answer stretches the wait instead of stacking on top of it.
+// The loop is a chain of waits rather than a timer, and what it waits for is the answer: the next
+// question goes out as soon as the last one has been dealt with, and the server decides when there
+// is a picture to draw. Nothing here decides when the live moves.
 const previewLoop = async () => {
   while (true) {
-    const before = performance.now();
-    await fetchPreviewFrame();
-    const spent = performance.now() - before;
-    await new Promise(resolve => setTimeout(resolve, Math.max(0, previewInterval - spent)));
+    const outcome = await fetchPreviewFrame();
+    await new Promise(resolve => setTimeout(resolve,
+      outcome === "idle" ? previewIdle : outcome === "waiting" ? previewFloor : 0));
   }
 };
 
@@ -251,6 +298,9 @@ const armPreviewFrame = () => {
   if (!previewFrame) return;
   previewStamp = null;
   previewPaused = false;
+  previewPicture?.close();
+  previewPicture = null;
+  previewPainted = null;
   previewFrame.hidden = true;
 };
 const previewVideo = preview?.querySelector("[data-preview-video]");
@@ -362,6 +412,7 @@ if (previewVideo) {
 
 if (previewFrame && previewIsLive) {
   previewLoop();
+  requestAnimationFrame(paintPreviewPicture);
   document.addEventListener("visibilitychange", () => {
     // A tab nobody is looking at is not asked for frames: the browser stops servicing its work
     // anyway, and what would pile up behind it is not a preview but a queue of stale pictures.

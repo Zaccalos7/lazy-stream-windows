@@ -56,17 +56,30 @@ public static class FfmpegCommandBuilder
     private const string PreviewLabel = "orbisp";
 
     /// <summary>
-    /// The preview is a picture to look at, not a second live: fifteen frames a second, small, as
+    /// The preview is a picture to look at, not a second live: thirty frames a second, small, as
     /// JPEG. It costs next to nothing next to the live encode, and it is what is on air (the
     /// composed canvas, the scaled file) rather than the source the page would otherwise replay.
     ///
     /// The size is what makes it read well: at 426 pixels wide the frame was stretched over a stage
     /// twice as wide, and a blurred mosaic moving in steps is worse to watch than a sharp picture
-    /// moving smoothly. 640 is as wide as the stage, so nothing is scaled up, and fifteen frames a
-    /// second is enough for the eye to read as motion. Encoding a frame this size costs a few
-    /// milliseconds, so the preview stays a small slice of a core next to the live encode.
+    /// moving smoothly. 640 is as wide as the stage, so nothing is scaled up.
+    ///
+    /// Thirty frames a second is not decoration. Half of that rate is fifteen beats a second of
+    /// which every other one is two beats long, and a picture that alternates between 33 and 66
+    /// milliseconds is a picture that judders however carefully it is fetched: the page cannot draw
+    /// a frame that was never written, and there is no page that can make fifteen of them a
+    /// second look like motion. A bigger preview would be sharper still, and it would be taken out
+    /// of the live encode, which has to finish its own frame in the time it has, so 640 is where it
+    /// stops: encoding a frame this size costs a couple of milliseconds and the preview stays a
+    /// small slice of a core next to the live.
     /// </summary>
-    private const string PreviewFilter = "fps=15,scale=w='min(640,iw)':h=-2";
+    private const string PreviewFilter = "fps=30,scale=w='min(640,iw)':h=-2";
+
+    /// <summary>
+    /// The real-time buffer of a dshow device: a couple of seconds of raw 1080p, enough to ride out
+    /// the start of the live and a slow moment of the encoder (see <see cref="AppendInput"/>).
+    /// </summary>
+    private const string DeviceBufferSize = "256M";
 
     public static IReadOnlyList<string> Build(FfmpegStreamRequest request)
     {
@@ -247,6 +260,16 @@ public static class FfmpegCommandBuilder
         // higher is the banding the small picture the page stretches it over would show.
         arguments.Add("-q:v");
         arguments.Add("6");
+
+        // One thread, and this is the whole of the isolation between the preview and the live. The
+        // two encoders are one process, so a preview left free to take the threads it wants takes
+        // them from the encode that is being sent to the platform - and the platform, not this
+        // page, is the one that decides the live is good. A 640 pixel JPEG takes a couple of
+        // milliseconds to encode, so one thread never becomes the reason the preview misses a beat,
+        // while the live keeps every thread its own codec asked for.
+        arguments.Add("-threads");
+        arguments.Add("1");
+
         arguments.Add("-f");
         arguments.Add("image2");
 
@@ -380,6 +403,16 @@ public static class FfmpegCommandBuilder
             case SourceKind.Microphone:
                 arguments.Add("-f");
                 arguments.Add("dshow");
+
+                // dshow pushes raw frames into a buffer of its own whether or not ffmpeg reads them,
+                // and the default (3 MB) holds less than one 1080p frame of a webcam. Every stall
+                // fills it - above all the seconds the RTMP handshake takes before the first frame
+                // is read - and from there every frame is dropped. The size is a ceiling, not an
+                // allocation: memory is only taken while the reader is behind.
+                arguments.Add("-rtbufsize");
+                arguments.Add(DeviceBufferSize);
+                arguments.Add("-thread_queue_size");
+                arguments.Add("1024");
                 arguments.Add("-i");
                 arguments.Add(item.Target);
                 break;
@@ -683,6 +716,7 @@ public static class FfmpegCommandBuilder
         {
             hasPreset = setting.VideoSettingsOptions.Any(o => o.Key?.Trim() == "preset");
             hasTune = setting.VideoSettingsOptions.Any(o => o.Key?.Trim() == "tune");
+            // hasPreset and hasTune are the ones read above for x264: the same keys, the same answer.
             var hasRc = setting.VideoSettingsOptions.Any(o => o.Key?.Trim() == "rc");
             var hasCq = setting.VideoSettingsOptions.Any(o => o.Key?.Trim() == "cq");
 

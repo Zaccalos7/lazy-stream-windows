@@ -13,6 +13,7 @@ public sealed class FfmpegStreamingSession : IAsyncDisposable
     private readonly Task<string> _standardError;
     private readonly Task _standardOutput;
     private readonly long _resumedFromMilliseconds;
+    private readonly string _outputUrl;
     private long _positionMilliseconds;
     private int _stopRequested;
     private int _restartRequested;
@@ -24,10 +25,12 @@ public sealed class FfmpegStreamingSession : IAsyncDisposable
         MediaProbeResult probe,
         MediaOutput output,
         TimeSpan resumeFrom,
+        string outputUrl,
         ILogger logger)
     {
         _process = process;
         _logger = logger;
+        _outputUrl = outputUrl;
 
         // ffmpeg counts from where it was asked to seek to, not from the start of the file: the
         // position of the live is that count plus the point it resumed from. Without it a stop after
@@ -159,8 +162,8 @@ public sealed class FfmpegStreamingSession : IAsyncDisposable
 
         // The output is named, not read off the end of the command line: the preview comes after it.
         logger.LogInformation(
-            "ffmpeg started for {Input} -> {OutputUrl}", inputPath, outputUrl);
-        return new FfmpegStreamingSession(process, videoPkid, inputPath, probe, output, resumeFrom, logger);
+            "ffmpeg started for {Input} -> {OutputUrl}", inputPath, RedactStreamKey(outputUrl, outputUrl));
+        return new FfmpegStreamingSession(process, videoPkid, inputPath, probe, output, resumeFrom, outputUrl, logger);
     }
 
     /// <summary>What the pages show instead of a path when a live is streaming a canvas.</summary>
@@ -207,7 +210,32 @@ public sealed class FfmpegStreamingSession : IAsyncDisposable
         return _process.ExitCode;
     }
 
-    public async Task<string> ReadErrorAsync() => await _standardError.ConfigureAwait(false);
+    /// <summary>
+    /// What ffmpeg wrote on its standard error, with the stream key masked: ffmpeg names the output
+    /// url in every error about it, and this text ends up on the live history page and in the log,
+    /// where a key in clear is a key anyone looking at the screen can stream with.
+    /// </summary>
+    public async Task<string> ReadErrorAsync() =>
+        RedactStreamKey(await _standardError.ConfigureAwait(false), _outputUrl);
+
+    /// <summary>
+    /// Replaces the stream key - the last segment of the output url - wherever it appears in a text.
+    /// A url with no segment worth hiding (a file on disk, a key too short to be one) is left alone.
+    /// </summary>
+    public static string RedactStreamKey(string text, string outputUrl)
+    {
+        ArgumentNullException.ThrowIfNull(text);
+        ArgumentNullException.ThrowIfNull(outputUrl);
+
+        if (!outputUrl.Contains("://", StringComparison.Ordinal))
+        {
+            return text;
+        }
+
+        var key = outputUrl.TrimEnd('/');
+        key = key[(key.LastIndexOf('/') + 1)..];
+        return key.Length < 8 ? text : text.Replace(key, "****", StringComparison.Ordinal);
+    }
 
     /// <summary>Drains a pipe of the process: a disposed process throws instead of ending the read.</summary>
     private static async Task<string> ReadToEndAsync(StreamReader reader)

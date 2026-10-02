@@ -266,5 +266,7 @@
   "composeNext": "Далее: собрать сцену",
   "previewWaiting": "Ожидание первого кадра…",
   "sceneSources": "Сцена · источников: {0}",
-  "deleteSceneLiveConfirm": "Вы уверены, что хотите удалить этот эфир (источников: {0})?"
+  "deleteSceneLiveConfirm": "Вы уверены, что хотите удалить этот эфир (источников: {0})?",
+  "defaultLowTwitch": "Default Low Twitch",
+  "defaultLowYouTube": "Default Low YouTube"
 }

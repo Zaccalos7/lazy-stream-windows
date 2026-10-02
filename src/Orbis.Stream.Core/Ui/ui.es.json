@@ -266,5 +266,7 @@
   "composeNext": "Siguiente: compón la escena",
   "previewWaiting": "Esperando el primer fotograma…",
   "sceneSources": "Escena · {0} fuentes",
-  "deleteSceneLiveConfirm": "¿Está seguro de que desea eliminar este directo ({0} fuentes)?"
+  "deleteSceneLiveConfirm": "¿Está seguro de que desea eliminar este directo ({0} fuentes)?",
+  "defaultLowTwitch": "Default Low Twitch",
+  "defaultLowYouTube": "Default Low YouTube"
 }

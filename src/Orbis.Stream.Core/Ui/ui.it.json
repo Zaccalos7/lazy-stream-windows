@@ -118,6 +118,8 @@
   "settings": "Impostazioni",
   "selectSectionMessage": "Seleziona la sezione che desideri configurare per gestire i parametri multimediali o il tuo canale.",
   "videoAndAudio": "Video e Audio",
+  "defaultLowTwitch": "Default Low Twitch",
+  "defaultLowYouTube": "Default Low YouTube",
   "additionalVideoOptionsDescription": "Configura i codec video e audio, i bitrate, il pixel format, il GOP size e le opzioni aggiuntive come preset e tune.",
   "configurationVideoAndAudio": "Configurazione Video e Audio",
   "channelSettings": "Settaggi Canale",

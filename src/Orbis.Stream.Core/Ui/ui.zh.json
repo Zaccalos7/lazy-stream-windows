@@ -266,5 +266,7 @@
   "composeNext": "下一步：编排场景",
   "previewWaiting": "正在等待第一帧…",
   "sceneSources": "场景 · {0} 个源",
-  "deleteSceneLiveConfirm": "您确定要删除此直播（{0} 个源）吗？"
+  "deleteSceneLiveConfirm": "您确定要删除此直播（{0} 个源）吗？",
+  "defaultLowTwitch": "Default Low Twitch",
+  "defaultLowYouTube": "Default Low YouTube"
 }

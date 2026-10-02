@@ -266,5 +266,7 @@
   "composeNext": "Weiter: Szene zusammenstellen",
   "previewWaiting": "Warte auf das erste Bild…",
   "sceneSources": "Szene · {0} Quellen",
-  "deleteSceneLiveConfirm": "Möchten Sie diesen Livestream ({0} Quellen) wirklich löschen?"
+  "deleteSceneLiveConfirm": "Möchten Sie diesen Livestream ({0} Quellen) wirklich löschen?",
+  "defaultLowTwitch": "Standard Niedrig Twitch",
+  "defaultLowYouTube": "Standard Niedrig YouTube"
 }

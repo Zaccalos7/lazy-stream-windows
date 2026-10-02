@@ -513,13 +513,15 @@ public sealed class FfmpegCompositionTests
 public sealed class SourceCatalogTests
 {
     [Fact]
-    public void DeviceList_OfFfmpeg5_NamesItsOwnKind()
+    public void DeviceList_OfFfmpeg5_NamesItsOwnKind_AndHandlesColons()
     {
         const string list = """
             [dshow @ 000001d2a4c5e3c0] "Integrated Camera" (video)
             [dshow @ 000001d2a4c5e3c0]   Alternative name "@device_pnp_\\?\usb#vid_04f2"
             [dshow @ 000001d2a4c5e3c0] "Microfono (Realtek(R) Audio)" (audio)
             [dshow @ 000001d2a4c5e3c0]   Alternative name "@device_cm_{33D9A762}"
+            [dshow @ 000001d2a4c5e3c0] "VirtualBox Webcam - Integrated Camera: Integrated C" (video)
+            [dshow @ 000001d2a4c5e3c0]   Alternative name "@device_pnp_\\?\usb#vid_04f2&colon"
             [dshow @ 000001d2a4c5e3c0] "OBS Virtual Camera" (none)
             dummy: Immediate exit requested
             """;
@@ -538,16 +540,25 @@ public sealed class SourceCatalogTests
             {
                 Assert.Equal(SourceKind.Microphone, microphone.Kind);
                 Assert.Equal("audio=Microfono (Realtek(R) Audio)", microphone.Target);
+            },
+            cameraWithColon =>
+            {
+                Assert.Equal(SourceKind.Camera, cameraWithColon.Kind);
+                Assert.Equal("VirtualBox Webcam - Integrated Camera: Integrated C", cameraWithColon.Name);
+                // The colon triggers fallback to the alternative name in Target
+                Assert.Equal("video=@device_pnp_\\\\?\\usb#vid_04f2&colon", cameraWithColon.Target);
             });
     }
 
     [Fact]
-    public void DeviceList_OfFfmpeg4_IsReadBySection()
+    public void DeviceList_OfFfmpeg4_IsReadBySection_AndHandlesColons()
     {
         const string list = """
             [dshow @ 0000020] DirectShow video devices (some may be both video and audio devices)
             [dshow @ 0000020]  "USB Camera"
             [dshow @ 0000020]     Alternative name "@device_pnp_x"
+            [dshow @ 0000020]  "USB Camera: HD"
+            [dshow @ 0000020]     Alternative name "@device_pnp_y"
             [dshow @ 0000020] DirectShow audio devices
             [dshow @ 0000020]  "Microphone (USB Camera)"
             [dshow @ 0000020]     Alternative name "@device_cm_y"
@@ -555,7 +566,7 @@ public sealed class SourceCatalogTests
 
         var options = CameraSourceProvider.Parse(list);
 
-        Assert.Equal(["video=USB Camera", "audio=Microphone (USB Camera)"], options.Select(option => option.Target));
+        Assert.Equal(["video=USB Camera", "video=@device_pnp_y", "audio=Microphone (USB Camera)"], options.Select(option => option.Target));
     }
 
     [Fact]

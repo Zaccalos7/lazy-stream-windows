@@ -16,13 +16,21 @@ public sealed class UiText
     /// <summary>Languages offered by the selector, in display order, with their native names.</summary>
     public static readonly IReadOnlyList<(string Code, string Name)> Languages =
     [
-        ("it", "Italiano"),
-        ("en", "English"),
-        ("de", "Deutsch"),
-        ("es", "Español"),
-        ("fr", "Français"),
-        ("ru", "Русский"),
-        ("zh", "中文")
+        ("it", "🇮🇹 Italiano"),
+        ("en", "🇬🇧 English"),
+        ("de", "🇩🇪 Deutsch"),
+        ("es", "🇪🇸 Español"),
+        ("fr", "🇫🇷 Français"),
+        ("pt", "🇵🇹 Português"),
+        ("ru", "🇷🇺 Русский"),
+        ("zh", "🇨🇳 中文"),
+        ("ko", "🇰🇷 한국어"),
+        ("ja", "🇯🇵 日本語"),
+        ("tlh", "🖖 tlhIngan Hol"),
+        ("hi", "🇮🇳 हिन्दी"),
+        ("la", "🏛️ Latina"),
+        ("bn", "🇧🇩 বাংলা"),
+        ("hod", "🚪 Hodor")
     ];
 
     private static readonly FrozenDictionary<string, FrozenDictionary<string, string>> Bundles = Load();

@@ -280,5 +280,7 @@
   "sceneSources": "Scène · {0} sources",
   "deleteSceneLiveConfirm": "Êtes-vous sûr de vouloir supprimer ce direct ({0} sources) ?",
   "defaultLowTwitch": "Default Low Twitch",
-  "defaultLowYouTube": "Default Low YouTube"
+  "defaultLowYouTube": "Default Low YouTube",
+  "ffmpegProcessesDetails": "Détails des processus FFmpeg",
+  "noActiveFfmpegProcess": "Aucun processus FFmpeg actif."
 }

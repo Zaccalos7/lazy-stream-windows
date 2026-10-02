@@ -280,5 +280,7 @@
   "sceneSources": "Szene · {0} Quellen",
   "deleteSceneLiveConfirm": "Möchten Sie diesen Livestream ({0} Quellen) wirklich löschen?",
   "defaultLowTwitch": "Standard Niedrig Twitch",
-  "defaultLowYouTube": "Standard Niedrig YouTube"
+  "defaultLowYouTube": "Standard Niedrig YouTube",
+  "ffmpegProcessesDetails": "FFmpeg-Prozessdetails",
+  "noActiveFfmpegProcess": "Kein aktiver FFmpeg-Prozess."
 }

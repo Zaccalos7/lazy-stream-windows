@@ -681,8 +681,8 @@ public static class FfmpegCommandBuilder
         
         if (isNvenc || isQsv || isAmf)
         {
-            var hasPreset = setting.VideoSettingsOptions.Any(o => o.Key?.Trim() == "preset");
-            var hasTune = setting.VideoSettingsOptions.Any(o => o.Key?.Trim() == "tune");
+            hasPreset = setting.VideoSettingsOptions.Any(o => o.Key?.Trim() == "preset");
+            hasTune = setting.VideoSettingsOptions.Any(o => o.Key?.Trim() == "tune");
             var hasRc = setting.VideoSettingsOptions.Any(o => o.Key?.Trim() == "rc");
             var hasCq = setting.VideoSettingsOptions.Any(o => o.Key?.Trim() == "cq");
 

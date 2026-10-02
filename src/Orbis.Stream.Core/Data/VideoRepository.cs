@@ -275,7 +275,7 @@ public sealed class VideoRepository
 
         using var command = connection.CreateCommand();
         command.CommandText =
-            $"SELECT {BaseColumns}, t.position, t.total, COALESCE(t.group_status, t.live_status) FROM ({Grouped}) t {where} " +
+            $"SELECT t.position, t.total, COALESCE(t.group_status, t.live_status), {BaseColumns} FROM ({Grouped}) t {where} " +
             "ORDER BY t.start_date_live DESC, t.pkid DESC LIMIT @size OFFSET @offset;";
         Bind(command);
         command.Parameters.AddWithValue("@size", size);
@@ -285,8 +285,11 @@ public sealed class VideoRepository
         using var reader = command.ExecuteReader();
         while (reader.Read())
         {
+            var position = reader.GetInt32(0);
+            var rowTotal = reader.GetInt32(1);
+            var status = LiveStatusExtensions.FromStorage(reader.GetValue(2));
             items.Add(new LiveRowEntity(
-                Map(reader), reader.GetInt32(20), reader.GetInt32(21), LiveStatusExtensions.FromStorage(reader.GetValue(22))));
+                Map(reader, 3), position, rowTotal, status));
         }
 
         return new PagedResult<LiveRowEntity>(items, page, size, total);
@@ -374,31 +377,31 @@ public sealed class VideoRepository
         return items;
     }
 
-    private static VideoEntity Map(SqliteDataReader reader) => new()
+private static VideoEntity Map(SqliteDataReader reader, int offset = 0) => new()
     {
-        Pkid = reader.GetInt32(0),
-        Name = reader.GetString(1),
-        VideoPath = reader.GetString(2),
-        Extension = reader.GetString(3),
-        LiveStatus = LiveStatusExtensions.FromStorage(reader.GetValue(4)),
-        LastTimeStampBeforeStop = SqliteValue.ToInt64(reader.GetValue(5)),
-        Message = SqliteValue.ToText(reader.GetValue(6)),
-        ShouldBeStop = SqliteValue.ToBoolean(reader.GetValue(7)),
-        StartDateLive = SqliteValue.ToNullableDateTime(reader.GetValue(8)),
-        ChannelName = reader.GetString(9),
-        VideoLiveHistoryId = SqliteValue.ToNullableInt64(reader.GetValue(10)),
-        VideoSettingId = SqliteValue.ToNullableInt32(reader.GetValue(11)),
-        SourceKind = SourceKindExtensions.TryParse(SqliteValue.ToText(reader.GetValue(12)), out var kind)
+        Pkid = reader.GetInt32(offset + 0),
+        Name = reader.GetString(offset + 1),
+        VideoPath = reader.GetString(offset + 2),
+        Extension = reader.GetString(offset + 3),
+        LiveStatus = LiveStatusExtensions.FromStorage(reader.GetValue(offset + 4)),
+        LastTimeStampBeforeStop = SqliteValue.ToInt64(reader.GetValue(offset + 5)),
+        Message = SqliteValue.ToText(reader.GetValue(offset + 6)),
+        ShouldBeStop = SqliteValue.ToBoolean(reader.GetValue(offset + 7)),
+        StartDateLive = SqliteValue.ToNullableDateTime(reader.GetValue(offset + 8)),
+        ChannelName = reader.GetString(offset + 9),
+        VideoLiveHistoryId = SqliteValue.ToNullableInt64(reader.GetValue(offset + 10)),
+        VideoSettingId = SqliteValue.ToNullableInt32(reader.GetValue(offset + 11)),
+        SourceKind = SourceKindExtensions.TryParse(SqliteValue.ToText(reader.GetValue(offset + 12)), out var kind)
             ? kind
             : SourceKind.File,
-        SourceTarget = SqliteValue.ToText(reader.GetValue(13)),
-        ScenePkid = SqliteValue.ToNullableInt64(reader.GetValue(14)),
-        X = SqliteValue.ToNullableInt32(reader.GetValue(15)),
-        Y = SqliteValue.ToNullableInt32(reader.GetValue(16)),
-        Width = SqliteValue.ToNullableInt32(reader.GetValue(17)),
-        Height = SqliteValue.ToNullableInt32(reader.GetValue(18)),
-        AudioEnabled = SqliteValue.ToBoolean(reader.GetValue(19)),
-        DurationMilliseconds = SqliteValue.ToNullableInt64(reader.GetValue(20))
+        SourceTarget = SqliteValue.ToText(reader.GetValue(offset + 13)),
+        ScenePkid = SqliteValue.ToNullableInt64(reader.GetValue(offset + 14)),
+        X = SqliteValue.ToNullableInt32(reader.GetValue(offset + 15)),
+        Y = SqliteValue.ToNullableInt32(reader.GetValue(offset + 16)),
+        Width = SqliteValue.ToNullableInt32(reader.GetValue(offset + 17)),
+        Height = SqliteValue.ToNullableInt32(reader.GetValue(offset + 17)),
+        AudioEnabled = SqliteValue.ToBoolean(reader.GetValue(offset + 19)),
+        DurationMilliseconds = SqliteValue.ToNullableInt64(reader.GetValue(offset + 20))
     };
 }
 

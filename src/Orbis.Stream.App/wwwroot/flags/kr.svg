@@ -1,0 +1,20 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 60 40" width="60" height="40" role="img" aria-hidden="true" focusable="false">
+  <defs><clipPath id="c"><rect width="60" height="40" rx="3"/></clipPath></defs>
+  <g clip-path="url(#c)">
+    <rect width="60" height="40" fill="#FFFFFF"/>
+    <path d="M30,20 a7,7 0 0 1 0,-14 a3.5,3.5 0 0 0 0,7 z" fill="#CD2E3A"/>
+    <path d="M30,20 a7,7 0 0 0 0,14 a3.5,3.5 0 0 1 0,-7 z" fill="#0047A0"/>
+    <line x1="7.80" y1="3.40" x2="16.20" y2="3.40" stroke="#000000" stroke-width="1.6" stroke-linecap="butt"/>
+    <line x1="7.80" y1="8.00" x2="16.20" y2="8.00" stroke="#000000" stroke-width="1.6" stroke-linecap="butt"/>
+    <line x1="7.80" y1="12.60" x2="16.20" y2="12.60" stroke="#000000" stroke-width="1.6" stroke-linecap="butt"/>
+    <line x1="52.60" y1="3.80" x2="52.60" y2="12.20" stroke="#000000" stroke-width="1.6" stroke-linecap="butt"/>
+    <line x1="48.00" y1="3.80" x2="48.00" y2="12.20" stroke="#000000" stroke-width="1.6" stroke-linecap="butt"/>
+    <line x1="43.40" y1="3.80" x2="43.40" y2="12.20" stroke="#000000" stroke-width="1.6" stroke-linecap="butt"/>
+    <line x1="7.40" y1="36.20" x2="7.40" y2="27.80" stroke="#000000" stroke-width="1.6" stroke-linecap="butt"/>
+    <line x1="12.00" y1="36.20" x2="12.00" y2="27.80" stroke="#000000" stroke-width="1.6" stroke-linecap="butt"/>
+    <line x1="16.60" y1="36.20" x2="16.60" y2="27.80" stroke="#000000" stroke-width="1.6" stroke-linecap="butt"/>
+    <line x1="52.20" y1="36.60" x2="43.80" y2="36.60" stroke="#000000" stroke-width="1.6" stroke-linecap="butt"/>
+    <line x1="52.20" y1="32.00" x2="43.80" y2="32.00" stroke="#000000" stroke-width="1.6" stroke-linecap="butt"/>
+    <line x1="52.20" y1="27.40" x2="43.80" y2="27.40" stroke="#000000" stroke-width="1.6" stroke-linecap="butt"/>
+  </g>
+</svg>

@@ -47,17 +47,32 @@
             <button type="button" class="segment" data-theme-set="light" title="Light" aria-label="Light Theme"><i class="icon">&#xE706;</i></button>
             <button type="button" class="segment" data-theme-set="dark" title="Dark" aria-label="Dark Theme"><i class="icon">&#xE708;</i></button>
         </div>
-        <form>
-            <label class="field">
-                <span class="caption"><i class="icon">&#xE774;</i></span>
-                <select class="input" aria-label="Language" onchange="location.href = '/orbis/lang/' + this.value">
-                    @foreach (var (code, name) in UiText.Languages)
-                    {
-                        <option value="@code" selected="@(code == T.Language)">@name</option>
-                    }
-                </select>
-            </label>
-        </form>
+        @* The selector draws the flag as a picture: a native <select> cannot hold one, and the
+           emoji that stood in for it is a pair of letters the platform may not even draw. *@
+        <details class="lang-picker">
+            <summary class="lang-current" title="Language" aria-label="Language">
+                @{
+                    // The language of the page is always one of the ones offered: T.Language already
+                    // falls back to English when the cookie asks for something no bundle answers.
+                    var current = UiText.Languages.First(l => l.Code == T.Language);
+                }
+                <img src="~/flags/@current.Flag" alt="" width="22" height="15">
+                <span>@current.Name</span>
+                <i class="icon" aria-hidden="true">&#xE70D;</i>
+            </summary>
+            <ul class="lang-menu">
+                @foreach (var language in UiText.Languages)
+                {
+                    <li>
+                        <a href="/orbis/lang/@language.Code" lang="@language.Code" hreflang="@language.Code"
+                           aria-current="@(language.Code == T.Language ? "true" : null)">
+                            <img src="~/flags/@language.Flag" alt="" width="22" height="15">
+                            <span>@language.Name</span>
+                        </a>
+                    </li>
+                }
+            </ul>
+        </details>
     </nav>
     <main class="content">
         <div class="page">

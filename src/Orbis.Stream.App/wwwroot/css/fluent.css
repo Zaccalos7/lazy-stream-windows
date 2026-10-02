@@ -278,6 +278,63 @@ a { color: var(--accent-text); text-decoration: none; }
 .nav form label.field { flex-direction: row; align-items: center; gap: 8px; }
 .nav form .caption .icon { font-size: 15px; color: var(--text-2); }
 
+/* The language picker: a native <select> can only hold text, so the flags that stood in for it
+   as emoji (two regional indicator letters, which a font swap turns into "IT") become pictures in
+   a menu of their own. A <details> keeps it openable with the keyboard, with no script. */
+.lang-picker { position: relative; margin-top: 10px; border-top: 1px solid var(--stroke); }
+.lang-picker > summary { list-style: none; }
+.lang-picker > summary::-webkit-details-marker { display: none; }
+
+.lang-current,
+.lang-menu a {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  height: 30px;
+  padding: 0 10px;
+  color: var(--text-2);
+  font-size: 13px;
+  font-weight: 500;
+  text-decoration: none;
+  border-radius: var(--radius-sm);
+}
+
+.lang-current { cursor: pointer; }
+.lang-current:hover { background: var(--tint); color: var(--text); }
+.lang-current .icon { margin-left: auto; font-size: 11px; transition: transform 0.15s ease; }
+.lang-picker[open] .lang-current { background: var(--tint); color: var(--text); }
+.lang-picker[open] .lang-current .icon { transform: rotate(180deg); }
+
+/* The flags are drawn on a 3:2 canvas with the corners already rounded: one pixel of border is
+   all they need to read as a flag rather than as a rectangle of colour. */
+.lang-current img,
+.lang-menu img {
+  flex: none;
+  width: 22px;
+  height: 15px;
+  border-radius: 2px;
+  box-shadow: 0 0 0 1px rgba(0, 0, 0, 0.18), 0 1px 1px rgba(0, 0, 0, 0.12);
+}
+
+.lang-menu {
+  position: absolute;
+  bottom: calc(100% + 4px);
+  left: 4px;
+  right: 4px;
+  z-index: 20;
+  margin: 0;
+  padding: 4px;
+  list-style: none;
+  background: var(--card);
+  border: 1px solid var(--stroke);
+  border-radius: var(--radius);
+  box-shadow: var(--shadow-card);
+  animation: rise 0.14s cubic-bezier(0.16, 1, 0.3, 1);
+}
+
+.lang-menu a:hover { background: var(--tint); color: var(--text); }
+.lang-menu a[aria-current="true"] { background: var(--accent); color: var(--on-accent); font-weight: 600; }
+
 .content { flex: 1; min-width: 0; overflow-y: auto; border-radius: var(--radius-lg); }
 
 .page { max-width: 100%; margin: 0 auto; padding: 2px 14px 36px; animation: rise 0.22s cubic-bezier(0.16, 1, 0.3, 1); }

@@ -108,6 +108,25 @@
                     <span>@T["description"]</span>
                     <textarea class="input" name="description" rows="3">@editing.Description</textarea>
                 </label>
+                <div class="section">
+                    <h3 class="section-title">@T["autoCleanup"]</h3>
+                    <p class="caption">@T["autoCleanupDescription"]</p>
+                    <label class="field toggle-section">
+                        <span>@T["autoCleanupEnabled"]</span>
+                        <label class="toggle">
+                            <input type="checkbox" name="autoCleanupEnabled" checked="@editing.AutoCleanupEnabled" />
+                            <span class="muted">@T["autoCleanupEnabled"]</span>
+                        </label>
+                    </label>
+                    <label class="field" data-auto-cleanup-fields style="display: @(editing.AutoCleanupEnabled ? "block" : "none")">
+                        <span>@T["autoCleanupIntervalMonths"]</span>
+                        <input class="input" type="number" name="autoCleanupIntervalMonths" min="0" max="24" step="1" value="@editing.AutoCleanupIntervalMonths" placeholder="@T["autoCleanupIntervalHelp"]" />
+                    </label>
+                    <label class="field" data-auto-cleanup-fields style="display: @(editing.AutoCleanupEnabled ? "block" : "none")">
+                        <span>@T["autoCleanupOlderThanMonths"]</span>
+                        <input class="input" type="number" name="autoCleanupOlderThanMonths" min="0" max="60" step="1" value="@editing.AutoCleanupOlderThanMonths" placeholder="@T["autoCleanupOlderThanHelp"]" />
+                    </label>
+                </div>
             </div>
             <div class="dialog-footer">
                 @if (editing.Id is not null)

@@ -61,6 +61,18 @@ public sealed class VideoSettingRepository
         return ReadAll(connection, command);
     }
 
+    public VideoSettingEntity? FindByTitleAndPlatform(string title, string platform)
+    {
+        using var connection = _connectionFactory.Open();
+        using var command = connection.CreateCommand();
+        command.CommandText =
+            $"SELECT {BaseColumns} FROM video_setting t " +
+            "WHERE t.title = @title AND t.default_platform_configuration = @platform LIMIT 1;";
+        command.Parameters.AddWithValue("@title", title);
+        command.Parameters.AddWithValue("@platform", platform);
+        return ReadAll(connection, command).FirstOrDefault();
+    }
+
     public int Insert(VideoSettingEntity setting)
     {
         using var connection = _connectionFactory.Open();

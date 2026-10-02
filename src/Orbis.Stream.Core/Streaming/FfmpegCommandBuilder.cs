@@ -66,7 +66,7 @@ public static class FfmpegCommandBuilder
     /// second is enough for the eye to read as motion. Encoding a frame this size costs a few
     /// milliseconds, so the preview stays a small slice of a core next to the live encode.
     /// </summary>
-    private const string PreviewFilter = "fps=30,scale=w='min(640,iw)':h=-2";
+    private const string PreviewFilter = "fps=15,scale=w='min(640,iw)':h=-2";
 
     public static IReadOnlyList<string> Build(FfmpegStreamRequest request)
     {
@@ -93,7 +93,7 @@ public static class FfmpegCommandBuilder
         // -re is an input option: read at the rate the file plays at, which is what the Java
         // version did by pacing the frames it decoded.
         arguments.Add("-thread_queue_size");
-        arguments.Add("1024");
+        arguments.Add("512");
         arguments.Add("-readrate");
         arguments.Add("1");
         arguments.Add("-i");
@@ -238,8 +238,14 @@ public static class FfmpegCommandBuilder
         arguments.Add("image2");
         arguments.Add("-update");
         arguments.Add("1");
-        arguments.Add("-atomic_writing");
-        arguments.Add("1");
+        if (!OperatingSystem.IsWindows())
+        {
+            // Atomic writing (write to .tmp then rename) fails on Windows when the destination
+            // file is open for reading, even with FileShare.Delete. The rename returns
+            // "Operation not permitted". JPEG decoders handle partial frames gracefully.
+            arguments.Add("-atomic_writing");
+            arguments.Add("1");
+        }
         arguments.Add(path);
     }
 
@@ -277,27 +283,35 @@ public static class FfmpegCommandBuilder
     }
 
     /// <summary>The options that are the same however the frames were produced.</summary>
-    private static List<string> GlobalArguments() =>
-    [
-        "-hide_banner",
-        "-nostdin",
+    private static List<string> GlobalArguments()
+    {
+        var threadCount = Math.Max(1, Environment.ProcessorCount / 2);
+        return
+        [
+            "-hide_banner",
+            "-nostdin",
 
-        // A transcode that starts again with new parameters writes over what the previous one
-        // sent: with a real ingest there is nothing to overwrite, and with a destination on
-        // disk ffmpeg would otherwise stop to ask a question nobody is there to answer.
-        "-y",
+            // A transcode that starts again with new parameters writes over what the previous one
+            // sent: with a real ingest there is nothing to overwrite, and with a destination on
+            // disk ffmpeg would otherwise stop to ask a question nobody is there to answer.
+            "-y",
 
-        "-loglevel",
-        "error",
+            "-loglevel",
+            "error",
 
-        // Where the transcode is, twice a second: that is the only place a running ffmpeg tells
-        // how far it got, and a stop has to leave the position on the video row to resume there.
-        "-progress",
-        "pipe:1",
-        "-nostats",
-        "-stats_period",
-        "0.2"
-    ];
+            // Limit threads to half CPU cores to leave headroom for OS and .NET runtime
+            "-threads",
+            threadCount.ToString(CultureInfo.InvariantCulture),
+
+            // Where the transcode is, twice a second: that is the only place a running ffmpeg tells
+            // how far it got, and a stop has to leave the position on the video row to resume there.
+            "-progress",
+            "pipe:1",
+            "-nostats",
+            "-stats_period",
+            "0.2"
+        ];
+    }
 
     private static void AppendInput(
         List<string> arguments,
@@ -317,7 +331,7 @@ public static class FfmpegCommandBuilder
             }
 
             arguments.Add("-thread_queue_size");
-            arguments.Add("1024");
+            arguments.Add("512");
             arguments.Add("-readrate");
             arguments.Add("1");
             arguments.Add("-i");
@@ -579,8 +593,9 @@ public static class FfmpegCommandBuilder
             arguments.Add(setting.VideoFormat.Trim());
         }
 
+        var codecName = FfmpegCodecCatalog.ResolveVideoCodecName(setting.VideoCodec, setting.VideoCodecName);
         arguments.Add("-c:v");
-        arguments.Add(FfmpegCodecCatalog.ResolveVideoCodecName(setting.VideoCodec, setting.VideoCodecName));
+        arguments.Add(codecName);
 
         arguments.Add("-pix_fmt");
         arguments.Add(FfmpegCodecCatalog.ResolvePixelFormat(setting.PixelFormat));
@@ -598,15 +613,101 @@ public static class FfmpegCommandBuilder
 
         if (setting.VideoBitrate is > 0)
         {
+            var bitrate = setting.VideoBitrate.Value.ToString(CultureInfo.InvariantCulture);
             arguments.Add("-b:v");
-            arguments.Add(setting.VideoBitrate.Value.ToString(CultureInfo.InvariantCulture));
+            arguments.Add(bitrate);
+            // Constrain rate for CBR-like streaming: maxrate = bitrate, bufsize = 2x bitrate
+            arguments.Add("-maxrate");
+            arguments.Add(bitrate);
+            arguments.Add("-bufsize");
+            arguments.Add((setting.VideoBitrate.Value * 2).ToString(CultureInfo.InvariantCulture));
         }
+
+        // Ensure constant frame rate output for stable streaming
+        arguments.Add("-vsync");
+        arguments.Add("cfr");
 
         // Twitch strictly requires a keyframe every 2 seconds: gop = fps * gopSize.
         if (setting.GopSize is > 0)
         {
             arguments.Add("-g");
             arguments.Add(((int)(frameRate * setting.GopSize.Value)).ToString(CultureInfo.InvariantCulture));
+        }
+
+        // x264-specific low-CPU options (applied when user hasn't overridden via VideoSettingsOptions)
+        var isLibX264 = codecName.Equals("libx264", StringComparison.OrdinalIgnoreCase);
+        var hasPreset = setting.VideoSettingsOptions.Any(o => o.Key?.Trim() == "preset");
+        var hasTune = setting.VideoSettingsOptions.Any(o => o.Key?.Trim() == "tune");
+        var hasProfile = setting.VideoSettingsOptions.Any(o => o.Key?.Trim() == "profile");
+        
+        if (isLibX264)
+        {
+            if (!hasPreset)
+            {
+                arguments.Add("-preset");
+                arguments.Add("ultrafast");
+            }
+            if (!hasTune)
+            {
+                arguments.Add("-tune");
+                arguments.Add("zerolatency");
+            }
+            if (!hasProfile)
+            {
+                arguments.Add("-profile:v");
+                arguments.Add("main");
+            }
+            // Reduce CPU further: disable scenecut and lookahead
+            var hasX264Params = setting.VideoSettingsOptions.Any(o => o.Key?.Trim() == "x264-params");
+            if (!hasX264Params)
+            {
+                arguments.Add("-x264-params");
+                arguments.Add("scenecut=0:rc_lookahead=0");
+            }
+        }
+
+        // Hardware encoder low-latency defaults (when user hasn't overridden)
+        var isNvenc = codecName.Contains("_nvenc", StringComparison.OrdinalIgnoreCase);
+        var isQsv = codecName.Contains("_qsv", StringComparison.OrdinalIgnoreCase);
+        var isAmf = codecName.Contains("_amf", StringComparison.OrdinalIgnoreCase);
+        
+        if (isNvenc || isQsv || isAmf)
+        {
+            var hasPreset = setting.VideoSettingsOptions.Any(o => o.Key?.Trim() == "preset");
+            var hasTune = setting.VideoSettingsOptions.Any(o => o.Key?.Trim() == "tune");
+            var hasRc = setting.VideoSettingsOptions.Any(o => o.Key?.Trim() == "rc");
+            var hasCq = setting.VideoSettingsOptions.Any(o => o.Key?.Trim() == "cq");
+
+            if (!hasPreset)
+            {
+                arguments.Add("-preset");
+                arguments.Add(isNvenc ? "p1" : "veryfast");  // NVENC: p1=fastest, QSV/AMF: veryfast
+            }
+            if (!hasTune && isNvenc)
+            {
+                arguments.Add("-tune");
+                arguments.Add("ll");  // NVENC low latency
+            }
+            if (!hasRc)
+            {
+                arguments.Add("-rc");
+                arguments.Add("cbr");  // Constant bitrate for streaming
+            }
+            if (!hasCq)
+            {
+                arguments.Add("-cq");
+                arguments.Add("23");   // Quality level for CQP modes
+            }
+            // NVENC: zero latency mode
+            if (isNvenc)
+            {
+                var hasDelay = setting.VideoSettingsOptions.Any(o => o.Key?.Trim() == "delay");
+                if (!hasDelay)
+                {
+                    arguments.Add("-delay");
+                    arguments.Add("0");
+                }
+            }
         }
 
         foreach (var option in setting.VideoSettingsOptions)

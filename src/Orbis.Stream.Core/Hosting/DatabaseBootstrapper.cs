@@ -42,8 +42,10 @@ public sealed class DatabaseBootstrapper : IHostedService
     private void AddDefaultVideoAndAudioSetting()
     {
         _logger.LogInformation("Initializing default VideoSetting...");
-        InitializeDefaultVideoSetting("Twitch");
-        InitializeDefaultVideoSetting("Youtube");
+        InitializeDefaultVideoSetting("Twitch", createHighQuality: true);
+        InitializeDefaultVideoSetting("Twitch", createHighQuality: false);
+        InitializeDefaultVideoSetting("Youtube", createHighQuality: true);
+        InitializeDefaultVideoSetting("Youtube", createHighQuality: false);
     }
 
     /// <summary>
@@ -60,53 +62,120 @@ public sealed class DatabaseBootstrapper : IHostedService
     private static bool IsPlaceholderTitle(string? title) =>
         string.IsNullOrWhiteSpace(title) || string.Equals(title.Trim(), "test", StringComparison.OrdinalIgnoreCase);
 
-    private void InitializeDefaultVideoSetting(string platform)
+    private void InitializeDefaultVideoSetting(string platform, bool createHighQuality)
     {
-        var existing = _videoSettingRepository.FindByIsDefaultConfigurationTrueAndDefaultPlatformConfiguration(platform);
-        if (existing.Count > 0)
+        var title = createHighQuality ? TitleOf(platform) : "Low CPU " + TitleOf(platform);
+        
+        var existing = _videoSettingRepository.FindByTitleAndPlatform(title, platform);
+        if (existing is not null)
         {
-            // The first of the duplicates stays, the others go, exactly as before: a platform with
-            // two default settings would offer the wizard two identical rows.
-            foreach (var duplicate in existing.Skip(1))
+            if (IsPlaceholderTitle(existing.Title))
             {
-                _videoSettingRepository.Delete(duplicate.Id!.Value);
+                existing.Title = title;
+                existing.LastModified = DateTime.Now;
+                _videoSettingRepository.Update(existing);
+                _logger.LogInformation("VideoSetting of {Platform} renamed to {Title}", platform, title);
             }
-
-            var kept = existing[0];
-            if (IsPlaceholderTitle(kept.Title))
-            {
-                kept.Title = TitleOf(platform);
-                kept.LastModified = DateTime.Now;
-                _videoSettingRepository.Update(kept);
-                _logger.LogInformation(
-                    "Default VideoSetting of {Platform} renamed to {Title}", platform, kept.Title);
-            }
-
             return;
         }
 
-        var setting = new VideoSettingEntity
+        if (createHighQuality)
         {
-            Title = TitleOf(platform),
-            VideoCodec = 27,
-            VideoCodecName = "libx264",
-            PixelFormat = 0,
-            VideoBitrate = 5_000_000,
-            LastModified = null,
-            IsVideoAndAudioSettingActive = true,
-            GopSize = 2,
-            VideoSettingsOptions =
-            [
-                new VideoSettingsOptionEntity { Key = "preset", Value = "ultrafast" },
-                new VideoSettingsOptionEntity { Key = "tune", Value = "zerolatency" }
-            ],
-            VideoFormat = "flv",
-            AudioSetting = new AudioSettingEntity { AudioCodec = 86018, AudioBitrate = 128_000 },
-            IsDefaultConfiguration = true,
-            DefaultPlatformConfiguration = platform
-        };
+            // High quality defaults (original)
+            var (bitrate, audioBitrate, videoFormat, gopSize, extraOptions) = platform switch
+            {
+                "Twitch" => (6_000_000, 160_000, "flv", 2, new[]
+                {
+                    new VideoSettingsOptionEntity { Key = "preset", Value = "veryfast" },
+                    new VideoSettingsOptionEntity { Key = "tune", Value = "zerolatency" },
+                    new VideoSettingsOptionEntity { Key = "profile", Value = "high" },
+                    new VideoSettingsOptionEntity { Key = "x264-params", Value = "rc_lookahead=20" }
+                }),
+                "Youtube" => (8_000_000, 192_000, "flv", 2, new[]
+                {
+                    new VideoSettingsOptionEntity { Key = "preset", Value = "veryfast" },
+                    new VideoSettingsOptionEntity { Key = "tune", Value = "zerolatency" },
+                    new VideoSettingsOptionEntity { Key = "profile", Value = "high" },
+                    new VideoSettingsOptionEntity { Key = "x264-params", Value = "rc_lookahead=20" }
+                }),
+                _ => (5_000_000, 128_000, "flv", 2, new[]
+                {
+                    new VideoSettingsOptionEntity { Key = "preset", Value = "veryfast" },
+                    new VideoSettingsOptionEntity { Key = "tune", Value = "zerolatency" }
+                })
+            };
 
-        _videoSettingRepository.Insert(setting);
-        _logger.LogInformation("Default VideoSetting initialized for {Platform}", platform);
+            var setting = new VideoSettingEntity
+            {
+                Title = title,
+                VideoCodec = 27,
+                VideoCodecName = "libx264",
+                PixelFormat = 0,
+                VideoBitrate = bitrate,
+                VideoWidth = null,      // Keep source resolution
+                VideoHeight = null,
+                FrameRate = null,       // Keep source frame rate
+                LastModified = null,
+                IsVideoAndAudioSettingActive = true,
+                GopSize = gopSize,
+                VideoSettingsOptions = extraOptions.ToList(),
+                VideoFormat = videoFormat,
+                AudioSetting = new AudioSettingEntity { AudioCodec = 86018, AudioBitrate = audioBitrate },
+                IsDefaultConfiguration = true,
+                DefaultPlatformConfiguration = platform
+            };
+
+            _videoSettingRepository.Insert(setting);
+            _logger.LogInformation("High quality VideoSetting initialized for {Platform}: {Title}", platform, title);
+        }
+        else
+        {
+            // Low CPU defaults (new)
+            var (bitrate, audioBitrate, videoFormat, gopSize, extraOptions) = platform switch
+            {
+                "Twitch" => (4_500_000, 128_000, "flv", 2, new[]
+                {
+                    new VideoSettingsOptionEntity { Key = "preset", Value = "ultrafast" },
+                    new VideoSettingsOptionEntity { Key = "tune", Value = "zerolatency" },
+                    new VideoSettingsOptionEntity { Key = "profile", Value = "main" },
+                    new VideoSettingsOptionEntity { Key = "x264-params", Value = "scenecut=0:rc_lookahead=0" }
+                }),
+                "Youtube" => (3_500_000, 128_000, "flv", 2, new[]
+                {
+                    new VideoSettingsOptionEntity { Key = "preset", Value = "ultrafast" },
+                    new VideoSettingsOptionEntity { Key = "tune", Value = "zerolatency" },
+                    new VideoSettingsOptionEntity { Key = "profile", Value = "main" },
+                    new VideoSettingsOptionEntity { Key = "x264-params", Value = "scenecut=0:rc_lookahead=0" }
+                }),
+                _ => (3_000_000, 96_000, "flv", 2, new[]
+                {
+                    new VideoSettingsOptionEntity { Key = "preset", Value = "ultrafast" },
+                    new VideoSettingsOptionEntity { Key = "tune", Value = "zerolatency" }
+                })
+            };
+
+            var setting = new VideoSettingEntity
+            {
+                Title = title,
+                VideoCodec = 27,
+                VideoCodecName = "libx264",
+                PixelFormat = 0,
+                VideoBitrate = bitrate,
+                VideoWidth = 1280,
+                VideoHeight = 720,
+                FrameRate = 30,
+                LastModified = null,
+                IsVideoAndAudioSettingActive = true,
+                GopSize = gopSize,
+                VideoSettingsOptions = extraOptions.ToList(),
+                VideoFormat = videoFormat,
+                AudioSetting = new AudioSettingEntity { AudioCodec = 86018, AudioBitrate = audioBitrate },
+                IsDefaultConfiguration = false,  // Not the primary default
+                DefaultPlatformConfiguration = platform
+            };
+
+            _videoSettingRepository.Insert(setting);
+            _logger.LogInformation("Low CPU VideoSetting initialized for {Platform}: {Title}", platform, title);
+        }
     }
 }

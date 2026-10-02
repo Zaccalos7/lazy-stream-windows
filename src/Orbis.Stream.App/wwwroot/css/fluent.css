@@ -274,15 +274,11 @@ a { color: var(--accent-text); text-decoration: none; }
   box-shadow: 0 1px 2px rgba(0, 0, 0, 0.08);
 }
 
-.nav form { padding: 10px 4px 0; border-top: 1px solid var(--stroke); }
-.nav form label.field { flex-direction: row; align-items: center; gap: 8px; }
-.nav form .caption .icon { font-size: 15px; color: var(--text-2); }
-
 /* The language picker: a native <select> can only hold text, so the flags that stood in for it
    as emoji (two regional indicator letters, which a font swap turns into "IT") become pictures in
    a menu of their own. A <details> keeps it openable with the keyboard, with no script. */
 .lang-picker { position: relative; margin-top: 10px; border-top: 1px solid var(--stroke); }
-.lang-picker > summary { list-style: none; }
+.lang-picker > summary { list-style: none; cursor: pointer; }
 .lang-picker > summary::-webkit-details-marker { display: none; }
 
 .lang-current,
@@ -299,7 +295,6 @@ a { color: var(--accent-text); text-decoration: none; }
   border-radius: var(--radius-sm);
 }
 
-.lang-current { cursor: pointer; }
 .lang-current:hover { background: var(--tint); color: var(--text); }
 .lang-current .icon { margin-left: auto; font-size: 11px; transition: transform 0.15s ease; }
 .lang-picker[open] .lang-current { background: var(--tint); color: var(--text); }
@@ -324,6 +319,8 @@ a { color: var(--accent-text); text-decoration: none; }
   z-index: 20;
   margin: 0;
   padding: 4px;
+  max-height: min(60vh, 340px);
+  overflow-y: auto;
   list-style: none;
   background: var(--card);
   border: 1px solid var(--stroke);
@@ -334,6 +331,10 @@ a { color: var(--accent-text); text-decoration: none; }
 
 .lang-menu a:hover { background: var(--tint); color: var(--text); }
 .lang-menu a[aria-current="true"] { background: var(--accent); color: var(--on-accent); font-weight: 600; }
+.lang-current:focus-visible,
+.lang-menu a:focus-visible { outline: 2px solid var(--accent); outline-offset: -2px; }
+.lang-current:focus:not(:focus-visible),
+.lang-menu a:focus:not(:focus-visible) { outline: none; }
 
 .content { flex: 1; min-width: 0; overflow-y: auto; border-radius: var(--radius-lg); }
 
@@ -402,7 +403,11 @@ h3 { font: 600 13px/18px var(--font); letter-spacing: -0.01em; margin: 0; }
   .shell { padding: 6px; gap: 6px; }
   .nav { width: 50px; padding: 10px 4px; }
   .nav a { justify-content: center; padding: 0; }
-  .nav a span:not(.icon), .nav-title span, .nav form, .segmented-control { display: none; }
+  /* Direct children only: ".nav a span" would reach the language menu too and blank its labels. */
+  .nav > a span:not(.icon), .nav-title span, .lang-current span, .lang-current .icon, .segmented-control { display: none; }
+  /* The flag is enough of a label when the sidebar is a strip, and the menu still spells them out. */
+  .lang-current { justify-content: center; padding: 0; }
+  .lang-menu { left: -8px; min-width: 150px; }
   .nav-title { justify-content: center; padding: 0 0 12px; }
   .page { padding: 0 2px 18px; }
   .page-header { padding: 16px; }

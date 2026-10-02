@@ -77,8 +77,10 @@ public sealed class UiTextTests
             var bundle = Bundle(language.Code);
             foreach (var (key, text) in english)
             {
-                Assert.Equal(Placeholders(text), Placeholders(bundle[key]),
-                    $"ui.{language.Code}.json does not carry the same parameters as '{key}'");
+                Assert.True(
+                    Placeholders(text) == Placeholders(bundle[key]),
+                    $"ui.{language.Code}.json does not carry the same parameters as '{key}': " +
+                    $"'{text}' against '{bundle[key]}'");
             }
         }
     }

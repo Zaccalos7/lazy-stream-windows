@@ -26,7 +26,7 @@ public sealed class MessageCatalog
 {
     public const string DefaultLanguage = "en";
 
-    private static readonly string[] KnownLanguages = ["en", "it", "de", "es", "fr", "ru", "zh", "pt", "ko", "ja", "tlh"];
+    private static readonly string[] KnownLanguages = ["en", "it", "de", "es", "fr", "ru", "zh", "pt", "ko", "ja", "tlh", "hi", "la", "bn", "hod"];
 
     private readonly Dictionary<string, PropertiesBundle> _bundles;
     private readonly ILogger<MessageCatalog> _logger;

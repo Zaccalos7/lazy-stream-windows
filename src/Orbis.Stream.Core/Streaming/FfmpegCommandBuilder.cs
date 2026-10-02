@@ -212,8 +212,21 @@ public static class FfmpegCommandBuilder
     }
 
     /// <summary>
-    /// The second output of a live: one JPEG, overwritten a few times a second. Written to a
-    /// temporary file and renamed, so the page never reads a frame that is half written.
+    /// The second output of a live: one JPEG, overwritten a few times a second.
+    ///
+    /// It is written straight over the file it was writing last, never beside it and renamed on
+    /// top. ffmpeg can do that swap (-atomic_writing), and on Windows it fails: renaming over a file
+    /// is refused with "Operation not permitted" as soon as anything holds that file open for a
+    /// moment, and a scanner that reads every frame the preview writes holds it for a moment of
+    /// every frame. The preview then never moves - the frame lands in the .tmp file thirty times a
+    /// second and the rename in front of the page fails thirty times a second instead, which is the
+    /// "failed to rename file" a live used to end its error message with, repeated thousands of
+    /// times.
+    ///
+    /// What the rename was there to buy - the page is never handed half a picture - is bought on the
+    /// reading side instead (LivePreviewFrames): the file ffmpeg overwrites is shortened before it
+    /// is written, so a read that catches it halfway holds the front of the frame and no end, and
+    /// that is a read made again rather than a picture sent.
     /// </summary>
     private static void AppendPreviewOutput(List<string> arguments, string map, string? filter, string path)
     {
@@ -236,16 +249,11 @@ public static class FfmpegCommandBuilder
         arguments.Add("6");
         arguments.Add("-f");
         arguments.Add("image2");
+
+        // One file, overwritten: the page asks for the newest picture and is answered with a whole
+        // one or with nothing at all, never with a file that is on its way to being the next frame.
         arguments.Add("-update");
         arguments.Add("1");
-        if (!OperatingSystem.IsWindows())
-        {
-            // Atomic writing (write to .tmp then rename) fails on Windows when the destination
-            // file is open for reading, even with FileShare.Delete. The rename returns
-            // "Operation not permitted". JPEG decoders handle partial frames gracefully.
-            arguments.Add("-atomic_writing");
-            arguments.Add("1");
-        }
         arguments.Add(path);
     }
 

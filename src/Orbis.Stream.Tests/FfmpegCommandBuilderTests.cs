@@ -52,8 +52,9 @@ public sealed class FfmpegCommandBuilderTests
     public void ThePreviewOfAFileIsThirtySharpFramesASecond()
     {
         // The picture of the file, slowed down and shrunk inside the graph, and written as the light
-        // picture: one file overwritten over and over, a temporary one renamed over it so the page
-        // never reads half a frame, and no audio rides along with it.
+        // picture: one file overwritten over and over, so ffmpeg never renames a frame on top of the
+        // one before it (a rename over an open file is refused on Windows, which left the preview of
+        // every live frozen on its first frame), and no audio rides along with it.
         var command = FfmpegCommandBuilder.Build(new FfmpegStreamRequest(
             "/videos/clip.mp4", "rtmp://ingest/live/key", Probe(), Setting(), PreviewPath: "/data/preview/7.jpg"));
 
@@ -64,7 +65,8 @@ public sealed class FfmpegCommandBuilderTests
         Assert.Contains("fps=30,scale=w='min(640,iw)':h=-2", text, StringComparison.Ordinal);
         Assert.Contains("-an -sn -dn", text, StringComparison.Ordinal);
         Assert.Contains("-c:v mjpeg -q:v 6", text, StringComparison.Ordinal);
-        Assert.Contains("-f image2 -update 1 -atomic_writing 1 /data/preview/7.jpg", text, StringComparison.Ordinal);
+        Assert.Contains("-f image2 -update 1 /data/preview/7.jpg", text, StringComparison.Ordinal);
+        Assert.DoesNotContain("-atomic_writing", text, StringComparison.Ordinal);
     }
 
     [Theory]
@@ -232,12 +234,13 @@ public sealed class FfmpegCompositionTests
         Assert.Contains("split=2", graph, StringComparison.Ordinal);
         Assert.Contains("fps=30,scale=w='min(640,iw)':h=-2", graph, StringComparison.Ordinal);
 
-        // It is one file overwritten over and over: a temporary one renamed over it, so the page
-        // never reads half a frame, and no audio rides along with it.
+        // It is one file overwritten over and over, with no rename on top of the frame before it, and
+        // no audio rides along with it.
         var text = string.Join(' ', command);
 
         Assert.Contains("-an -sn -dn -c:v mjpeg -q:v 6", text, StringComparison.Ordinal);
-        Assert.Contains("-f image2 -update 1 -atomic_writing 1 /data/preview/7.jpg", text, StringComparison.Ordinal);
+        Assert.Contains("-f image2 -update 1 /data/preview/7.jpg", text, StringComparison.Ordinal);
+        Assert.DoesNotContain("-atomic_writing", text, StringComparison.Ordinal);
     }
 
     private static string GraphOf(IReadOnlyList<string> command) =>

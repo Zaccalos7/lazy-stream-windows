@@ -195,12 +195,3 @@ Function un.onInit
   ${EndIf}
 FunctionEnd
 !endif
-
-Section "Uninstall"
-  Delete "$DESKTOP\${APPNAME}.lnk"
-  RMDir "$SMPROGRAMS\${APPNAME}"
-  Delete "$INSTDIR\uninstall.exe"
-  RMDir /r "$INSTDIR"
-  DeleteRegKey HKCU "${UNINSTKEY}"
-  DeleteRegKey HKCU "${REGKEY}"
-SectionEnd

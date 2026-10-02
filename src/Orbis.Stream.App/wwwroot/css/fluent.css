@@ -556,6 +556,12 @@ textarea.input { resize: vertical; padding: 8px 10px; }
 .input-affix .reveal:hover { color: var(--text); background: var(--tint-strong); }
 .input-affix .reveal[aria-pressed="true"] { color: var(--accent-text); background: var(--tint-strong); }
 
+/* Hide native Edge/Chromium password reveal button since we use a custom one */
+input[type="password"]::-ms-reveal,
+input[type="password"]::-ms-clear {
+  display: none;
+}
+
 /* Dropzone */
 .dropzone .input { border-style: dashed; }
 .dropzone > small { display: flex; align-items: center; gap: 6px; }

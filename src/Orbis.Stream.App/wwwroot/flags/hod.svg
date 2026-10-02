@@ -1,0 +1,7 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 60 40" width="60" height="40" role="img" aria-hidden="true" focusable="false">
+  <defs><clipPath id="c"><rect width="60" height="40" rx="3"/></clipPath></defs>
+  <g clip-path="url(#c)">
+    <rect width="60" height="40" fill="#5B4632"/>
+    <text x="30" y="29" text-anchor="middle" font-family="Georgia, 'Times New Roman', serif" font-size="24" font-weight="700" fill="#F2E9DC">H</text>
+  </g>
+</svg>

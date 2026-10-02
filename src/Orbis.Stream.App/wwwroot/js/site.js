@@ -156,6 +156,9 @@ const preview = document.querySelector("[data-preview]");
 const previewFrame = preview?.querySelector("[data-preview-frame]");
 const previewFrameUrl = previewFrame ? `/preview/live/${Number(preview.dataset.pkid || 0)}/frame` : null;
 
+// Platform embed player (Twitch/YouTube) - shows what viewers actually see on the platform
+const previewPlatformPlayer = preview?.querySelector(".preview-platform-player");
+
 // How long a question waits for its answer. ffmpeg writes the next picture every thirty third of a
 // second, and the server holds the request open until that picture exists instead of being asked
 // again on a timer of the page's own. That is the whole trick against the judder: two clocks, one
@@ -208,6 +211,18 @@ let previewPainted = null;
 // smoothing the browser does at its best, costs the same and keeps the picture as sharp as a scaled
 // frame can be.
 const paintPreviewPicture = () => {
+  // If platform embed player is available, use it instead of canvas (shows what viewers see)
+  if (previewPlatformPlayer) {
+    if (previewPlatformPlayer.hidden) {
+      // Hide canvas and cover, show platform player
+      if (previewFrame) previewFrame.hidden = true;
+      const cover = preview?.querySelector(".preview-cover");
+      if (cover) cover.hidden = true;
+      previewPlatformPlayer.hidden = false;
+    }
+    return;
+  }
+
   if (!previewFrame) return;
 
   requestAnimationFrame(paintPreviewPicture);
@@ -410,16 +425,32 @@ if (previewVideo) {
   });
 }
 
-if (previewFrame && previewIsLive) {
-  previewLoop();
-  requestAnimationFrame(paintPreviewPicture);
-  document.addEventListener("visibilitychange", () => {
-    // A tab nobody is looking at is not asked for frames: the browser stops servicing its work
-    // anyway, and what would pile up behind it is not a preview but a queue of stale pictures.
-    previewPaused = document.hidden;
-    if (document.hidden) return;
-    armPreviewFrame();
-  });
+if (previewIsLive) {
+  if (previewPlatformPlayer) {
+    // Platform embed player (Twitch/YouTube) - shows what viewers see on the platform
+    // Hide canvas and cover, show platform player immediately
+    if (previewFrame) previewFrame.hidden = true;
+    const cover = preview?.querySelector(".preview-cover");
+    if (cover) cover.hidden = true;
+    previewPlatformPlayer.hidden = false;
+    // Still listen for visibility to pause platform player if needed
+    document.addEventListener("visibilitychange", () => {
+      if (document.hidden && previewPlatformPlayer.src) {
+        // Could pause iframe but most platforms handle this automatically
+      }
+    });
+  } else if (previewFrame) {
+    // Local canvas preview (fallback for unknown platforms)
+    previewLoop();
+    requestAnimationFrame(paintPreviewPicture);
+    document.addEventListener("visibilitychange", () => {
+      // A tab nobody is looking at is not asked for frames: the browser stops servicing its work
+      // anyway, and what would pile up behind it is not a preview but a queue of stale pictures.
+      previewPaused = document.hidden;
+      if (document.hidden) return;
+      armPreviewFrame();
+    });
+  }
 }
 
 const paintPreview = state => {

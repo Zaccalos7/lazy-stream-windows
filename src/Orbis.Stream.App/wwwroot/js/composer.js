@@ -117,6 +117,7 @@
     item.h = clamp(Math.round(item.h), minimumSize, scene.height);
     item.x = clamp(Math.round(item.x), 0, scene.width - item.w);
     item.y = clamp(Math.round(item.y), 0, scene.height - item.h);
+    return item;
   };
 
   // Screen pixels to output pixels: the stage is drawn at whatever size the window gives it.
@@ -130,7 +131,43 @@
     };
   };
 
+  // Whether a point lands inside a rectangle.
+  const covers = (item, point) =>
+    point.x >= item.x && point.x <= item.x + item.w &&
+    point.y >= item.y && point.y <= item.y + item.h;
+
+  // What a drop at that point is aimed at, worked out on the rectangles and not on what the
+  // browser happened to hit: the tiles are positioned with percentages and stacked in array
+  // order, so hit-testing would hand every drop to whichever tile happens to be painted last.
+  //
+  // An empty sagoma is a box waiting for a source, so under the pointer it is always the answer,
+  // whatever is drawn over it. That is what makes a layout work: the full frame goes in the first
+  // sagoma and the second one is still there to be filled afterwards.
+  const slotUnder = point => slots().filter(item => covers(item, point)).pop() || null;
+
+  // A source that covers the whole frame is the backdrop of the composition, not one box among
+  // many: there is nowhere else on the canvas to aim at, so a drop anywhere on it lands as a new
+  // layer where the pointer is, the way a drop on bare canvas does.
+  const isBackdrop = item => item.x <= 0 && item.y <= 0 && item.w >= scene.width && item.h >= scene.height;
+
+  const tileUnder = point => pictures()
+    .filter(item => !isSlot(item) && !isBackdrop(item) && covers(item, point))
+    .pop() || null;
+
   // ---------- Items ----------
+
+  // The rectangle a source takes when it lands at that point: the first thing on the canvas is
+  // what the viewer expects to fill the frame; a webcam, or anything laid over something already
+  // there, starts as a third of the width. Drawn as a ghost while the drag is in the air, so the
+  // drop lands where the picture said it would.
+  const boxFor = (option, at, aspect) => {
+    const fills = pictures().length === 0 && option.kind !== Kind.Camera;
+    if (fills) return fitted(aspect);
+    const w = Math.round(scene.width / 3);
+    const h = Math.round(w / aspect);
+    const centre = at || { x: scene.width / 2, y: scene.height / 2 };
+    return keepInside({ x: centre.x - w / 2, y: centre.y - h / 2, w, h });
+  };
 
   const itemFrom = (option, at) => {
     const item = {
@@ -148,22 +185,7 @@
       x: 0, y: 0, w: 0, h: 0
     };
 
-    if (!hasPicture(item.kind)) return item;
-
-    const aspect = aspectOf(item);
-    // The first screen or video is what the viewer expects to fill the frame; a webcam, or
-    // anything laid on top of something already there, starts as a third of the width.
-    const fills = pictures().length === 0 && item.kind !== Kind.Camera;
-    const box = fills ? fitted(aspect) : { w: Math.round(scene.width / 3), h: Math.round(scene.width / 3 / aspect) };
-    Object.assign(item, box);
-
-    if (!fills) {
-      const centre = at || { x: scene.width / 2, y: scene.height / 2 };
-      item.x = centre.x - item.w / 2;
-      item.y = centre.y - item.h / 2;
-    }
-
-    keepInside(item);
+    if (hasPicture(item.kind)) Object.assign(item, boxFor(option, at, aspectOf(item)));
     return item;
   };
 
@@ -224,6 +246,15 @@
     render();
   };
 
+  // A source that goes into a rectangle takes it whole: the box keeps its place in the stack, so
+  // a full frame one stays under the boxes laid on top of it instead of jumping over them.
+  const occupies = (target, item) => {
+    Object.assign(item, { x: target.x, y: target.y, w: target.w, h: target.h, autoSized: false });
+    // The source remembers the slot it went into, so taking it off gives the skeleton back.
+    item.slotLabel = isSlot(target) ? target.label : target.slotLabel;
+    return item;
+  };
+
   const replaceSource = (uid, option) => {
     const existing = scene.items.find(item => sameSource(item, option));
     if (existing) {
@@ -242,14 +273,7 @@
       return;
     }
 
-    const newItem = itemFrom(option);
-    newItem.x = targetItem.x;
-    newItem.y = targetItem.y;
-    newItem.w = targetItem.w;
-    newItem.h = targetItem.h;
-    newItem.autoSized = false;
-    // The source remembers the slot it went into, so taking it off leaves the skeleton as it was.
-    newItem.slotLabel = isSlot(targetItem) ? targetItem.label : targetItem.slotLabel;
+    const newItem = occupies(targetItem, itemFrom(option));
 
     scene.items[targetIndex] = newItem;
     tiles.get(uid)?.remove();
@@ -260,7 +284,49 @@
     render();
   };
 
-  const removeItem = uid => {
+  // The one way a source reaches the canvas, whether it was dropped or picked: an empty sagoma
+  // under the pointer is filled, a source already on the canvas gives its rectangle to a new one
+  // laid over it, and bare canvas opens a new layer where the pointer is. Nothing is thrown away
+  // to make room for the drop, and a source that is already on the canvas is moved to the new
+  // spot rather than refused: dropping it in another box is how a box changes its mind.
+  const place = (option, at) => {
+    // A microphone has no picture to put in a rectangle: it joins the mix and every sagoma stays.
+    // Picked from the list rather than dropped somewhere, there is no pointer to follow either,
+    // and the list fills the skeleton in order.
+    if (!at || !hasPicture(option.kind)) {
+      addSource(option);
+      return;
+    }
+
+    const target = slotUnder(at) || tileUnder(at);
+    if (!target) {
+      addSource(option, at);
+      return;
+    }
+
+    const taken = scene.items.find(item => sameSource(item, option));
+    if (taken) {
+      if (taken.uid === target.uid) {
+        select(taken.uid);
+        return;
+      }
+      // On its way to another box: the one it leaves behind does not come back as a hole.
+      removeItem(taken.uid, { giveSlotBack: false });
+    }
+
+    const index = scene.items.findIndex(item => item.uid === target.uid);
+    if (index < 0) return;
+    const item = occupies(target, itemFrom(option));
+    scene.items[index] = item;
+    tiles.get(target.uid)?.remove();
+    tiles.delete(target.uid);
+
+    select(item.uid);
+    markDirty();
+    render();
+  };
+
+  const removeItem = (uid, { giveSlotBack = true } = {}) => {
     const index = scene.items.findIndex(item => item.uid === uid);
     if (index < 0) return;
     const item = scene.items[index];
@@ -269,7 +335,7 @@
     if (selected === uid) selected = null;
 
     // A source taken out of a slot gives the slot back; the slot itself is what goes for good.
-    if (item.slotLabel !== undefined) {
+    if (giveSlotBack && item.slotLabel !== undefined) {
       scene.items[index] = { ...slotFrom(), label: item.slotLabel, x: item.x, y: item.y, w: item.w, h: item.h };
     } else {
       scene.items.splice(index, 1);
@@ -722,74 +788,126 @@
 
   const sourceType = "application/x-orbis-source";
   let pendingDrop = null;
-  let pendingDropUid = null;
+  // What the drag in the air is carrying. The payload of a drag cannot be read while it is still
+  // travelling (the browser hands it over on drop only), so the entry that started the drag
+  // leaves the option here: it is what the ghost is measured from and what the drop resolves to.
+  let carried = null;
+
+  // The ghost: the rectangle the source will take, drawn where it will take it, with the words
+  // that say what letting go is about to do. It is the whole difference between a drag that goes
+  // where you aimed it and one that quietly swaps what was already there.
+  const ghost = document.createElement("div");
+  ghost.className = "composer-drop";
+  ghost.hidden = true;
+  const ghostLabel = document.createElement("span");
+  ghostLabel.className = "composer-drop-label";
+  ghost.append(ghostLabel);
+  stage.append(ghost);
+
+  // A file dragged in from Explorer is only known to be a video until the host answers with its
+  // path: until then the ghost is measured on a plain 16:9.
+  const fileShape = { kind: Kind.File, name: "", width: 0, height: 0 };
+  const inFlight = () => carried || fileShape;
+
+  const carriesSource = event => {
+    const types = [...(event.dataTransfer?.types || [])];
+    return types.includes(sourceType) || types.includes("Files");
+  };
+
+  // What a drop at that point will do, and where it will land. A microphone has no rectangle to
+  // land in: it joins the sound of the canvas wherever it is let go, so the ghost stays away
+  // rather than promising a box it will never take.
+  const previewAt = (option, at) => {
+    if (!hasPicture(option.kind)) return null;
+    const slot = slotUnder(at);
+    const target = slot || tileUnder(at);
+    if (target) {
+      return {
+        box: { x: target.x, y: target.y, w: target.w, h: target.h },
+        target,
+        label: slot ? `${word("drop-into-slot")} ${slot.label}` : `${word("drop-into-tile")} ${target.label}`
+      };
+    }
+    // Bare canvas. On a canvas with nothing on it yet the source takes the frame, and the ghost
+    // says so rather than calling it a layer.
+    const fills = pictures().length === 0 && option.kind !== Kind.Camera;
+    const shape = { kind: option.kind, w: 0, h: 0, naturalWidth: option.width || 0, naturalHeight: option.height || 0 };
+    return { box: boxFor(shape, at, aspectOf(shape)), target: null, label: fills ? word("fill") : word("drop-as-layer") };
+  };
+
+  const clearDrop = () => {
+    ghost.hidden = true;
+    stage.classList.remove("is-over");
+    for (const tile of stage.querySelectorAll(".composer-tile.is-drop-on")) tile.classList.remove("is-drop-on");
+  };
+
+  const showDrop = (option, at) => {
+    for (const tile of stage.querySelectorAll(".composer-tile.is-drop-on")) tile.classList.remove("is-drop-on");
+    const preview = previewAt(option, at);
+    if (!preview) {
+      ghost.hidden = true;
+      return;
+    }
+
+    ghost.style.left = (preview.box.x / scene.width * 100) + "%";
+    ghost.style.top = (preview.box.y / scene.height * 100) + "%";
+    ghost.style.width = (preview.box.w / scene.width * 100) + "%";
+    ghost.style.height = (preview.box.h / scene.height * 100) + "%";
+    ghostLabel.textContent = preview.label;
+    ghost.hidden = false;
+    if (preview.target) tiles.get(preview.target.uid)?.classList.add("is-drop-on");
+  };
 
   stage.addEventListener("dragover", event => {
-    if (layoutMode) return;
-    const types = [...(event.dataTransfer?.types || [])];
-    if (!types.includes(sourceType) && !types.includes("Files")) return;
+    if (layoutMode || !carriesSource(event)) return;
     event.preventDefault();
     event.dataTransfer.dropEffect = "copy";
     stage.classList.add("is-over");
-
-    // Highlight drop target if hovering over a tile
-    const tile = event.target.closest(".composer-tile");
-    stage.querySelectorAll(".composer-tile.is-drag-over").forEach(t => {
-      if (t !== tile) t.classList.remove("is-drag-over");
-    });
-    if (tile) tile.classList.add("is-drag-over");
+    showDrop(inFlight(), pointOnCanvas(event));
   });
 
   stage.addEventListener("dragleave", event => {
-    if (!stage.contains(event.relatedTarget)) {
-      stage.classList.remove("is-over");
-      stage.querySelectorAll(".composer-tile.is-drag-over").forEach(t => t.classList.remove("is-drag-over"));
-    } else {
-      const tile = event.relatedTarget?.closest(".composer-tile");
-      stage.querySelectorAll(".composer-tile.is-drag-over").forEach(t => {
-        if (t !== tile) t.classList.remove("is-drag-over");
-      });
-    }
+    // Leaving for the sidebar and not for another tile: there is nothing under the pointer any more.
+    if (stage.contains(event.relatedTarget)) return;
+    clearDrop();
+  });
+
+  // A drag let go outside the canvas, or on the catalog, still has to take its ghost with it.
+  document.addEventListener("dragend", () => {
+    carried = null;
+    clearDrop();
   });
 
   stage.addEventListener("drop", event => {
     if (layoutMode) return;
-    stage.classList.remove("is-over");
 
-    const targetTile = event.target.closest(".composer-tile");
-    if (targetTile) targetTile.classList.remove("is-drag-over");
-    const dropUid = targetTile ? Number(targetTile.dataset.uid) : null;
+    const id = event.dataTransfer?.getData(sourceType);
+    const files = event.dataTransfer?.files;
+    // Anything else dragged in (a word of text, a link) is none of this canvas's business.
+    if (!id && !(files?.length && window.chrome?.webview)) return;
+    event.preventDefault();
 
     const at = pointOnCanvas(event);
-    const id = event.dataTransfer?.getData(sourceType);
+    carried = null;
+    clearDrop();
+
     if (id) {
-      event.preventDefault();
       const option = catalog.find(candidate => candidate.id === id);
-      if (option) {
-        if (dropUid !== null) replaceSource(dropUid, option);
-        else addSource(option, at);
-      }
+      if (option) place(option, at);
       return;
     }
 
     // A video dragged from Explorer: the browser never tells a path, so the file goes to the
     // WebView2 host, which answers with it (the same route the path fields of the settings use).
-    const files = event.dataTransfer?.files;
-    if (files?.length && window.chrome?.webview) {
-      event.preventDefault();
-      pendingDrop = at;
-      pendingDropUid = dropUid;
-      window.chrome.webview.postMessageWithAdditionalObjects("dropPath", files);
-    }
+    pendingDrop = at;
+    window.chrome.webview.postMessageWithAdditionalObjects("dropPath", files);
   });
 
   window.chrome?.webview?.addEventListener("message", event => {
     if (!pendingDrop || typeof event.data !== "string") return;
     const at = pendingDrop;
-    const dropUid = pendingDropUid;
     pendingDrop = null;
-    pendingDropUid = null;
-    addFile(event.data, at, dropUid);
+    addFile(event.data, at);
   });
 
   const fileOption = path => ({
@@ -799,7 +917,7 @@
     target: path
   });
 
-  const addFile = (path, at, replaceUid = null) => {
+  const addFile = (path, at) => {
     const trimmed = path.trim().replace(/^"(.*)"$/, "$1");
     if (!trimmed) return;
     let option = catalog.find(candidate => candidate.kind === Kind.File && candidate.target === trimmed);
@@ -808,8 +926,7 @@
       catalog.push(option);
       drawCatalog();
     }
-    if (replaceUid !== null) replaceSource(replaceUid, option);
-    else addSource(option, at);
+    place(option, at);
   };
 
   root.querySelector("[data-composer-add-path]")?.addEventListener("click", () => {
@@ -842,7 +959,9 @@
     entry.type = "button";
     entry.className = "composer-source";
     if (isUsedItem) entry.classList.add("is-used");
-    entry.draggable = !isUsedItem;
+    // A source already on the canvas drags as well as the others: dragging it into another
+    // sagoma is how a box changes its mind without going back to the list first.
+    entry.draggable = true;
     entry.dataset.sourceId = option.id;
     entry.title = isUsedItem ? word("remove") : word("add");
 
@@ -866,15 +985,16 @@
 
     entry.append(iconOf(option.kind), text, actionIcon);
 
+    entry.addEventListener("dragstart", event => {
+      event.dataTransfer.setData(sourceType, option.id);
+      event.dataTransfer.effectAllowed = "copy";
+      carried = option;
+    });
+
     if (!isUsedItem) {
-      entry.addEventListener("dragstart", event => {
-        event.dataTransfer.setData(sourceType, option.id);
-        event.dataTransfer.effectAllowed = "copy";
-      });
       entry.addEventListener("click", () => addSource(option));
     } else {
-      entry.addEventListener("click", (e) => {
-        e.stopPropagation();
+      entry.addEventListener("click", () => {
         const item = scene.items.find(i => sameSource(i, option));
         if (item) removeItem(item.uid);
       });

@@ -312,8 +312,8 @@ html.sidebar-closed .nav-title {
   justify-content: space-between;
   flex-wrap: wrap;
   gap: 14px;
-  margin-bottom: 18px;
-  padding: 20px 24px;
+  margin-bottom: 12px;
+  padding: 12px 20px;
   background: var(--panel);
   backdrop-filter: blur(24px) saturate(180%);
   -webkit-backdrop-filter: blur(24px) saturate(180%);
@@ -1136,7 +1136,7 @@ a:hover > .platform-mark { background: var(--tint); }
 .composer {
   display: grid;
   gap: 14px;
-  grid-template-columns: 250px minmax(0, 1fr) 270px;
+  grid-template-columns: 220px minmax(0, 1fr) 240px;
   align-items: start;
 }
 
@@ -1200,6 +1200,9 @@ a:hover > .platform-mark { background: var(--tint); }
 .composer-stage {
   position: relative;
   width: 100%;
+  max-height: calc(100vh - 240px);
+  max-width: calc((100vh - 240px) * 16 / 9);
+  margin: 0 auto;
   overflow: hidden;
   background-color: #000;
   /* Thirds, so a tile can be lined up by eye before the guides kick in. */

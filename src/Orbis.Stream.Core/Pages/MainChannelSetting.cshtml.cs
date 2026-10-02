@@ -42,7 +42,7 @@ public sealed class MainChannelSettingModel(SettingService settings, RequestVali
         Configurations = settings.RetrieveSettings(filters);
 
         Editing = edit == "new"
-            ? new SettingResponse(null, null, null, null, null, null, null, null, true, null)
+            ? new SettingResponse(null, null, null, null, null, null, null, null, true, null, false, 0, 0)
             : int.TryParse(edit, out var id) ? settings.RetrieveSettings(new Dictionary<string, string> { ["id"] = edit! }).FirstOrDefault(setting => setting.Id == id) : null;
     }
 

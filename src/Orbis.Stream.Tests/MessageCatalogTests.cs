@@ -20,11 +20,11 @@ public sealed class MessageCatalogTests
     [InlineData("pt-BR", "pt")]
     [InlineData("ko-KR", "ko")]
     [InlineData("ar-EG", "en")]
-    // Languages that were never translations, or were jokes, resolve to English like anything else
-    // the catalogue does not have: Klingon, Hodor and Latin answer in English, never in themselves.
-    [InlineData("tlh", "en")]
-    [InlineData("hod", "en")]
-    [InlineData("la", "en")]
+    [InlineData("tlh", "tlh")]
+    [InlineData("hod", "hod")]
+    [InlineData("la", "la")]
+    // Bengali and Hindi were dropped: their bundles were the English text behind a "[bn]" tag,
+    // which is not a language. They resolve to English like anything else the catalogue lacks.
     [InlineData("hi-IN", "en")]
     [InlineData("bn-BD", "en")]
     [InlineData(null, "en")]
@@ -48,7 +48,7 @@ public sealed class MessageCatalogTests
         var catalog = CreateCatalog();
 
         Assert.Equal("Not valid field", catalog.GetMessage("ar-EG", "not.valid.input"));
-        Assert.Equal("Not valid field", catalog.GetMessage("hod", "not.valid.input"));
+        Assert.Equal("Not valid field", catalog.GetMessage("hi-IN", "not.valid.input"));
     }
 
     [Fact]
@@ -93,7 +93,7 @@ public sealed class MessageCatalogTests
         var catalog = CreateCatalog();
         var english = PropertiesBundle.Parse(File.ReadAllText(BundlePath("en")));
 
-        Assert.Equal(10, catalog.SupportedLanguages.Count);
+        Assert.Equal(13, catalog.SupportedLanguages.Count);
 
         foreach (var language in catalog.SupportedLanguages)
         {

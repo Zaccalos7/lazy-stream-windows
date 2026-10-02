@@ -139,3 +139,15 @@
         </form>
     </dialog>
 }
+
+<script>
+    // Toggle auto-cleanup fields visibility
+    document.addEventListener("change", e => {
+        const toggle = e.target.closest('input[name="autoCleanupEnabled"]');
+        if (toggle) {
+            document.querySelectorAll('[data-auto-cleanup-fields]').forEach(el => {
+                el.style.display = toggle.checked ? "block" : "none";
+            });
+        }
+    });
+</script>

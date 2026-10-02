@@ -73,6 +73,7 @@ public static class OrbisServiceCollectionExtensions
 
         services.AddSingleton<DatabaseBootstrapper>();
         services.AddHostedService(provider => provider.GetRequiredService<DatabaseBootstrapper>());
+        services.AddHostedService<AutoCleanupService>();
 
         return services;
     }

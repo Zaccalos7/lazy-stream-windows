@@ -12,18 +12,41 @@
         <h1>@T["liveHistory"]</h1>
     </div>
     <div class="toolbar">
-        <div class="toolbar-group">
-            <span class="caption">@T["deleteOldLiveHistory"]</span>
-            <select id="deleteOldSelector" class="input" aria-label="@T["deleteOldLiveHistory"]">
-                <option value="" disabled selected>@T["olderThan3Months"]</option>
-                <option value="3">@T["olderThan3Months"]</option>
-                <option value="6">@T["olderThan6Months"]</option>
-                <option value="12">@T["olderThan1Year"]</option>
-                <option value="24">@T["olderThan2Years"]</option>
-            </select>
-            <button id="deleteOldBtn" class="btn subtle danger" disabled>
-                <i class="icon">&#xE74D;</i> @T["deleteOldLiveHistory"]
-            </button>
+        <div class="toolbar-group auto-cleanup-config">
+            <label class="field toggle-section">
+                <span>@T["autoCleanupEnabled"]</span>
+                <label class="toggle">
+                    <input type="checkbox" id="autoCleanupEnabled" @(Model.AutoCleanupEnabled ? "checked" : "") />
+                    <span class="muted">@T["autoCleanupEnabled"]</span>
+                </label>
+            </label>
+            <div id="autoCleanupFields" style="display: @(Model.AutoCleanupEnabled ? "flex" : "none")">
+                <label class="field">
+                    <span>@T["autoCleanupIntervalMonths"]</span>
+                    <select id="autoCleanupIntervalMonths" class="input">
+                        <option value="1" selected="@(Model.AutoCleanupIntervalMonths == 1)">1 @T["monthAbbrev"]</option>
+                        <option value="2" selected="@(Model.AutoCleanupIntervalMonths == 2)">2 @T["monthAbbrev"]</option>
+                        <option value="3" selected="@(Model.AutoCleanupIntervalMonths == 3)">3 @T["monthAbbrev"]</option>
+                        <option value="6" selected="@(Model.AutoCleanupIntervalMonths == 6)">6 @T["monthAbbrev"]</option>
+                        <option value="12" selected="@(Model.AutoCleanupIntervalMonths == 12)">12 @T["monthAbbrev"]</option>
+                    </select>
+                </label>
+                <label class="field">
+                    <span>@T["autoCleanupOlderThanMonths"]</span>
+                    <select id="autoCleanupOlderThanMonths" class="input">
+                        <option value="3" selected="@(Model.AutoCleanupOlderThanMonths == 3)">@T["olderThan3Months"]</option>
+                        <option value="6" selected="@(Model.AutoCleanupOlderThanMonths == 6)">@T["olderThan6Months"]</option>
+                        <option value="12" selected="@(Model.AutoCleanupOlderThanMonths == 12)">@T["olderThan1Year"]</option>
+                        <option value="24" selected="@(Model.AutoCleanupOlderThanMonths == 24)">@T["olderThan2Years"]</option>
+                    </select>
+                </label>
+                <button id="saveAutoCleanupBtn" class="btn accent">
+                    <i class="icon">&#xE74E;</i> @T["save"]
+                </button>
+                <button id="runCleanupBtn" class="btn subtle" title="@T["runCleanupNow"]">
+                    <i class="icon">&#xE72C;</i> @T["runCleanupNow"]
+                </button>
+            </div>
         </div>
     </div>
 </div>
@@ -95,35 +118,164 @@ else
 }
 
 <script>
-    // Bulk delete old live histories
-    const selector = document.getElementById("deleteOldSelector");
-    const btn = document.getElementById("deleteOldBtn");
-    if (selector && btn) {
-        selector.addEventListener("change", () => {
-            btn.disabled = !selector.value;
+    // Auto-cleanup config
+    const enabledToggle = document.getElementById("autoCleanupEnabled");
+    const fieldsDiv = document.getElementById("autoCleanupFields");
+    const saveBtn = document.getElementById("saveAutoCleanupBtn");
+    const runBtn = document.getElementById("runCleanupBtn");
+
+    if (enabledToggle) {
+        enabledToggle.addEventListener("change", () => {
+            const show = enabledToggle.checked;
+            fieldsDiv.style.display = show ? "flex" : "none";
         });
-        btn.addEventListener("click", async () => {
-            const months = selector.value;
-            if (!months) return;
-            const confirmMsg = "@T["deleteOldLiveHistoryConfirm"]".replace("{0}", months);
-            if (!confirm(confirmMsg)) return;
-            btn.disabled = true;
+    }
+
+    if (saveBtn) {
+        saveBtn.addEventListener("click", async () => {
+            const enabled = enabledToggle.checked;
+            const interval = document.getElementById("autoCleanupIntervalMonths").value;
+            const olderThan = document.getElementById("autoCleanupOlderThanMonths").value;
+
+            saveBtn.disabled = true;
             try {
-                const resp = await fetch(`/video/live-history/older-than/${months}`, { method: "DELETE" });
+                const resp = await fetch("/channel/save-auto-cleanup", {
+                    method: "POST",
+                    headers: { "Content-Type": "application/json" },
+                    body: JSON.stringify({
+                        autoCleanupEnabled: enabled,
+                        autoCleanupIntervalMonths: enabled ? parseInt(interval) : 0,
+                        autoCleanupOlderThanMonths: enabled ? parseInt(olderThan) : 0
+                    })
+                });
                 if (resp.ok) {
-                    location.reload();
+                    showToast("@T["cleanupSuccess"]".replace("{0}", "settings saved"), "success");
+                    // Update the enabled state on the server
+                    if (enabled !== @Model.AutoCleanupEnabled) {
+                        location.reload();
+                    }
                 } else {
-                    alert("Error: " + await resp.text());
+                    showToast("@T["cleanupError"]".replace("{0}", await resp.text()), "error");
                 }
             } catch (e) {
-                alert("Error: " + e);
+                showToast("@T["cleanupError"]".replace("{0}", e), "error");
             } finally {
-                btn.disabled = false;
+                saveBtn.disabled = false;
             }
         });
     }
 
+    if (runBtn) {
+        runBtn.addEventListener("click", async () => {
+            const olderThan = document.getElementById("autoCleanupOlderThanMonths").value;
+            if (!olderThan) {
+                showToast("@T["invalidParameter"]", "error");
+                return;
+            }
+            runBtn.disabled = true;
+            try {
+                const resp = await fetch(`/video/live-history/older-than/${olderThan}`, { method: "DELETE" });
+                if (resp.ok) {
+                    const text = await resp.text();
+                    showToast("@T["cleanupSuccess"]".replace("{0}", text.match(/\d+/)?.[0] || "0"), "success");
+                    setTimeout(() => location.reload(), 1000);
+                } else {
+                    showToast("@T["cleanupError"]".replace("{0}", await resp.text()), "error");
+                }
+            } catch (e) {
+                showToast("@T["cleanupError"]".replace("{0}", e), "error");
+            } finally {
+                runBtn.disabled = false;
+            }
+        });
+    }
+
+    // Toast system
+    function showToast(message, type = "info") {
+        const container = getToastContainer();
+        const toast = document.createElement("div");
+        toast.className = `toast toast-${type}`;
+        toast.innerHTML = `
+            <span>${message}</span>
+            <button class="toast-close" aria-label="Close">&times;</button>
+        `;
+        container.appendChild(toast);
+        toast.querySelector(".toast-close").addEventListener("click", () => toast.remove());
+        setTimeout(() => toast.classList.add("show"), 10);
+        setTimeout(() => {
+            toast.classList.remove("show");
+            setTimeout(() => toast.remove(), 300);
+        }, 5000);
+    }
+
+    function getToastContainer() {
+        let container = document.getElementById("toast-container");
+        if (!container) {
+            container = document.createElement("div");
+            container.id = "toast-container";
+            container.className = "toast-container";
+            document.body.appendChild(container);
+        }
+        return container;
+    }
+
+    // Single delete
     function confirmDelete(form, msg) {
         return confirm(msg);
     }
 </script>
+
+<style>
+    .auto-cleanup-config {
+        display: flex;
+        align-items: center;
+        gap: 12px;
+        flex-wrap: wrap;
+    }
+    .auto-cleanup-config .field {
+        margin: 0;
+    }
+    .auto-cleanup-config .toggle-section {
+        margin: 0;
+    }
+    .toast-container {
+        position: fixed;
+        bottom: 24px;
+        right: 24px;
+        z-index: 10000;
+        display: flex;
+        flex-direction: column;
+        gap: 8px;
+    }
+    .toast {
+        display: flex;
+        align-items: center;
+        justify-content: space-between;
+        gap: 12px;
+        padding: 12px 16px;
+        border-radius: 8px;
+        background: var(--card);
+        border: 1px solid var(--border);
+        box-shadow: 0 4px 12px rgba(0,0,0,0.15);
+        min-width: 280px;
+        max-width: 400px;
+        transform: translateX(120%);
+        opacity: 0;
+        transition: transform 0.3s ease, opacity 0.3s ease;
+    }
+    .toast.show {
+        transform: translateX(0);
+        opacity: 1;
+    }
+    .toast-success { border-left: 4px solid var(--success); }
+    .toast-error { border-left: 4px solid var(--danger); }
+    .toast-info { border-left: 4px solid var(--accent); }
+    .toast-close {
+        background: none;
+        border: none;
+        font-size: 1.2rem;
+        cursor: pointer;
+        color: var(--text-3);
+        padding: 0 4px;
+    }
+</style>

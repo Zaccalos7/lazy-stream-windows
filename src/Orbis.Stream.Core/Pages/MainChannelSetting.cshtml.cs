@@ -52,7 +52,10 @@ public sealed class MainChannelSettingModel(SettingService settings, RequestVali
         string? channelName,
         string? streamUrl,
         string? streamKey,
-        string? description)
+        string? description,
+        bool autoCleanupEnabled,
+        int autoCleanupIntervalMonths,
+        int autoCleanupOlderThanMonths)
     {
         if (string.IsNullOrWhiteSpace(streamUrl))
         {
@@ -68,7 +71,10 @@ public sealed class MainChannelSettingModel(SettingService settings, RequestVali
             // What a live streams is chosen on the canvas when it starts, not on the destination.
             null,
             id is null ? true : null,
-            channelName?.Trim());
+            channelName?.Trim(),
+            autoCleanupEnabled,
+            autoCleanupIntervalMonths,
+            autoCleanupOlderThanMonths);
 
         Try(() =>
         {

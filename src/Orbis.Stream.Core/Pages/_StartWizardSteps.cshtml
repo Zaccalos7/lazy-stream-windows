@@ -14,10 +14,15 @@ else
     <div class="choice-list section" style="margin-top: 8px;">
         @foreach (var setting in Model.ActiveSettings)
         {
+            var displayTitle = string.IsNullOrWhiteSpace(setting.Title)
+                ? T["untitled"]
+                : (setting.Title == "Default Low Twitch" ? T["defaultLowTwitch"]
+                   : setting.Title == "Default Low YouTube" ? T["defaultLowYouTube"]
+                   : setting.Title);
             <label class="choice">
                 <input type="radio" name="settingId" value="@setting.Id" required />
                 <span class="grow">
-                    <strong>@(string.IsNullOrWhiteSpace(setting.Title) ? T["untitled"] : setting.Title)</strong>
+                    <strong>@displayTitle</strong>
                     @if (setting.IsDefaultConfiguration == true)
                     {
                         <span class="badge">@setting.DefaultPlatformConfiguration</span>

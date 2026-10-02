@@ -172,7 +172,7 @@ public sealed class DatabaseBootstrapperTests
         Assert.NotEqual(twitch.Id, youtube.Id);
 
         // The low CPU preset sits next to the default without being one: the wizard picks the default.
-        var lowCpu = settings.FindByTitleAndPlatform("Low CPU Default Twitch", "Twitch");
+        var lowCpu = settings.FindByTitleAndPlatform("Default Low Twitch", "Twitch");
         Assert.NotNull(lowCpu);
         Assert.False(lowCpu.IsDefaultConfiguration);
     }

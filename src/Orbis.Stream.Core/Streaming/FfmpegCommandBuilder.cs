@@ -714,8 +714,6 @@ public static class FfmpegCommandBuilder
         
         if (isNvenc || isQsv || isAmf)
         {
-            hasPreset = setting.VideoSettingsOptions.Any(o => o.Key?.Trim() == "preset");
-            hasTune = setting.VideoSettingsOptions.Any(o => o.Key?.Trim() == "tune");
             // hasPreset and hasTune are the ones read above for x264: the same keys, the same answer.
             var hasRc = setting.VideoSettingsOptions.Any(o => o.Key?.Trim() == "rc");
             var hasCq = setting.VideoSettingsOptions.Any(o => o.Key?.Trim() == "cq");

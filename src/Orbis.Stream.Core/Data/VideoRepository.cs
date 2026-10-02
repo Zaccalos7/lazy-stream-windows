@@ -11,7 +11,7 @@ public sealed class VideoRepository
     private const string BaseColumns =
         "t.pkid, t.name, t.video_path, t.extension, t.live_status, t.last_time_stamp_before_stop, " +
         "t.message, t.should_be_stop, t.start_date_live, t.channel_name, t.video_live_history_pkid, t.video_setting_id, " +
-        "t.source_kind, t.source_target, t.scene_pkid, t.x, t.y, t.width, t.height, t.audio_enabled";
+        "t.source_kind, t.source_target, t.scene_pkid, t.x, t.y, t.width, t.height, t.audio_enabled, t.duration_milliseconds";
 
     private readonly SqliteConnectionFactory _connectionFactory;
 

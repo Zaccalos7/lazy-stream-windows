@@ -162,6 +162,9 @@ public sealed class VideoEntity
 
     public int? Height { get; set; }
 
+    /// <summary>Duration of the video file in milliseconds. Null for capture devices.</summary>
+    public long? DurationMilliseconds { get; set; }
+
     /// <summary>Whether this source contributes audio to the mix.</summary>
     public bool AudioEnabled { get; set; }
 }

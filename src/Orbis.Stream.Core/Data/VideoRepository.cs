@@ -358,6 +358,7 @@ public sealed class VideoRepository
         command.Parameters.AddWithValue("@width", SqliteValue.From(video.Width));
         command.Parameters.AddWithValue("@height", SqliteValue.From(video.Height));
         command.Parameters.AddWithValue("@audioEnabled", video.AudioEnabled ? 1 : 0);
+        command.Parameters.AddWithValue("@duration", video.DurationMilliseconds is null ? DBNull.Value : video.DurationMilliseconds.Value);
     }
 
     private static List<VideoEntity> ReadAll(SqliteCommand command)
@@ -395,7 +396,8 @@ public sealed class VideoRepository
         Y = SqliteValue.ToNullableInt32(reader.GetValue(16)),
         Width = SqliteValue.ToNullableInt32(reader.GetValue(17)),
         Height = SqliteValue.ToNullableInt32(reader.GetValue(18)),
-        AudioEnabled = SqliteValue.ToBoolean(reader.GetValue(19))
+        AudioEnabled = SqliteValue.ToBoolean(reader.GetValue(19)),
+        DurationMilliseconds = SqliteValue.ToNullableInt64(reader.GetValue(20))
     };
 }
 

@@ -87,7 +87,8 @@ public static class DatabaseSchema
                 Column("y", "INTEGER", "INTEGER", nullable: true),
                 Column("width", "INTEGER", "INTEGER", nullable: true),
                 Column("height", "INTEGER", "INTEGER", nullable: true),
-                Column("audio_enabled", "BOOLEAN", "BOOLEAN DEFAULT 'false' NOT NULL", nullable: false)
+                Column("audio_enabled", "BOOLEAN", "BOOLEAN DEFAULT 'false' NOT NULL", nullable: false),
+                Column("duration_milliseconds", "BIGINT", "BIGINT", nullable: true)
             ],
             ["stream_scene"] =
             [

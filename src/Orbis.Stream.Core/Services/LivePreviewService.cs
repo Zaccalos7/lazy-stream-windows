@@ -162,7 +162,7 @@ public sealed class LivePreviewService
                         isPlayable,
                         new LiveMedia(0, 0, 0, false, 0),
                         new LiveMedia(0, 0, 0, false, 0),
-                        LiveSnapshot.EmptyParameters);
+                        new LiveParameters(null, null, null, null, null, null, null, null, null, null, null, null, null));
                 }
             }
             return LiveSnapshot.Offline(Running(null));

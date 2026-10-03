@@ -445,20 +445,29 @@ const showPlatformPlayer = url => {
 const previewRetry = 15000;
 let previewEmbedAsked = false;
 
+const embedStatus = preview?.querySelector(".preview-embed-status");
+const embedText = embedStatus?.querySelector("[data-embed-text]");
+
 const resolvePlatformPlayer = async () => {
   if (!previewPlatformPlayer || previewPkid <= 0 || previewEmbedAsked) return;
   previewEmbedAsked = true;
+  if (embedStatus) embedStatus.hidden = false;
   try {
     const response = await fetch(`/preview/live/embed?live=${previewPkid}`, { cache: "no-store" });
     if (response.ok) {
       const embed = await response.json();
       if (embed?.url) {
         showPlatformPlayer(embed.url);
+        if (embedStatus) embedStatus.hidden = true;
         return;
       }
     }
   } catch {
     // The server is not answering: the local picture stays, which is what it is for.
+  }
+  if (embedStatus && embedText) {
+    const platform = previewMark("embedFailed", "Unable to load {0} player: channel is not live");
+    embedText.textContent = platform.replace("{0}", "Twitch/YouTube");
   }
   if (previewIsLive) setTimeout(resolvePlatformPlayer, previewRetry);
 };

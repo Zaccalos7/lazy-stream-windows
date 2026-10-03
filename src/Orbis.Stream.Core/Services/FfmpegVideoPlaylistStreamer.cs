@@ -533,18 +533,25 @@ public sealed class FfmpegVideoPlaylistStreamer : IVideoPlaylistStreamer
                 var exitCode = await session.WaitForExitAsync(cancellationToken).ConfigureAwait(false);
                 var errorOutput = await session.ReadErrorAsync().ConfigureAwait(false);
 
+                // Check stop condition first (needs session for StopAsync)
+                var wasStopped = session.StopRequested || (exitCode != 0 && _videoRepository.FindByPkid(videoKey)?.ShouldBeStop == true);
+
+                if (wasStopped)
+                {
+                    var stopped = _localizer.PrintMessage("live.stopped");
+                    await session.StopAsync().ConfigureAwait(false);
+                    MarkRows(rows, LiveStatus.Stopped, stopped);
+                    return;
+                }
+
+                // Video ended normally (exitCode == 0): save position and clean up immediately
+                var finalPosition = session.PositionMilliseconds;
+
                 // Clean up session immediately so preview sees live as ended
                 _sessions.Remove(videoKey);
                 await session.DisposeAsync().ConfigureAwait(false);
                 _frames.Forget(videoKey);
                 session = null;
-
-                if (session != null && (session.StopRequested || (exitCode != 0 && _videoRepository.FindByPkid(videoKey)?.ShouldBeStop == true)))
-                {
-                    var stopped = _localizer.PrintMessage("live.stopped");
-                    MarkRows(rows, LiveStatus.Stopped, stopped);
-                    return;
-                }
 
                 // If the scene has only file sources and ffmpeg exited cleanly, the video ended.
                 // End the live instead of restarting the loop.

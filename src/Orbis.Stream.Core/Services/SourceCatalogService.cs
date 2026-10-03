@@ -186,7 +186,11 @@ public sealed class CameraSourceProvider : ISourceProvider
     private static readonly Regex LinePrefix = new(@"^\[[^\]]*\]\s*", RegexOptions.Compiled);
 
     /// <summary>A device line: its name in quotes, and on ffmpeg 5+ the kind in brackets after it.</summary>
+/// <summary>A device line: its name in quotes, and on ffmpeg 5+ the kind in brackets after it.</summary>
     private static readonly Regex DeviceLine = new(@"^""(?<name>[^""]+)""\s*(\((?<kind>[^)]*)\))?$", RegexOptions.Compiled);
+
+    /// <summary>The alternative name (moniker) of a device, on the line under the friendly name.</summary>
+    private static readonly Regex AlternativeNameLine = new(@"^Alternative name\s+""(?<altname>[^""]+)""$", RegexOptions.Compiled);
 
     private readonly FfmpegToolLocator _locator;
 
@@ -265,6 +269,8 @@ public sealed class CameraSourceProvider : ISourceProvider
     {
         var options = new List<SourceOption>();
         string? section = null;
+        string? pendingName = null;
+        string? pendingKind = null;
 
         foreach (var raw in deviceList.Split('\n'))
         {
@@ -287,26 +293,57 @@ public sealed class CameraSourceProvider : ISourceProvider
             }
 
             var match = DeviceLine.Match(line);
-            if (!match.Success)
+            if (match.Success)
             {
+                if (pendingName is not null)
+                {
+                    AddPending(options, pendingName, pendingName, pendingKind);
+                }
+
+                pendingName = match.Groups["name"].Value;
+                pendingKind = match.Groups["kind"].Success ? match.Groups["kind"].Value : section ?? string.Empty;
                 continue;
             }
 
-            var name = match.Groups["name"].Value;
-            var kind = match.Groups["kind"].Success ? match.Groups["kind"].Value : section ?? string.Empty;
-
-            if (kind.Contains("video", StringComparison.OrdinalIgnoreCase))
+            var altMatch = AlternativeNameLine.Match(line);
+            if (altMatch.Success && pendingName is not null)
             {
-                Add(options, new SourceOption($"video={name}", name, SourceKind.Camera, $"video={name}"));
-            }
+                var altName = altMatch.Groups["altname"].Value;
 
-            if (kind.Contains("audio", StringComparison.OrdinalIgnoreCase))
-            {
-                Add(options, new SourceOption($"audio={name}", name, SourceKind.Microphone, $"audio={name}"));
+                // ffmpeg's dshow parser uses strtok on ':' which breaks on names containing a colon.
+                // For those, we MUST use the alternative name (the device moniker) which has no colons.
+                var targetName = pendingName.Contains(':', StringComparison.Ordinal) ? altName : pendingName;
+
+                AddPending(options, targetName, pendingName, pendingKind);
+                pendingName = null;
+                pendingKind = null;
             }
         }
 
+        if (pendingName is not null)
+        {
+            AddPending(options, pendingName, pendingName, pendingKind);
+        }
+
         return options;
+    }
+
+    private static void AddPending(List<SourceOption> options, string targetName, string displayName, string? kind)
+    {
+        if (string.IsNullOrWhiteSpace(kind))
+        {
+            return;
+        }
+
+        if (kind.Contains("video", StringComparison.OrdinalIgnoreCase))
+        {
+            Add(options, new SourceOption($"video={targetName}", displayName, SourceKind.Camera, $"video={targetName}"));
+        }
+
+        if (kind.Contains("audio", StringComparison.OrdinalIgnoreCase))
+        {
+            Add(options, new SourceOption($"audio={targetName}", displayName, SourceKind.Microphone, $"audio={targetName}"));
+        }
     }
 
     /// <summary>A device appears once per pinned instance; one entry is enough.</summary>

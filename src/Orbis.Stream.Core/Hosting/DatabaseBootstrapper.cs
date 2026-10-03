@@ -14,15 +14,18 @@ public sealed class DatabaseBootstrapper : IHostedService
 {
     private readonly SqliteConnectionFactory _connectionFactory;
     private readonly VideoSettingRepository _videoSettingRepository;
+    private readonly VideoRepository _videoRepository;
     private readonly ILogger<DatabaseBootstrapper> _logger;
 
     public DatabaseBootstrapper(
         SqliteConnectionFactory connectionFactory,
         VideoSettingRepository videoSettingRepository,
+        VideoRepository videoRepository,
         ILogger<DatabaseBootstrapper> logger)
     {
         _connectionFactory = connectionFactory;
         _videoSettingRepository = videoSettingRepository;
+        _videoRepository = videoRepository;
         _logger = logger;
     }
 
@@ -33,15 +36,43 @@ public sealed class DatabaseBootstrapper : IHostedService
             DatabaseSchema.EnsureCreated(connection, _logger);
         }
 
+        ReleaseLivesLeftRunning();
         AddDefaultVideoAndAudioSetting();
         return Task.CompletedTask;
     }
 
     public Task StopAsync(CancellationToken cancellationToken) => Task.CompletedTask;
 
+    /// <summary>
+    /// Nothing is streaming while the application is opening, so a video row still marked LIVE was
+    /// left behind by a run that never ended: the window was closed with ffmpeg on, or the machine
+    /// went down. Left as it is, the live grid and the live history show a live that stopped weeks
+    /// ago next to the one that is really on air, and a start on that channel is refused over it.
+    /// </summary>
+    private void ReleaseLivesLeftRunning()
+    {
+        foreach (var video in _videoRepository.FindByLiveStatus(LiveStatus.Live))
+        {
+            _logger.LogInformation("Video {Name} was still marked live at startup and is released", video.Name);
+
+            video.LiveStatus = LiveStatus.Stopped;
+            video.ShouldBeStop = false;
+            // What it says about itself no longer holds: it did not stop, it was interrupted.
+            video.Message = null;
+            _videoRepository.Update(video);
+        }
+    }
+
     private void AddDefaultVideoAndAudioSetting()
     {
         _logger.LogInformation("Initializing default VideoSetting...");
+
+        var oldLowCpuTwitch = _videoSettingRepository.FindByTitleAndPlatform("Low CPU Default Twitch", "Twitch");
+        if (oldLowCpuTwitch != null) _videoSettingRepository.Delete(oldLowCpuTwitch.Id!.Value);
+
+        var oldLowCpuYoutube = _videoSettingRepository.FindByTitleAndPlatform("Low CPU Default Youtube", "Youtube");
+        if (oldLowCpuYoutube != null) _videoSettingRepository.Delete(oldLowCpuYoutube.Id!.Value);
+
         InitializeDefaultVideoSetting("Twitch", createHighQuality: true);
         InitializeDefaultVideoSetting("Twitch", createHighQuality: false);
         InitializeDefaultVideoSetting("Youtube", createHighQuality: true);
@@ -55,6 +86,8 @@ public sealed class DatabaseBootstrapper : IHostedService
     /// </summary>
     private static string TitleOf(string platform) => "Default " + platform;
 
+    private static string LowTitleOf(string platform) => "Default Low " + platform;
+
     /// <summary>
     /// The name the first versions gave to every default setting. An installation that already has
     /// one keeps it: only the placeholder is renamed, so a name the user chose is never overwritten.
@@ -62,20 +95,44 @@ public sealed class DatabaseBootstrapper : IHostedService
     private static bool IsPlaceholderTitle(string? title) =>
         string.IsNullOrWhiteSpace(title) || string.Equals(title.Trim(), "test", StringComparison.OrdinalIgnoreCase);
 
+    /// <summary>
+    /// Whether the platform already has its default setting, which is found by the flag and not by
+    /// its title: the title is the one thing the user may have changed, and an installation from the
+    /// first versions still calls it "test". Looked up by title, both were missed and a second default
+    /// was added next to them on every upgrade. The first of the duplicates stays, the others go: a
+    /// platform with two default settings would offer the wizard two identical rows.
+    /// </summary>
+    private bool KeepTheDefaultOf(string platform, string title)
+    {
+        var existing = _videoSettingRepository.FindByIsDefaultConfigurationTrueAndDefaultPlatformConfiguration(platform);
+        if (existing.Count == 0)
+        {
+            return false;
+        }
+
+        foreach (var duplicate in existing.Skip(1))
+        {
+            _videoSettingRepository.Delete(duplicate.Id!.Value);
+        }
+
+        var kept = existing[0];
+        if (IsPlaceholderTitle(kept.Title))
+        {
+            kept.Title = title;
+            kept.LastModified = DateTime.Now;
+            _videoSettingRepository.Update(kept);
+            _logger.LogInformation("Default VideoSetting of {Platform} renamed to {Title}", platform, title);
+        }
+
+        return true;
+    }
+
     private void InitializeDefaultVideoSetting(string platform, bool createHighQuality)
     {
-        var title = createHighQuality ? TitleOf(platform) : "Low CPU " + TitleOf(platform);
-        
-        var existing = _videoSettingRepository.FindByTitleAndPlatform(title, platform);
-        if (existing is not null)
+        var title = createHighQuality ? TitleOf(platform) : LowTitleOf(platform);
+
+        if (createHighQuality ? KeepTheDefaultOf(platform, title) : _videoSettingRepository.FindByTitleAndPlatform(title, platform) is not null)
         {
-            if (IsPlaceholderTitle(existing.Title))
-            {
-                existing.Title = title;
-                existing.LastModified = DateTime.Now;
-                _videoSettingRepository.Update(existing);
-                _logger.LogInformation("VideoSetting of {Platform} renamed to {Title}", platform, title);
-            }
             return;
         }
 
@@ -130,24 +187,24 @@ public sealed class DatabaseBootstrapper : IHostedService
         }
         else
         {
-            // Low CPU defaults (new)
+            // Low CPU defaults (new) - aggressive bitrate reduction for low-end hardware
             var (bitrate, audioBitrate, videoFormat, gopSize, extraOptions) = platform switch
             {
-                "Twitch" => (4_500_000, 128_000, "flv", 2, new[]
+                "Twitch" => (3_000_000, 96_000, "flv", 2, new[]
                 {
                     new VideoSettingsOptionEntity { Key = "preset", Value = "ultrafast" },
                     new VideoSettingsOptionEntity { Key = "tune", Value = "zerolatency" },
                     new VideoSettingsOptionEntity { Key = "profile", Value = "main" },
                     new VideoSettingsOptionEntity { Key = "x264-params", Value = "scenecut=0:rc_lookahead=0" }
                 }),
-                "Youtube" => (3_500_000, 128_000, "flv", 2, new[]
+                "Youtube" => (2_500_000, 96_000, "flv", 2, new[]
                 {
                     new VideoSettingsOptionEntity { Key = "preset", Value = "ultrafast" },
                     new VideoSettingsOptionEntity { Key = "tune", Value = "zerolatency" },
                     new VideoSettingsOptionEntity { Key = "profile", Value = "main" },
                     new VideoSettingsOptionEntity { Key = "x264-params", Value = "scenecut=0:rc_lookahead=0" }
                 }),
-                _ => (3_000_000, 96_000, "flv", 2, new[]
+                _ => (2_000_000, 64_000, "flv", 2, new[]
                 {
                     new VideoSettingsOptionEntity { Key = "preset", Value = "ultrafast" },
                     new VideoSettingsOptionEntity { Key = "tune", Value = "zerolatency" }

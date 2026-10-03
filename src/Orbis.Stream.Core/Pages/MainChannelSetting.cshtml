@@ -70,6 +70,9 @@
     <dialog class="dialog wide" data-open>
         <form method="post" asp-page-handler="Save" asp-route-platform="@Model.Platform" asp-route-active="@Model.Active">
             <input type="hidden" name="id" value="@editing.Id" />
+            <input type="hidden" name="autoCleanupEnabled" value="@(editing.AutoCleanupEnabled ? "true" : "false")" />
+            <input type="hidden" name="autoCleanupIntervalMonths" value="@editing.AutoCleanupIntervalMonths" />
+            <input type="hidden" name="autoCleanupOlderThanMonths" value="@editing.AutoCleanupOlderThanMonths" />
             <div class="dialog-body">
                 <h2>@(editing.Id is null ? T["addConfiguration"] : T["editModalTitle"])</h2>
                 <div class="choice-list" role="radiogroup" aria-label="Platform">

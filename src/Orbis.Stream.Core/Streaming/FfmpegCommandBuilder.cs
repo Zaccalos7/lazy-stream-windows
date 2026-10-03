@@ -36,6 +36,17 @@ public sealed record FfmpegCompositionRequest(
     int CanvasHeight,
     double CanvasFrameRate,
     TimeSpan ResumeFrom = default,
+    /// <summary>
+    /// How long the whole canvas streams, when it has an end. A canvas of nothing but files has
+    /// one, and it is the length of the longest of them: a video that runs out while the others
+    /// are still going leaves its shape on the canvas (the overlay holds its last frame) and the
+    /// live goes on, exactly as a playlist goes on to the next video. When the longest one is over
+    /// the live is over, which is what <c>-t</c> is for: ffmpeg stops on its own instead of
+    /// waiting to be asked, so the connection to the platform is closed by the process that opened
+    /// it.
+    /// <para>Null for a canvas with a capture device on it: a device has no end to reach.</para>
+    /// </summary>
+    TimeSpan? Duration = null,
     string? PreviewPath = null);
 
 /// <summary>
@@ -56,17 +67,30 @@ public static class FfmpegCommandBuilder
     private const string PreviewLabel = "orbisp";
 
     /// <summary>
-    /// The preview is a picture to look at, not a second live: fifteen frames a second, small, as
+    /// The preview is a picture to look at, not a second live: thirty frames a second, small, as
     /// JPEG. It costs next to nothing next to the live encode, and it is what is on air (the
     /// composed canvas, the scaled file) rather than the source the page would otherwise replay.
     ///
     /// The size is what makes it read well: at 426 pixels wide the frame was stretched over a stage
     /// twice as wide, and a blurred mosaic moving in steps is worse to watch than a sharp picture
-    /// moving smoothly. 640 is as wide as the stage, so nothing is scaled up, and fifteen frames a
-    /// second is enough for the eye to read as motion. Encoding a frame this size costs a few
-    /// milliseconds, so the preview stays a small slice of a core next to the live encode.
+    /// moving smoothly. 640 is as wide as the stage, so nothing is scaled up.
+    ///
+    /// Thirty frames a second is not decoration. Half of that rate is fifteen beats a second of
+    /// which every other one is two beats long, and a picture that alternates between 33 and 66
+    /// milliseconds is a picture that judders however carefully it is fetched: the page cannot draw
+    /// a frame that was never written, and there is no page that can make fifteen of them a
+    /// second look like motion. A bigger preview would be sharper still, and it would be taken out
+    /// of the live encode, which has to finish its own frame in the time it has, so 640 is where it
+    /// stops: encoding a frame this size costs a couple of milliseconds and the preview stays a
+    /// small slice of a core next to the live.
     /// </summary>
-    private const string PreviewFilter = "fps=15,scale=w='min(640,iw)':h=-2";
+    private const string PreviewFilter = "fps=30,scale=w='min(640,iw)':h=-2";
+
+    /// <summary>
+    /// The real-time buffer of a dshow device: a couple of seconds of raw 1080p, enough to ride out
+    /// the start of the live and a slow moment of the encoder (see <see cref="AppendInput"/>).
+    /// </summary>
+    private const string DeviceBufferSize = "256M";
 
     public static IReadOnlyList<string> Build(FfmpegStreamRequest request)
     {
@@ -201,6 +225,16 @@ public static class FfmpegCommandBuilder
         AppendEncoderArguments(
             arguments, setting, frameRate, HasAudioMix(items), channels: 0, scaleFilter: null);
 
+        // The length of the canvas is an output option: it counts what goes on air, whatever the
+        // inputs do. It stands before the destination, which is where every output option goes.
+        // A canvas started again from where it was interrupted reads from that point on, so the
+        // clock of the output carries the part already streamed: the live lasts the same either way.
+        if (request.Duration is { } duration && duration > TimeSpan.Zero)
+        {
+            arguments.Add("-t");
+            arguments.Add(Seconds(duration + request.ResumeFrom));
+        }
+
         arguments.Add(request.OutputUrl);
 
         if (request.PreviewPath is { } previewPath)
@@ -247,6 +281,16 @@ public static class FfmpegCommandBuilder
         // higher is the banding the small picture the page stretches it over would show.
         arguments.Add("-q:v");
         arguments.Add("6");
+
+        // One thread, and this is the whole of the isolation between the preview and the live. The
+        // two encoders are one process, so a preview left free to take the threads it wants takes
+        // them from the encode that is being sent to the platform - and the platform, not this
+        // page, is the one that decides the live is good. A 640 pixel JPEG takes a couple of
+        // milliseconds to encode, so one thread never becomes the reason the preview misses a beat,
+        // while the live keeps every thread its own codec asked for.
+        arguments.Add("-threads");
+        arguments.Add("1");
+
         arguments.Add("-f");
         arguments.Add("image2");
 
@@ -380,6 +424,16 @@ public static class FfmpegCommandBuilder
             case SourceKind.Microphone:
                 arguments.Add("-f");
                 arguments.Add("dshow");
+
+                // dshow pushes raw frames into a buffer of its own whether or not ffmpeg reads them,
+                // and the default (3 MB) holds less than one 1080p frame of a webcam. Every stall
+                // fills it - above all the seconds the RTMP handshake takes before the first frame
+                // is read - and from there every frame is dropped. The size is a ceiling, not an
+                // allocation: memory is only taken while the reader is behind.
+                arguments.Add("-rtbufsize");
+                arguments.Add(DeviceBufferSize);
+                arguments.Add("-thread_queue_size");
+                arguments.Add("1024");
                 arguments.Add("-i");
                 arguments.Add(item.Target);
                 break;
@@ -424,8 +478,9 @@ public static class FfmpegCommandBuilder
             }
 
             var label = $"tile{index}";
+            // For layout compositions, respect layout dimensions, scaling to fill and cropping as needed
             graph.Append(CultureInfo.InvariantCulture,
-                $"[{index}:v]setpts=PTS-STARTPTS,{Fit(width, height)},setsar=1[{label}];");
+                $"[{index}:v]setpts=PTS-STARTPTS,{Fit(width, height, true)},setsar=1[{label}];");
             labels[index] = label;
         }
 
@@ -433,8 +488,10 @@ public static class FfmpegCommandBuilder
         foreach (var (item, index) in pictures)
         {
             var next = $"stack{index}";
+            var xExpr = $"{Even(item.X)}+({Even(item.Width)}-w)/2";
+            var yExpr = $"{Even(item.Y)}+({Even(item.Height)}-h)/2";
             graph.Append(CultureInfo.InvariantCulture,
-                $"[{composed}][{labels[index]}]overlay={Even(item.X)}:{Even(item.Y)}:format=auto[{next}];");
+                $"[{composed}][{labels[index]}]overlay={xExpr}:{yExpr}:format=auto[{next}];");
             composed = next;
         }
 
@@ -528,12 +585,18 @@ public static class FfmpegCommandBuilder
         audio is null ? video : $"{video};{audio}";
 
     /// <summary>
-    /// Scale keeping the aspect ratio and padding what is left: a webcam dropped on a 16:9 tile
-    /// arrives 4:3, and stretching it to fill is the one thing a user always notices.
+    /// Scale keeping the aspect ratio: a webcam dropped on a 16:9 tile arrives 4:3, and
+    /// stretching it to fill is the one thing a user always notices. The scaled frame is then
+    /// placed in the center of the tile area by the overlay filter rather than padded.
     /// </summary>
-    public static string Fit(int width, int height) =>
-        $"scale={width}:{height}:force_original_aspect_ratio=decrease," +
-        $"pad={width}:{height}:(ow-iw)/2:(oh-ih)/2";
+    public static string Fit(int width, int height, bool fill = false)
+    {
+        if (fill)
+        {
+            return $"scale={width}:{height}:force_original_aspect_ratio=increase:force_divisible_by=2,crop={width}:{height}";
+        }
+        return $"scale={width}:{height}:force_original_aspect_ratio=decrease:force_divisible_by=2";
+    }
 
     /// <summary>
     /// What the encoder will be asked to produce for a file: the resolution and the frame rate of
@@ -681,8 +744,7 @@ public static class FfmpegCommandBuilder
         
         if (isNvenc || isQsv || isAmf)
         {
-            var hasPreset = setting.VideoSettingsOptions.Any(o => o.Key?.Trim() == "preset");
-            var hasTune = setting.VideoSettingsOptions.Any(o => o.Key?.Trim() == "tune");
+            // hasPreset and hasTune are the ones read above for x264: the same keys, the same answer.
             var hasRc = setting.VideoSettingsOptions.Any(o => o.Key?.Trim() == "rc");
             var hasCq = setting.VideoSettingsOptions.Any(o => o.Key?.Trim() == "cq");
 

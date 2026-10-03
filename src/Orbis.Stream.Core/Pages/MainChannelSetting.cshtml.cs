@@ -42,7 +42,7 @@ public sealed class MainChannelSettingModel(SettingService settings, RequestVali
         Configurations = settings.RetrieveSettings(filters);
 
         Editing = edit == "new"
-            ? new SettingResponse(null, null, null, null, null, null, null, null, true, null)
+            ? new SettingResponse(null, null, null, null, null, null, null, null, true, null, false, 0, 0)
             : int.TryParse(edit, out var id) ? settings.RetrieveSettings(new Dictionary<string, string> { ["id"] = edit! }).FirstOrDefault(setting => setting.Id == id) : null;
     }
 
@@ -52,7 +52,10 @@ public sealed class MainChannelSettingModel(SettingService settings, RequestVali
         string? channelName,
         string? streamUrl,
         string? streamKey,
-        string? description)
+        string? description,
+        bool autoCleanupEnabled,
+        int autoCleanupIntervalMonths,
+        int autoCleanupOlderThanMonths)
     {
         if (string.IsNullOrWhiteSpace(streamUrl))
         {
@@ -68,7 +71,10 @@ public sealed class MainChannelSettingModel(SettingService settings, RequestVali
             // What a live streams is chosen on the canvas when it starts, not on the destination.
             null,
             id is null ? true : null,
-            channelName?.Trim());
+            channelName?.Trim(),
+            autoCleanupEnabled,
+            autoCleanupIntervalMonths,
+            autoCleanupOlderThanMonths);
 
         Try(() =>
         {
@@ -79,9 +85,12 @@ public sealed class MainChannelSettingModel(SettingService settings, RequestVali
         return BackToList();
     }
 
-    public IActionResult OnPostToggle(int id, bool current)
+public IActionResult OnPostToggle(int id, bool current)
     {
-        Run(() => settings.ModifySetting(id, new SettingRequest(null, null, null, null, null, !current, null)));
+        // A toggle only flips IsActive. The auto cleanup fields are not nullable on the request,
+        // so they cannot be told from "left alone" here; ModifySetting does not write them, which
+        // is what keeps this from wiping the cleanup settings of the row being toggled.
+        Run(() => settings.ModifySetting(id, new SettingRequest(null, null, null, null, null, !current, null, false, 0, 0)));
         return BackToList();
     }
 

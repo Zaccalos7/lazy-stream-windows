@@ -71,6 +71,40 @@ public sealed class SettingService
     public List<SettingResponse> RetrieveSettings(IReadOnlyDictionary<string, string> filters) =>
         RetrieveSettingsWithFiltersOrNot(filters).Select(SettingResponse.FromEntity).ToList();
 
+    /// <summary>
+    /// Saves the auto cleanup settings on the active configuration. They live on the configuration
+    /// row rather than on the live history page, so they cannot go through <see cref="ModifySetting"/>:
+    /// that one carries the whole record, and a form that only shows the three cleanup fields would
+    /// write an empty stream url over a working configuration.
+    /// </summary>
+    public MessageResponse SaveAutoCleanup(bool enabled, int intervalMonths, int olderThanMonths)
+    {
+        if (intervalMonths is < 0 or > 12 || olderThanMonths < LiveHistoryCleanupService.Everything)
+        {
+            throw new RequestValidationException(new Dictionary<string, string>
+            {
+                ["autoCleanupIntervalMonths"] = _localizer.PrintMessage("not.valid.input")
+            });
+        }
+
+        var active = RetrieveSettingsWithFiltersOrNot(new Dictionary<string, string>())
+            .FirstOrDefault(setting => setting.IsActive == true);
+        if (active is null)
+        {
+            _logger.LogError("{Message}", _localizer.PrintMessage("setting.not.found"));
+            throw new NotFoundCustomException("setting.not.found");
+        }
+
+        // The picks are kept while the cleanup is off, so turning it back on finds the same period
+        // where it was left rather than the first one of the list.
+        active.AutoCleanupEnabled = enabled;
+        active.AutoCleanupIntervalMonths = enabled ? intervalMonths : active.AutoCleanupIntervalMonths;
+        active.AutoCleanupOlderThanMonths = enabled ? olderThanMonths : active.AutoCleanupOlderThanMonths;
+        _settingRepository.Update(active);
+
+        return _responses.Build("setting.update", StatusCodes.Status202Accepted);
+    }
+
     public HashSet<string> RetrieveChannel(IReadOnlyDictionary<string, string> filters) =>
         RetrieveSettingsWithFiltersOrNot(filters)
             .Select(setting => setting.ChannelName)

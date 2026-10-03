@@ -15,6 +15,7 @@ public sealed class VideoService
     private readonly VideoSettingRepository _videoSettingRepository;
     private readonly VideoLiveHistoryRepository _videoLiveHistoryRepository;
     private readonly SceneRepository _sceneRepository;
+    private readonly LiveHistoryCleanupService _cleanup;
     private readonly ResponseFactory _responses;
     private readonly Localizer _localizer;
     private readonly BackgroundTaskExecutor _executor;
@@ -26,6 +27,7 @@ public sealed class VideoService
         VideoSettingRepository videoSettingRepository,
         VideoLiveHistoryRepository videoLiveHistoryRepository,
         SceneRepository sceneRepository,
+        LiveHistoryCleanupService cleanup,
         ResponseFactory responses,
         Localizer localizer,
         BackgroundTaskExecutor executor,
@@ -36,6 +38,7 @@ public sealed class VideoService
         _videoSettingRepository = videoSettingRepository;
         _videoLiveHistoryRepository = videoLiveHistoryRepository;
         _sceneRepository = sceneRepository;
+        _cleanup = cleanup;
         _responses = responses;
         _localizer = localizer;
         _executor = executor;
@@ -99,10 +102,6 @@ public sealed class VideoService
     public MessageResponse DeletePlaylist(long videoLiveHistoryPkid)
     {
         var videos = _videoRepository.FindByLiveHistoryId(videoLiveHistoryPkid);
-        if (videos.Count == 0)
-        {
-            throw new NotFoundCustomException("video.not.found");
-        }
 
         if (videos.Any(video => video.LiveStatus == LiveStatus.Live))
         {
@@ -123,6 +122,43 @@ public sealed class VideoService
         _notifier.Raise();
         _logger.LogInformation("{Message}", _localizer.PrintMessage("delete.successful"));
         return _responses.Build("delete.successful", StatusCodes.Status200OK);
+    }
+
+    /// <summary>Deletes a single live history row and all its video rows. Refused if any video is live.</summary>
+    public MessageResponse DeleteLiveHistory(long videoLiveHistoryPkid)
+    {
+        _cleanup.DeleteLive(videoLiveHistoryPkid);
+
+        _logger.LogInformation("{Message}", _localizer.PrintMessage("delete.successful"));
+        return _responses.Build("delete.successful", StatusCodes.Status200OK);
+    }
+
+    /// <summary>
+    /// Deletes all live history rows older than the given number of months and their video rows, on
+    /// the calling thread: this is the answer of the API and of the scheduler, while the page queues
+    /// the same work and watches it go (see <see cref="LiveHistoryCleanupService"/>).
+    /// </summary>
+    public MessageResponse DeleteOldLiveHistory(int monthsOld)
+    {
+        if (monthsOld < LiveHistoryCleanupService.Everything)
+        {
+            return _responses.Build("invalid.parameter", StatusCodes.Status400BadRequest);
+        }
+
+        var progress = _cleanup.Run(monthsOld);
+        _logger.LogInformation(
+            "Deleted {Videos} video rows of {Lives} live history rows older than {Months} months",
+            progress.DeletedVideos, progress.DeletedLives, monthsOld);
+
+        if (progress.Error is { } error)
+        {
+            return _responses.Build("cleanupError", StatusCodes.Status500InternalServerError, [error]);
+        }
+
+        // The envelope carries a message code, not a sentence: a sentence built here is looked up in
+        // the bundles as if it were a code, and the lookup miss answers a 500 to a cleanup that did
+        // its work.
+        return _responses.Build("cleanupSuccess", StatusCodes.Status200OK, [progress.DeletedLives]);
     }
 
     /// <summary>One video with its live history and setting, the payload <c>/live/start-video-live</c> expects.</summary>

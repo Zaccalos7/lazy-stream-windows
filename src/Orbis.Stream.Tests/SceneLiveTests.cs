@@ -86,14 +86,14 @@ public sealed class SceneLiveTests : IAsyncLifetime
         // The composed picture is split in the graph: the preview frame is written next to the live.
         var frames = _host.Services.GetRequiredService<LivePreviewFrames>();
         var basePkid = Row().Video.Pkid!.Value;
-        Assert.True(await WaitForAsync(() => frames.Read(basePkid) is { Length: > 0 }), "no preview frame was written");
-        var frame = frames.Read(basePkid)!;
+        Assert.True(await WaitForAsync(() => frames.Latest(basePkid) is { Bytes.Length: > 0 }), "no preview frame was written");
+        var frame = frames.Latest(basePkid)!.Bytes;
         Assert.Equal(0xFF, frame[0]);
         Assert.Equal(0xD8, frame[1]);
 
         streaming.StopVideoStreamingByPkid(basePkid);
         Assert.True(await WaitForAsync(() => Row().Status != LiveStatus.Live), "the stop of the row did not reach the canvas");
-        Assert.True(await WaitForAsync(() => frames.Read(basePkid) is null), "a stopped live left its preview frame behind");
+        Assert.True(await WaitForAsync(() => frames.Latest(basePkid) is null), "a stopped live left its preview frame behind");
 
         // The scene a live went on air with is what it restarts from: it cannot be deleted on its own.
         Assert.Throws<LiveException>(() => _host.Services.GetRequiredService<SceneService>().Delete(scenePkid));

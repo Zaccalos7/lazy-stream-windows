@@ -1,0 +1,8 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 60 40" width="60" height="40" role="img" aria-hidden="true" focusable="false">
+  <defs><clipPath id="c"><rect width="60" height="40" rx="3"/></clipPath></defs>
+  <g clip-path="url(#c)">
+    <rect width="60" height="40" fill="#8C1D2C"/>
+    <rect x="4" y="4" width="52" height="32" rx="2" fill="none" stroke="#D4AF37" stroke-width="1.4"/>
+    <text x="30" y="26" text-anchor="middle" font-family="Georgia, 'Times New Roman', serif" font-size="16" font-weight="700" letter-spacing="1.4" fill="#D4AF37">SPQR</text>
+  </g>
+</svg>

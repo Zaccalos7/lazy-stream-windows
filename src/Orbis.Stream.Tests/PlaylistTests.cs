@@ -6,6 +6,7 @@ using Orbis.Stream.Core.Data;
 using Orbis.Stream.Core.Domain;
 using Orbis.Stream.Core.Http;
 using Orbis.Stream.Core.Services;
+using Orbis.Stream.Core.Streaming;
 using Xunit.Abstractions;
 
 namespace Orbis.Stream.Tests;
@@ -185,6 +186,53 @@ public sealed class PlaylistTests : IAsyncLifetime
 
         return false;
     }
+
+    /// <summary>
+    /// A canvas is not a playlist, but the end of it is decided the same way: the live lasts as long
+    /// as its longest file, and it is that length that the streaming loop watches for. A probe of
+    /// zero is a live that never ends, which is what a canvas used to be measured with.
+    /// </summary>
+    [Fact]
+    public void ACanvasLastsAsLongAsItsLongestFile()
+    {
+        var shortClip = Clip("C:/clips/short.mp4");
+        var longClip = Clip("C:/clips/long.mp4");
+
+        var probes = new Dictionary<string, MediaProbeResult>
+        {
+            [shortClip.VideoPath] = Probe(1920, 1080, 120d),
+            [longClip.VideoPath] = Probe(3840, 2160, 754.5d)
+        };
+
+        Assert.Equal(
+            TimeSpan.FromSeconds(754.5),
+            FfmpegVideoPlaylistStreamer.LongestFileDuration([shortClip, longClip], probes));
+
+        // The shortest one on its own is the length of the live: the canvas is one shape to fill.
+        Assert.Equal(
+            TimeSpan.FromSeconds(120),
+            FfmpegVideoPlaylistStreamer.LongestFileDuration([shortClip], probes));
+
+        // A capture device has no length of its own and says nothing about the end of the canvas:
+        // it is the streaming loop that refuses a length altogether when the canvas has a device on
+        // it, because a device produces frames for ever.
+        var camera = new VideoEntity { Pkid = 9, SourceKind = SourceKind.Camera, SourceTarget = "video=Cam" };
+        Assert.Equal(
+            TimeSpan.FromSeconds(120),
+            FfmpegVideoPlaylistStreamer.LongestFileDuration([shortClip, camera], probes));
+
+        // A file nothing can read has no length either, and alone on the canvas it leaves nothing
+        // to measure the live against.
+        Assert.Null(FfmpegVideoPlaylistStreamer.LongestFileDuration(
+            [Clip("C:/clips/unreadable.mp4")],
+            new Dictionary<string, MediaProbeResult>()));
+    }
+
+    private static VideoEntity Clip(string path) =>
+        new() { Pkid = Math.Abs(path.GetHashCode()), SourceKind = SourceKind.File, VideoPath = path, Name = path };
+
+    private static MediaProbeResult Probe(int width, int height, double seconds) =>
+        new(width, height, 25d, HasAudio: true, AudioChannels: 2, DurationSeconds: seconds);
 
     private static async Task RunAsync(string fileName, string arguments)
     {

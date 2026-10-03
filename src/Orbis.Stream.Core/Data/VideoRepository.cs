@@ -11,7 +11,7 @@ public sealed class VideoRepository
     private const string BaseColumns =
         "t.pkid, t.name, t.video_path, t.extension, t.live_status, t.last_time_stamp_before_stop, " +
         "t.message, t.should_be_stop, t.start_date_live, t.channel_name, t.video_live_history_pkid, t.video_setting_id, " +
-        "t.source_kind, t.source_target, t.scene_pkid, t.x, t.y, t.width, t.height, t.audio_enabled";
+        "t.source_kind, t.source_target, t.scene_pkid, t.x, t.y, t.width, t.height, t.audio_enabled, t.duration_milliseconds";
 
     private readonly SqliteConnectionFactory _connectionFactory;
 
@@ -154,9 +154,9 @@ public sealed class VideoRepository
             """
             INSERT INTO video (name, video_path, extension, live_status, last_time_stamp_before_stop, message,
                                should_be_stop, start_date_live, channel_name, video_live_history_pkid, video_setting_id,
-                               source_kind, source_target, scene_pkid, x, y, width, height, audio_enabled)
+                               source_kind, source_target, scene_pkid, x, y, width, height, audio_enabled, duration_milliseconds)
             VALUES (@name, @path, @extension, @liveStatus, @lastTimeStamp, @message, @shouldBeStop, @startDateLive, @channelName, @history, @setting,
-                    @sourceKind, @sourceTarget, @scenePkid, @x, @y, @width, @height, @audioEnabled);
+                    @sourceKind, @sourceTarget, @scenePkid, @x, @y, @width, @height, @audioEnabled, @duration);
             SELECT last_insert_rowid();
             """;
         Bind(command, video);
@@ -188,7 +188,8 @@ public sealed class VideoRepository
                 y = @y,
                 width = @width,
                 height = @height,
-                audio_enabled = @audioEnabled
+                audio_enabled = @audioEnabled,
+                duration_milliseconds = @duration
             WHERE pkid = @pkid;
             """;
         Bind(command, video);
@@ -274,7 +275,7 @@ public sealed class VideoRepository
 
         using var command = connection.CreateCommand();
         command.CommandText =
-            $"SELECT {BaseColumns}, t.position, t.total, COALESCE(t.group_status, t.live_status) FROM ({Grouped}) t {where} " +
+            $"SELECT t.position, t.total, COALESCE(t.group_status, t.live_status), {BaseColumns} FROM ({Grouped}) t {where} " +
             "ORDER BY t.start_date_live DESC, t.pkid DESC LIMIT @size OFFSET @offset;";
         Bind(command);
         command.Parameters.AddWithValue("@size", size);
@@ -284,8 +285,11 @@ public sealed class VideoRepository
         using var reader = command.ExecuteReader();
         while (reader.Read())
         {
+            var position = reader.GetInt32(0);
+            var rowTotal = reader.GetInt32(1);
+            var status = LiveStatusExtensions.FromStorage(reader.GetValue(2));
             items.Add(new LiveRowEntity(
-                Map(reader), reader.GetInt32(20), reader.GetInt32(21), LiveStatusExtensions.FromStorage(reader.GetValue(22))));
+                Map(reader, 3), position, rowTotal, status));
         }
 
         return new PagedResult<LiveRowEntity>(items, page, size, total);
@@ -358,6 +362,7 @@ public sealed class VideoRepository
         command.Parameters.AddWithValue("@width", SqliteValue.From(video.Width));
         command.Parameters.AddWithValue("@height", SqliteValue.From(video.Height));
         command.Parameters.AddWithValue("@audioEnabled", video.AudioEnabled ? 1 : 0);
+        command.Parameters.AddWithValue("@duration", video.DurationMilliseconds is null ? DBNull.Value : video.DurationMilliseconds.Value);
     }
 
     private static List<VideoEntity> ReadAll(SqliteCommand command)
@@ -372,30 +377,31 @@ public sealed class VideoRepository
         return items;
     }
 
-    private static VideoEntity Map(SqliteDataReader reader) => new()
+private static VideoEntity Map(SqliteDataReader reader, int offset = 0) => new()
     {
-        Pkid = reader.GetInt32(0),
-        Name = reader.GetString(1),
-        VideoPath = reader.GetString(2),
-        Extension = reader.GetString(3),
-        LiveStatus = LiveStatusExtensions.FromStorage(reader.GetValue(4)),
-        LastTimeStampBeforeStop = SqliteValue.ToInt64(reader.GetValue(5)),
-        Message = SqliteValue.ToText(reader.GetValue(6)),
-        ShouldBeStop = SqliteValue.ToBoolean(reader.GetValue(7)),
-        StartDateLive = SqliteValue.ToNullableDateTime(reader.GetValue(8)),
-        ChannelName = reader.GetString(9),
-        VideoLiveHistoryId = SqliteValue.ToNullableInt64(reader.GetValue(10)),
-        VideoSettingId = SqliteValue.ToNullableInt32(reader.GetValue(11)),
-        SourceKind = SourceKindExtensions.TryParse(SqliteValue.ToText(reader.GetValue(12)), out var kind)
+        Pkid = reader.GetInt32(offset + 0),
+        Name = reader.GetString(offset + 1),
+        VideoPath = reader.GetString(offset + 2),
+        Extension = reader.GetString(offset + 3),
+        LiveStatus = LiveStatusExtensions.FromStorage(reader.GetValue(offset + 4)),
+        LastTimeStampBeforeStop = SqliteValue.ToInt64(reader.GetValue(offset + 5)),
+        Message = SqliteValue.ToText(reader.GetValue(offset + 6)),
+        ShouldBeStop = SqliteValue.ToBoolean(reader.GetValue(offset + 7)),
+        StartDateLive = SqliteValue.ToNullableDateTime(reader.GetValue(offset + 8)),
+        ChannelName = reader.GetString(offset + 9),
+        VideoLiveHistoryId = SqliteValue.ToNullableInt64(reader.GetValue(offset + 10)),
+        VideoSettingId = SqliteValue.ToNullableInt32(reader.GetValue(offset + 11)),
+        SourceKind = SourceKindExtensions.TryParse(SqliteValue.ToText(reader.GetValue(offset + 12)), out var kind)
             ? kind
             : SourceKind.File,
-        SourceTarget = SqliteValue.ToText(reader.GetValue(13)),
-        ScenePkid = SqliteValue.ToNullableInt64(reader.GetValue(14)),
-        X = SqliteValue.ToNullableInt32(reader.GetValue(15)),
-        Y = SqliteValue.ToNullableInt32(reader.GetValue(16)),
-        Width = SqliteValue.ToNullableInt32(reader.GetValue(17)),
-        Height = SqliteValue.ToNullableInt32(reader.GetValue(18)),
-        AudioEnabled = SqliteValue.ToBoolean(reader.GetValue(19))
+        SourceTarget = SqliteValue.ToText(reader.GetValue(offset + 13)),
+        ScenePkid = SqliteValue.ToNullableInt64(reader.GetValue(offset + 14)),
+        X = SqliteValue.ToNullableInt32(reader.GetValue(offset + 15)),
+        Y = SqliteValue.ToNullableInt32(reader.GetValue(offset + 16)),
+        Width = SqliteValue.ToNullableInt32(reader.GetValue(offset + 17)),
+        Height = SqliteValue.ToNullableInt32(reader.GetValue(offset + 17)),
+        AudioEnabled = SqliteValue.ToBoolean(reader.GetValue(offset + 19)),
+        DurationMilliseconds = SqliteValue.ToNullableInt64(reader.GetValue(offset + 20))
     };
 }
 

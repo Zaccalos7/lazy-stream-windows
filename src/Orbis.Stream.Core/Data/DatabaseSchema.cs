@@ -64,7 +64,10 @@ public static class DatabaseSchema
                 Column("video_folder", "VARCHAR(255)", "VARCHAR(255) DEFAULT '/' NOT NULL", nullable: false),
                 Column("is_active", "BOOLEAN", "BOOLEAN DEFAULT 'false'", nullable: true),
                 Column("channel_name", "TEXT", "TEXT DEFAULT 'Zingy' NOT NULL", nullable: false),
-                Column("scene_pkid", "BIGINT", "BIGINT", nullable: true)
+                Column("scene_pkid", "BIGINT", "BIGINT", nullable: true),
+                Column("auto_cleanup_enabled", "BOOLEAN", "BOOLEAN DEFAULT 'false' NOT NULL", nullable: false),
+                Column("auto_cleanup_interval_months", "INTEGER", "INTEGER DEFAULT '0'", nullable: false),
+                Column("auto_cleanup_older_than_months", "INTEGER", "INTEGER DEFAULT '0'", nullable: false)
             ],
             ["video"] =
             [
@@ -87,7 +90,8 @@ public static class DatabaseSchema
                 Column("y", "INTEGER", "INTEGER", nullable: true),
                 Column("width", "INTEGER", "INTEGER", nullable: true),
                 Column("height", "INTEGER", "INTEGER", nullable: true),
-                Column("audio_enabled", "BOOLEAN", "BOOLEAN DEFAULT 'false' NOT NULL", nullable: false)
+                Column("audio_enabled", "BOOLEAN", "BOOLEAN DEFAULT 'false' NOT NULL", nullable: false),
+                Column("duration_milliseconds", "BIGINT", "BIGINT", nullable: true)
             ],
             ["stream_scene"] =
             [

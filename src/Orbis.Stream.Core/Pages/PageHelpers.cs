@@ -127,8 +127,7 @@ public static class LiveLinkView
         return PlatformOf(streamUrl) switch
         {
             "twitch" => "https://www.twitch.tv/" + Uri.EscapeDataString(name),
-            // Always the same base plus the channel: a "@" typed by the user is not doubled.
-            "youtube" => "https://www.youtube.com/@" + Uri.EscapeDataString(name.TrimStart('@')),
+            "youtube" => "https://www.youtube.com/channel/" + Uri.EscapeDataString(name),
             _ => null
         };
     }

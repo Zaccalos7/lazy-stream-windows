@@ -118,8 +118,11 @@
             <h3 class="section">@T["wizardStep3PlaylistTitle"]</h3>
             <label class="field dropzone" style="margin-top: 8px;">
                 <span>@T["playlistFolder"]</span>
-                <input class="input" name="videoFolder" value="@Model.Folder" placeholder="C:\Video\Playlist" required
-                       data-drop-path data-drop-done="@T["dropVideoFolderDone"]" />
+                <span class="composer-file-row">
+                    <input class="input" name="videoFolder" value="@Model.Folder" placeholder="C:\Video\Playlist" required
+                           data-drop-path data-drop-done="@T["dropVideoFolderDone"]" />
+                    <button type="button" class="btn" data-playlist-browse-folder>@T["add"]</button>
+                </span>
                 <small><i class="icon">&#xE8B7;</i><span>@T["dropPlaylistFolderHint"]</span></small>
             </label>
             <div class="infobar section">

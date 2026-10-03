@@ -58,7 +58,8 @@
 <p data-preview-words hidden
    data-ok="@T["success"]" data-ko="@T["error"]"
    data-applied="@T["parametersApplied"]" data-failed="@T["parametersFailed"]"
-   data-no="@T["noAudioTrack"]"></p>
+   data-no="@T["noAudioTrack"]"
+   data-embed-loading="@T["embedLoading"]" data-embed-failed="@T["embedFailed"]"></p>
 
 <div data-preview
      data-pkid="@live.VideoPkid"
@@ -86,21 +87,41 @@ else
     var shape = live.Output.Width > 0 && live.Output.Height > 0
         ? $"aspect-ratio: {live.Output.Width.ToString(CultureInfo.InvariantCulture)} / {live.Output.Height.ToString(CultureInfo.InvariantCulture)}"
         : null;
+
+    // The platform the live goes on, shown next to the name of the channel. Where the live can be
+    // watched with the player of the platform is asked for here rather than written into the page:
+    // the player of YouTube is addressed by the id of the video, and that id only exists once the
+    // platform has been asked which video is on air, which is longer than a page should wait to be
+    // drawn. The page asks for it once it is open and keeps the picture below until it answers.
+    var platform = LiveLinkView.PlatformOf(live.StreamUrl);
+    var platformLabel = LiveLinkView.LabelOf(platform);
     <div class="preview">
         <div class="preview-stage card">
-            @* What is on air, made light: a few small frames a second that ffmpeg writes next to the
-               live, not a second copy of it. The cover under it shows until the first frame lands. *@
+            @* What is on air, made light: the frames a few times a second that ffmpeg writes next to
+               the live, not a second copy of it. The canvas stays hidden, under the cover, until the
+               first of those frames has been decoded, so nothing empty or stale is ever shown. *@
             <div class="preview-screen" style="@shape">
-                <div class="preview-cover">
+                <div class="preview-cover" data-preview-cover>
                     <span class="spinner"></span>
-                    <p class="muted">@T["previewWaiting"]</p>
+                    <p class="muted" data-cover-text>@T["previewWaiting"]</p>
                 </div>
-                <canvas data-preview-frame role="img" aria-label="@live.VideoName"></canvas>
+                <iframe class="preview-platform-player"
+                        data-platform-embed
+                        title="@(platformLabel ?? "Platform") live stream"
+                        allow="autoplay; fullscreen; picture-in-picture"
+                        allowfullscreen
+                        scrolling="no"
+                        hidden></iframe>
+                <canvas data-preview-frame role="img" aria-label="@live.VideoName" hidden></canvas>
+                <div class="preview-embed-status" hidden>
+                    <span class="spinner"></span>
+                    <span data-embed-text>@T["embedLoading"]</span>
+                </div>
             </div>
             <div class="preview-bar">
                 <div class="preview-id">
                     <strong class="truncate">@live.VideoName</strong>
-                    <span class="caption truncate">@live.ChannelName@(string.IsNullOrEmpty(live.PlatformStreamName) ? "" : " · " + live.PlatformStreamName)</span>
+                    <span class="caption truncate">@live.ChannelName@(string.IsNullOrEmpty(platformLabel) ? "" : " · " + platformLabel)</span>
                 </div>
                 <span class="spinner" data-preview-restart hidden title="@T["reconfiguring"]"></span>
                 <span class="caption preview-time" data-preview-position>@Time(live.PositionMilliseconds) / @Time(live.DurationMilliseconds)</span>

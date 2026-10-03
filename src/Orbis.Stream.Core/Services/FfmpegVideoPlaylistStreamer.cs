@@ -97,16 +97,33 @@ public sealed class FfmpegVideoPlaylistStreamer : IVideoPlaylistStreamer
             queue = [.. files.Select(video => new PlannedVideo(video, null, TimeSpan.Zero))];
         }
 
-        foreach (var planned in queue)
+        for (var i = 0; i < queue.Count; i++)
         {
+            var planned = queue[i];
             cancellationToken.ThrowIfCancellationRequested();
 
             // A stop is for the whole playlist, not for the video that happened to be on air: the
             // next one must not go live by itself. It stays where it is, so a play resumes here.
-            var stopped = await StreamVideoAsync(planned, outputUrl, videoLiveHistoryPkid, cancellationToken)
+            var isLast = i == queue.Count - 1;
+            var stopped = await StreamVideoAsync(planned, outputUrl, videoLiveHistoryPkid, cancellationToken, markEndedOnFinish: isLast)
                 .ConfigureAwait(false);
             if (stopped)
             {
+                return;
+            }
+
+            // If this was the last video in the playlist and it ended (not stopped), mark the live as ended.
+            if (i == queue.Count - 1)
+            {
+                var endedMessage = _localizer.PrintMessage("video.live.ended");
+                _logger.LogInformation("{Message} - playlist complete", endedMessage);
+                foreach (var video in files)
+                {
+                    video.LiveStatus = LiveStatus.Ended;
+                    video.Message = endedMessage;
+                    _videoRepository.Update(video);
+                }
+                _notifier.Raise();
                 return;
             }
         }
@@ -222,7 +239,8 @@ public sealed class FfmpegVideoPlaylistStreamer : IVideoPlaylistStreamer
         PlannedVideo planned,
         string outputUrl,
         long videoLiveHistoryPkid,
-        CancellationToken cancellationToken)
+        CancellationToken cancellationToken,
+        bool markEndedOnFinish = true)
     {
         var video = planned.Video;
         var inputPath = video.VideoPath;
@@ -298,18 +316,42 @@ public sealed class FfmpegVideoPlaylistStreamer : IVideoPlaylistStreamer
                 var exitCode = await session.WaitForExitAsync(cancellationToken).ConfigureAwait(false);
                 var errorOutput = await session.ReadErrorAsync().ConfigureAwait(false);
 
-                if (session.StopRequested || (exitCode != 0 && _videoRepository.FindByPkid(videoKey)?.ShouldBeStop == true))
+                // Check stop condition first (needs session for StopAndRecordAsync)
+                var wasStopped = session.StopRequested || (exitCode != 0 && _videoRepository.FindByPkid(videoKey)?.ShouldBeStop == true);
+
+                if (wasStopped)
                 {
                     await StopAndRecordAsync(session, videoKey, videoLiveHistoryPkid, inputPath).ConfigureAwait(false);
                     return true;
                 }
 
-                if (exitCode == 0)
+                // Video ended normally (exitCode == 0): save position and clean up immediately
+                var finalPosition = session.PositionMilliseconds;
+
+                // Clean up session immediately so preview sees live as ended
+                _sessions.Remove(videoKey);
+                await session.DisposeAsync().ConfigureAwait(false);
+                _frames.Forget(videoKey);
+                var endedNaturally = session.EndedNaturally;
+                session = null;
+
+                if (exitCode == 0 || endedNaturally)
                 {
-                    var endedMessage = _localizer.PrintMessage("video.live.ended");
-                    _logger.LogInformation("{Message}", endedMessage);
-                    SaveMessageOnVideoLiveHistory(
-                        endedMessage, videoLiveHistoryPkid, inputPath, LiveStatus.Ended, null, EndOf(probe, session));
+                    if (markEndedOnFinish)
+                    {
+                        var endedMessage = _localizer.PrintMessage("video.live.ended");
+                        _logger.LogInformation("{Message}", endedMessage);
+                        SaveMessageOnVideoLiveHistory(
+                            endedMessage, videoLiveHistoryPkid, inputPath, LiveStatus.Ended, null, finalPosition);
+                    }
+                    else
+                    {
+                        // Don't mark as ended if this is an intermediate video in a playlist
+                        // The next video will take over
+                        _logger.LogInformation("Video ended, continuing to next in playlist");
+                        SaveMessageOnVideoLiveHistory(
+                            string.Empty, videoLiveHistoryPkid, inputPath, LiveStatus.Offline, null, finalPosition);
+                    }
                     return false;
                 }
 
@@ -338,6 +380,7 @@ public sealed class FfmpegVideoPlaylistStreamer : IVideoPlaylistStreamer
         }
         finally
         {
+            // Session already cleaned up in the normal flow, but ensure it's gone
             _sessions.Remove(videoKey);
             if (session is not null)
             {
@@ -349,34 +392,79 @@ public sealed class FfmpegVideoPlaylistStreamer : IVideoPlaylistStreamer
     }
 
     /// <summary>
+    /// What ffprobe says about every file of the canvas, asked once: the sound of a file decides
+    /// whether it joins the mix, and its length decides whether the live waits for it.
+    /// </summary>
+    private async Task<Dictionary<string, MediaProbeResult>> ProbedFilesAsync(
+        IReadOnlyList<VideoEntity> rows,
+        CancellationToken cancellationToken)
+    {
+        var probes = new Dictionary<string, MediaProbeResult>(StringComparer.Ordinal);
+        foreach (var row in rows.Where(row => row.SourceKind == SourceKind.File))
+        {
+            if (probes.ContainsKey(row.VideoPath))
+            {
+                continue;
+            }
+
+            try
+            {
+                probes[row.VideoPath] = await _probe.ProbeAsync(row.VideoPath, cancellationToken).ConfigureAwait(false);
+            }
+            catch (Exception exception) when (exception is not OperationCanceledException)
+            {
+                _logger.LogWarning(exception, "Could not probe {Path}", row.VideoPath);
+            }
+        }
+
+        return probes;
+    }
+
+    /// <summary>
     /// The files whose sound was asked for but that have none. A video without an audio track is
     /// common, and <c>[n:a]</c> on it fails the whole graph before the first frame: such a file
     /// stays on the canvas and simply leaves the mix. A file ffprobe cannot read counts as silent,
     /// so the error the user sees is ffmpeg's about the file, not a filter one about its sound.
     /// </summary>
-    private async Task<HashSet<VideoEntity>> SilentFilesAsync(
+    private static HashSet<VideoEntity> SilentFilesOf(
         IReadOnlyList<VideoEntity> rows,
-        CancellationToken cancellationToken)
+        IReadOnlyDictionary<string, MediaProbeResult> probes)
     {
         var silent = new HashSet<VideoEntity>();
         foreach (var row in rows.Where(row => row.SourceKind == SourceKind.File && row.AudioEnabled))
         {
-            try
+            if (!probes.TryGetValue(row.VideoPath, out var probe) || !probe.HasAudio)
             {
-                var probe = await _probe.ProbeAsync(row.VideoPath, cancellationToken).ConfigureAwait(false);
-                if (!probe.HasAudio)
-                {
-                    silent.Add(row);
-                }
-            }
-            catch (Exception exception) when (exception is not OperationCanceledException)
-            {
-                _logger.LogWarning(exception, "Could not probe {Path}", row.VideoPath);
                 silent.Add(row);
             }
         }
 
         return silent;
+    }
+
+    /// <summary>
+    /// How long a canvas of files streams: the length of its longest file.
+    /// <para>A canvas is not a playlist, but the end of it is decided the same way: a video that
+    /// runs out while the others are still going leaves its shape on the canvas (the overlay holds
+    /// its last frame) and the live goes on, and when the longest file is over the live is over.
+    /// A canvas with a capture device on it has no end: a device produces frames for ever, so
+    /// null is the answer and the live lasts until it is stopped.</para>
+    /// <para>A file ffprobe could not read has no length to be measured with, so it is not what
+    /// the live is measured against: a live that never ends because of a file nothing can read is
+    /// better than one that ends on the first guess.</para>
+    /// </summary>
+    internal static TimeSpan? LongestFileDuration(
+        IReadOnlyList<VideoEntity> rows,
+        IReadOnlyDictionary<string, MediaProbeResult> probes)
+    {
+        var seconds = rows
+            .Where(row => row.SourceKind == SourceKind.File)
+            .Select(row => probes.TryGetValue(row.VideoPath, out var probe) ? probe.DurationSeconds : 0d)
+            .Where(value => value > 0)
+            .DefaultIfEmpty(0d)
+            .Max();
+
+        return seconds > 0 ? TimeSpan.FromSeconds(seconds) : null;
     }
 
     /// <summary>
@@ -400,8 +488,9 @@ public sealed class FfmpegVideoPlaylistStreamer : IVideoPlaylistStreamer
 
     /// <summary>
     /// One ffmpeg for a whole canvas. The rows of a scene are its sources, not a playlist: they are
-    /// opened together and laid over each other, and the pass lasts until the user stops it, because
-    /// a capture device has no end to reach.
+    /// opened together and laid over each other, so the pass lasts until the user stops it, or
+    /// until the longest of its files is over when the canvas is made of nothing else. That is the
+    /// same end a playlist has, measured the same way, and the live stops as cleanly as the button.
     /// </summary>
     private async Task StreamSceneAsync(
         IReadOnlyList<VideoEntity> rows,
@@ -429,6 +518,10 @@ public sealed class FfmpegVideoPlaylistStreamer : IVideoPlaylistStreamer
             return;
         }
 
+        // A canvas made only of files has an end, and it is the end of the longest of them: a
+        // video that runs out first leaves its shape on the canvas and the live goes on, the way a
+        // playlist goes on to the next video.
+        var onlyFiles = rows.All(row => row.SourceKind == SourceKind.File);
         var videoKey = baseRow.Pkid;
         var description = _localizer.PrintMessage("video.live.scene", [rows.Count.ToString(CultureInfo.InvariantCulture)]);
         FfmpegStreamingSession? session = null;
@@ -436,7 +529,15 @@ public sealed class FfmpegVideoPlaylistStreamer : IVideoPlaylistStreamer
         try
         {
             var resumeFrom = TimeSpan.Zero;
-            var silent = await SilentFilesAsync(rows, cancellationToken).ConfigureAwait(false);
+            var probes = await ProbedFilesAsync(rows, cancellationToken).ConfigureAwait(false);
+            var silent = SilentFilesOf(rows, probes);
+            var duration = onlyFiles ? LongestFileDuration(rows, probes) : null;
+            if (duration is { } canvasLength)
+            {
+                _logger.LogInformation(
+                    "The canvas streams for {Seconds:0.##} seconds, the length of its longest file",
+                    canvasLength.TotalSeconds);
+            }
 
             while (true)
             {
@@ -465,6 +566,7 @@ public sealed class FfmpegVideoPlaylistStreamer : IVideoPlaylistStreamer
                     DefaultCanvasFrameRate,
                     _logger,
                     resumeFrom,
+                    duration,
                     _frames.PathOf(videoKey));
 
                 var previous = session;
@@ -501,10 +603,34 @@ public sealed class FfmpegVideoPlaylistStreamer : IVideoPlaylistStreamer
                 var exitCode = await session.WaitForExitAsync(cancellationToken).ConfigureAwait(false);
                 var errorOutput = await session.ReadErrorAsync().ConfigureAwait(false);
 
-                if (session.StopRequested || (exitCode != 0 && _videoRepository.FindByPkid(videoKey)?.ShouldBeStop == true))
+                // Check stop condition first (needs session for StopAsync)
+                var wasStopped = session.StopRequested || (exitCode != 0 && _videoRepository.FindByPkid(videoKey)?.ShouldBeStop == true);
+
+                if (wasStopped)
                 {
                     var stopped = _localizer.PrintMessage("live.stopped");
+                    await session.StopAsync().ConfigureAwait(false);
                     MarkRows(rows, LiveStatus.Stopped, stopped);
+                    return;
+                }
+
+                // Video ended normally (exitCode == 0): save position and clean up immediately
+                var finalPosition = session.PositionMilliseconds;
+
+                // Clean up session immediately so preview sees live as ended
+                _sessions.Remove(videoKey);
+                await session.DisposeAsync().ConfigureAwait(false);
+                _frames.Forget(videoKey);
+                var endedNaturally = session.EndedNaturally;
+                session = null;
+
+                // If the scene has only file sources and ffmpeg exited cleanly, the video ended.
+                // End the live instead of restarting the loop.
+                if (onlyFiles && (exitCode == 0 || endedNaturally))
+                {
+                    var endedMessage = _localizer.PrintMessage("video.live.ended");
+                    _logger.LogInformation("{Message}", endedMessage);
+                    MarkRows(rows, LiveStatus.Ended, endedMessage);
                     return;
                 }
 
@@ -528,6 +654,7 @@ public sealed class FfmpegVideoPlaylistStreamer : IVideoPlaylistStreamer
         }
         finally
         {
+            // Session already cleaned up in the normal flow, but ensure it's gone
             _sessions.Remove(videoKey);
             if (session is not null)
             {
@@ -615,6 +742,13 @@ public sealed class FfmpegVideoPlaylistStreamer : IVideoPlaylistStreamer
             if (session.RestartRequested)
             {
                 return StreamOutcome.Reconfigured;
+            }
+
+            var durationMs = session.Probe.DurationSeconds > 0 ? (long)(session.Probe.DurationSeconds * 1000) : 0;
+            if (durationMs > 0 && session.PositionMilliseconds >= durationMs)
+            {
+                await session.EndNaturallyAsync().ConfigureAwait(false);
+                return StreamOutcome.Finished;
             }
 
             if (session.HasExited)

@@ -35,22 +35,13 @@ public sealed class MainLiveHistoryModel(VideoService videos, SettingService set
     }
 
     /// <summary>
-    /// Saves the cleanup settings, and runs the cleanup straight away when the button that asked for
-    /// it is the one that runs: the picks on screen are the ones it works on, so they are stored
-    /// first. Both outcomes land on the same InfoBar, the last one overwriting the first.
+    /// Saves the cleanup settings of the active configuration. Running the cleanup is not here: it
+    /// walks over the videos one at a time and the page follows that walk, so it is queued on its
+    /// own and watched from the popover (<see cref="LiveHistoryCleanupService"/>).
     /// </summary>
-    public IActionResult OnPostSaveAutoCleanup(bool enabled, int intervalMonths, int olderThanMonths, bool runNow = false)
+    public IActionResult OnPostSaveAutoCleanup(bool enabled, int intervalMonths, int olderThanMonths)
     {
-        if (!Run(() => settings.SaveAutoCleanup(enabled, intervalMonths, olderThanMonths)))
-        {
-            return RedirectToPage(new { p = PageIndex });
-        }
-
-        if (runNow)
-        {
-            Run(() => videos.DeleteOldLiveHistory(olderThanMonths));
-        }
-
+        Run(() => settings.SaveAutoCleanup(enabled, intervalMonths, olderThanMonths));
         return RedirectToPage(new { p = PageIndex });
     }
 

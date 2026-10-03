@@ -277,6 +277,40 @@ public sealed class FfmpegCompositionTests
     }
 
     [Fact]
+    public void AShapeThatHasToLastLongerIsLoopedAndTheOneTheLiveIsMeasuredAgainstIsNot()
+    {
+        // A canvas is not a playlist: a video that runs out while three others are going keeps its
+        // shape on air, so it plays again. The longest file is the one the live ends with, so it is
+        // the one that is left to end for real.
+        var shortest = new FfmpegCompositionItem(SourceKind.File, "C:/clips/short.mp4", 0, 0, 1920, 1080, false, Loop: true);
+        var middle = new FfmpegCompositionItem(SourceKind.File, "C:/clips/middle.mp4", 0, 0, 1920, 1080, false, Loop: true);
+        var longest = new FfmpegCompositionItem(SourceKind.File, "C:/clips/long.mp4", 0, 0, 1920, 1080, false);
+
+        var text = string.Join(' ', FfmpegCommandBuilder.BuildComposition(Request([shortest, middle, longest])));
+
+        // The loop is an input option, so it stands with the rest of them, before the file it is
+        // about: only the two files that have to keep going carry it.
+        Assert.Contains(
+            "-stream_loop -1 -thread_queue_size 512 -readrate 1 -i C:/clips/short.mp4",
+            text,
+            StringComparison.Ordinal);
+        Assert.Contains(
+            "-stream_loop -1 -thread_queue_size 512 -readrate 1 -i C:/clips/middle.mp4",
+            text,
+            StringComparison.Ordinal);
+        Assert.Contains(
+            "-thread_queue_size 512 -readrate 1 -i C:/clips/long.mp4",
+            text,
+            StringComparison.Ordinal);
+        Assert.Equal(2, text.Split("-stream_loop").Length - 1);
+
+        // A device has no end to reach, so nothing is ever asked to loop for it.
+        var withCamera = FfmpegCommandBuilder.BuildComposition(
+            Request([Camera(0, 0, 640, 480), Microphone()]));
+        Assert.DoesNotContain("-stream_loop", string.Join(' ', withCamera), StringComparison.Ordinal);
+    }
+
+    [Fact]
     public void ADeviceGetsARealTimeBufferLargerThanAFrame()
     {
         // The default 3 MB of dshow is less than one raw 1080p frame: the RTMP handshake alone

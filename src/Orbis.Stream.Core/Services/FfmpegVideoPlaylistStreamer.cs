@@ -392,34 +392,86 @@ public sealed class FfmpegVideoPlaylistStreamer : IVideoPlaylistStreamer
     }
 
     /// <summary>
+    /// What ffprobe says about every file of the canvas, asked once: the sound of a file decides
+    /// whether it joins the mix, and its length decides whether the live waits for it.
+    /// </summary>
+    private async Task<Dictionary<string, MediaProbeResult>> ProbedFilesAsync(
+        IReadOnlyList<VideoEntity> rows,
+        CancellationToken cancellationToken)
+    {
+        var probes = new Dictionary<string, MediaProbeResult>(StringComparer.Ordinal);
+        foreach (var row in rows.Where(row => row.SourceKind == SourceKind.File))
+        {
+            if (probes.ContainsKey(row.VideoPath))
+            {
+                continue;
+            }
+
+            try
+            {
+                probes[row.VideoPath] = await _probe.ProbeAsync(row.VideoPath, cancellationToken).ConfigureAwait(false);
+            }
+            catch (Exception exception) when (exception is not OperationCanceledException)
+            {
+                _logger.LogWarning(exception, "Could not probe {Path}", row.VideoPath);
+            }
+        }
+
+        return probes;
+    }
+
+    /// <summary>
     /// The files whose sound was asked for but that have none. A video without an audio track is
     /// common, and <c>[n:a]</c> on it fails the whole graph before the first frame: such a file
     /// stays on the canvas and simply leaves the mix. A file ffprobe cannot read counts as silent,
     /// so the error the user sees is ffmpeg's about the file, not a filter one about its sound.
     /// </summary>
-    private async Task<HashSet<VideoEntity>> SilentFilesAsync(
+    private static HashSet<VideoEntity> SilentFilesOf(
         IReadOnlyList<VideoEntity> rows,
-        CancellationToken cancellationToken)
+        IReadOnlyDictionary<string, MediaProbeResult> probes)
     {
         var silent = new HashSet<VideoEntity>();
         foreach (var row in rows.Where(row => row.SourceKind == SourceKind.File && row.AudioEnabled))
         {
-            try
+            if (!probes.TryGetValue(row.VideoPath, out var probe) || !probe.HasAudio)
             {
-                var probe = await _probe.ProbeAsync(row.VideoPath, cancellationToken).ConfigureAwait(false);
-                if (!probe.HasAudio)
-                {
-                    silent.Add(row);
-                }
-            }
-            catch (Exception exception) when (exception is not OperationCanceledException)
-            {
-                _logger.LogWarning(exception, "Could not probe {Path}", row.VideoPath);
                 silent.Add(row);
             }
         }
 
         return silent;
+    }
+
+    /// <summary>
+    /// The files that play again when they reach their end: every one of them but the longest.
+    /// <para>A canvas is not a playlist. A video that runs out while three others are still going
+    /// does not take the live down with it, as it would in a playlist: its shape keeps playing
+    /// until the longest file of the canvas is over, and that is the one the live is measured
+    /// against, so the live ends with it.</para>
+    /// <para>A file ffprobe could not read has no length to be measured with, so it is looped: a
+    /// live that never ends because of a file nothing can read is better than one that ends on the
+    /// first guess.</para>
+    /// </summary>
+    private static HashSet<VideoEntity> LoopedFilesOf(
+        IReadOnlyList<VideoEntity> rows,
+        IReadOnlyDictionary<string, MediaProbeResult> probes)
+    {
+        var files = rows.Where(row => row.SourceKind == SourceKind.File).ToList();
+        var looped = new HashSet<VideoEntity>(files);
+
+        var longest = files
+            .Select(row => (Row: row, Seconds: probes.TryGetValue(row.VideoPath, out var probe) ? probe.DurationSeconds : 0d))
+            .Where(entry => entry.Seconds > 0)
+            .OrderByDescending(entry => entry.Seconds)
+            .ThenBy(entry => entry.Row.Pkid)
+            .FirstOrDefault();
+
+        if (longest.Row is not null)
+        {
+            looped.Remove(longest.Row);
+        }
+
+        return looped;
     }
 
     /// <summary>
@@ -472,8 +524,8 @@ public sealed class FfmpegVideoPlaylistStreamer : IVideoPlaylistStreamer
             return;
         }
 
-        // If all sources are files (no screen/camera/microphone), the scene has a finite duration.
-        // We should end the live when the longest file ends, not loop forever.
+        // A canvas made only of files has an end, and it is the end of the longest of them: the
+        // others play again rather than stopping the live, as they would in a playlist.
         var onlyFiles = rows.All(row => row.SourceKind == SourceKind.File);
         var videoKey = baseRow.Pkid;
         var description = _localizer.PrintMessage("video.live.scene", [rows.Count.ToString(CultureInfo.InvariantCulture)]);
@@ -482,7 +534,9 @@ public sealed class FfmpegVideoPlaylistStreamer : IVideoPlaylistStreamer
         try
         {
             var resumeFrom = TimeSpan.Zero;
-            var silent = await SilentFilesAsync(rows, cancellationToken).ConfigureAwait(false);
+            var probes = await ProbedFilesAsync(rows, cancellationToken).ConfigureAwait(false);
+            var silent = SilentFilesOf(rows, probes);
+            var looped = LoopedFilesOf(rows, probes);
 
             while (true)
             {
@@ -497,7 +551,8 @@ public sealed class FfmpegVideoPlaylistStreamer : IVideoPlaylistStreamer
                         row.Y ?? 0,
                         row.Width ?? 0,
                         row.Height ?? 0,
-                        row.AudioEnabled && !silent.Contains(row)))
+                        row.AudioEnabled && !silent.Contains(row),
+                        looped.Contains(row)))
                     .ToList();
 
                 var next = FfmpegStreamingSession.StartComposition(

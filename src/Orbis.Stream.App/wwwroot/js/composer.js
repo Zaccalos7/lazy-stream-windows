@@ -295,6 +295,14 @@ const occupies = (target, item) => {
   // laid over it, and bare canvas opens a new layer where the pointer is. Nothing is thrown away
   // to make room for the drop, and a source that is already on the canvas is moved to the new
   // spot rather than refused: dropping it in another box is how a box changes its mind.
+  // The shape the user clicked last: the outline is coloured, so the drag that follows is meant for
+  // it even if the pointer is let go on bare canvas. The rectangle under the pointer still wins, so
+  // the answer only changes where there is nothing else to drop into.
+  const selectedShape = () => {
+    const item = scene.items.find(entry => entry.uid === selected);
+    return item && isShape(item) ? item : null;
+  };
+
   const place = (option, at) => {
     // A microphone has no picture to put in a rectangle: it joins the mix and every sagoma stays.
     // Picked from the list rather than dropped somewhere, there is no pointer to follow either,
@@ -304,7 +312,7 @@ const occupies = (target, item) => {
       return;
     }
 
-    const target = slotUnder(at) || tileUnder(at);
+    const target = slotUnder(at) || tileUnder(at) || selectedShape();
     if (!target) {
       addSource(option, at);
       return;
@@ -381,6 +389,8 @@ const occupies = (target, item) => {
   // Every still is asked for at its own URL: the address of a source never changes, so without
   // this the WebView would answer a scene saved yesterday with the answer it gave then.
   let stillAsked = 0;
+  // A tile and a catalog entry both say what they are with a kind and a target, which is all the
+  // still endpoint asks for.
   const snapshotUrl = item =>
     `/preview/sources/snapshot?kind=${item.kind}&target=${encodeURIComponent(item.target)}&v=${++stillAsked}`;
 
@@ -397,6 +407,20 @@ const occupies = (target, item) => {
   };
 
   const iconOf = kind => glyphIcon(glyphs[kind] || "\uE714");
+
+  // A shape is the rectangle a layout is made of, and it outlives whatever is dropped into it: the
+  // dashed outline and the name stay on the canvas with the video inside, so the composition reads
+  // at a glance (shape 1 is pippo, shape 2 is piero) and the same layout can be filled again for
+  // the next live.
+  const shapeNameOf = item => (isSlot(item) ? item.label : (item.slotLabel ?? null));
+
+  const isShape = item => shapeNameOf(item) !== null;
+
+  // What a tile says about itself: the shape it is, and inside it what it is showing.
+  const titleOf = item => {
+    const shape = shapeNameOf(item);
+    return shape && !isSlot(item) ? shape + " · " + item.label : item.label;
+  };
 
   // A tile is made once and then only moved: its still is asked for when it is created, and
   // redrawing the canvas must not open the webcam again every time a tile is nudged.
@@ -426,6 +450,9 @@ const occupies = (target, item) => {
       appendHandles(tile, item);
       return tile;
     }
+
+    // Filled, and still the rectangle of the layout: the outline and the name of the shape stay.
+    if (isShape(item)) tile.classList.add("is-shape");
 
     const cover = document.createElement("div");
     cover.className = "composer-tile-cover";
@@ -467,7 +494,7 @@ const occupies = (target, item) => {
 
     const label = document.createElement("span");
     label.className = "composer-tile-label";
-    label.append(iconOf(item.kind), document.createTextNode(item.label));
+    label.append(iconOf(item.kind), document.createTextNode(titleOf(item)));
 
     tile.append(cover, still, label);
     appendHandles(tile, item);
@@ -501,7 +528,7 @@ const occupies = (target, item) => {
     tile.style.top = (item.y / scene.height * 100) + "%";
     tile.style.width = (item.w / scene.width * 100) + "%";
     tile.style.height = (item.h / scene.height * 100) + "%";
-    tile.title = `${item.label} · ${item.w}×${item.h} @ ${item.x},${item.y}`;
+    tile.title = `${titleOf(item)} · ${item.w}×${item.h} @ ${item.x},${item.y}`;
   };
 
   const layerButton = (glyph, title, action, pressed) => {
@@ -531,12 +558,14 @@ const occupies = (target, item) => {
       row.classList.toggle("is-selected", item.uid === selected);
       row.classList.toggle("is-audio", !hasPicture(item.kind));
       row.classList.toggle("is-slot", isSlot(item));
+      row.classList.toggle("is-shape", isShape(item) && !isSlot(item));
 
       const text = document.createElement("span");
       text.className = "grow";
       const name = document.createElement("strong");
       name.className = "truncate";
-      name.textContent = item.label;
+      // A filled shape says both things: the rectangle it is, and the video inside it.
+      name.textContent = titleOf(item);
       const facts = document.createElement("span");
       facts.className = "caption";
       const where = `${item.w}×${item.h} · ${item.x}, ${item.y}`;
@@ -807,10 +836,29 @@ const occupies = (target, item) => {
   const ghost = document.createElement("div");
   ghost.className = "composer-drop";
   ghost.hidden = true;
+  // The first frame of what is being dragged, inside the rectangle it is about to take: the sagoma
+  // fills with the picture of the video while the pointer is still moving, not after it is let go.
+  const ghostFrame = document.createElement("img");
+  ghostFrame.alt = "";
+  ghostFrame.draggable = false;
+  ghostFrame.hidden = true;
   const ghostLabel = document.createElement("span");
   ghostLabel.className = "composer-drop-label";
-  ghost.append(ghostLabel);
+  ghost.append(ghostFrame, ghostLabel);
   stage.append(ghost);
+
+  // The frame is asked for once per source, and only while the drag lasts: a tile that is already
+  // on the canvas has its own, and a source that cannot be grabbed keeps the hollow ghost.
+  let ghostAsked = 0;
+  let ghostSrc = "";
+
+  const showGhostFrame = option => {
+    const src = snapshotUrl(option);
+    if (src === ghostSrc) return;
+    ghostSrc = src;
+    ghostFrame.hidden = true;
+    ghostFrame.src = src;
+  };
 
   // A file dragged in from Explorer is only known to be a video until the host answers with its
   // path: until then the ghost is measured on a plain 16:9.
@@ -845,6 +893,8 @@ const occupies = (target, item) => {
 
   const clearDrop = () => {
     ghost.hidden = true;
+    ghostFrame.hidden = true;
+    ghostSrc = "";
     stage.classList.remove("is-over");
     for (const tile of stage.querySelectorAll(".composer-tile.is-drop-on")) tile.classList.remove("is-drop-on");
   };
@@ -863,8 +913,12 @@ const occupies = (target, item) => {
     ghost.style.height = (preview.box.h / scene.height * 100) + "%";
     ghostLabel.textContent = preview.label;
     ghost.hidden = false;
+    showGhostFrame(option);
     if (preview.target) tiles.get(preview.target.uid)?.classList.add("is-drop-on");
   };
+
+  ghostFrame.addEventListener("load", () => { if (!ghost.hidden) ghostFrame.hidden = false; });
+  ghostFrame.addEventListener("error", () => { ghostFrame.hidden = true; });
 
   stage.addEventListener("dragover", event => {
     if (layoutMode || !carriesSource(event)) return;
@@ -1066,31 +1120,33 @@ const occupies = (target, item) => {
     selected = null;
   };
 
-  const findMaxSourceResolution = () => {
-    let maxW = 0, maxH = 0;
-    for (const item of scene.items) {
-      if (!hasPicture(item.kind)) continue;
-      const isFullFrame = item.x <= 0 && item.y <= 0 && item.w >= scene.width && item.h >= scene.height;
-      const w = item.naturalWidth || item.w;
-      const h = item.naturalHeight || item.h;
-      if (isFullFrame) {
-        maxW = w;
-        maxH = h;
-        return { maxW, maxH };
-      }
-      if (w > maxW || h > maxH) {
-        maxW = Math.max(maxW, w);
-        maxH = Math.max(maxH, h);
-      }
-      if (item.kind === Kind.File) {
-        const opt = catalog.find(c => c.kind === Kind.File && c.target === item.target);
-        if (opt && (opt.width > maxW || opt.height > maxH)) {
-          maxW = Math.max(maxW, opt.width);
-          maxH = Math.max(maxH, opt.height);
-        }
-      }
+  // How many pixels a shape has, asked of the source inside it: a video says so on its still, a
+  // file the catalog has already listed says so there, and a shape nobody filled is the rectangle
+  // it was drawn as.
+  const naturalSizeOf = item => {
+    let w = item.naturalWidth || 0;
+    let h = item.naturalHeight || 0;
+
+    if ((w <= 0 || h <= 0) && item.kind === Kind.File) {
+      const option = catalog.find(candidate => candidate.kind === Kind.File && candidate.target === item.target);
+      w = option?.width || 0;
+      h = option?.height || 0;
     }
-    return { maxW, maxH };
+
+    return { w: w || item.w, h: h || item.h };
+  };
+
+  // The composition is measured against the biggest shape on the canvas: it is the one the eye
+  // reads as the frame, and its video is what says how many pixels there are to fill. So the
+  // resolution cannot be offered above what that shape has, or the live would be upscaled out of
+  // a video that was never that big.
+  const findMaxSourceResolution = () => {
+    const biggest = pictures()
+      .map(item => ({ item, ...naturalSizeOf(item) }))
+      .sort((a, b) => (b.item.w * b.item.h) - (a.item.w * a.item.h) || a.item.uid - b.item.uid)
+      .find(entry => entry.w > 0 && entry.h > 0);
+
+    return biggest ? { maxW: biggest.w, maxH: biggest.h } : { maxW: 0, maxH: 0 };
   };
 
   const updateResolutionOptions = () => {
@@ -1164,7 +1220,7 @@ const occupies = (target, item) => {
     };
     nameBox.value = scene.name;
     if (layoutMode) {
-      scenesBox.value = layoutPkid === null ? "" : String(layoutPkid);
+      if (scenesBox) scenesBox.value = layoutPkid === null ? "" : String(layoutPkid);
     } else if (asSlots) {
       // In compose mode, when a layout is selected, set the layout select
       scenesBox.value = String(layoutPkid);
@@ -1175,6 +1231,8 @@ const occupies = (target, item) => {
   };
 
   const drawScenes = () => {
+    // The layout page has no select: the list it would fill is drawn by the live wizard only.
+    if (!scenesBox) return;
     const current = layoutPkid === null ? "" : String(layoutPkid);
     scenesBox.replaceChildren(new Option(word("noLayoutSelected") || "No layout selected", ""));
     for (const saved of scenes) {
@@ -1197,7 +1255,7 @@ const occupies = (target, item) => {
     drawScenes();
   };
 
-  scenesBox.addEventListener("change", () => {
+  scenesBox?.addEventListener("change", () => {
     const pkid = scenesBox.value;
     if (!pkid) {
       // When selecting "no layout", clear the scene

@@ -21,7 +21,13 @@ public sealed record FfmpegCompositionItem(
     int Y,
     int Width,
     int Height,
-    bool AudioEnabled);
+    bool AudioEnabled,
+    /// <summary>
+    /// A file that plays again when it reaches its end. A canvas is not a playlist: a video that
+    /// runs out keeps its shape on the canvas, and the live ends with the longest one rather than
+    /// with the first. Only the file the live is measured against is left to end for real.
+    /// </summary>
+    bool Loop = false);
 
 /// <summary>
 /// Everything needed to stream a canvas: the sources, where they sit, and the encoder setting they
@@ -359,6 +365,13 @@ public static class FfmpegCommandBuilder
             {
                 arguments.Add("-ss");
                 arguments.Add(Seconds(resumeFrom));
+            }
+
+            // Both are input options, so they go in before the file they are about.
+            if (item.Loop)
+            {
+                arguments.Add("-stream_loop");
+                arguments.Add("-1");
             }
 
             arguments.Add("-thread_queue_size");

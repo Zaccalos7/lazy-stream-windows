@@ -1168,6 +1168,21 @@ a:hover > .platform-mark { background: var(--tint); }
 .preview-cover .icon { font-size: 30px; color: var(--text-3); }
 .preview-cover p { margin: 0; font-size: 12px; }
 
+.preview-embed-status {
+  position: absolute;
+  inset: 0;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: 10px;
+  background: rgba(0, 0, 0, 0.7);
+  color: var(--text);
+  font-size: 13px;
+  z-index: 2;
+}
+.preview-embed-status .spinner { border-top-color: var(--accent); }
+.preview-embed-status[hidden] { display: none; }
+
 .preview-bar { display: flex; align-items: center; gap: 10px; }
 .preview-id { flex: 1; min-width: 0; display: flex; flex-direction: column; }
 .preview-id strong { font-size: 13px; }

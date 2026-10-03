@@ -304,5 +304,8 @@
   "sceneSources": "Сцена · источников: {0}",
   "deleteSceneLiveConfirm": "Вы уверены, что хотите удалить этот эфир (источников: {0})?",
   "olderThanYesterday": "Старше чем вчера",
-  "olderThanNow": "Старее текущего момента"
+  "olderThanNow": "Старее текущего момента",
+  "noLayoutSelected": "No layout selected",
+  "selectLayout": "Select layout",
+  "layoutSelected": "Layout selected"
 }

@@ -304,5 +304,8 @@
   "sceneSources": "Scène · {0} sources",
   "deleteSceneLiveConfirm": "Êtes-vous sûr de vouloir supprimer ce direct ({0} sources) ?",
   "olderThanYesterday": "Plus ancien qu'hier",
-  "olderThanNow": "Plus anciennes que maintenant"
+  "olderThanNow": "Plus anciennes que maintenant",
+  "noLayoutSelected": "No layout selected",
+  "selectLayout": "Select layout",
+  "layoutSelected": "Layout selected"
 }

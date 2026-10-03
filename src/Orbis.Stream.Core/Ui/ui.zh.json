@@ -304,5 +304,8 @@
   "sceneSources": "场景 · {0} 个源",
   "deleteSceneLiveConfirm": "您确定要删除此直播（{0} 个源）吗？",
   "olderThanYesterday": "早于昨天",
-  "olderThanNow": "比现在更早"
+  "olderThanNow": "比现在更早",
+  "noLayoutSelected": "No layout selected",
+  "selectLayout": "Select layout",
+  "layoutSelected": "Layout selected"
 }

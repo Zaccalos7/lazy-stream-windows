@@ -304,5 +304,8 @@
   "sceneSources": "Hodor {0} Hodor.",
   "deleteSceneLiveConfirm": "Hodor hodor! {0} Hodor.",
   "olderThanYesterday": "HODOR hodor hodoR",
-  "olderThanNow": "Hodor, Hodor Hodor!"
+  "olderThanNow": "Hodor, Hodor Hodor!",
+  "noLayoutSelected": "No layout selected",
+  "selectLayout": "Select layout",
+  "layoutSelected": "Layout selected"
 }

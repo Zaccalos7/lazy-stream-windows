@@ -304,5 +304,8 @@
   "sceneSources": "씬 · 소스 {0}개",
   "deleteSceneLiveConfirm": "이 라이브를 삭제하시겠습니까(소스 {0}개)?",
   "olderThanYesterday": "Older than yesterday",
-  "olderThanNow": "지금보다 오래된 것"
+  "olderThanNow": "지금보다 오래된 것",
+  "noLayoutSelected": "No layout selected",
+  "selectLayout": "Select layout",
+  "layoutSelected": "Layout selected"
 }

@@ -304,5 +304,8 @@
   "sceneSources": "sIn · soQ {0}",
   "deleteSceneLiveConfirm": "DIch lIw dIlIt-chom? (soQ {0})?",
   "olderThanYesterday": "Older than yesterday",
-  "olderThanNow": "DaH 'ej bIQ'a'"
+  "olderThanNow": "DaH 'ej bIQ'a'",
+  "noLayoutSelected": "No layout selected",
+  "selectLayout": "Select layout",
+  "layoutSelected": "Layout selected"
 }

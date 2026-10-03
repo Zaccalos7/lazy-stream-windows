@@ -38,7 +38,7 @@
   const catalogBox = root.querySelector("[data-composer-catalog]");
   const usedBox = root.querySelector("[data-composer-used]");
   const layersBox = root.querySelector("[data-composer-layers]");
-  const scenesBox = root.querySelector("[data-composer-scenes]");
+  const scenesBox = root.querySelector("[data-composer-scenes]") || root.querySelector("[data-composer-layouts]");
   const nameBox = root.querySelector("[data-composer-name]");
   const sizeBox = root.querySelector("[data-composer-size]");
   const dirtyMark = root.querySelector("[data-composer-dirty]");
@@ -1122,11 +1122,14 @@ const occupies = (target, item) => {
 
   const drawScenes = () => {
     const current = layoutPkid === null ? "" : String(layoutPkid);
-    scenesBox.replaceChildren(new Option(word("new"), ""));
-    for (const saved of scenes) scenesBox.append(new Option(saved.name, String(saved.pkid)));
-    if (layoutMode) {
-      scenesBox.value = current;
+    scenesBox.replaceChildren(new Option(word("noLayoutSelected") || "No layout selected", ""));
+    for (const saved of scenes) {
+      scenesBox.append(new Option(saved.name, String(saved.pkid)));
     }
+    if (!layoutMode) {
+      // In compose mode, allow selecting any layout
+    }
+    scenesBox.value = current;
   };
 
   // Only the layouts: the scene a live went on air with belongs to that live.
@@ -1141,8 +1144,15 @@ const occupies = (target, item) => {
   };
 
   scenesBox.addEventListener("change", () => {
-    const saved = scenes.find(entry => String(entry.pkid) === scenesBox.value);
-    loadScene(saved || null);
+    const pkid = scenesBox.value;
+    if (!pkid) {
+      loadScene(null);
+      return;
+    }
+    const saved = scenes.find(entry => String(entry.pkid) === pkid);
+    if (saved) {
+      loadScene(saved);
+    }
   });
 
   nameBox.addEventListener("input", () => {

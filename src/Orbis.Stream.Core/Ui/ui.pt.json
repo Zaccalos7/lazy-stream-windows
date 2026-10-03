@@ -304,5 +304,8 @@
   "sceneSources": "Cena · {0} fontes",
   "deleteSceneLiveConfirm": "Tens a certeza de que queres eliminar esta live ({0} fontes)?",
   "olderThanYesterday": "Older than yesterday",
-  "olderThanNow": "Mais antigos que agora"
+  "olderThanNow": "Mais antigos que agora",
+  "noLayoutSelected": "No layout selected",
+  "selectLayout": "Select layout",
+  "layoutSelected": "Layout selected"
 }

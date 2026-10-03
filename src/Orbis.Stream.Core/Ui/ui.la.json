@@ -304,5 +304,8 @@
   "sceneSources": "Scaena · {0} fontēs",
   "deleteSceneLiveConfirm": "Ānnōn certus es hoc directum dēlēre ({0} fontēs)?",
   "olderThanYesterday": "Older than yesterday",
-  "olderThanNow": "Nunc priora"
+  "olderThanNow": "Nunc priora",
+  "noLayoutSelected": "No layout selected",
+  "selectLayout": "Select layout",
+  "layoutSelected": "Layout selected"
 }

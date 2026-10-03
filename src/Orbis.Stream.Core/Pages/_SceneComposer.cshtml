@@ -67,12 +67,15 @@
 
     <section class="composer-main">
         <div class="card composer-bar">
-            <label class="field" @(layout ? "" : "hidden")>
-                <span class="caption">@T["layout"]</span>
-                <select class="input" data-composer-scenes>
-                    <option value="">@(T[layout ? "newLayout" : "blankLayout"])</option>
-                </select>
-            </label>
+            @if (!layout)
+            {
+                <label class="field">
+                    <span class="caption">@T["layout"]</span>
+                    <select class="input" data-composer-layouts>
+                        <option value="">@T["noLayoutSelected"]</option>
+                    </select>
+                </label>
+            }
             <label class="field grow">
                 <span class="caption">@(T[layout ? "layoutName" : "sceneName"])</span>
                 <input class="input" data-composer-name maxlength="255" placeholder="@(T[layout ? "newLayout" : "newScene"])" />

@@ -304,5 +304,8 @@
   "sceneSources": "シーン · ソース{0}個",
   "deleteSceneLiveConfirm": "このライブ配信（{0}個のソース）を削除してもよろしいですか？",
   "olderThanYesterday": "Older than yesterday",
-  "olderThanNow": "現在より古いもの"
+  "olderThanNow": "現在より古いもの",
+  "noLayoutSelected": "No layout selected",
+  "selectLayout": "Select layout",
+  "layoutSelected": "Layout selected"
 }

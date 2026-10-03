@@ -107,6 +107,7 @@ public sealed class LivePreviewService
     private readonly VideoRepository _videoRepository;
     private readonly VideoSettingRepository _videoSettingRepository;
     private readonly VideoLiveHistoryRepository _historyRepository;
+    private readonly LivePlatformEmbeds _embeds;
     private readonly ResponseFactory _responses;
     private readonly Localizer _localizer;
     private readonly LiveChangeNotifier _notifier;
@@ -117,6 +118,7 @@ public sealed class LivePreviewService
         VideoRepository videoRepository,
         VideoSettingRepository videoSettingRepository,
         VideoLiveHistoryRepository historyRepository,
+        LivePlatformEmbeds embeds,
         ResponseFactory responses,
         Localizer localizer,
         LiveChangeNotifier notifier,
@@ -126,10 +128,26 @@ public sealed class LivePreviewService
         _videoRepository = videoRepository;
         _videoSettingRepository = videoSettingRepository;
         _historyRepository = historyRepository;
+        _embeds = embeds;
         _responses = responses;
         _localizer = localizer;
         _notifier = notifier;
         _logger = logger;
+    }
+
+    /// <summary>
+    /// The platform player of the live the page is watching, so the page can show the live as the
+    /// viewers see it. Nothing when the live is not running, when the platform is one this
+    /// application does not have a player for, or when the channel is not on air: the page falls
+    /// back to the picture ffmpeg writes, which is the truth of the encoder either way.
+    /// </summary>
+    /// <param name="host">The host the page is served on, which Twitch has to be told about.</param>
+    public async Task<LivePlatformEmbed?> EmbedAsync(int? videoPkid, string? host, CancellationToken cancellationToken)
+    {
+        var snapshot = Snapshot(videoPkid);
+        return snapshot.IsLive
+            ? await _embeds.ResolveAsync(snapshot.StreamUrl, snapshot.ChannelName, snapshot.PlatformStreamName, host, cancellationToken)
+            : null;
     }
 
     /// <summary>The live to watch: the one asked for while it runs, otherwise the last one started.</summary>

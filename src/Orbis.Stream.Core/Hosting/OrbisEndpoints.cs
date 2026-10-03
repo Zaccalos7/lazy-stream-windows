@@ -281,6 +281,26 @@ public static class OrbisEndpoints
         group.MapGet("/live", (LivePreviewService service, HttpRequest request) =>
             Results.Json(service.Snapshot(Watched(request))));
 
+        // The player of the platform a live is on, for a page that would rather show the live as
+        // the viewers see it than as the encoder sees it. It is asked for once the page is open and
+        // not while it is drawn, because on YouTube the address of the player is not known before
+        // the platform has been asked which video is on air, and that takes longer than a page
+        // should wait to be drawn. There is nothing to hand back when the live is over, when the
+        // platform is one this application has no player for, or when the channel is not on air,
+        // and a page that is told so keeps the local picture.
+        group.MapGet("/live/embed", async (
+            LivePreviewService service,
+            HttpRequest request,
+            HttpContext context) =>
+        {
+            var embed = await service.EmbedAsync(
+                Watched(request),
+                context.Request.Host.Host,
+                context.RequestAborted);
+
+            return embed is null ? Results.NotFound() : Results.Ok(embed);
+        });
+
         group.MapGet("/live/{pkid:int}/video", (int pkid, LivePreviewService service) =>
         {
             var file = service.FileOf(pkid);

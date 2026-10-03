@@ -1160,6 +1160,9 @@ a:hover > .platform-mark { background: var(--tint); }
 .preview-screen { position: relative; aspect-ratio: 16 / 9; border-radius: var(--radius-sm); overflow: hidden; background: #000; }
 .preview-screen .preview-cover { position: absolute; inset: 0; aspect-ratio: auto; border-radius: 0; }
 .preview-screen canvas, .preview-screen .preview-platform-player { position: absolute; inset: 0; z-index: 1; width: 100%; height: 100%; border: none; }
+/* The cover is drawn with a flex layout and the player and the canvas are placed on the stage, so
+   none of them would answer to `hidden` on their own: it is said here once, for all three. */
+.preview-screen [hidden] { display: none; }
 /* The lives on air to pick from: one control, not a row of buttons across the page. */
 .live-picker label.field { width: min(420px, 100%); }
 .preview-cover .icon { font-size: 30px; color: var(--text-3); }

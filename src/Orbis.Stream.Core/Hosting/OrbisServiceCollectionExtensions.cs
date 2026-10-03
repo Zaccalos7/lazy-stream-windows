@@ -15,6 +15,9 @@ namespace Orbis.Stream.Core.Hosting;
 /// </summary>
 public static class OrbisServiceCollectionExtensions
 {
+    /// <summary>The name the client that reads the pages of the streaming platforms is built under.</summary>
+    private const string PlatformPlayerClient = "platform-player";
+
     public static IServiceCollection AddOrbisStream(
         this IServiceCollection services,
         OrbisRuntimeOptions options)
@@ -60,6 +63,22 @@ public static class OrbisServiceCollectionExtensions
         services.AddSingleton<SettingService>();
         services.AddSingleton<VideoSettingService>();
         services.AddSingleton<ImageService>();
+        // The players of the platforms a live goes on. The client is given a name of its own and a
+        // short leash: a platform page that does not answer in time must not hold the preview open
+        // waiting for it, and the answers are held in the service so a page asking again does not
+        // ask YouTube again.
+        services.AddHttpClient(PlatformPlayerClient, client =>
+        {
+            client.Timeout = TimeSpan.FromSeconds(8);
+            // A platform page is the page a browser gets. Without these it answers a page that is
+            // not a browser one with a consent wall instead of the channel.
+            client.DefaultRequestHeaders.UserAgent.ParseAdd(
+                "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/124.0.0.0 Safari/537.36");
+            client.DefaultRequestHeaders.AcceptLanguage.ParseAdd("en-US,en;q=0.9");
+        });
+        services.AddSingleton(provider => new LivePlatformEmbeds(
+            provider.GetRequiredService<IHttpClientFactory>().CreateClient(PlatformPlayerClient),
+            provider.GetRequiredService<Microsoft.Extensions.Logging.ILogger<LivePlatformEmbeds>>()));
         services.AddSingleton<LivePreviewService>();
         // What the canvas can be built from. The folders are read on every listing, so a folder
         // added in the channel settings shows its files without restarting the application.

@@ -332,10 +332,9 @@ public sealed class FfmpegVideoPlaylistStreamer : IVideoPlaylistStreamer
                 _sessions.Remove(videoKey);
                 await session.DisposeAsync().ConfigureAwait(false);
                 _frames.Forget(videoKey);
-                var endedNaturally = session.EndedNaturally;
                 session = null;
 
-                if (exitCode == 0 || endedNaturally)
+                if (exitCode == 0)
                 {
                     if (markEndedOnFinish)
                     {
@@ -565,12 +564,11 @@ public sealed class FfmpegVideoPlaylistStreamer : IVideoPlaylistStreamer
                 _sessions.Remove(videoKey);
                 await session.DisposeAsync().ConfigureAwait(false);
                 _frames.Forget(videoKey);
-                var endedNaturally = session.EndedNaturally;
                 session = null;
 
                 // If the scene has only file sources and ffmpeg exited cleanly, the video ended.
                 // End the live instead of restarting the loop.
-                if (onlyFiles && (exitCode == 0 || endedNaturally))
+                if (onlyFiles && exitCode == 0)
                 {
                     var endedMessage = _localizer.PrintMessage("video.live.ended");
                     _logger.LogInformation("{Message}", endedMessage);
@@ -686,13 +684,6 @@ public sealed class FfmpegVideoPlaylistStreamer : IVideoPlaylistStreamer
             if (session.RestartRequested)
             {
                 return StreamOutcome.Reconfigured;
-            }
-
-            var durationMs = session.Probe.DurationSeconds > 0 ? (long)(session.Probe.DurationSeconds * 1000) : 0;
-            if (durationMs > 0 && session.PositionMilliseconds >= durationMs)
-            {
-                await session.EndNaturallyAsync().ConfigureAwait(false);
-                return StreamOutcome.Finished;
             }
 
             if (session.HasExited)

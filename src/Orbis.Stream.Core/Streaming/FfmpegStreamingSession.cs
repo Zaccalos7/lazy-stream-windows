@@ -17,6 +17,7 @@ public sealed class FfmpegStreamingSession : IAsyncDisposable
     private long _positionMilliseconds;
     private int _stopRequested;
     private int _restartRequested;
+    private int _endedNaturally;
 
     private FfmpegStreamingSession(
         Process process,
@@ -78,6 +79,28 @@ public sealed class FfmpegStreamingSession : IAsyncDisposable
     /// loop watches this flag and does exactly that.
     /// </summary>
     public bool RestartRequested => Volatile.Read(ref _restartRequested) == 1;
+
+    public bool EndedNaturally => Volatile.Read(ref _endedNaturally) == 1;
+
+    public async Task EndNaturallyAsync()
+    {
+        if (Interlocked.Exchange(ref _endedNaturally, 1) == 1)
+        {
+            return;
+        }
+
+        try
+        {
+            if (!_process.HasExited)
+            {
+                _process.Kill(entireProcessTree: true);
+                await _process.WaitForExitAsync().ConfigureAwait(false);
+            }
+        }
+        catch (InvalidOperationException)
+        {
+        }
+    }
 
     public bool HasExited
     {

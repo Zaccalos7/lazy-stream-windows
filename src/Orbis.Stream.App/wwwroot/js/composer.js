@@ -1070,8 +1070,14 @@ const occupies = (target, item) => {
     let maxW = 0, maxH = 0;
     for (const item of scene.items) {
       if (!hasPicture(item.kind)) continue;
+      const isFullFrame = item.x <= 0 && item.y <= 0 && item.w >= scene.width && item.h >= scene.height;
       const w = item.naturalWidth || item.w;
       const h = item.naturalHeight || item.h;
+      if (isFullFrame) {
+        maxW = w;
+        maxH = h;
+        return { maxW, maxH };
+      }
       if (w > maxW || h > maxH) {
         maxW = Math.max(maxW, w);
         maxH = Math.max(maxH, h);

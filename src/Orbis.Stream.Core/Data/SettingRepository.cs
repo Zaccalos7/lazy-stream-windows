@@ -209,50 +209,33 @@ public sealed class VideoLiveHistoryRepository
         return ReadAll(command).FirstOrDefault();
     }
 
-    /// <summary>Deletes a single live history row and all its video rows.</summary>
-    public void DeleteByPkid(long pkid)
+    /// <summary>
+    /// The lives that started before the given date, oldest first. The rows come back whole because
+    /// deleting them is a walk over their videos, and a walk needs to know which live each one
+    /// belongs to.
+    /// </summary>
+    public List<VideoLiveHistoryEntity> FindOlderThan(DateTime threshold)
     {
         using var connection = _connectionFactory.Open();
         using var command = connection.CreateCommand();
-        command.CommandText = "DELETE FROM video WHERE video_live_history_pkid = @pkid;";
-        command.Parameters.AddWithValue("@pkid", pkid);
-        command.ExecuteNonQuery();
-
-        command.CommandText = "DELETE FROM video_live_history WHERE pkid = @pkid;";
-        command.ExecuteNonQuery();
+        command.CommandText =
+            $"SELECT {BaseColumns} FROM video_live_history t WHERE t.local_date_time_start_live < @threshold ORDER BY t.pkid;";
+        command.Parameters.AddWithValue("@threshold", SqliteValue.From(threshold));
+        return ReadAll(command);
     }
 
-    /// <summary>Deletes all live history rows older than the given date and their video rows.</summary>
-    public int DeleteOlderThan(DateTime threshold)
+    /// <summary>
+    /// Deletes the live history row on its own. Its videos go first: the foreign key of
+    /// <c>video.video_live_history_pkid</c> has no cascade, so a row with videos under it cannot be
+    /// deleted while they are there.
+    /// </summary>
+    public void DeleteRow(long pkid)
     {
         using var connection = _connectionFactory.Open();
         using var command = connection.CreateCommand();
-        // First collect pkids to delete
-        command.CommandText = "SELECT pkid FROM video_live_history WHERE local_date_time_start_live < @threshold;";
-        command.Parameters.AddWithValue("@threshold", SqliteValue.From(threshold));
-        var pkids = new List<long>();
-        using (var reader = command.ExecuteReader())
-        {
-            while (reader.Read())
-            {
-                pkids.Add(Convert.ToInt64(reader.GetValue(0), CultureInfo.InvariantCulture));
-            }
-        }
-
-        if (pkids.Count == 0) return 0;
-
-        var placeholders = string.Join(",", pkids.Select((_, i) => $"@pkid{i}"));
-        command.CommandText = $"DELETE FROM video WHERE video_live_history_pkid IN ({placeholders});";
-        for (var i = 0; i < pkids.Count; i++)
-        {
-            command.Parameters.AddWithValue($"@pkid{i}", pkids[i]);
-        }
+        command.CommandText = "DELETE FROM video_live_history WHERE pkid = @pkid;";
+        command.Parameters.AddWithValue("@pkid", pkid);
         command.ExecuteNonQuery();
-
-        command.CommandText = $"DELETE FROM video_live_history WHERE pkid IN ({placeholders});";
-        command.ExecuteNonQuery();
-
-        return pkids.Count;
     }
 
     private static List<VideoLiveHistoryEntity> ReadAll(SqliteCommand command)

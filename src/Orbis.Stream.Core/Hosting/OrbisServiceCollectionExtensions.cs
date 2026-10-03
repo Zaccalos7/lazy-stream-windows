@@ -59,6 +59,7 @@ public static class OrbisServiceCollectionExtensions
         services.AddSingleton(provider => new BackgroundTaskExecutor(
             provider.GetRequiredService<Microsoft.Extensions.Logging.ILogger<BackgroundTaskExecutor>>()));
         services.AddSingleton<StreamingService>();
+        services.AddSingleton<LiveHistoryCleanupService>();
         services.AddSingleton<VideoService>();
         services.AddSingleton<SettingService>();
         services.AddSingleton<VideoSettingService>();

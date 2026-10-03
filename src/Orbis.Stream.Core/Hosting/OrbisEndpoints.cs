@@ -168,6 +168,13 @@ public static class OrbisEndpoints
         // Live History endpoints
         group.MapDelete("/live-history/{pkid:long}", (long pkid, VideoService service) => AsResult(service.DeleteLiveHistory(pkid)));
         group.MapDelete("/live-history/older-than/{months:int}", (int months, VideoService service) => AsResult(service.DeleteOldLiveHistory(months)));
+
+        // The cleanup the page queues: it answers at once and the page asks how far it has got,
+        // because deleting a hundred lives takes long enough to be worth watching.
+        group.MapPost("/live-history/cleanup", (int months, LiveHistoryCleanupService cleanup) => cleanup.TryStart(months)
+            ? Results.Ok(cleanup.Progress)
+            : Results.Json(cleanup.Progress, statusCode: StatusCodes.Status409Conflict));
+        group.MapGet("/live-history/cleanup", (LiveHistoryCleanupService cleanup) => Results.Ok(cleanup.Progress));
     }
 
     private static void MapSettings(IEndpointRouteBuilder app)

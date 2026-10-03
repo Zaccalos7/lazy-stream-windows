@@ -99,10 +99,6 @@ public sealed class VideoService
     public MessageResponse DeletePlaylist(long videoLiveHistoryPkid)
     {
         var videos = _videoRepository.FindByLiveHistoryId(videoLiveHistoryPkid);
-        if (videos.Count == 0)
-        {
-            throw new NotFoundCustomException("video.not.found");
-        }
 
         if (videos.Any(video => video.LiveStatus == LiveStatus.Live))
         {
@@ -129,10 +125,6 @@ public sealed class VideoService
     public MessageResponse DeleteLiveHistory(long videoLiveHistoryPkid)
     {
         var videos = _videoRepository.FindByLiveHistoryId(videoLiveHistoryPkid);
-        if (videos.Count == 0)
-        {
-            throw new NotFoundCustomException("video.not.found");
-        }
 
         if (videos.Any(video => video.LiveStatus == LiveStatus.Live))
         {
@@ -158,12 +150,12 @@ public sealed class VideoService
     /// <summary>Deletes all live history rows older than the given number of months and their video rows.</summary>
     public MessageResponse DeleteOldLiveHistory(int monthsOld)
     {
-        if (monthsOld <= 0)
+        if (monthsOld < 0)
         {
             return _responses.Build("invalid.parameter", StatusCodes.Status400BadRequest);
         }
 
-        var threshold = DateTime.Now.AddMonths(-monthsOld);
+        var threshold = monthsOld == 0 ? DateTime.Now.AddDays(-1) : DateTime.Now.AddMonths(-monthsOld);
         var deletedCount = _videoLiveHistoryRepository.DeleteOlderThan(threshold);
 
         _notifier.Raise();

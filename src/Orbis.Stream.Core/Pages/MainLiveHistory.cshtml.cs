@@ -36,7 +36,11 @@ public sealed class MainLiveHistoryModel(VideoService videos, SettingService set
 
     public IActionResult OnPostDelete(long id)
     {
-        Run(() => videos.DeleteLiveHistory(id));
+        var success = Run(() => videos.DeleteLiveHistory(id));
+        if (Request.Headers["X-Requested-With"] == "XMLHttpRequest" || Request.Headers["Accept"].ToString().Contains("application/json") )
+        {
+            return success ? new OkResult() : new BadRequestResult();
+        }
         return RedirectToPage(new { p = PageIndex });
     }
 }

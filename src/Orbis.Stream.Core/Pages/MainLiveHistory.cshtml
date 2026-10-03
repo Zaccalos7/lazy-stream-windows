@@ -12,16 +12,16 @@
         <h1>@T["liveHistory"]</h1>
     </div>
     <div class="toolbar">
-        <div class="auto-cleanup-config" style="gap: 12px; display: flex; flex-wrap: wrap; align-items: center;">
+        <div class="auto-cleanup-config" style="gap: 24px; display: flex; flex-wrap: wrap; align-items: center;">
             <label class="field toggle-section" style="gap: 8px;">
                 <span>@T["autoCleanupEnabled"]</span>
-                <label class="toggle" style="gap: 6px;">
+                <label class="toggle" style="gap: 8px;">
                     <input type="checkbox" id="autoCleanupEnabled" @(Model.AutoCleanupEnabled ? "checked" : "") />
                     <span class="muted">@T["autoCleanupEnabled"]</span>
                 </label>
             </label>
-            <div id="autoCleanupFields" style="display: @(Model.AutoCleanupEnabled ? "flex" : "none"); gap: 12px; flex-wrap: wrap; align-items: center;">
-                <label class="field" style="gap: 6px;">
+            <div id="autoCleanupFields" style="display: @(Model.AutoCleanupEnabled ? "flex" : "none"); gap: 24px; flex-wrap: wrap; align-items: center;">
+                <label class="field" style="gap: 8px;">
                     <span>@T["autoCleanupIntervalMonths"]</span>
                     <select id="autoCleanupIntervalMonths" class="input">
                         <option value="1" selected="@(Model.AutoCleanupIntervalMonths == 1)">1 @T["monthAbbrev"]</option>
@@ -31,7 +31,7 @@
                         <option value="12" selected="@(Model.AutoCleanupIntervalMonths == 12)">12 @T["monthAbbrev"]</option>
                     </select>
                 </label>
-                <label class="field" style="gap: 6px;">
+                <label class="field" style="gap: 8px;">
                     <span>@T["autoCleanupOlderThanMonths"]</span>
                     <select id="autoCleanupOlderThanMonths" class="input">
                         <option value="1" selected="@(Model.AutoCleanupOlderThanMonths == 1)">@T["olderThan1Day"]</option>
@@ -102,7 +102,7 @@ else
                     <td class="nowrap">
                         @if (historyPkid > 0)
                         {
-                            <form method="post" asp-page-handler="Delete" asp-route-id="@historyPkid" class="inline" data-confirm="@T["deleteLiveHistoryConfirm"]">
+                            <form method="post" asp-page-handler="Delete" asp-route-id="@historyPkid" class="inline" data-confirm="@T["deleteLiveHistoryConfirm"]" onsubmit="event.preventDefault(); confirmDelete(this, this.dataset.confirm);">
                                 <button type="submit" class="btn subtle icon-only danger" title="@T["deleteLiveHistory"]" aria-label="@T["deleteLiveHistory"]"><i class="icon">&#xE74D;</i></button>
                             </form>
                         }
@@ -223,7 +223,27 @@ else
 
     // Single delete
     function confirmDelete(form, msg) {
-        return confirm(msg);
+        const dialog = document.getElementById("confirm-dialog");
+        dialog.querySelector("[data-text]").textContent = msg;
+        dialog.returnValue = "";
+        dialog.onclose = async () => {
+            if (dialog.returnValue !== "ok") return;
+            const btn = form.querySelector("button");
+            btn.disabled = true;
+            try {
+                const formData = new FormData(form);
+                const resp = await fetch(form.action, { method: "POST", body: formData, headers: { "X-Requested-With": "XMLHttpRequest" } });
+                if (resp.ok) {
+                    form.closest("tr").remove();
+                    showToast("@T["deleteLiveHistory"]", "success");
+                } else {
+                    showToast(await resp.text(), "error");
+                }
+            } finally {
+                btn.disabled = false;
+            }
+        };
+        dialog.showModal();
     }
 </script>
 
@@ -231,7 +251,7 @@ else
     .auto-cleanup-config {
         display: flex;
         align-items: center;
-        gap: 12px;
+        gap: 24px;
         flex-wrap: wrap;
     }
     .auto-cleanup-config .field {
@@ -253,7 +273,7 @@ else
         display: flex;
         align-items: center;
         justify-content: space-between;
-        gap: 12px;
+        gap: 24px;
         padding: 12px 16px;
         border-radius: 8px;
         background: var(--card);

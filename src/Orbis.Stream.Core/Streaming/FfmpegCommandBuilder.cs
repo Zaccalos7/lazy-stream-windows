@@ -21,13 +21,7 @@ public sealed record FfmpegCompositionItem(
     int Y,
     int Width,
     int Height,
-    bool AudioEnabled,
-    /// <summary>
-    /// A file that plays again when it reaches its end. A canvas is not a playlist: a video that
-    /// runs out keeps its shape on the canvas, and the live ends with the longest one rather than
-    /// with the first. Only the file the live is measured against is left to end for real.
-    /// </summary>
-    bool Loop = false);
+    bool AudioEnabled);
 
 /// <summary>
 /// Everything needed to stream a canvas: the sources, where they sit, and the encoder setting they
@@ -42,6 +36,17 @@ public sealed record FfmpegCompositionRequest(
     int CanvasHeight,
     double CanvasFrameRate,
     TimeSpan ResumeFrom = default,
+    /// <summary>
+    /// How long the whole canvas streams, when it has an end. A canvas of nothing but files has
+    /// one, and it is the length of the longest of them: a video that runs out while the others
+    /// are still going leaves its shape on the canvas (the overlay holds its last frame) and the
+    /// live goes on, exactly as a playlist goes on to the next video. When the longest one is over
+    /// the live is over, which is what <c>-t</c> is for: ffmpeg stops on its own instead of
+    /// waiting to be asked, so the connection to the platform is closed by the process that opened
+    /// it.
+    /// <para>Null for a canvas with a capture device on it: a device has no end to reach.</para>
+    /// </summary>
+    TimeSpan? Duration = null,
     string? PreviewPath = null);
 
 /// <summary>
@@ -220,6 +225,16 @@ public static class FfmpegCommandBuilder
         AppendEncoderArguments(
             arguments, setting, frameRate, HasAudioMix(items), channels: 0, scaleFilter: null);
 
+        // The length of the canvas is an output option: it counts what goes on air, whatever the
+        // inputs do. It stands before the destination, which is where every output option goes.
+        // A canvas started again from where it was interrupted reads from that point on, so the
+        // clock of the output carries the part already streamed: the live lasts the same either way.
+        if (request.Duration is { } duration && duration > TimeSpan.Zero)
+        {
+            arguments.Add("-t");
+            arguments.Add(Seconds(duration + request.ResumeFrom));
+        }
+
         arguments.Add(request.OutputUrl);
 
         if (request.PreviewPath is { } previewPath)
@@ -365,13 +380,6 @@ public static class FfmpegCommandBuilder
             {
                 arguments.Add("-ss");
                 arguments.Add(Seconds(resumeFrom));
-            }
-
-            // Both are input options, so they go in before the file they are about.
-            if (item.Loop)
-            {
-                arguments.Add("-stream_loop");
-                arguments.Add("-1");
             }
 
             arguments.Add("-thread_queue_size");

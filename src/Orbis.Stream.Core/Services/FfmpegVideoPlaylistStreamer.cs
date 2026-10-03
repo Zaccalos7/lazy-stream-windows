@@ -443,35 +443,28 @@ public sealed class FfmpegVideoPlaylistStreamer : IVideoPlaylistStreamer
     }
 
     /// <summary>
-    /// The files that play again when they reach their end: every one of them but the longest.
-    /// <para>A canvas is not a playlist. A video that runs out while three others are still going
-    /// does not take the live down with it, as it would in a playlist: its shape keeps playing
-    /// until the longest file of the canvas is over, and that is the one the live is measured
-    /// against, so the live ends with it.</para>
-    /// <para>A file ffprobe could not read has no length to be measured with, so it is looped: a
-    /// live that never ends because of a file nothing can read is better than one that ends on the
-    /// first guess.</para>
+    /// How long a canvas of files streams: the length of its longest file.
+    /// <para>A canvas is not a playlist, but the end of it is decided the same way: a video that
+    /// runs out while the others are still going leaves its shape on the canvas (the overlay holds
+    /// its last frame) and the live goes on, and when the longest file is over the live is over.
+    /// A canvas with a capture device on it has no end: a device produces frames for ever, so
+    /// null is the answer and the live lasts until it is stopped.</para>
+    /// <para>A file ffprobe could not read has no length to be measured with, so it is not what
+    /// the live is measured against: a live that never ends because of a file nothing can read is
+    /// better than one that ends on the first guess.</para>
     /// </summary>
-    private static HashSet<VideoEntity> LoopedFilesOf(
+    internal static TimeSpan? LongestFileDuration(
         IReadOnlyList<VideoEntity> rows,
         IReadOnlyDictionary<string, MediaProbeResult> probes)
     {
-        var files = rows.Where(row => row.SourceKind == SourceKind.File).ToList();
-        var looped = new HashSet<VideoEntity>(files);
+        var seconds = rows
+            .Where(row => row.SourceKind == SourceKind.File)
+            .Select(row => probes.TryGetValue(row.VideoPath, out var probe) ? probe.DurationSeconds : 0d)
+            .Where(value => value > 0)
+            .DefaultIfEmpty(0d)
+            .Max();
 
-        var longest = files
-            .Select(row => (Row: row, Seconds: probes.TryGetValue(row.VideoPath, out var probe) ? probe.DurationSeconds : 0d))
-            .Where(entry => entry.Seconds > 0)
-            .OrderByDescending(entry => entry.Seconds)
-            .ThenBy(entry => entry.Row.Pkid)
-            .FirstOrDefault();
-
-        if (longest.Row is not null)
-        {
-            looped.Remove(longest.Row);
-        }
-
-        return looped;
+        return seconds > 0 ? TimeSpan.FromSeconds(seconds) : null;
     }
 
     /// <summary>
@@ -495,8 +488,9 @@ public sealed class FfmpegVideoPlaylistStreamer : IVideoPlaylistStreamer
 
     /// <summary>
     /// One ffmpeg for a whole canvas. The rows of a scene are its sources, not a playlist: they are
-    /// opened together and laid over each other, and the pass lasts until the user stops it, because
-    /// a capture device has no end to reach.
+    /// opened together and laid over each other, so the pass lasts until the user stops it, or
+    /// until the longest of its files is over when the canvas is made of nothing else. That is the
+    /// same end a playlist has, measured the same way, and the live stops as cleanly as the button.
     /// </summary>
     private async Task StreamSceneAsync(
         IReadOnlyList<VideoEntity> rows,
@@ -524,8 +518,9 @@ public sealed class FfmpegVideoPlaylistStreamer : IVideoPlaylistStreamer
             return;
         }
 
-        // A canvas made only of files has an end, and it is the end of the longest of them: the
-        // others play again rather than stopping the live, as they would in a playlist.
+        // A canvas made only of files has an end, and it is the end of the longest of them: a
+        // video that runs out first leaves its shape on the canvas and the live goes on, the way a
+        // playlist goes on to the next video.
         var onlyFiles = rows.All(row => row.SourceKind == SourceKind.File);
         var videoKey = baseRow.Pkid;
         var description = _localizer.PrintMessage("video.live.scene", [rows.Count.ToString(CultureInfo.InvariantCulture)]);
@@ -536,7 +531,13 @@ public sealed class FfmpegVideoPlaylistStreamer : IVideoPlaylistStreamer
             var resumeFrom = TimeSpan.Zero;
             var probes = await ProbedFilesAsync(rows, cancellationToken).ConfigureAwait(false);
             var silent = SilentFilesOf(rows, probes);
-            var looped = LoopedFilesOf(rows, probes);
+            var duration = onlyFiles ? LongestFileDuration(rows, probes) : null;
+            if (duration is { } canvasLength)
+            {
+                _logger.LogInformation(
+                    "The canvas streams for {Seconds:0.##} seconds, the length of its longest file",
+                    canvasLength.TotalSeconds);
+            }
 
             while (true)
             {
@@ -551,8 +552,7 @@ public sealed class FfmpegVideoPlaylistStreamer : IVideoPlaylistStreamer
                         row.Y ?? 0,
                         row.Width ?? 0,
                         row.Height ?? 0,
-                        row.AudioEnabled && !silent.Contains(row),
-                        looped.Contains(row)))
+                        row.AudioEnabled && !silent.Contains(row)))
                     .ToList();
 
                 var next = FfmpegStreamingSession.StartComposition(
@@ -566,6 +566,7 @@ public sealed class FfmpegVideoPlaylistStreamer : IVideoPlaylistStreamer
                     DefaultCanvasFrameRate,
                     _logger,
                     resumeFrom,
+                    duration,
                     _frames.PathOf(videoKey));
 
                 var previous = session;

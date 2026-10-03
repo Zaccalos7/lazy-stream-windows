@@ -149,17 +149,23 @@ public sealed class FfmpegStreamingSession : IAsyncDisposable
         double canvasFrameRate,
         ILogger logger,
         TimeSpan resumeFrom = default,
+        TimeSpan? duration = null,
         string? previewPath = null)
     {
         var arguments = FfmpegCommandBuilder.BuildComposition(new FfmpegCompositionRequest(
-            items, outputUrl, setting, canvasWidth, canvasHeight, canvasFrameRate, resumeFrom, previewPath));
+            items, outputUrl, setting, canvasWidth, canvasHeight, canvasFrameRate, resumeFrom, duration, previewPath));
 
         // The composition is always sent at the size of the canvas: the resolution of the setting
         // is not applied on top of it (see BuildComposition), so it is not the one shown either.
         var frameRate = setting.FrameRate is > 0 ? setting.FrameRate.Value : canvasFrameRate;
         var output = new MediaOutput(canvasWidth, canvasHeight, frameRate);
         var sound = FfmpegCommandBuilder.CarriesSound(items);
-        var probe = new MediaProbeResult(canvasWidth, canvasHeight, frameRate, sound, sound ? 2 : 0, 0);
+
+        // The length of the canvas is kept in the probe because that is where the streaming loop
+        // looks for it: a playlist ends when the position reaches the length of its file, and a
+        // canvas made of files ends the same way. A probe that said zero is a live that never ends.
+        var probe = new MediaProbeResult(
+            canvasWidth, canvasHeight, frameRate, sound, sound ? 2 : 0, duration?.TotalSeconds ?? 0);
 
         return Launch(locator, videoPkid, SceneDescriptionOf(items), outputUrl, arguments, probe, output, resumeFrom, logger);
     }

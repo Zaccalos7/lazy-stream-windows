@@ -277,37 +277,44 @@ public sealed class FfmpegCompositionTests
     }
 
     [Fact]
-    public void AShapeThatHasToLastLongerIsLoopedAndTheOneTheLiveIsMeasuredAgainstIsNot()
+    public void ACanvasOfFilesIsBoundedByItsLongestFile()
     {
-        // A canvas is not a playlist: a video that runs out while three others are going keeps its
-        // shape on air, so it plays again. The longest file is the one the live ends with, so it is
-        // the one that is left to end for real.
-        var shortest = new FfmpegCompositionItem(SourceKind.File, "C:/clips/short.mp4", 0, 0, 1920, 1080, false, Loop: true);
-        var middle = new FfmpegCompositionItem(SourceKind.File, "C:/clips/middle.mp4", 0, 0, 1920, 1080, false, Loop: true);
-        var longest = new FfmpegCompositionItem(SourceKind.File, "C:/clips/long.mp4", 0, 0, 1920, 1080, false);
+        // The canvas ends with the longest of its files, the way a playlist ends with the last one:
+        // -t is an output option, so ffmpeg stops on its own and closes the connection to the
+        // platform instead of waiting to be asked.
+        var request = Request([Camera(0, 0, 1920, 1080)]) with { Duration = TimeSpan.FromSeconds(754.5) };
+        var command = FfmpegCommandBuilder.BuildComposition(request);
+        var text = string.Join(' ', command);
 
-        var text = string.Join(' ', FfmpegCommandBuilder.BuildComposition(Request([shortest, middle, longest])));
+        Assert.Contains("-t 754.5 rtmp://ingest/live/key", text, StringComparison.Ordinal);
+        Assert.True(command.ToList().IndexOf("-t") < command.ToList().IndexOf("rtmp://ingest/live/key"));
+    }
 
-        // The loop is an input option, so it stands with the rest of them, before the file it is
-        // about: only the two files that have to keep going carry it.
-        Assert.Contains(
-            "-stream_loop -1 -thread_queue_size 512 -readrate 1 -i C:/clips/short.mp4",
-            text,
-            StringComparison.Ordinal);
-        Assert.Contains(
-            "-stream_loop -1 -thread_queue_size 512 -readrate 1 -i C:/clips/middle.mp4",
-            text,
-            StringComparison.Ordinal);
-        Assert.Contains(
-            "-thread_queue_size 512 -readrate 1 -i C:/clips/long.mp4",
-            text,
-            StringComparison.Ordinal);
-        Assert.Equal(2, text.Split("-stream_loop").Length - 1);
+    [Fact]
+    public void ACanvasIsNotBoundedWhileThereIsSomethingThatNeverEnds()
+    {
+        // A capture device produces frames for ever: there is no length to put on the live, and
+        // asking for one would cut a live that is running perfectly well.
+        Assert.DoesNotContain(
+            FfmpegCommandBuilder.BuildComposition(Request([Camera(0, 0, 640, 480)])),
+            argument => argument == "-t");
+    }
 
-        // A device has no end to reach, so nothing is ever asked to loop for it.
-        var withCamera = FfmpegCommandBuilder.BuildComposition(
-            Request([Camera(0, 0, 640, 480), Microphone()]));
-        Assert.DoesNotContain("-stream_loop", string.Join(' ', withCamera), StringComparison.Ordinal);
+    [Fact]
+    public void ACanvasStartedAgainFromWhereItStoppedStillLastsAsLong()
+    {
+        // The inputs read from the point the interrupted pass got to, so the clock of the output
+        // carries the part that was already on air.
+        var request = Request([Camera(0, 0, 1920, 1080)]) with
+        {
+            Duration = TimeSpan.FromSeconds(600),
+            ResumeFrom = TimeSpan.FromSeconds(120)
+        };
+
+        Assert.Contains(
+            "-t 720",
+            string.Join(' ', FfmpegCommandBuilder.BuildComposition(request)),
+            StringComparison.Ordinal);
     }
 
     [Fact]

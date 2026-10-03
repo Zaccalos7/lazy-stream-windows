@@ -2,6 +2,7 @@ using System.Net;
 using Microsoft.AspNetCore.Builder;
 using Microsoft.Extensions.DependencyInjection;
 using System.Net.Http.Json;
+using System.Reflection;
 using System.Text.Json;
 using System.Text.RegularExpressions;
 using Orbis.Stream.Core.Configuration;
@@ -364,9 +365,16 @@ public sealed class EndToEndApiTests : IClassFixture<ApplicationFixture>
         Assert.Equal(HttpStatusCode.OK, response.StatusCode);
         var html = await response.Content.ReadAsStringAsync();
 
-        Assert.Equal("2.0.13", AppInfo.Current.Version);
         Assert.Equal("Orbis Stream", AppInfo.Current.Name);
         Assert.Equal("Marco Amleto Guarino", AppInfo.Current.Author);
+
+        // The version is the one the build stamped, without the commit the source link appends to
+        // it: it is not written a second time anywhere, so a version bump cannot leave it behind.
+        var informational = typeof(AppInfo).Assembly
+            .GetCustomAttribute<AssemblyInformationalVersionAttribute>()?.InformationalVersion;
+        Assert.False(string.IsNullOrWhiteSpace(informational));
+        Assert.Equal(informational!.Split('+')[0], AppInfo.Current.Version);
+        Assert.Matches(@"^\d+\.\d+\.\d+", AppInfo.Current.Version);
 
         // The sidebar carries the mark of the application, the build and the author, and opens the
         // dialog that says the same in full.

@@ -196,18 +196,6 @@ public static class OrbisEndpoints
             Results.Ok(service.RetrieveDirectoriesSettingsPath(Filters(context.Request.Query, "lang"))));
 
         group.MapDelete("/delete", (int id, SettingService service) => AsResult(service.DeleteAStreamingSetting(id)));
-
-        // Save auto-cleanup settings from live history page
-        group.MapPost("/save-auto-cleanup", (HttpContext context, SettingService service, RequestValidator validator) =>
-        {
-            var request = context.Request.ReadFromJsonAsync<SettingRequest>().GetAwaiter().GetResult();
-            if (request is null)
-            {
-                return Results.BadRequest();
-            }
-            validator.RequireSetting(request);
-            return AsResult(service.AddNewConfiguration(request));
-        });
     }
 
     private static void MapVideoSettings(IEndpointRouteBuilder app)

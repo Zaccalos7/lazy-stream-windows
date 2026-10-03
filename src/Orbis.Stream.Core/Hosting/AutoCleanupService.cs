@@ -76,7 +76,9 @@ public sealed class AutoCleanupService : BackgroundService
         var settings = settingService.RetrieveSettings(new Dictionary<string, string>());
         var activeConfig = settings.FirstOrDefault(c => c.IsActive == true);
 
-        if (activeConfig?.AutoCleanupEnabled != true || activeConfig.AutoCleanupOlderThanMonths <= 0)
+        // Zero months is "older than yesterday", the shortest period there is, so it runs: only a
+        // negative one is a refused parameter.
+        if (activeConfig?.AutoCleanupEnabled != true || activeConfig.AutoCleanupOlderThanMonths < 0)
         {
             return;
         }

@@ -34,13 +34,29 @@ public sealed class MainLiveHistoryModel(VideoService videos, SettingService set
             new PageRequest(Math.Max(PageIndex, 0), PageSize, [new SortOrder("startDateLive", true)]));
     }
 
+    /// <summary>
+    /// Saves the cleanup settings, and runs the cleanup straight away when the button that asked for
+    /// it is the one that runs: the picks on screen are the ones it works on, so they are stored
+    /// first. Both outcomes land on the same InfoBar, the last one overwriting the first.
+    /// </summary>
+    public IActionResult OnPostSaveAutoCleanup(bool enabled, int intervalMonths, int olderThanMonths, bool runNow = false)
+    {
+        if (!Run(() => settings.SaveAutoCleanup(enabled, intervalMonths, olderThanMonths)))
+        {
+            return RedirectToPage(new { p = PageIndex });
+        }
+
+        if (runNow)
+        {
+            Run(() => videos.DeleteOldLiveHistory(olderThanMonths));
+        }
+
+        return RedirectToPage(new { p = PageIndex });
+    }
+
     public IActionResult OnPostDelete(long id)
     {
-        var success = Run(() => videos.DeleteLiveHistory(id));
-        if (Request.Headers["X-Requested-With"] == "XMLHttpRequest" || Request.Headers["Accept"].ToString().Contains("application/json") )
-        {
-            return success ? new OkResult() : new BadRequestResult();
-        }
+        Run(() => videos.DeleteLiveHistory(id));
         return RedirectToPage(new { p = PageIndex });
     }
 }

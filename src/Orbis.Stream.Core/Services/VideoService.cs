@@ -160,7 +160,11 @@ public sealed class VideoService
 
         _notifier.Raise();
         _logger.LogInformation("Deleted {Count} live history rows older than {Months} months", deletedCount, monthsOld);
-        return _responses.Build($"Deleted {deletedCount} live history rows older than {monthsOld} months", StatusCodes.Status200OK);
+
+        // The envelope carries a message code, not a sentence: a sentence built here is looked up in
+        // the bundles as if it were a code, and the lookup miss answers a 500 to a cleanup that did
+        // its work.
+        return _responses.Build("cleanupSuccess", StatusCodes.Status200OK, [deletedCount]);
     }
 
     /// <summary>One video with its live history and setting, the payload <c>/live/start-video-live</c> expects.</summary>

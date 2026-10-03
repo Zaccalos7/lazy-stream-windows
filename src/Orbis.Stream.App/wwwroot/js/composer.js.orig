@@ -1108,9 +1108,7 @@ const occupies = (target, item) => {
     const current = layoutPkid === null ? "" : String(layoutPkid);
     scenesBox.replaceChildren(new Option(word("new"), ""));
     for (const saved of scenes) scenesBox.append(new Option(saved.name, String(saved.pkid)));
-    if (layoutMode) {
-      scenesBox.value = current;
-    }
+    scenesBox.value = current;
   };
 
   // Only the layouts: the scene a live went on air with belongs to that live.
@@ -1195,17 +1193,15 @@ const occupies = (target, item) => {
     }
     // The scene of a live goes by the layout it was filled from unless it was given a name: it is
     // what the row of the live is called, not something to pick from a list.
-    if (layoutMode) {
-      if (!scene.name.trim()) {
-        nameBox.focus();
-        notify("error", word("needs-name"));
-        return false;
-      }
-    } else {
-      if (!scene.name.trim()) {
-        scene.name = nameBox.value = nameBox.placeholder;
-      }
+    if (!layoutMode && !scene.name.trim()) {
+      scene.name = nameBox.value = nameBox.placeholder;
     }
+    if (!scene.name.trim()) {
+      nameBox.focus();
+      notify("error", word("needs-name"));
+      return false;
+    }
+
     setBusy(true);
     try {
       const response = await fetch("/scene/save", {

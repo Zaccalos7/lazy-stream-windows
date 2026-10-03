@@ -567,8 +567,11 @@ public static class FfmpegCommandBuilder
     /// stretching it to fill is the one thing a user always notices. The scaled frame is then
     /// placed in the center of the tile area by the overlay filter rather than padded.
     /// </summary>
-    public static string Fit(int width, int height) =>
-        $"scale={width}:{height}:force_original_aspect_ratio=decrease";
+    public static string Fit(int width, int height)
+    {
+        // The user explicitly requested that the video fills the canvas, so use increase and crop
+        return $"scale={width}:{height}:force_original_aspect_ratio=increase,crop={width}:{height}";
+    }
 
     /// <summary>
     /// What the encoder will be asked to produce for a file: the resolution and the frame rate of

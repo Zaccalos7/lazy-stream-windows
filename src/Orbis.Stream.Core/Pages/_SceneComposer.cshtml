@@ -67,7 +67,7 @@
 
     <section class="composer-main">
         <div class="card composer-bar">
-            <label class="field">
+            <label class="field" @(layout ? "" : "hidden")>
                 <span class="caption">@T["layout"]</span>
                 <select class="input" data-composer-scenes>
                     <option value="">@(T[layout ? "newLayout" : "blankLayout"])</option>

@@ -12,16 +12,16 @@
         <h1>@T["liveHistory"]</h1>
     </div>
     <div class="toolbar">
-        <div class="toolbar-group auto-cleanup-config">
-            <label class="field toggle-section">
+        <div class="auto-cleanup-config" style="gap: 12px; display: flex; flex-wrap: wrap; align-items: center;">
+            <label class="field toggle-section" style="gap: 8px;">
                 <span>@T["autoCleanupEnabled"]</span>
-                <label class="toggle">
+                <label class="toggle" style="gap: 6px;">
                     <input type="checkbox" id="autoCleanupEnabled" @(Model.AutoCleanupEnabled ? "checked" : "") />
                     <span class="muted">@T["autoCleanupEnabled"]</span>
                 </label>
             </label>
-            <div id="autoCleanupFields" style="display: @(Model.AutoCleanupEnabled ? "flex" : "none")">
-                <label class="field">
+            <div id="autoCleanupFields" style="display: @(Model.AutoCleanupEnabled ? "flex" : "none"); gap: 12px; flex-wrap: wrap; align-items: center;">
+                <label class="field" style="gap: 6px;">
                     <span>@T["autoCleanupIntervalMonths"]</span>
                     <select id="autoCleanupIntervalMonths" class="input">
                         <option value="1" selected="@(Model.AutoCleanupIntervalMonths == 1)">1 @T["monthAbbrev"]</option>
@@ -31,9 +31,11 @@
                         <option value="12" selected="@(Model.AutoCleanupIntervalMonths == 12)">12 @T["monthAbbrev"]</option>
                     </select>
                 </label>
-                <label class="field">
+                <label class="field" style="gap: 6px;">
                     <span>@T["autoCleanupOlderThanMonths"]</span>
                     <select id="autoCleanupOlderThanMonths" class="input">
+                        <option value="1" selected="@(Model.AutoCleanupOlderThanMonths == 1)">@T["olderThan1Day"]</option>
+                        <option value="0" selected="@(Model.AutoCleanupOlderThanMonths == 0)">@T["olderThanYesterday"]</option>
                         <option value="3" selected="@(Model.AutoCleanupOlderThanMonths == 3)">@T["olderThan3Months"]</option>
                         <option value="6" selected="@(Model.AutoCleanupOlderThanMonths == 6)">@T["olderThan6Months"]</option>
                         <option value="12" selected="@(Model.AutoCleanupOlderThanMonths == 12)">@T["olderThan1Year"]</option>
@@ -100,7 +102,7 @@ else
                     <td class="nowrap">
                         @if (historyPkid > 0)
                         {
-                            <form method="post" action="/video/live-history/@historyPkid" class="inline" onsubmit="return confirmDelete(this, '@T["deleteLiveHistoryConfirm"]')">
+                            <form method="post" asp-page-handler="Delete" asp-route-id="@historyPkid" class="inline" data-confirm="@T["deleteLiveHistoryConfirm"]">
                                 <button type="submit" class="btn subtle icon-only danger" title="@T["deleteLiveHistory"]" aria-label="@T["deleteLiveHistory"]"><i class="icon">&#xE74D;</i></button>
                             </form>
                         }

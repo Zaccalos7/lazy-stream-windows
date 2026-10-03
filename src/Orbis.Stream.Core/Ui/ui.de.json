@@ -294,5 +294,7 @@
   "composeNext": "Weiter: Szene zusammenstellen",
   "previewWaiting": "Warte auf das erste Bild…",
   "sceneSources": "Szene · {0} Quellen",
-  "deleteSceneLiveConfirm": "Möchten Sie diesen Livestream ({0} Quellen) wirklich löschen?"
+  "deleteSceneLiveConfirm": "Möchten Sie diesen Livestream ({0} Quellen) wirklich löschen?",
+  "olderThanYesterday": "Older than yesterday",
+  "olderThan1Day": "Older than 1 day"
 }

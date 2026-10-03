@@ -33,4 +33,10 @@ public sealed class MainLiveHistoryModel(VideoService videos, SettingService set
             new Dictionary<string, string>(),
             new PageRequest(Math.Max(PageIndex, 0), PageSize, [new SortOrder("startDateLive", true)]));
     }
+
+    public IActionResult OnPostDelete(long id)
+    {
+        Run(() => videos.DeleteLiveHistory(id));
+        return RedirectToPage(new { p = PageIndex });
+    }
 }

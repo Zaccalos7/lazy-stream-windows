@@ -295,6 +295,6 @@
   "previewWaiting": "Ожидание первого кадра…",
   "sceneSources": "Сцена · источников: {0}",
   "deleteSceneLiveConfirm": "Вы уверены, что хотите удалить этот эфир (источников: {0})?",
-  "olderThanYesterday": "Older than yesterday",
-  "olderThan1Day": "Older than 1 day"
+  "olderThanYesterday": "Старше чем вчера",
+  "olderThan1Day": "Старше 1 дня"
 }

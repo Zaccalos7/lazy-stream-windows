@@ -295,6 +295,6 @@
   "previewWaiting": "Warte auf das erste Bild…",
   "sceneSources": "Szene · {0} Quellen",
   "deleteSceneLiveConfirm": "Möchten Sie diesen Livestream ({0} Quellen) wirklich löschen?",
-  "olderThanYesterday": "Older than yesterday",
-  "olderThan1Day": "Older than 1 day"
+  "olderThanYesterday": "Älter als gestern",
+  "olderThan1Day": "Älter als 1 Tag"
 }

@@ -295,6 +295,6 @@
   "previewWaiting": "In attesa del primo fotogramma…",
   "sceneSources": "Scena · {0} sorgenti",
   "deleteSceneLiveConfirm": "Sei sicuro di voler eliminare questa live ({0} sorgenti)?",
-  "olderThanYesterday": "Older than yesterday",
-  "olderThan1Day": "Older than 1 day"
+  "olderThanYesterday": "Più vecchi di ieri",
+  "olderThan1Day": "Più vecchi di 1 giorno"
 }

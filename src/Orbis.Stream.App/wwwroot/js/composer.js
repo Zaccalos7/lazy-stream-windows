@@ -243,6 +243,7 @@
     scene.items.push(item);
     select(item.uid);
     markDirty();
+    updateResolutionOptions();
     render();
   };
 
@@ -285,6 +286,7 @@ const occupies = (target, item) => {
 
     select(newItem.uid);
     markDirty();
+    updateResolutionOptions();
     render();
   };
 
@@ -327,6 +329,7 @@ const occupies = (target, item) => {
 
     select(item.uid);
     markDirty();
+    updateResolutionOptions();
     render();
   };
 
@@ -547,8 +550,9 @@ const occupies = (target, item) => {
       if (!isSlot(item) && canCarrySound(item.kind)) {
         actions.append(layerButton(item.audio ? "\uE767" : "\uE74F", word("sound"), () => {
           item.audio = !item.audio;
-          markDirty();
-          render();
+    markDirty();
+    updateResolutionOptions();
+    render();
         }, item.audio));
       }
       if (hasPicture(item.kind)) {
@@ -1062,12 +1066,51 @@ const occupies = (target, item) => {
     selected = null;
   };
 
-  const setSizeBox = () => {
-    const value = `${scene.width}x${scene.height}`;
-    if (![...sizeBox.options].some(option => option.value === value)) {
-      sizeBox.append(new Option(`${scene.width} × ${scene.height}`, value));
+  const findMaxSourceResolution = () => {
+    let maxW = 0, maxH = 0;
+    for (const item of scene.items) {
+      if (!hasPicture(item.kind)) continue;
+      const w = item.naturalWidth || item.w;
+      const h = item.naturalHeight || item.h;
+      if (w > maxW || h > maxH) {
+        maxW = Math.max(maxW, w);
+        maxH = Math.max(maxH, h);
+      }
+      if (item.kind === Kind.File) {
+        const opt = catalog.find(c => c.kind === Kind.File && c.target === item.target);
+        if (opt && (opt.width > maxW || opt.height > maxH)) {
+          maxW = Math.max(maxW, opt.width);
+          maxH = Math.max(maxH, opt.height);
+        }
+      }
     }
-    sizeBox.value = value;
+    return { maxW, maxH };
+  };
+
+  const updateResolutionOptions = () => {
+    const { maxW, maxH } = findMaxSourceResolution();
+    const maxRes = Math.max(maxW, maxH);
+    const allSizes = [(1280, 720), (1920, 1080), (2560, 1440), (3840, 2160)];
+    let allowed = allSizes.filter(([w,h]) => Math.max(w,h) <= maxRes);
+    if (allowed.length === 0 && maxRes > 0) {
+      allowed = allSizes.filter(([w,h]) => Math.max(w,h) >= maxRes).slice(0,1);
+      if (allowed.length === 0) allowed = [[maxRes & ~1 || 1280, (maxRes & ~1 || 1280) * 9/16 | 0]];
+    }
+    if (allowed.length === 0) allowed = allSizes;
+    const current = `${scene.width}x${scene.height}`;
+    sizeBox.replaceChildren();
+    for (const [w,h] of allowed) {
+      sizeBox.append(new Option(`${w} × ${h}`, `${w}x${h}`));
+    }
+    if (![...sizeBox.options].some(o => o.value === current)) {
+      const [cw,ch] = current.split('x').map(Number);
+      sizeBox.append(new Option(`${cw} × ${ch}`, current));
+    }
+    sizeBox.value = current;
+  };
+
+  const setSizeBox = () => {
+    updateResolutionOptions();
   };
 
   const slotOf = (entry, index) => ({

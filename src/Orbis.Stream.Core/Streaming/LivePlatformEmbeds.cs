@@ -107,34 +107,18 @@ public sealed class LivePlatformEmbeds
 
     /// <summary>
     /// The Twitch player of a channel. Twitch plays the embed only on a page it is told the name of
-    /// (<c>parent</c>), and it is told one name at a time, so the host the request came in on is
-    /// the one it gets; the loopback names follow it for the case of a page reached through one of
-    /// them under another name.
+    /// (<c>parent</c>), and it takes one name: the host the request came in on, which is the name
+    /// of the page the player is about to be drawn into.
     /// </summary>
     public static string TwitchUrl(string channel, string? host)
     {
-        var parents = new List<string>();
-
-        void Remember(string? candidate)
-        {
-            var name = candidate?.Trim();
-            if (!string.IsNullOrEmpty(name) && !parents.Contains(name, StringComparer.OrdinalIgnoreCase))
-            {
-                parents.Add(name);
-            }
-        }
-
-        Remember(host);
-        Remember("localhost");
-        Remember("127.0.0.1");
+        var parent = string.IsNullOrWhiteSpace(host) ? "localhost" : host.Trim();
 
         // A Twitch channel is its name in lower case, and a name in another case is a channel that
         // does not exist to the player even when the page of it opens.
-        var player =
-            "https://player.twitch.tv/?channel=" + Uri.EscapeDataString(channel.Trim().ToLowerInvariant()) +
+        return "https://player.twitch.tv/?channel=" + Uri.EscapeDataString(channel.Trim().ToLowerInvariant()) +
+            "&parent=" + Uri.EscapeDataString(parent) +
             "&muted=true&autoplay=true&playsinline=true";
-
-        return parents.Aggregate(player, (url, parent) => url + "&parent=" + Uri.EscapeDataString(parent));
     }
 
     /// <summary>The YouTube player of a live, once the id of the video is known.</summary>

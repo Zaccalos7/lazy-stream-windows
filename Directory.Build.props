@@ -11,7 +11,9 @@
     <!-- Kept in sync with Installer/OrbisStream.wxs: the MSI product version. -->
     <Version>2.0.12</Version>
     <Product>Orbis Stream</Product>
-    <Company>Orbis</Company>
+    <!-- The author of the application: the pages and the About dialog read it back from the
+         assembly attribute this stamps, so it is written here once. -->
+    <Company>Marco Amleto Guarino</Company>
   </PropertyGroup>
 
 </Project>

@@ -947,6 +947,9 @@ table.list.roomy td.nowrap { white-space: nowrap; }
 .auto-cleanup { margin-bottom: 0; }
 .auto-cleanup-fields { display: flex; gap: 10px; align-items: end; flex-wrap: wrap; }
 .auto-cleanup-toggle { min-height: 34px; }
+/* A button is 30px and a control 34px: half the difference is what puts the two in the middle of
+   each other, where the eye looks for them, rather than one hanging off the other. */
+.auto-cleanup .btn { margin-bottom: 2px; }
 
 /* ---------- macOS Sheet Dialog ---------- */
 

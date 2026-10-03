@@ -96,7 +96,7 @@ public sealed class DatabaseSchemaTests
     /// really on air, and a start on that channel is refused over it.
     /// </summary>
     [Fact]
-    public void StartAsync_ReleasesTheLivesLeftRunning()
+    public async Task StartAsync_ReleasesTheLivesLeftRunning()
     {
         using var database = new TemporaryDatabase();
         var videos = database.Repository<VideoRepository>();
@@ -113,14 +113,12 @@ public sealed class DatabaseSchemaTests
             VideoSettingId = 1
         });
 
-        new DatabaseBootstrapper(
+        await new DatabaseBootstrapper(
             database.ConnectionFactory,
             database.Repository<VideoSettingRepository>(),
             videos,
             NullLogger<DatabaseBootstrapper>.Instance)
-            .StartAsync(CancellationToken.None)
-            .GetAwaiter()
-            .GetResult();
+            .StartAsync(CancellationToken.None);
 
         var released = Assert.Single(videos.FindByLiveStatus(LiveStatus.Stopped));
         Assert.Equal("left-running.mp4", released.Name);

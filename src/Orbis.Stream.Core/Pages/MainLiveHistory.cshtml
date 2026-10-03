@@ -49,10 +49,11 @@
             <button type="submit" class="btn accent">
                 <i class="icon">&#xE74E;</i> @T["save"]
             </button>
-            <button type="button" class="btn subtle" id="runCleanupBtn" title="@T["runCleanupNow"]">
-                <i class="icon">&#xE72C;</i> <span id="runCleanupLabel">@T["runCleanupNow"]</span>
-            </button>
         </div>
+        @* Running it once is a thing of its own: it does not need the cleanup to be on. *@
+        <button type="button" class="btn subtle" id="runCleanupBtn" title="@T["runCleanupNow"]">
+            <i class="icon">&#xE72C;</i> <span id="runCleanupLabel">@T["runCleanupNow"]</span>
+        </button>
     </form>
 </div>
 
@@ -64,6 +65,7 @@
      data-in-progress-text="@T["cleanupInProgress"]"
      data-count-text="@T["cleanupProgressCount"]"
      data-failed-text="@T["cleanupError"]">
+    <button type="button" class="cleanup-close" data-role="close" title="@T["cancel"]" aria-label="@T["cancel"]">&times;</button>
     <h3>
         <span class="spinner" data-role="spinner"></span>
         <span data-role="title">@T["cleanupRunning"]</span>
@@ -165,16 +167,17 @@ else
         const count = cleanupProgress.querySelector('[data-role="count"]');
         const bar = cleanupProgress.querySelector('[data-role="bar"]');
         const spinner = cleanupProgress.querySelector('[data-role="spinner"]');
+        const close = cleanupProgress.querySelector('[data-role="close"]');
         let watching = false;
 
         const show = state => {
             if (state.error) {
+                cleanupProgress.classList.add("failed");
                 title.textContent = cleanupProgress.dataset.failedText.replace("{0}", state.error);
                 file.textContent = "";
                 count.textContent = "";
                 bar.style.width = "0%";
                 spinner.hidden = true;
-                cleanupProgress.classList.add("failed");
             } else {
                 cleanupProgress.classList.remove("failed");
                 spinner.hidden = false;
@@ -191,17 +194,23 @@ else
 
         const ask = async () => {
             try {
-                const response = await fetch(cleanupProgress.dataset.progressUrl, { headers: { "X-Requested-With": "XMLHttpRequest" } });
+                const response = await fetch(cleanupProgress.dataset.progressUrl);
                 return response.ok ? await response.json() : null;
             } catch {
                 return null;
             }
         };
 
+        const stop = () => {
+            watching = false;
+            runCleanupBtn.disabled = false;
+            runCleanupLabel.textContent = runCleanupText;
+        };
+
         const watch = async () => {
             watching = true;
             runCleanupBtn.disabled = true;
-            runCleanupLabel.textContent = cleanupProgress.dataset.inProgressText ?? runCleanupText;
+            runCleanupLabel.textContent = cleanupProgress.dataset.inProgressText;
 
             while (watching) {
                 const state = await ask();
@@ -213,32 +222,37 @@ else
                     continue;
                 }
 
-                // Done: the rows on the table are the ones that are left, so the table is asked
-                // again rather than patched.
+                // Done: the table is asked again rather than patched, because the walk may have
+                // taken whole pages of it with it.
                 cleanupProgress.hidden = true;
-                runCleanupBtn.disabled = false;
-                runCleanupLabel.textContent = runCleanupText;
-                watching = false;
+                stop();
                 location.reload();
                 return;
             }
 
-            watching = false;
+            stop();
         };
+
+        close.addEventListener("click", () => {
+            cleanupProgress.hidden = true;
+            stop();
+        });
 
         runCleanupBtn.addEventListener("click", async () => {
             const months = document.getElementById("autoCleanupOlderThanMonths")?.value ?? "0";
             runCleanupBtn.disabled = true;
             try {
                 const response = await fetch(`/video/live-history/cleanup?months=${months}`, { method: "POST" });
-                const state = await response.json();
-                if (!response.ok) {
-                    show(state.error ? state : { error: String(response.status) });
-                    runCleanupBtn.disabled = false;
+
+                // One walk at a time: the one already going is the one there is to watch.
+                if (response.status === 409 || response.ok) {
+                    watch();
                     return;
                 }
 
-                watch();
+                const state = await response.json().catch(() => null);
+                show(state?.error ? state : { error: String(response.status) });
+                runCleanupBtn.disabled = false;
             } catch (error) {
                 show({ error: String(error) });
                 runCleanupBtn.disabled = false;

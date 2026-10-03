@@ -188,7 +188,11 @@ public sealed class DatabaseBootstrapperTests
         original.Title = "test";
         settings.Update(original);
 
-        await new DatabaseBootstrapper(database.ConnectionFactory, settings, NullLogger<DatabaseBootstrapper>.Instance)
+        await new DatabaseBootstrapper(
+                database.ConnectionFactory,
+                settings,
+                database.Repository<VideoRepository>(),
+                NullLogger<DatabaseBootstrapper>.Instance)
             .StartAsync(CancellationToken.None);
 
         var twitch = Assert.Single(settings.FindByIsDefaultConfigurationTrueAndDefaultPlatformConfiguration("Twitch"));
@@ -203,6 +207,7 @@ public sealed class DatabaseBootstrapperTests
         var bootstrapper = new DatabaseBootstrapper(
             database.ConnectionFactory,
             database.Repository<VideoSettingRepository>(),
+            database.Repository<VideoRepository>(),
             NullLogger<DatabaseBootstrapper>.Instance);
 
         var duplicates = database.Repository<VideoSettingRepository>().Insert(new VideoSettingEntity

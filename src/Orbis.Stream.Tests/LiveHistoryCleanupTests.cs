@@ -126,35 +126,82 @@ public sealed class LiveHistoryCleanupTests : IAsyncLifetime
     }
 
     [Fact]
-    public async Task RunningTheCleanupFromThePageDeletesWhatThePickSays()
+    public async Task TheRunButtonQueuesTheCleanupAndThePageCanFollowIt()
     {
-        await AddActiveConfiguration();
         var history = Repository<VideoLiveHistoryRepository>();
         var videos = Repository<VideoRepository>();
-        var repository = Repository<SettingRepository>();
 
-        var threeDaysOld = AddLive(history, videos, "run-three-days", DateTime.Now.AddDays(-3));
+        var threeDaysOld = AddLive(history, videos, "run-three-days", DateTime.Now.AddDays(-3), videosPerLive: 3);
         var startedToday = AddLive(history, videos, "run-today", DateTime.Now.AddHours(-2));
 
-        // The run button saves the picks on screen first, so "older than yesterday" has to delete
-        // the three days old live and leave the one that started a couple of hours ago alone.
-        var html = await PostAsync("/orbis/mainLiveHistory?handler=SaveAutoCleanup", new Dictionary<string, string>
-        {
-            ["enabled"] = "true",
-            ["intervalMonths"] = "1",
-            ["olderThanMonths"] = "0",
-            ["runNow"] = "true"
-        });
+        // The button answers at once and the walk goes on: "older than yesterday" has to delete the
+        // three days old live, all three of its videos, and leave the one of a couple of hours ago.
+        using var queued = await _host.Client.PostAsync("/video/live-history/cleanup?months=0", null);
+        Assert.Equal(HttpStatusCode.OK, queued.StatusCode);
 
-        Assert.Contains("Auto cleanup completed: deleted 1 live history rows.", html, StringComparison.Ordinal);
+        var progress = await WaitForTheCleanupAsync();
+        Assert.Null(progress.GetProperty("error").GetString());
+        Assert.Equal(3, progress.GetProperty("totalVideos").GetInt32());
+        Assert.Equal(3, progress.GetProperty("deletedVideos").GetInt32());
+        Assert.Equal(1, progress.GetProperty("deletedLives").GetInt32());
+        Assert.False(progress.GetProperty("running").GetBoolean());
+        Assert.Equal(string.Empty, progress.GetProperty("currentVideo").GetString());
 
         Assert.Null(history.FindByPkid(threeDaysOld));
         Assert.Empty(videos.FindByLiveHistoryId(threeDaysOld));
         Assert.NotNull(history.FindByPkid(startedToday));
+        Assert.Single(videos.FindByLiveHistoryId(startedToday));
+    }
 
-        var saved = repository.FindAll(new Dictionary<string, string>()).Single();
-        Assert.True(saved.AutoCleanupEnabled);
-        Assert.Equal(0, saved.AutoCleanupOlderThanMonths);
+    [Fact]
+    public async Task TheCleanupLeavesALiveThatIsOnAirAlone()
+    {
+        var history = Repository<VideoLiveHistoryRepository>();
+        var videos = Repository<VideoRepository>();
+
+        var onAir = AddLive(history, videos, "on-air", DateTime.Now.AddMonths(-8));
+        var finished = AddLive(history, videos, "finished", DateTime.Now.AddMonths(-8));
+        foreach (var video in videos.FindByLiveHistoryId(onAir))
+        {
+            video.LiveStatus = LiveStatus.Live;
+            videos.Update(video);
+        }
+
+        using var queued = await _host.Client.PostAsync("/video/live-history/cleanup?months=1", null);
+        Assert.Equal(HttpStatusCode.OK, queued.StatusCode);
+        var progress = await WaitForTheCleanupAsync();
+
+        // The files of a live being streamed are being read right now: they stay, and the count the
+        // popover shows is of what was really deleted.
+        Assert.NotNull(history.FindByPkid(onAir));
+        Assert.Single(videos.FindByLiveHistoryId(onAir));
+        Assert.Null(history.FindByPkid(finished));
+        Assert.Empty(videos.FindByLiveHistoryId(finished));
+        Assert.Equal(1, progress.GetProperty("totalVideos").GetInt32());
+        Assert.Equal(1, progress.GetProperty("deletedVideos").GetInt32());
+    }
+
+    /// <summary>
+    /// Reads the progress the way the page does, until the walk is over: it is queued on a thread of
+    /// its own, so it may well be finished before the first answer.
+    /// </summary>
+    private async Task<JsonElement> WaitForTheCleanupAsync()
+    {
+        for (var attempt = 0; attempt < 200; attempt++)
+        {
+            using var response = await _host.Client.GetAsync("/video/live-history/cleanup");
+            Assert.Equal(HttpStatusCode.OK, response.StatusCode);
+            var progress = await response.Content.ReadFromJsonAsync<JsonElement>();
+
+            if (!progress.GetProperty("running").GetBoolean())
+            {
+                return progress;
+            }
+
+            await Task.Delay(50);
+        }
+
+        throw new InvalidOperationException("The cleanup did not finish.");
     }
 
     /// <summary>The cleanup follows the configuration that is streaming, which the tests need one of.</summary>

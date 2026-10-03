@@ -901,6 +901,23 @@ table.list.roomy td.nowrap { white-space: nowrap; }
 .cleanup-progress .file { margin: 0 0 4px; font-size: 12px; color: var(--text-2); }
 .cleanup-progress .count { margin: 0; font-size: 12px; font-variant-numeric: tabular-nums; }
 .cleanup-progress.failed { border-left-color: var(--critical); }
+/* The class of the spinner sets its display, so hiding it takes a rule of its own. */
+.cleanup-progress .spinner[hidden] { display: none; }
+
+.cleanup-close {
+  position: absolute;
+  top: 6px;
+  right: 8px;
+  padding: 0 4px;
+  font-size: 16px;
+  line-height: 1;
+  color: var(--text-3);
+  background: none;
+  border: none;
+  cursor: pointer;
+}
+
+.cleanup-close:hover { color: var(--text); }
 
 .cleanup-bar {
   height: 6px;

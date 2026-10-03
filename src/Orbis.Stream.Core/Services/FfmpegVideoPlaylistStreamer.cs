@@ -314,18 +314,30 @@ public sealed class FfmpegVideoPlaylistStreamer : IVideoPlaylistStreamer
                 var exitCode = await session.WaitForExitAsync(cancellationToken).ConfigureAwait(false);
                 var errorOutput = await session.ReadErrorAsync().ConfigureAwait(false);
 
-                if (session.StopRequested || (exitCode != 0 && _videoRepository.FindByPkid(videoKey)?.ShouldBeStop == true))
+                // Check stop condition first (needs session for StopAndRecordAsync)
+                var wasStopped = session.StopRequested || (exitCode != 0 && _videoRepository.FindByPkid(videoKey)?.ShouldBeStop == true);
+
+                if (wasStopped)
                 {
                     await StopAndRecordAsync(session, videoKey, videoLiveHistoryPkid, inputPath).ConfigureAwait(false);
                     return true;
                 }
+
+                // Video ended normally (exitCode == 0): save position and clean up immediately
+                var finalPosition = session.PositionMilliseconds;
+
+                // Clean up session immediately so preview sees live as ended
+                _sessions.Remove(videoKey);
+                await session.DisposeAsync().ConfigureAwait(false);
+                _frames.Forget(videoKey);
+                session = null;
 
                 if (exitCode == 0)
                 {
                     var endedMessage = _localizer.PrintMessage("video.live.ended");
                     _logger.LogInformation("{Message}", endedMessage);
                     SaveMessageOnVideoLiveHistory(
-                        endedMessage, videoLiveHistoryPkid, inputPath, LiveStatus.Ended, null, EndOf(probe, session));
+                        endedMessage, videoLiveHistoryPkid, inputPath, LiveStatus.Ended, null, finalPosition);
                     return false;
                 }
 
@@ -354,6 +366,7 @@ public sealed class FfmpegVideoPlaylistStreamer : IVideoPlaylistStreamer
         }
         finally
         {
+            // Session already cleaned up in the normal flow, but ensure it's gone
             _sessions.Remove(videoKey);
             if (session is not null)
             {
@@ -520,7 +533,13 @@ public sealed class FfmpegVideoPlaylistStreamer : IVideoPlaylistStreamer
                 var exitCode = await session.WaitForExitAsync(cancellationToken).ConfigureAwait(false);
                 var errorOutput = await session.ReadErrorAsync().ConfigureAwait(false);
 
-                if (session.StopRequested || (exitCode != 0 && _videoRepository.FindByPkid(videoKey)?.ShouldBeStop == true))
+                // Clean up session immediately so preview sees live as ended
+                _sessions.Remove(videoKey);
+                await session.DisposeAsync().ConfigureAwait(false);
+                _frames.Forget(videoKey);
+                session = null;
+
+                if (session != null && (session.StopRequested || (exitCode != 0 && _videoRepository.FindByPkid(videoKey)?.ShouldBeStop == true)))
                 {
                     var stopped = _localizer.PrintMessage("live.stopped");
                     MarkRows(rows, LiveStatus.Stopped, stopped);
@@ -557,6 +576,7 @@ public sealed class FfmpegVideoPlaylistStreamer : IVideoPlaylistStreamer
         }
         finally
         {
+            // Session already cleaned up in the normal flow, but ensure it's gone
             _sessions.Remove(videoKey);
             if (session is not null)
             {

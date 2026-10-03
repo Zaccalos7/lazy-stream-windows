@@ -294,5 +294,7 @@
   "composeNext": "次へ：シーンを構成",
   "previewWaiting": "最初のフレームを待機中…",
   "sceneSources": "シーン · ソース{0}個",
-  "deleteSceneLiveConfirm": "このライブ配信（{0}個のソース）を削除してもよろしいですか？"
+  "deleteSceneLiveConfirm": "このライブ配信（{0}個のソース）を削除してもよろしいですか？",
+  "olderThanYesterday": "Older than yesterday",
+  "olderThan1Day": "Older than 1 day"
 }

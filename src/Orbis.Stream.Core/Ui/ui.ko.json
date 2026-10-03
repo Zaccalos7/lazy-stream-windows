@@ -294,5 +294,7 @@
   "composeNext": "다음: 씬 구성",
   "previewWaiting": "첫 프레임을 기다리는 중…",
   "sceneSources": "씬 · 소스 {0}개",
-  "deleteSceneLiveConfirm": "이 라이브를 삭제하시겠습니까(소스 {0}개)?"
+  "deleteSceneLiveConfirm": "이 라이브를 삭제하시겠습니까(소스 {0}개)?",
+  "olderThanYesterday": "Older than yesterday",
+  "olderThan1Day": "Older than 1 day"
 }

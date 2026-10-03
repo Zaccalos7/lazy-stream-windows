@@ -79,7 +79,7 @@ public sealed class SettingService
     /// </summary>
     public MessageResponse SaveAutoCleanup(bool enabled, int intervalMonths, int olderThanMonths)
     {
-        if (intervalMonths is < 0 or > 12 || olderThanMonths < 0)
+        if (intervalMonths is < 0 or > 12 || olderThanMonths < LiveHistoryCleanupService.Everything)
         {
             throw new RequestValidationException(new Dictionary<string, string>
             {

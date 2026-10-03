@@ -5,6 +5,7 @@ using System.Text.RegularExpressions;
 using Microsoft.Extensions.DependencyInjection;
 using Orbis.Stream.Core.Data;
 using Orbis.Stream.Core.Domain;
+using Orbis.Stream.Core.Services;
 
 namespace Orbis.Stream.Tests;
 
@@ -151,6 +152,46 @@ public sealed class LiveHistoryCleanupTests : IAsyncLifetime
         Assert.Empty(videos.FindByLiveHistoryId(threeDaysOld));
         Assert.NotNull(history.FindByPkid(startedToday));
         Assert.Single(videos.FindByLiveHistoryId(startedToday));
+    }
+
+    [Fact]
+    public async Task ThePickOfNowTakesEveryLiveThereIs()
+    {
+        var history = Repository<VideoLiveHistoryRepository>();
+        var videos = Repository<VideoRepository>();
+
+        var oldLive = AddLive(history, videos, "now-old", DateTime.Now.AddMonths(-14));
+        // A live of an hour ago is not older than any period there is but "now": that is what tells
+        // the two apart, and it is the reason the threshold of "now" is this very moment.
+        var anHourAgo = AddLive(history, videos, "now-hour", DateTime.Now.AddHours(-1));
+
+        using var queued = await _host.Client.PostAsync("/video/live-history/cleanup?months=-1", null);
+        Assert.Equal(HttpStatusCode.OK, queued.StatusCode);
+        var progress = await WaitForTheCleanupAsync();
+
+        Assert.Null(progress.GetProperty("error").GetString());
+        Assert.Equal(2, progress.GetProperty("deletedLives").GetInt32());
+        Assert.Equal(2, progress.GetProperty("deletedVideos").GetInt32());
+        Assert.Null(history.FindByPkid(oldLive));
+        Assert.Null(history.FindByPkid(anHourAgo));
+        Assert.Empty(videos.FindByLiveHistoryId(oldLive));
+        Assert.Empty(videos.FindByLiveHistoryId(anHourAgo));
+    }
+
+    [Fact]
+    public void ThePeriodsAreTheOnesThePicksSayTheyAre()
+    {
+        var yesterday = LiveHistoryCleanupService.ThresholdOf(LiveHistoryCleanupService.Yesterday);
+        Assert.InRange(yesterday, DateTime.Now.AddDays(-1).AddSeconds(-1), DateTime.Now.AddDays(-1).AddSeconds(1));
+
+        var sixMonthsBack = LiveHistoryCleanupService.ThresholdOf(6);
+        Assert.InRange(sixMonthsBack, DateTime.Now.AddMonths(-6).AddSeconds(-1), DateTime.Now.AddMonths(-6).AddSeconds(1));
+
+        // "Now" is not a period back: it is this very moment, and a live that started a second ago
+        // is already older than it.
+        var now = LiveHistoryCleanupService.ThresholdOf(LiveHistoryCleanupService.Everything);
+        Assert.InRange(now, DateTime.Now.AddSeconds(-1), DateTime.Now.AddSeconds(1));
+        Assert.True(now > DateTime.Now.AddHours(-1));
     }
 
     [Fact]

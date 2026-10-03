@@ -140,7 +140,7 @@ public sealed class VideoService
     /// </summary>
     public MessageResponse DeleteOldLiveHistory(int monthsOld)
     {
-        if (monthsOld < 0)
+        if (monthsOld < LiveHistoryCleanupService.Everything)
         {
             return _responses.Build("invalid.parameter", StatusCodes.Status400BadRequest);
         }

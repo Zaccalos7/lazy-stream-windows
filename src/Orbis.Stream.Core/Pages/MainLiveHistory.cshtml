@@ -36,7 +36,9 @@
             <label class="field">
                 <span class="caption">@T["autoCleanupOlderThanMonths"]</span>
                 @* The value is the number of months the cleanup works on, so a pick that says a day
-                   has to send 0 (yesterday), not 1 (a month). *@
+                   has to send 0 (yesterday), not 1 (a month); -1 is "older than now", which is
+                   every live there is. It is the last of the list because it is the one that takes
+                   them all. *@
                 <select id="autoCleanupOlderThanMonths" name="olderThanMonths" class="input">
                     <option value="0" selected="@(Model.AutoCleanupOlderThanMonths == 0)">@T["olderThanYesterday"]</option>
                     <option value="1" selected="@(Model.AutoCleanupOlderThanMonths == 1)">1 @T["monthAbbrev"]</option>
@@ -44,6 +46,7 @@
                     <option value="6" selected="@(Model.AutoCleanupOlderThanMonths == 6)">@T["olderThan6Months"]</option>
                     <option value="12" selected="@(Model.AutoCleanupOlderThanMonths == 12)">@T["olderThan1Year"]</option>
                     <option value="24" selected="@(Model.AutoCleanupOlderThanMonths == 24)">@T["olderThan2Years"]</option>
+                    <option value="-1" selected="@(Model.AutoCleanupOlderThanMonths == -1)">@T["olderThanNow"]</option>
                 </select>
             </label>
             <button type="submit" class="btn accent">

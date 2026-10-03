@@ -302,5 +302,5 @@
   "sceneSources": "Szene · {0} Quellen",
   "deleteSceneLiveConfirm": "Möchten Sie diesen Livestream ({0} Quellen) wirklich löschen?",
   "olderThanYesterday": "Älter als gestern",
-  "olderThan1Day": "Älter als 1 Tag"
+  "olderThanNow": "Jetzt oder älter"
 }

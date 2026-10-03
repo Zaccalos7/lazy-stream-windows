@@ -2,6 +2,7 @@ using Microsoft.AspNetCore.Http;
 using Orbis.Stream.Core.Contracts;
 using Orbis.Stream.Core.Http;
 using Orbis.Stream.Core.I18n;
+using Orbis.Stream.Core.Services;
 
 namespace Orbis.Stream.Core.Hosting;
 
@@ -41,7 +42,8 @@ public sealed class RequestValidator
             {
                 errors["autoCleanupIntervalMonths"] = Message("not.valid.input");
             }
-            if (request.AutoCleanupOlderThanMonths <= 0)
+            // Zero is "older than yesterday" and minus one "older than now": both are periods.
+            if (request.AutoCleanupOlderThanMonths < LiveHistoryCleanupService.Everything)
             {
                 errors["autoCleanupOlderThanMonths"] = Message("not.valid.input");
             }

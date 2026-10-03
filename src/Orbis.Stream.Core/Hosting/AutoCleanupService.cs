@@ -76,9 +76,10 @@ public sealed class AutoCleanupService : BackgroundService
         var settings = settingService.RetrieveSettings(new Dictionary<string, string>());
         var activeConfig = settings.FirstOrDefault(c => c.IsActive == true);
 
-        // Zero months is "older than yesterday", the shortest period there is, so it runs: only a
-        // negative one is a refused parameter.
-        if (activeConfig?.AutoCleanupEnabled != true || activeConfig.AutoCleanupOlderThanMonths < 0)
+        // "Older than yesterday" (zero) is a period like any other and so runs, and so does
+        // "older than now" (minus one), which takes everything: only a period below that is a
+        // refused parameter.
+        if (activeConfig?.AutoCleanupEnabled != true || activeConfig.AutoCleanupOlderThanMonths < LiveHistoryCleanupService.Everything)
         {
             return;
         }

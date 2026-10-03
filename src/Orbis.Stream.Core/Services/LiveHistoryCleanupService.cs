@@ -31,6 +31,15 @@ public sealed record LiveHistoryCleanupProgress(
 /// </summary>
 public sealed class LiveHistoryCleanupService
 {
+    /// <summary>
+    /// The period of the cleanup that takes everything: a live older than now is any live there is.
+    /// It is the one value below zero, because "now" is not a period but the end of all of them.
+    /// </summary>
+    public const int Everything = -1;
+
+    /// <summary>The oldest period there is, a live that started before yesterday.</summary>
+    public const int Yesterday = 0;
+
     private readonly VideoRepository _videoRepository;
     private readonly VideoLiveHistoryRepository _videoLiveHistoryRepository;
     private readonly SceneRepository _sceneRepository;
@@ -102,8 +111,7 @@ public sealed class LiveHistoryCleanupService
     /// <summary>Deletes every live older than the period, on the calling thread.</summary>
     public LiveHistoryCleanupProgress Run(int monthsOld)
     {
-        var threshold = monthsOld == 0 ? DateTime.Now.AddDays(-1) : DateTime.Now.AddMonths(-monthsOld);
-        var lives = DeletableLives(threshold);
+        var lives = DeletableLives(ThresholdOf(monthsOld));
         var videos = lives.SelectMany(life => _videoRepository.FindByLiveHistoryId(life.Pkid)).ToList();
 
         Publish(LiveHistoryCleanupProgress.Idle with { Running = true, TotalVideos = videos.Count });
@@ -171,8 +179,21 @@ public sealed class LiveHistoryCleanupService
     }
 
     /// <summary>
+    /// The instant a live has to be older than to be deleted: <see cref="Everything"/> takes them all
+    /// (a live that started before this very moment is any live there is), <see cref="Yesterday"/>
+    /// the ones of the day before, anything else that many months back.
+    /// </summary>
+    public static DateTime ThresholdOf(int monthsOld) => monthsOld switch
+    {
+        Everything => DateTime.Now,
+        Yesterday => DateTime.Now.AddDays(-1),
+        _ => DateTime.Now.AddMonths(-monthsOld)
+    };
+
+    /// <summary>
     /// The lives the walk may touch. A live that is on air is left alone whatever its age: the files
-    /// of a live being streamed are being read right now.
+    /// of a live being streamed are being read right now, and "delete everything" must not read the
+    /// row ffmpeg is streaming from out from under it.
     /// </summary>
     private List<VideoLiveHistoryEntity> DeletableLives(DateTime threshold)
     {

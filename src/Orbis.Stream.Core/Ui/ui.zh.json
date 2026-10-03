@@ -302,5 +302,5 @@
   "sceneSources": "场景 · {0} 个源",
   "deleteSceneLiveConfirm": "您确定要删除此直播（{0} 个源）吗？",
   "olderThanYesterday": "早于昨天",
-  "olderThan1Day": "早于 1 天"
+  "olderThanNow": "比现在更早"
 }

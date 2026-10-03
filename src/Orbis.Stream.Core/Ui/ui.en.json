@@ -302,5 +302,5 @@
   "sceneSources": "Scene · {0} sources",
   "deleteSceneLiveConfirm": "Are you sure you want to delete this live ({0} sources)?",
   "olderThanYesterday": "Older than yesterday",
-  "olderThan1Day": "Older than 1 day"
+  "olderThanNow": "Older than now"
 }

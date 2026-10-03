@@ -302,5 +302,5 @@
   "sceneSources": "Cena · {0} fontes",
   "deleteSceneLiveConfirm": "Tens a certeza de que queres eliminar esta live ({0} fontes)?",
   "olderThanYesterday": "Older than yesterday",
-  "olderThan1Day": "Older than 1 day"
+  "olderThanNow": "Mais antigos que agora"
 }

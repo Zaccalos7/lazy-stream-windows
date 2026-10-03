@@ -302,5 +302,5 @@
   "sceneSources": "Сцена · источников: {0}",
   "deleteSceneLiveConfirm": "Вы уверены, что хотите удалить этот эфир (источников: {0})?",
   "olderThanYesterday": "Старше чем вчера",
-  "olderThan1Day": "Старше 1 дня"
+  "olderThanNow": "Старее текущего момента"
 }

@@ -352,6 +352,31 @@ public sealed class EndToEndApiTests : IClassFixture<ApplicationFixture>
         Assert.True(response.Headers.CacheControl!.NoCache);
     }
 
+    /// <summary>
+    /// Which build is running and who wrote it, said in the foot of the bar and in full behind the
+    /// dialog that opens from it. The numbers come from the attributes the build stamps, so a page
+    /// that answers a version is a page that answers the one in the setup that installed it.
+    /// </summary>
+    [Fact]
+    public async Task EveryPageSaysWhichBuildThisIsAndWhoWroteIt()
+    {
+        using var response = await _fixture.Client.GetAsync("/orbis/mainMenu");
+        Assert.Equal(HttpStatusCode.OK, response.StatusCode);
+        var html = await response.Content.ReadAsStringAsync();
+
+        Assert.Equal("2.0.12", AppInfo.Current.Version);
+        Assert.Equal("Orbis Stream", AppInfo.Current.Name);
+        Assert.Equal("Marco Amleto Guarino", AppInfo.Current.Author);
+
+        // The sidebar carries the mark of the application, the build and the author, and opens the
+        // dialog that says the same in full.
+        Assert.Contains("id=\"about-button\"", html, StringComparison.Ordinal);
+        Assert.Contains($"<strong>{AppInfo.Current.NameAndVersion}</strong>", html, StringComparison.Ordinal);
+        Assert.Contains($"Created by {AppInfo.Current.Author}", html, StringComparison.Ordinal);
+        Assert.Contains("id=\"about-dialog\"", html, StringComparison.Ordinal);
+        Assert.Contains("<img src=\"/favicon.ico\"", html, StringComparison.Ordinal);
+    }
+
     [Fact]
     public async Task TheLiveHistoryPagesLikeTheLiveGridDoes()
     {

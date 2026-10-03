@@ -742,6 +742,16 @@ document.addEventListener("submit", event => {
   }
 });
 
+// The About dialog: the version and who wrote the application are in the foot of the side bar, and
+// this is where they are said in full.
+document.addEventListener("click", event => {
+  const shortcut = event.target.closest?.("[data-open-about], #about-button");
+  const about = document.getElementById("about-dialog");
+  if (!shortcut || !about || about.open) return;
+  event.preventDefault();
+  about.showModal();
+});
+
 // The side bar starts a live from anywhere: on this page the dialog is already there, elsewhere
 // the link goes to the page with ?start=1, which draws it open.
 document.addEventListener("click", event => {

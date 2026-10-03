@@ -237,6 +237,43 @@ a { color: var(--accent-text); text-decoration: none; }
 
 .nav-spacer { flex: 1; }
 
+/* Which build this is and who wrote it. It sits where the bar has nothing else to say, and it is
+   the way into the dialog that says it in full. */
+.nav-about {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  width: 100%;
+  padding: 6px 10px;
+  text-align: left;
+  color: var(--text-3);
+  background: none;
+  border: 1px solid transparent;
+  border-radius: var(--radius-sm);
+  cursor: pointer;
+}
+
+.nav-about:hover { background: var(--tint); border-color: var(--stroke); color: var(--text-2); }
+.nav-about .icon { font-size: 15px; }
+.nav-about-text { display: flex; flex-direction: column; min-width: 0; line-height: 1.35; }
+.nav-about-text strong { font-size: 11px; font-weight: 600; color: var(--text-2); }
+.nav-about-text small { font-size: 10px; color: var(--text-3); overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+
+/* The About dialog: the mark of the application beside its name, the two facts under it. */
+.about-body { display: flex; align-items: flex-start; gap: 16px; }
+
+.about-mark {
+  width: 48px;
+  height: 48px;
+  padding: 6px;
+  border-radius: var(--radius-squircle);
+  background: linear-gradient(180deg, var(--accent) 0%, var(--accent-hover) 100%);
+  box-shadow: 0 1px 4px rgba(0, 0, 0, 0.12);
+}
+
+.about-body .facts { grid-template-columns: 1fr; }
+.about-body .fact:last-child { border-bottom: none; }
+
 /* macOS Segmented Control */
 .segmented-control {
   display: flex;

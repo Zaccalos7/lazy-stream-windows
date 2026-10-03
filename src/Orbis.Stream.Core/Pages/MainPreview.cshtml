@@ -58,7 +58,8 @@
 <p data-preview-words hidden
    data-ok="@T["success"]" data-ko="@T["error"]"
    data-applied="@T["parametersApplied"]" data-failed="@T["parametersFailed"]"
-   data-no="@T["noAudioTrack"]"></p>
+   data-no="@T["noAudioTrack"]"
+   data-embed-loading="@T["embedLoading"]" data-embed-failed="@T["embedFailed"]"></p>
 
 <div data-preview
      data-pkid="@live.VideoPkid"
@@ -100,9 +101,9 @@ else
                the live, not a second copy of it. The canvas stays hidden, under the cover, until the
                first of those frames has been decoded, so nothing empty or stale is ever shown. *@
             <div class="preview-screen" style="@shape">
-                <div class="preview-cover">
+                <div class="preview-cover" data-preview-cover>
                     <span class="spinner"></span>
-                    <p class="muted">@T["previewWaiting"]</p>
+                    <p class="muted" data-cover-text>@T["previewWaiting"]</p>
                 </div>
                 <iframe class="preview-platform-player"
                         data-platform-embed
@@ -112,6 +113,10 @@ else
                         scrolling="no"
                         hidden></iframe>
                 <canvas data-preview-frame role="img" aria-label="@live.VideoName" hidden></canvas>
+                <div class="preview-embed-status" hidden>
+                    <span class="spinner"></span>
+                    <span data-embed-text>@T["embedLoading"]</span>
+                </div>
             </div>
             <div class="preview-bar">
                 <div class="preview-id">

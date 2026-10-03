@@ -876,6 +876,61 @@ table.list.roomy td.nowrap { white-space: nowrap; }
 .infobar.warning { --hue: var(--caution); background: var(--caution-bg); border-color: rgba(255, 149, 0, 0.25); }
 .infobar p { margin: 0; flex: 1; }
 
+/* ---------- Cleanup progress ---------- */
+
+/* The auto cleanup walks over the videos of the old lives, and the walk is the only thing the page
+   has to say while it goes on: which video it is on, how many there are and how many are gone. It
+   sits at the foot of the page, over the table but not on it. */
+.cleanup-progress {
+  position: fixed;
+  bottom: 20px;
+  left: 50%;
+  transform: translateX(-50%);
+  z-index: 9999;
+  width: min(460px, calc(100vw - 32px));
+  padding: 14px 18px;
+  border-radius: var(--radius-lg);
+  border: 1px solid var(--stroke);
+  border-left: 3px solid var(--accent);
+  background: var(--card);
+  box-shadow: var(--shadow-flyout);
+  animation: slideUp 0.25s cubic-bezier(0.16, 1, 0.3, 1);
+}
+
+.cleanup-progress h3 { display: flex; align-items: center; gap: 8px; margin: 0 0 8px; }
+.cleanup-progress .file { margin: 0 0 4px; font-size: 12px; color: var(--text-2); }
+.cleanup-progress .count { margin: 0; font-size: 12px; font-variant-numeric: tabular-nums; }
+.cleanup-progress.failed { border-left-color: var(--critical); }
+
+.cleanup-bar {
+  height: 6px;
+  margin-top: 10px;
+  border-radius: 3px;
+  background: var(--stroke);
+  overflow: hidden;
+}
+
+.cleanup-bar > span {
+  display: block;
+  height: 100%;
+  width: 0;
+  border-radius: 3px;
+  background: var(--accent);
+  transition: width 0.2s ease;
+}
+
+.cleanup-progress.failed .cleanup-bar { display: none; }
+
+@keyframes slideUp {
+  from { transform: translate(-50%, 20px); opacity: 0; }
+  to { transform: translate(-50%, 0); opacity: 1; }
+}
+
+/* The auto cleanup of the live history is one line in the header of the page, beside its title. */
+.auto-cleanup { margin-bottom: 0; }
+.auto-cleanup-fields { display: flex; gap: 10px; align-items: end; flex-wrap: wrap; }
+.auto-cleanup-toggle { min-height: 34px; }
+
 /* ---------- macOS Sheet Dialog ---------- */
 
 dialog.dialog {

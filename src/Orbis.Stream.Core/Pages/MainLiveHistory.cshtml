@@ -11,51 +11,66 @@
     <div>
         <h1>@T["liveHistory"]</h1>
     </div>
-    <div class="toolbar">
-        @* One form for both buttons: the run button carries runNow, so the picks on screen are the
-           ones the cleanup works on. Both land on the InfoBar at the top of the page, like every
-           other action of the application. *@
-        <form method="post" asp-page-handler="SaveAutoCleanup" class="auto-cleanup-config" style="gap: 24px; display: flex; flex-wrap: wrap; align-items: center;">
-            <label class="field toggle-section" style="gap: 8px;">
-                <span>@T["autoCleanupEnabled"]</span>
-                <label class="toggle" style="gap: 8px;">
-                    <input type="checkbox" id="autoCleanupEnabled" name="enabled" value="true" @(Model.AutoCleanupEnabled ? "checked" : "") />
-                    <span class="muted">@T["autoCleanupEnabled"]</span>
-                </label>
+    @* The form is the toolbar, as on the other pages: the picks and the buttons line up on the same
+       row because they are one flex line, not two nested ones. Save answers on the InfoBar at the
+       top of the page; Run Cleanup Now queues the work and the popover at the foot of the page
+       follows it, because a form post cannot draw a walk that takes seconds. *@
+    <form method="post" asp-page-handler="SaveAutoCleanup" class="toolbar auto-cleanup">
+        <label class="field">
+            <span class="caption">@T["autoCleanupEnabled"]</span>
+            <label class="toggle auto-cleanup-toggle">
+                <input type="checkbox" id="autoCleanupEnabled" name="enabled" value="true" @(Model.AutoCleanupEnabled ? "checked" : "") />
             </label>
-            <div id="autoCleanupFields" style="display: @(Model.AutoCleanupEnabled ? "flex" : "none"); gap: 24px; flex-wrap: wrap; align-items: center;">
-                <label class="field" style="gap: 8px;">
-                    <span>@T["autoCleanupIntervalMonths"]</span>
-                    <select id="autoCleanupIntervalMonths" name="intervalMonths" class="input">
-                        <option value="1" selected="@(Model.AutoCleanupIntervalMonths == 1)">1 @T["monthAbbrev"]</option>
-                        <option value="2" selected="@(Model.AutoCleanupIntervalMonths == 2)">2 @T["monthAbbrev"]</option>
-                        <option value="3" selected="@(Model.AutoCleanupIntervalMonths == 3)">3 @T["monthAbbrev"]</option>
-                        <option value="6" selected="@(Model.AutoCleanupIntervalMonths == 6)">6 @T["monthAbbrev"]</option>
-                        <option value="12" selected="@(Model.AutoCleanupIntervalMonths == 12)">12 @T["monthAbbrev"]</option>
-                    </select>
-                </label>
-                <label class="field" style="gap: 8px;">
-                    <span>@T["autoCleanupOlderThanMonths"]</span>
-                    @* The value is the number of months the cleanup works on, so a pick that says a
-                       day has to send 0 (yesterday), not 1 (a month). *@
-                    <select id="autoCleanupOlderThanMonths" name="olderThanMonths" class="input">
-                        <option value="0" selected="@(Model.AutoCleanupOlderThanMonths == 0)">@T["olderThanYesterday"]</option>
-                        <option value="1" selected="@(Model.AutoCleanupOlderThanMonths == 1)">1 @T["monthAbbrev"]</option>
-                        <option value="3" selected="@(Model.AutoCleanupOlderThanMonths == 3)">@T["olderThan3Months"]</option>
-                        <option value="6" selected="@(Model.AutoCleanupOlderThanMonths == 6)">@T["olderThan6Months"]</option>
-                        <option value="12" selected="@(Model.AutoCleanupOlderThanMonths == 12)">@T["olderThan1Year"]</option>
-                        <option value="24" selected="@(Model.AutoCleanupOlderThanMonths == 24)">@T["olderThan2Years"]</option>
-                    </select>
-                </label>
-                <button type="submit" class="btn accent">
-                    <i class="icon">&#xE74E;</i> @T["save"]
-                </button>
-                <button type="submit" name="runNow" value="true" class="btn subtle" title="@T["runCleanupNow"]">
-                    <i class="icon">&#xE72C;</i> @T["runCleanupNow"]
-                </button>
-            </div>
-        </form>
-    </div>
+        </label>
+        <div class="auto-cleanup-fields" id="autoCleanupFields" style="display: @(Model.AutoCleanupEnabled ? "flex" : "none");">
+            <label class="field">
+                <span class="caption">@T["autoCleanupIntervalMonths"]</span>
+                <select id="autoCleanupIntervalMonths" name="intervalMonths" class="input">
+                    <option value="1" selected="@(Model.AutoCleanupIntervalMonths == 1)">1 @T["monthAbbrev"]</option>
+                    <option value="2" selected="@(Model.AutoCleanupIntervalMonths == 2)">2 @T["monthAbbrev"]</option>
+                    <option value="3" selected="@(Model.AutoCleanupIntervalMonths == 3)">3 @T["monthAbbrev"]</option>
+                    <option value="6" selected="@(Model.AutoCleanupIntervalMonths == 6)">6 @T["monthAbbrev"]</option>
+                    <option value="12" selected="@(Model.AutoCleanupIntervalMonths == 12)">12 @T["monthAbbrev"]</option>
+                </select>
+            </label>
+            <label class="field">
+                <span class="caption">@T["autoCleanupOlderThanMonths"]</span>
+                @* The value is the number of months the cleanup works on, so a pick that says a day
+                   has to send 0 (yesterday), not 1 (a month). *@
+                <select id="autoCleanupOlderThanMonths" name="olderThanMonths" class="input">
+                    <option value="0" selected="@(Model.AutoCleanupOlderThanMonths == 0)">@T["olderThanYesterday"]</option>
+                    <option value="1" selected="@(Model.AutoCleanupOlderThanMonths == 1)">1 @T["monthAbbrev"]</option>
+                    <option value="3" selected="@(Model.AutoCleanupOlderThanMonths == 3)">@T["olderThan3Months"]</option>
+                    <option value="6" selected="@(Model.AutoCleanupOlderThanMonths == 6)">@T["olderThan6Months"]</option>
+                    <option value="12" selected="@(Model.AutoCleanupOlderThanMonths == 12)">@T["olderThan1Year"]</option>
+                    <option value="24" selected="@(Model.AutoCleanupOlderThanMonths == 24)">@T["olderThan2Years"]</option>
+                </select>
+            </label>
+            <button type="submit" class="btn accent">
+                <i class="icon">&#xE74E;</i> @T["save"]
+            </button>
+            <button type="button" class="btn subtle" id="runCleanupBtn" title="@T["runCleanupNow"]">
+                <i class="icon">&#xE72C;</i> <span id="runCleanupLabel">@T["runCleanupNow"]</span>
+            </button>
+        </div>
+    </form>
+</div>
+
+@* Where the deletion stands: what it is deleting, how many videos there are and how many are gone.
+   It sits at the foot of the page because the table is what the user is looking at while it runs. *@
+<div class="cleanup-progress" id="cleanupProgress" role="status" hidden
+     data-progress-url="/video/live-history/cleanup"
+     data-running-text="@T["cleanupRunning"]"
+     data-in-progress-text="@T["cleanupInProgress"]"
+     data-count-text="@T["cleanupProgressCount"]"
+     data-failed-text="@T["cleanupError"]">
+    <h3>
+        <span class="spinner" data-role="spinner"></span>
+        <span data-role="title">@T["cleanupRunning"]</span>
+    </h3>
+    <p class="file truncate" data-role="file"></p>
+    <p class="count" data-role="count"></p>
+    <div class="cleanup-bar"><span data-role="bar"></span></div>
 </div>
 
 @if (Model.Videos.Content.Count == 0)
@@ -125,7 +140,7 @@ else
 }
 
 <script>
-    // The two fields only mean something while the cleanup is on: the toggle shows and hides them,
+    // The two picks only mean something while the cleanup is on: the toggle shows and hides them,
     // the server draws them the way they were left.
     const autoCleanupEnabled = document.getElementById("autoCleanupEnabled");
     const autoCleanupFields = document.getElementById("autoCleanupFields");
@@ -135,13 +150,104 @@ else
             autoCleanupFields.style.display = autoCleanupEnabled.checked ? "flex" : "none";
         });
     }
-</script>
 
-<style>
-    /* The two picks sit on one row: their own margins would push the rest of the toolbar out of
-      the header. */
-    .auto-cleanup-config .field,
-    .auto-cleanup-config .toggle-section {
-        margin: 0;
+    // The cleanup runs on the server while the page watches it: the popover says which video it is
+    // on and how many of them there are, because a walk that deletes a hundred rows in a flash
+    // leaves nothing else to look at.
+    const runCleanupBtn = document.getElementById("runCleanupBtn");
+    const runCleanupLabel = document.getElementById("runCleanupLabel");
+    const cleanupProgress = document.getElementById("cleanupProgress");
+    const runCleanupText = runCleanupLabel?.textContent ?? "";
+
+    if (runCleanupBtn && cleanupProgress) {
+        const title = cleanupProgress.querySelector('[data-role="title"]');
+        const file = cleanupProgress.querySelector('[data-role="file"]');
+        const count = cleanupProgress.querySelector('[data-role="count"]');
+        const bar = cleanupProgress.querySelector('[data-role="bar"]');
+        const spinner = cleanupProgress.querySelector('[data-role="spinner"]');
+        let watching = false;
+
+        const show = state => {
+            if (state.error) {
+                title.textContent = cleanupProgress.dataset.failedText.replace("{0}", state.error);
+                file.textContent = "";
+                count.textContent = "";
+                bar.style.width = "0%";
+                spinner.hidden = true;
+                cleanupProgress.classList.add("failed");
+            } else {
+                cleanupProgress.classList.remove("failed");
+                spinner.hidden = false;
+                title.textContent = cleanupProgress.dataset.runningText;
+                file.textContent = state.currentVideo ?? "";
+                count.textContent = cleanupProgress.dataset.countText
+                    .replace("{0}", state.deletedVideos)
+                    .replace("{1}", state.totalVideos);
+                bar.style.width = `${state.totalVideos > 0 ? (state.deletedVideos / state.totalVideos) * 100 : 0}%`;
+            }
+
+            cleanupProgress.hidden = false;
+        };
+
+        const ask = async () => {
+            try {
+                const response = await fetch(cleanupProgress.dataset.progressUrl, { headers: { "X-Requested-With": "XMLHttpRequest" } });
+                return response.ok ? await response.json() : null;
+            } catch {
+                return null;
+            }
+        };
+
+        const watch = async () => {
+            watching = true;
+            runCleanupBtn.disabled = true;
+            runCleanupLabel.textContent = cleanupProgress.dataset.inProgressText ?? runCleanupText;
+
+            while (watching) {
+                const state = await ask();
+                if (!state) break;
+
+                if (state.running) {
+                    show(state);
+                    await new Promise(done => setTimeout(done, 400));
+                    continue;
+                }
+
+                // Done: the rows on the table are the ones that are left, so the table is asked
+                // again rather than patched.
+                cleanupProgress.hidden = true;
+                runCleanupBtn.disabled = false;
+                runCleanupLabel.textContent = runCleanupText;
+                watching = false;
+                location.reload();
+                return;
+            }
+
+            watching = false;
+        };
+
+        runCleanupBtn.addEventListener("click", async () => {
+            const months = document.getElementById("autoCleanupOlderThanMonths")?.value ?? "0";
+            runCleanupBtn.disabled = true;
+            try {
+                const response = await fetch(`/video/live-history/cleanup?months=${months}`, { method: "POST" });
+                const state = await response.json();
+                if (!response.ok) {
+                    show(state.error ? state : { error: String(response.status) });
+                    runCleanupBtn.disabled = false;
+                    return;
+                }
+
+                watch();
+            } catch (error) {
+                show({ error: String(error) });
+                runCleanupBtn.disabled = false;
+            }
+        });
+
+        // A cleanup the scheduler started on its own is worth watching too.
+        ask().then(state => {
+            if (state?.running) watch();
+        });
     }
-</style>
+</script>

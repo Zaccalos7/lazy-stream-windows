@@ -503,6 +503,57 @@ public sealed class LivePreviewTests : IAsyncLifetime
     }
 
     [Fact]
+    public async Task ALiveOnAPlatform_IsAlsoWatchableWithThePlayerOfThatPlatform()
+    {
+        // Nothing on air has nowhere to watch: the page keeps the picture ffmpeg writes.
+        using (var offline = await _host.Client.GetAsync("/preview/live/embed"))
+        {
+            Assert.Equal(HttpStatusCode.NotFound, offline.StatusCode);
+        }
+
+        if (!await StartLiveAsync())
+        {
+            return;
+        }
+
+        await WaitForLiveAsync();
+
+        // The player is on the page from the start, with no address in it: on YouTube the address is
+        // not known before the platform has been asked which video is on air, so the page asks for
+        // it once it is open and keeps the picture of the encoder until it answers.
+        using (var page = await _host.Client.GetAsync($"/orbis/mainPreview?live={_pkid}"))
+        {
+            var html = await page.Content.ReadAsStringAsync();
+            Assert.Contains("data-platform-embed", html, StringComparison.Ordinal);
+        }
+
+        // The live of this test writes to a folder, which is not the ingest of any platform, so there
+        // is no player for it. Pointing the history at the Twitch ingest is what a live started
+        // against Twitch looks like to the server.
+        using (var connection = _host.Services.GetRequiredService<Orbis.Stream.Core.Data.SqliteConnectionFactory>().Open())
+        using (var command = connection.CreateCommand())
+        {
+            command.CommandText = "UPDATE video_live_history SET stream_url = 'rtmp://live.twitch.tv/app';";
+            command.ExecuteNonQuery();
+        }
+
+        using var player = await _host.Client.GetAsync($"/preview/live/embed?live={_pkid}");
+        Assert.Equal(HttpStatusCode.OK, player.StatusCode);
+
+        var embed = JsonDocument.Parse(await player.Content.ReadAsStringAsync()).RootElement;
+        Assert.Equal("twitch", embed.GetProperty("platform").GetString());
+
+        // The channel of the configuration, and not the field named platform stream name: a live
+        // started from the wizard keeps the choice of platform there ("twitch"), and a player
+        // addressed by that field plays a channel called "twitch".
+        Assert.Equal("channel-preview", embed.GetProperty("channel").GetString());
+        Assert.Contains(
+            "channel=channel-preview",
+            embed.GetProperty("url").GetString(),
+            StringComparison.Ordinal);
+    }
+
+    [Fact]
     public async Task WithTwoLivesOnAir_ThePreviewPageOffersThemInAList()
     {
         if (!await StartLiveAsync())

@@ -97,8 +97,9 @@ public sealed class FfmpegVideoPlaylistStreamer : IVideoPlaylistStreamer
             queue = [.. files.Select(video => new PlannedVideo(video, null, TimeSpan.Zero))];
         }
 
-        foreach (var planned in queue)
+        for (var i = 0; i < queue.Count; i++)
         {
+            var planned = queue[i];
             cancellationToken.ThrowIfCancellationRequested();
 
             // A stop is for the whole playlist, not for the video that happened to be on air: the
@@ -107,6 +108,21 @@ public sealed class FfmpegVideoPlaylistStreamer : IVideoPlaylistStreamer
                 .ConfigureAwait(false);
             if (stopped)
             {
+                return;
+            }
+
+            // If this was the last video in the playlist and it ended (not stopped), mark the live as ended.
+            if (i == queue.Count - 1)
+            {
+                var endedMessage = _localizer.PrintMessage("video.live.ended");
+                _logger.LogInformation("{Message} - playlist complete", endedMessage);
+                foreach (var video in files)
+                {
+                    video.LiveStatus = LiveStatus.Ended;
+                    video.Message = endedMessage;
+                    _videoRepository.Update(video);
+                }
+                _notifier.Raise();
                 return;
             }
         }

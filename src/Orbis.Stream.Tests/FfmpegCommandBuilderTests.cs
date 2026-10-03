@@ -270,8 +270,8 @@ public sealed class FfmpegCompositionTests
 
         // And the result is one video and one audio stream, not one per source.
         Assert.Equal(2, command.Count(argument => argument == "-map"));
-        Assert.Contains("-map [orbisv] -map [orbisa]", text, StringComparison.Ordinal);
-        Assert.Contains("overlay=1400:700", text, StringComparison.Ordinal);
+        Assert.Contains("scale=480:270:force_original_aspect_ratio=decrease", text, StringComparison.Ordinal);
+        Assert.Contains("overlay=1400+(480-w)/2:700+(270-h)/2", text, StringComparison.Ordinal);
         Assert.Contains("[2:a]asetpts=PTS-STARTPTS", text, StringComparison.Ordinal);
         Assert.EndsWith("rtmp://ingest/live/key", text, StringComparison.Ordinal);
     }
@@ -307,7 +307,7 @@ public sealed class FfmpegCompositionTests
             Request([Camera(1400, 700, 480, 270)], width: 1280, height: 720)));
 
         Assert.StartsWith("color=c=black:s=1280x720:r=30[canvas];", graph, StringComparison.Ordinal);
-        Assert.Contains("[canvas][tile0]overlay=1400:700", graph, StringComparison.Ordinal);
+        Assert.Contains("[canvas][tile0]overlay=1400+(480-w)/2:700+(270-h)/2", graph, StringComparison.Ordinal);
         Assert.DoesNotContain("scale=1280:720", graph, StringComparison.Ordinal);
         Assert.EndsWith("realtime[orbisv]", graph, StringComparison.Ordinal);
     }
@@ -465,7 +465,7 @@ public sealed class FfmpegCompositionTests
             Request([Screen("desktop"), Camera(1411, 703, 481, 271)]));
 
         Assert.Contains("scale=480:270", string.Join(' ', command), StringComparison.Ordinal);
-        Assert.Contains("overlay=1410:702", string.Join(' ', command), StringComparison.Ordinal);
+        Assert.Contains("overlay=1410+(480-w)/2:702+(270-h)/2", string.Join(' ', command), StringComparison.Ordinal);
     }
 
     [Fact]
@@ -476,9 +476,9 @@ public sealed class FfmpegCompositionTests
 
         // The second camera goes over the first, and the first over the desktop: the order the user
         // arranged them in is the order they are drawn in.
-        var desktop = graph.IndexOf("[canvas][tile0]overlay=0:0", StringComparison.Ordinal);
-        var first = graph.IndexOf("[stack0][tile1]overlay=0:0", StringComparison.Ordinal);
-        var second = graph.IndexOf("[stack1][tile2]overlay=1280:0", StringComparison.Ordinal);
+        var desktop = graph.IndexOf("[canvas][tile0]overlay=0+(1920-w)/2:0+(1080-h)/2", StringComparison.Ordinal);
+        var first = graph.IndexOf("[stack0][tile1]overlay=0+(640-w)/2:0+(480-h)/2", StringComparison.Ordinal);
+        var second = graph.IndexOf("[stack1][tile2]overlay=1280+(640-w)/2:0+(480-h)/2", StringComparison.Ordinal);
         Assert.True(desktop > 0);
         Assert.True(first > desktop);
         Assert.True(second > first);

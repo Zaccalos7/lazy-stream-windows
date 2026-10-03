@@ -457,9 +457,9 @@ public static class FfmpegCommandBuilder
             }
 
             var label = $"tile{index}";
-            // For layout compositions, respect layout dimensions without cropping
+            // For layout compositions, respect layout dimensions, scaling to fill and cropping as needed
             graph.Append(CultureInfo.InvariantCulture,
-                $"[{index}:v]setpts=PTS-STARTPTS,{Fit(width, height, false)},setsar=1[{label}];");
+                $"[{index}:v]setpts=PTS-STARTPTS,{Fit(width, height, true)},setsar=1[{label}];");
             labels[index] = label;
         }
 

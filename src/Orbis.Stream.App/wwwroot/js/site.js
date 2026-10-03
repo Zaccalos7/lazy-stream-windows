@@ -860,9 +860,34 @@ document.addEventListener("drop", event => {
   window.chrome.webview.postMessageWithAdditionalObjects("dropPath", files);
 });
 
+document.addEventListener("click", event => {
+  const browseFolderBtn = event.target.closest?.("[data-playlist-browse-folder]");
+  if (browseFolderBtn && window.chrome?.webview) {
+    const field = browseFolderBtn.parentElement?.querySelector("[data-drop-path]");
+    if (field && !field.value.trim()) {
+      dropTarget = field;
+      dropZone = field.closest(".dropzone");
+      window.chrome.webview.postMessage("browseFolder");
+    }
+  }
+});
+
 window.chrome?.webview?.addEventListener("message", event => {
   if (!dropTarget || typeof event.data !== "string") return;
-  dropTarget.value = event.data;
+  let path = event.data;
+
+  try {
+    const payload = JSON.parse(event.data);
+    if (payload.type === "browseFolder" && payload.path) {
+      path = payload.path;
+    } else {
+      return; // Ignore other JSON messages we don't handle here
+    }
+  } catch {
+    // Plain string from drop, handled correctly
+  }
+
+  dropTarget.value = path;
   dropTarget.dispatchEvent(new Event("input", { bubbles: true }));
 
   // The path is in the field, but nothing says it came from the drop: say it for a couple of seconds.

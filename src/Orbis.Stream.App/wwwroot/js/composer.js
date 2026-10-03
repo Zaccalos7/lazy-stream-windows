@@ -908,10 +908,22 @@ const occupies = (target, item) => {
   });
 
   window.chrome?.webview?.addEventListener("message", event => {
-    if (!pendingDrop || typeof event.data !== "string") return;
-    const at = pendingDrop;
-    pendingDrop = null;
-    addFile(event.data, at);
+    if (typeof event.data === "string") {
+      try {
+        const payload = JSON.parse(event.data);
+        if (payload.type === "browseVideo" && payload.path) {
+          addFile(payload.path, pendingDrop);
+          pendingDrop = null;
+          return;
+        }
+      } catch {
+        // Plain string from drop
+        if (!pendingDrop) return;
+        const at = pendingDrop;
+        pendingDrop = null;
+        addFile(event.data, at);
+      }
+    }
   });
 
   const fileOption = path => ({
@@ -934,8 +946,12 @@ const occupies = (target, item) => {
   };
 
   root.querySelector("[data-composer-add-path]")?.addEventListener("click", () => {
-    addFile(pathBox.value);
-    pathBox.value = "";
+    if (!pathBox.value.trim() && window.chrome?.webview) {
+      window.chrome.webview.postMessage("browseVideo");
+    } else {
+      addFile(pathBox.value);
+      pathBox.value = "";
+    }
   });
 
   // A file dropped on the field comes back from the host as a scripted input event: that one

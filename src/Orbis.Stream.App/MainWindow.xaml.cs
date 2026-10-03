@@ -1,6 +1,7 @@
 ﻿using System.Diagnostics;
 using System.IO;
 using System.Windows;
+using Microsoft.Win32;
 using Microsoft.AspNetCore.Builder;
 using Microsoft.Web.WebView2.Core;
 using Orbis.Stream.Core.Configuration;
@@ -142,16 +143,39 @@ public partial class MainWindow : Window
     /// </summary>
     private void OnWebMessageReceived(object? sender, CoreWebView2WebMessageReceivedEventArgs e)
     {
+        var message = e.WebMessageAsJson;
         // WebMessageAsJson never throws, unlike TryGetWebMessageAsString on a non-string message.
-        if (e.WebMessageAsJson != "\"dropPath\"")
+        if (message == "\"dropPath\"")
         {
+            var path = e.AdditionalObjects?.OfType<CoreWebView2File>().FirstOrDefault()?.Path;
+            if (path is not null)
+            {
+                Browser.CoreWebView2.PostWebMessageAsString(path);
+            }
             return;
         }
 
-        var path = e.AdditionalObjects?.OfType<CoreWebView2File>().FirstOrDefault()?.Path;
-        if (path is not null)
+        if (message == "\"browseVideo\"")
         {
-            Browser.CoreWebView2.PostWebMessageAsString(path);
+            var dialog = new OpenFileDialog
+            {
+                Filter = "Video Files|*.mp4;*.mkv;*.avi;*.mov;*.wmv;*.flv;*.webm;*.m4v;*.mpeg;*.mpg|All Files|*.*"
+            };
+            if (dialog.ShowDialog(this) == true)
+            {
+                Browser.CoreWebView2.PostWebMessageAsString($"{{\"type\":\"browseVideo\",\"path\":\"{dialog.FileName.Replace("\\", "\\\\")}\"}}");
+            }
+            return;
+        }
+
+        if (message == "\"browseFolder\"")
+        {
+            var dialog = new OpenFolderDialog();
+            if (dialog.ShowDialog(this) == true)
+            {
+                Browser.CoreWebView2.PostWebMessageAsString($"{{\"type\":\"browseFolder\",\"path\":\"{dialog.FolderName.Replace("\\", "\\\\")}\"}}");
+            }
+            return;
         }
     }
 

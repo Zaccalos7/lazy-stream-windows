@@ -41,6 +41,6 @@ public sealed record AppInfo(string Name, string Version, string Author)
 
         return !string.IsNullOrWhiteSpace(version)
             ? version
-            : assembly.GetName().Version?.ToString() ?? "0.0.0";
+            : assembly.GetName().Version?.ToString() ?? "DUA";
     }
 }

@@ -87,16 +87,13 @@ else
         ? $"aspect-ratio: {live.Output.Width.ToString(CultureInfo.InvariantCulture)} / {live.Output.Height.ToString(CultureInfo.InvariantCulture)}"
         : null;
 
-    // Platform embed URLs for showing what viewers see (Twitch/YouTube playback)
+    // The platform the live goes on, shown next to the name of the channel. Where the live can be
+    // watched with the player of the platform is asked for here rather than written into the page:
+    // the player of YouTube is addressed by the id of the video, and that id only exists once the
+    // platform has been asked which video is on air, which is longer than a page should wait to be
+    // drawn. The page asks for it once it is open and keeps the picture below until it answers.
     var platform = LiveLinkView.PlatformOf(live.StreamUrl);
-    var channel = live.PlatformStreamName ?? live.ChannelName ?? "";
-    var twitchEmbed = platform == "twitch" && !string.IsNullOrWhiteSpace(channel)
-        ? $"https://player.twitch.tv/?channel={Uri.EscapeDataString(channel)}&parent={Request.Host.Host}&muted=true"
-        : null;
-    var youtubeEmbed = platform == "youtube" && !string.IsNullOrWhiteSpace(channel)
-        ? $"https://www.youtube.com/embed/live_stream?channel={Uri.EscapeDataString(channel)}&autoplay=1&mute=1"
-        : null;
-    var hasPlatformEmbed = twitchEmbed != null || youtubeEmbed != null;
+    var platformLabel = LiveLinkView.LabelOf(platform);
     <div class="preview">
         <div class="preview-stage card">
             @* What is on air, made light: the frames a few times a second that ffmpeg writes next to
@@ -107,21 +104,19 @@ else
                     <span class="spinner"></span>
                     <p class="muted">@T["previewWaiting"]</p>
                 </div>
-                @if (hasPlatformEmbed)
-                {
-                    <iframe class="preview-platform-player"
-                            src="@(twitchEmbed ?? youtubeEmbed)"
-                            title="@(platform == "twitch" ? "Twitch" : "YouTube") live stream"
-                            allow="autoplay; fullscreen"
-                            loading="lazy"
-                            hidden></iframe>
-                }
+                <iframe class="preview-platform-player"
+                        data-platform-embed
+                        title="@(platformLabel ?? "Platform") live stream"
+                        allow="autoplay; fullscreen; picture-in-picture"
+                        allowfullscreen
+                        scrolling="no"
+                        hidden></iframe>
                 <canvas data-preview-frame role="img" aria-label="@live.VideoName" hidden></canvas>
             </div>
             <div class="preview-bar">
                 <div class="preview-id">
                     <strong class="truncate">@live.VideoName</strong>
-                    <span class="caption truncate">@live.ChannelName@(string.IsNullOrEmpty(live.PlatformStreamName) ? "" : " · " + live.PlatformStreamName)</span>
+                    <span class="caption truncate">@live.ChannelName@(string.IsNullOrEmpty(platformLabel) ? "" : " · " + platformLabel)</span>
                 </div>
                 <span class="spinner" data-preview-restart hidden title="@T["reconfiguring"]"></span>
                 <span class="caption preview-time" data-preview-position>@Time(live.PositionMilliseconds) / @Time(live.DurationMilliseconds)</span>

@@ -154,10 +154,16 @@ const preview = document.querySelector("[data-preview]");
 // keeps no queue either: it holds the newest picture and nothing else, and draws it on a clock of
 // its own that nothing but the picture can hurry or hold back.
 const previewFrame = preview?.querySelector("[data-preview-frame]");
-const previewFrameUrl = previewFrame ? `/preview/live/${Number(preview.dataset.pkid || 0)}/frame` : null;
+let previewFrameUrl = previewFrame ? `/preview/live/${Number(preview.dataset.pkid || 0)}/frame` : null;
 
-// Platform embed player (Twitch/YouTube) - shows what viewers actually see on the platform
-const previewPlatformPlayer = preview?.querySelector(".preview-platform-player");
+// The platform player (Twitch/YouTube): what the viewers see, in place of the local picture.
+//
+// It is asked for once the page is open and not written into the page, because on YouTube the
+// address of the player is not known before the platform has been asked which video is on air.
+// Until it answers, the light picture of the live is on the stage: it is the truth of the encoder
+// and it is there at once, so a platform that cannot be reached costs a missing picture and not an
+// empty stage.
+const previewPlatformPlayer = preview?.querySelector("[data-platform-embed]");
 
 // How long a question waits for its answer. ffmpeg writes the next picture every thirty third of a
 // second, and the server holds the request open until that picture exists instead of being asked
@@ -211,18 +217,6 @@ let previewPainted = null;
 // smoothing the browser does at its best, costs the same and keeps the picture as sharp as a scaled
 // frame can be.
 const paintPreviewPicture = () => {
-  // If platform embed player is available, use it instead of canvas (shows what viewers see)
-  if (previewPlatformPlayer) {
-    if (previewPlatformPlayer.hidden) {
-      // Hide canvas and cover, show platform player
-      if (previewFrame) previewFrame.hidden = true;
-      const cover = preview?.querySelector(".preview-cover");
-      if (cover) cover.hidden = true;
-      previewPlatformPlayer.hidden = false;
-    }
-    return;
-  }
-
   if (!previewFrame) return;
 
   requestAnimationFrame(paintPreviewPicture);
@@ -297,9 +291,10 @@ const fetchPreviewFrame = async () => {
 
 // The loop is a chain of waits rather than a timer, and what it waits for is the answer: the next
 // question goes out as soon as the last one has been dealt with, and the server decides when there
-// is a picture to draw. Nothing here decides when the live moves.
+// is a picture to draw. Nothing here decides when the live moves. It ends when the platform player
+// takes the stage: there is no longer a picture on the canvas to keep fed.
 const previewLoop = async () => {
-  while (true) {
+  while (previewFrameUrl) {
     const outcome = await fetchPreviewFrame();
     await new Promise(resolve => setTimeout(resolve,
       outcome === "idle" ? previewIdle : outcome === "waiting" ? previewFloor : 0));
@@ -425,22 +420,53 @@ if (previewVideo) {
   });
 }
 
-if (previewIsLive) {
-  if (previewPlatformPlayer) {
-    // Platform embed player (Twitch/YouTube) - shows what viewers see on the platform
-    // Hide canvas and cover, show platform player immediately
-    if (previewFrame) previewFrame.hidden = true;
-    const cover = preview?.querySelector(".preview-cover");
-    if (cover) cover.hidden = true;
-    previewPlatformPlayer.hidden = false;
-    // Still listen for visibility to pause platform player if needed
-    document.addEventListener("visibilitychange", () => {
-      if (document.hidden && previewPlatformPlayer.src) {
-        // Could pause iframe but most platforms handle this automatically
+// Puts the platform player on the stage in place of the local picture, once the server has said
+// which one the live can be watched on.
+const showPlatformPlayer = url => {
+  if (!previewPlatformPlayer) return;
+  if (previewPlatformPlayer.getAttribute("src") !== url) previewPlatformPlayer.setAttribute("src", url);
+  previewPlatformPlayer.hidden = false;
+  if (previewFrame) previewFrame.hidden = true;
+  const cover = preview?.querySelector(".preview-cover");
+  if (cover) cover.hidden = true;
+  // The canvas is not drawn on any more: the questions for its frames stop with the loop that asks
+  // for them, so an encoder nobody is watching does not keep writing a preview for a hidden canvas.
+  previewFrameUrl = null;
+};
+
+// Asks where this live can be watched. A page that is told there is nowhere to watch it keeps the
+// local picture, which is the right answer for a platform this application has no player for and
+// for a channel that is not on air yet.
+//
+// The question is asked again for as long as there is no answer: ffmpeg starts pushing before the
+// platform calls the channel live, and a live started on another machine while this page is open is
+// not on air at all when the page is drawn. A live that is on air keeps its player until it ends,
+// so the question stops there and not one moment before.
+const previewRetry = 15000;
+let previewEmbedAsked = false;
+
+const resolvePlatformPlayer = async () => {
+  if (!previewPlatformPlayer || previewPkid <= 0 || previewEmbedAsked) return;
+  previewEmbedAsked = true;
+  try {
+    const response = await fetch(`/preview/live/embed?live=${previewPkid}`, { cache: "no-store" });
+    if (response.ok) {
+      const embed = await response.json();
+      if (embed?.url) {
+        showPlatformPlayer(embed.url);
+        return;
       }
-    });
-  } else if (previewFrame) {
-    // Local canvas preview (fallback for unknown platforms)
+    }
+  } catch {
+    // The server is not answering: the local picture stays, which is what it is for.
+  }
+  if (previewIsLive) setTimeout(resolvePlatformPlayer, previewRetry);
+};
+
+if (previewIsLive) {
+  if (previewFrame) {
+    // The light picture of the live, on the stage from the first frame and until the platform
+    // player takes it over.
     previewLoop();
     requestAnimationFrame(paintPreviewPicture);
     document.addEventListener("visibilitychange", () => {
@@ -451,6 +477,7 @@ if (previewIsLive) {
       armPreviewFrame();
     });
   }
+  resolvePlatformPlayer();
 }
 
 const paintPreview = state => {

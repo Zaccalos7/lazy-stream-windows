@@ -466,8 +466,10 @@ public static class FfmpegCommandBuilder
         foreach (var (item, index) in pictures)
         {
             var next = $"stack{index}";
+            var xExpr = $"{Even(item.X)}+({Even(item.Width)}-w)/2";
+            var yExpr = $"{Even(item.Y)}+({Even(item.Height)}-h)/2";
             graph.Append(CultureInfo.InvariantCulture,
-                $"[{composed}][{labels[index]}]overlay={Even(item.X)}:{Even(item.Y)}:format=auto[{next}];");
+                $"[{composed}][{labels[index]}]overlay={xExpr}:{yExpr}:format=auto[{next}];");
             composed = next;
         }
 
@@ -561,12 +563,12 @@ public static class FfmpegCommandBuilder
         audio is null ? video : $"{video};{audio}";
 
     /// <summary>
-    /// Scale keeping the aspect ratio and padding what is left: a webcam dropped on a 16:9 tile
-    /// arrives 4:3, and stretching it to fill is the one thing a user always notices.
+    /// Scale keeping the aspect ratio: a webcam dropped on a 16:9 tile arrives 4:3, and
+    /// stretching it to fill is the one thing a user always notices. The scaled frame is then
+    /// placed in the center of the tile area by the overlay filter rather than padded.
     /// </summary>
     public static string Fit(int width, int height) =>
-        $"scale={width}:{height}:force_original_aspect_ratio=decrease," +
-        $"pad={width}:{height}:(ow-iw)/2:(oh-ih)/2";
+        $"scale={width}:{height}:force_original_aspect_ratio=decrease";
 
     /// <summary>
     /// What the encoder will be asked to produce for a file: the resolution and the frame rate of

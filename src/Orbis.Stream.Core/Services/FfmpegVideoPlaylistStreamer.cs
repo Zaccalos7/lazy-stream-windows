@@ -104,7 +104,8 @@ public sealed class FfmpegVideoPlaylistStreamer : IVideoPlaylistStreamer
 
             // A stop is for the whole playlist, not for the video that happened to be on air: the
             // next one must not go live by itself. It stays where it is, so a play resumes here.
-            var stopped = await StreamVideoAsync(planned, outputUrl, videoLiveHistoryPkid, cancellationToken)
+            var isLast = i == queue.Count - 1;
+            var stopped = await StreamVideoAsync(planned, outputUrl, videoLiveHistoryPkid, cancellationToken, markEndedOnFinish: isLast)
                 .ConfigureAwait(false);
             if (stopped)
             {
@@ -238,7 +239,8 @@ public sealed class FfmpegVideoPlaylistStreamer : IVideoPlaylistStreamer
         PlannedVideo planned,
         string outputUrl,
         long videoLiveHistoryPkid,
-        CancellationToken cancellationToken)
+        CancellationToken cancellationToken,
+        bool markEndedOnFinish = true)
     {
         var video = planned.Video;
         var inputPath = video.VideoPath;
@@ -334,10 +336,21 @@ public sealed class FfmpegVideoPlaylistStreamer : IVideoPlaylistStreamer
 
                 if (exitCode == 0)
                 {
-                    var endedMessage = _localizer.PrintMessage("video.live.ended");
-                    _logger.LogInformation("{Message}", endedMessage);
-                    SaveMessageOnVideoLiveHistory(
-                        endedMessage, videoLiveHistoryPkid, inputPath, LiveStatus.Ended, null, finalPosition);
+                    if (markEndedOnFinish)
+                    {
+                        var endedMessage = _localizer.PrintMessage("video.live.ended");
+                        _logger.LogInformation("{Message}", endedMessage);
+                        SaveMessageOnVideoLiveHistory(
+                            endedMessage, videoLiveHistoryPkid, inputPath, LiveStatus.Ended, null, finalPosition);
+                    }
+                    else
+                    {
+                        // Don't mark as ended if this is an intermediate video in a playlist
+                        // The next video will take over
+                        _logger.LogInformation("Video ended, continuing to next in playlist");
+                        SaveMessageOnVideoLiveHistory(
+                            string.Empty, videoLiveHistoryPkid, inputPath, LiveStatus.Offline, null, finalPosition);
+                    }
                     return false;
                 }
 

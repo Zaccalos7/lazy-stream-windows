@@ -305,7 +305,7 @@
   "deleteSceneLiveConfirm": "Sei sicuro di voler eliminare questa live ({0} sorgenti)?",
   "olderThanYesterday": "Più vecchi di ieri",
   "olderThanNow": "Più vecchi di adesso",
-  "noLayoutSelected": "No layout selected",
-  "selectLayout": "Select layout",
+  "noLayoutSelected": "Nessun layout selezionato",
+  "selectLayout": "Seleziona layout",
   "layoutSelected": "Layout selected"
 }

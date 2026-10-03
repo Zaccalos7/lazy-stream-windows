@@ -457,8 +457,9 @@ public static class FfmpegCommandBuilder
             }
 
             var label = $"tile{index}";
+            // For layout compositions, respect layout dimensions without cropping
             graph.Append(CultureInfo.InvariantCulture,
-                $"[{index}:v]setpts=PTS-STARTPTS,{Fit(width, height)},setsar=1[{label}];");
+                $"[{index}:v]setpts=PTS-STARTPTS,{Fit(width, height, false)},setsar=1[{label}];");
             labels[index] = label;
         }
 
@@ -567,10 +568,13 @@ public static class FfmpegCommandBuilder
     /// stretching it to fill is the one thing a user always notices. The scaled frame is then
     /// placed in the center of the tile area by the overlay filter rather than padded.
     /// </summary>
-    public static string Fit(int width, int height)
+    public static string Fit(int width, int height, bool fill = false)
     {
-        // The user explicitly requested that the video fills the canvas, so use increase and crop
-        return $"scale={width}:{height}:force_original_aspect_ratio=increase,crop={width}:{height}";
+        if (fill)
+        {
+            return $"scale={width}:{height}:force_original_aspect_ratio=increase:force_divisible_by=2,crop={width}:{height}";
+        }
+        return $"scale={width}:{height}:force_original_aspect_ratio=decrease:force_divisible_by=2";
     }
 
     /// <summary>

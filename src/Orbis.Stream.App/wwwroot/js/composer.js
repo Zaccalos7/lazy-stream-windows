@@ -1101,6 +1101,8 @@ const occupies = (target, item) => {
   // starts, and saving it can never write over the layout.
   const loadScene = saved => {
     clearStage();
+    // In compose mode, when loading a layout (asSlots is true), we load it as slots
+    // In layout mode, it's the layout being edited
     const asSlots = !!saved?.isLayout;
     const items = (saved?.items || []).filter(entry => !asSlots || (entry.width > 0 && entry.height > 0));
     layoutPkid = asSlots ? saved.pkid : null;
@@ -1114,6 +1116,9 @@ const occupies = (target, item) => {
     nameBox.value = scene.name;
     if (layoutMode) {
       scenesBox.value = layoutPkid === null ? "" : String(layoutPkid);
+    } else if (asSlots) {
+      // In compose mode, when a layout is selected, set the layout select
+      scenesBox.value = String(layoutPkid);
     }
     setSizeBox();
     markClean();
@@ -1146,11 +1151,13 @@ const occupies = (target, item) => {
   scenesBox.addEventListener("change", () => {
     const pkid = scenesBox.value;
     if (!pkid) {
+      // When selecting "no layout", clear the scene
       loadScene(null);
       return;
     }
     const saved = scenes.find(entry => String(entry.pkid) === pkid);
     if (saved) {
+      // Load layout as slots - in compose mode, loading a layout should create a new scene based on it
       loadScene(saved);
     }
   });

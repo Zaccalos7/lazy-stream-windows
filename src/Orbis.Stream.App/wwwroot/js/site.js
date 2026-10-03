@@ -431,7 +431,8 @@ const showPlatformPlayer = url => {
   if (cover) cover.hidden = true;
   // The canvas is not drawn on any more: the questions for its frames stop with the loop that asks
   // for them, so an encoder nobody is watching does not keep writing a preview for a hidden canvas.
-  previewFrameUrl = null;
+  // Don't stop fetching local preview frames - keep continuous stream
+  // previewFrameUrl = null;
 };
 
 // Asks where this live can be watched. A page that is told there is nowhere to watch it keeps the
@@ -443,14 +444,12 @@ const showPlatformPlayer = url => {
 // not on air at all when the page is drawn. A live that is on air keeps its player until it ends,
 // so the question stops there and not one moment before.
 const previewRetry = 15000;
-let previewEmbedAsked = false;
 
 const embedStatus = preview?.querySelector(".preview-embed-status");
 const embedText = embedStatus?.querySelector("[data-embed-text]");
 
 const resolvePlatformPlayer = async () => {
-  if (!previewPlatformPlayer || previewPkid <= 0 || previewEmbedAsked) return;
-  previewEmbedAsked = true;
+  if (!previewPlatformPlayer || previewPkid <= 0) return;
   if (embedStatus) embedStatus.hidden = false;
   try {
     const response = await fetch(`/preview/live/embed?live=${previewPkid}`, { cache: "no-store" });
@@ -459,6 +458,8 @@ const resolvePlatformPlayer = async () => {
       if (embed?.url) {
         showPlatformPlayer(embed.url);
         if (embedStatus) embedStatus.hidden = true;
+        // Keep polling to stay updated
+        if (previewIsLive) setTimeout(resolvePlatformPlayer, previewRetry);
         return;
       }
     }

@@ -265,12 +265,12 @@ public sealed class FfmpegCompositionTests
         Assert.Contains("-f dshow -rtbufsize 256M -thread_queue_size 1024 -i audio=Microphone", text, StringComparison.Ordinal);
 
         // Every picture is scaled into the rectangle it was dropped on.
-        Assert.Contains("scale=1920:1080:force_original_aspect_ratio=increase,crop=1920:1080", text, StringComparison.Ordinal);
-        Assert.Contains("scale=480:270:force_original_aspect_ratio=increase,crop=480:270", text, StringComparison.Ordinal);
+        Assert.Contains("scale=1920:1080:force_original_aspect_ratio=decrease", text, StringComparison.Ordinal);
+        Assert.Contains("scale=480:270:force_original_aspect_ratio=decrease", text, StringComparison.Ordinal);
 
         // And the result is one video and one audio stream, not one per source.
         Assert.Equal(2, command.Count(argument => argument == "-map"));
-        Assert.Contains("scale=480:270:force_original_aspect_ratio=increase,crop=480:270", text, StringComparison.Ordinal);
+        Assert.Contains("scale=480:270:force_original_aspect_ratio=decrease", text, StringComparison.Ordinal);
         Assert.Contains("overlay=1400+(480-w)/2:700+(270-h)/2", text, StringComparison.Ordinal);
         Assert.Contains("[2:a]asetpts=PTS-STARTPTS", text, StringComparison.Ordinal);
         Assert.EndsWith("rtmp://ingest/live/key", text, StringComparison.Ordinal);

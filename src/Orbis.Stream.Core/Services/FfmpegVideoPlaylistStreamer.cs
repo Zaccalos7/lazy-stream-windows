@@ -429,6 +429,9 @@ public sealed class FfmpegVideoPlaylistStreamer : IVideoPlaylistStreamer
             return;
         }
 
+        // If all sources are files (no screen/camera/microphone), the scene has a finite duration.
+        // We should end the live when the longest file ends, not loop forever.
+        var onlyFiles = rows.All(row => row.SourceKind == SourceKind.File);
         var videoKey = baseRow.Pkid;
         var description = _localizer.PrintMessage("video.live.scene", [rows.Count.ToString(CultureInfo.InvariantCulture)]);
         FfmpegStreamingSession? session = null;
@@ -505,6 +508,16 @@ public sealed class FfmpegVideoPlaylistStreamer : IVideoPlaylistStreamer
                 {
                     var stopped = _localizer.PrintMessage("live.stopped");
                     MarkRows(rows, LiveStatus.Stopped, stopped);
+                    return;
+                }
+
+                // If the scene has only file sources and ffmpeg exited cleanly, the video ended.
+                // End the live instead of restarting the loop.
+                if (onlyFiles && exitCode == 0)
+                {
+                    var endedMessage = _localizer.PrintMessage("video.live.ended");
+                    _logger.LogInformation("{Message}", endedMessage);
+                    MarkRows(rows, LiveStatus.Ended, endedMessage);
                     return;
                 }
 

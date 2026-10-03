@@ -246,14 +246,18 @@
     render();
   };
 
-  // A source that goes into a rectangle takes it whole: the box keeps its place in the stack, so
-  // a full frame one stays under the boxes laid on top of it instead of jumping over them.
-  const occupies = (target, item) => {
-    Object.assign(item, { x: target.x, y: target.y, w: target.w, h: target.h, autoSized: false });
-    // The source remembers the slot it went into, so taking it off gives the skeleton back.
-    item.slotLabel = isSlot(target) ? target.label : target.slotLabel;
-    return item;
-  };
+// A source that goes into a rectangle takes it whole: the box keeps its place in the stack, so
+// a full frame one stays under the boxes laid on top of it instead of jumping over them.
+const occupies = (target, item) => {
+  Object.assign(item, { x: target.x, y: target.y, w: target.w, h: target.h, autoSized: false });
+  // If the target was a full-frame slot (the background), the source should fill the canvas.
+  if (isSlot(target) && target.x <= 0 && target.y <= 0 && target.w >= scene.width && target.h >= scene.height) {
+    Object.assign(item, { x: 0, y: 0, w: scene.width, h: scene.height });
+  }
+  // The source remembers the slot it went into, so taking it off gives the skeleton back.
+  item.slotLabel = isSlot(target) ? target.label : target.slotLabel;
+  return item;
+};
 
   const replaceSource = (uid, option) => {
     const existing = scene.items.find(item => sameSource(item, option));

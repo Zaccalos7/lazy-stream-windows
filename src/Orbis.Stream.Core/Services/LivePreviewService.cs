@@ -196,6 +196,14 @@ public sealed class LivePreviewService
         var history = video.VideoLiveHistoryId is { } historyId ? _historyRepository.FindByPkid(historyId) : null;
         var probe = session.Probe;
 
+        // For scene lives, the probe duration is 0 (synthetic). Use the sum of all video durations in the live history.
+        long totalDurationMs = (long)(probe.DurationSeconds * 1000);
+        if (totalDurationMs == 0 && video.VideoLiveHistoryId is { } liveHistoryId)
+        {
+            var videosInHistory = _videoRepository.FindByLiveHistoryId(liveHistoryId);
+            totalDurationMs = videosInHistory.Sum(v => v.DurationMilliseconds ?? 0);
+        }
+
         return new LiveSnapshot(
             true,
             session.RestartRequested,
@@ -207,7 +215,7 @@ public sealed class LivePreviewService
             history?.PlatformStreamName ?? string.Empty,
             history?.StreamUrl,
             session.PositionMilliseconds,
-            (long)(probe.DurationSeconds * 1000),
+            totalDurationMs,
             // A canvas is not any one of its files: playing the first of them would show a
             // picture that is not the one on air.
             video.ScenePkid is null && VideoExtensions.IsBrowserPlayable(video.Extension),

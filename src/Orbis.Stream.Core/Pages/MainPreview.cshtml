@@ -94,7 +94,7 @@ else
         ? $"https://player.twitch.tv/?channel={Uri.EscapeDataString(channel)}&parent={Request.Host.Host}&muted=true"
         : null;
     var youtubeEmbed = platform == "youtube" && !string.IsNullOrWhiteSpace(channel)
-        ? $"https://www.youtube.com/embed/live_stream?channel={Uri.EscapeDataString(channel.TrimStart('@'))}&autoplay=1&mute=1"
+        ? $"https://www.youtube.com/embed/live_stream?channel={Uri.EscapeDataString(channel)}&autoplay=1&mute=1"
         : null;
     var hasPlatformEmbed = twitchEmbed != null || youtubeEmbed != null;
     <div class="preview">

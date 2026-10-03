@@ -14,15 +14,18 @@ public sealed class DatabaseBootstrapper : IHostedService
 {
     private readonly SqliteConnectionFactory _connectionFactory;
     private readonly VideoSettingRepository _videoSettingRepository;
+    private readonly VideoRepository _videoRepository;
     private readonly ILogger<DatabaseBootstrapper> _logger;
 
     public DatabaseBootstrapper(
         SqliteConnectionFactory connectionFactory,
         VideoSettingRepository videoSettingRepository,
+        VideoRepository videoRepository,
         ILogger<DatabaseBootstrapper> logger)
     {
         _connectionFactory = connectionFactory;
         _videoSettingRepository = videoSettingRepository;
+        _videoRepository = videoRepository;
         _logger = logger;
     }
 
@@ -33,11 +36,32 @@ public sealed class DatabaseBootstrapper : IHostedService
             DatabaseSchema.EnsureCreated(connection, _logger);
         }
 
+        ReleaseLivesLeftRunning();
         AddDefaultVideoAndAudioSetting();
         return Task.CompletedTask;
     }
 
     public Task StopAsync(CancellationToken cancellationToken) => Task.CompletedTask;
+
+    /// <summary>
+    /// Nothing is streaming while the application is opening, so a video row still marked LIVE was
+    /// left behind by a run that never ended: the window was closed with ffmpeg on, or the machine
+    /// went down. Left as it is, the live grid and the live history show a live that stopped weeks
+    /// ago next to the one that is really on air, and a start on that channel is refused over it.
+    /// </summary>
+    private void ReleaseLivesLeftRunning()
+    {
+        foreach (var video in _videoRepository.FindByLiveStatus(LiveStatus.Live))
+        {
+            _logger.LogInformation("Video {Name} was still marked live at startup and is released", video.Name);
+
+            video.LiveStatus = LiveStatus.Stopped;
+            video.ShouldBeStop = false;
+            // What it says about itself no longer holds: it did not stop, it was interrupted.
+            video.Message = null;
+            _videoRepository.Update(video);
+        }
+    }
 
     private void AddDefaultVideoAndAudioSetting()
     {

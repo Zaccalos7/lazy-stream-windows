@@ -294,5 +294,7 @@
   "composeNext": "Hodor",
   "previewWaiting": "Hodor",
   "sceneSources": "Hodor {0} Hodor.",
-  "deleteSceneLiveConfirm": "Hodor hodor! {0} Hodor."
+  "deleteSceneLiveConfirm": "Hodor hodor! {0} Hodor.",
+  "olderThanYesterday": "Older than yesterday",
+  "olderThan1Day": "Older than 1 day"
 }

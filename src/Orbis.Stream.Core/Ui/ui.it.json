@@ -42,7 +42,7 @@
   "noDataPresent": "Nessun Dato presente",
   "upcomingLive": "La Live sta per iniziare",
   "noImage": "Nessuna Immagine",
-  "channelName": "Nome del canale :",
+  "channelName": "Nome del canale (o ID Canale YouTube) :",
   "streamKey": "Chiave di stream :",
   "streamUrl": "URL dello stream :",
   "videoFolder": "Percorso cartella video :",

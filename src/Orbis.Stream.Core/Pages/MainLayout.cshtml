@@ -10,8 +10,9 @@
 <div class="page-header">
     <div>
         <h1>@T["layouts"]</h1>
-        <p class="subtitle">@T["layoutsDescription"]</p>
+        <p class="subtitle"><a href="/orbis/mainLayoutList">@T["layouts"]</a> › @(Model.Edit is null ? T["newLayout"] : T["editModalTitle"])</p>
     </div>
+    <a class="btn" href="/orbis/mainLayoutList"><i class="icon">&#xE72B;</i>@T["back"]</a>
 </div>
 
 <partial name="_SceneComposer" model="new SceneComposerModel(Model.Edit, Layout: true)" />

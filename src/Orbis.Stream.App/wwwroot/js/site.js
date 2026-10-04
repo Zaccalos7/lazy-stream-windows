@@ -977,3 +977,65 @@ document.addEventListener("DOMContentLoaded", () => {
     }, 7000);
   }
 });
+
+// Auto-updater Logic
+document.addEventListener("DOMContentLoaded", async () => {
+    const currentVersion = document.documentElement.dataset.appVersion;
+    if (!currentVersion) return;
+
+    try {
+        const response = await fetch("https://sourceforge.net/projects/lazy-stream-windows/best_release.json");
+        const data = await response.json();
+        const latestRelease = data?.release?.filename;
+        if (!latestRelease) return;
+
+        // Extracts version from "/2.0.5/OrbisStream-2.0.5-win-x64-setup.exe" -> "2.0.5"
+        const match = latestRelease.match(/\/([0-9\.]+)\//);
+        if (!match) return;
+        const latestVersion = match[1];
+
+        // Basic version comparison (assumes semver-like format)
+        const v1 = currentVersion.split('.').map(Number);
+        const v2 = latestVersion.split('.').map(Number);
+        let isNewer = false;
+
+        for (let i = 0; i < Math.max(v1.length, v2.length); i++) {
+            const num1 = v1[i] || 0;
+            const num2 = v2[i] || 0;
+            if (num2 > num1) {
+                isNewer = true;
+                break;
+            } else if (num2 < num1) {
+                break;
+            }
+        }
+
+        if (isNewer) {
+            const updateUrl = data.release.url;
+            const dialog = document.getElementById("update-dialog");
+            const updateText = document.getElementById("update-dialog-text");
+            const bell = document.getElementById("update-bell");
+
+            if (!dialog || !updateText || !bell) return;
+
+            updateText.textContent = "c’è una nuova versione vuoi scaricarla?";
+
+            dialog.onclose = () => {
+                if (dialog.returnValue === "ok") {
+                    window.open(updateUrl, "_blank");
+                } else {
+                    bell.hidden = false;
+                }
+            };
+
+            dialog.showModal();
+
+            bell.addEventListener("click", () => {
+                updateText.textContent = "vuoi installare la versione nuova?";
+                dialog.showModal();
+            });
+        }
+    } catch (e) {
+        console.error("Failed to check for updates", e);
+    }
+});

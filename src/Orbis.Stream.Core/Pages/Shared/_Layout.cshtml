@@ -5,7 +5,7 @@
     var notice = ViewContext.ViewData.Model as OrbisPageModel;
 }
 <!DOCTYPE html>
-<html lang="@T.Language" data-initializing="@T["initializing"]">
+<html lang="@T.Language" data-initializing="@T["initializing"]" data-app-version="@AppInfo.Current.Version">
 <head>
     <meta charset="utf-8" />
     <meta name="viewport" content="width=device-width, initial-scale=1" />
@@ -45,6 +45,9 @@
         <div class="nav-spacer"></div>
         @* Which build this is and who wrote it: the two lines at the foot of the bar are the only
            place that says so without opening anything, the dialog behind them says it in full. *@
+        <button type="button" class="btn subtle icon-only update-bell" id="update-bell" title="Update Available" aria-label="Update Available" hidden>
+            <i class="icon" style="position: relative;">&#xEA8F;<span style="position: absolute; top: 0; right: -2px; width: 6px; height: 6px; background-color: red; border-radius: 50%;"></span></i>
+        </button>
         <button type="button" class="nav-about" id="about-button" title="@T["about"]" aria-label="@T["about"]">
             <i class="icon" aria-hidden="true">&#xE946;</i>
             <span class="nav-about-text">
@@ -105,6 +108,16 @@
         </div>
     </main>
 </div>
+
+<dialog class="dialog" id="update-dialog">
+    <form method="dialog">
+        <div class="dialog-body"><h2 id="update-dialog-text"></h2></div>
+        <div class="dialog-footer">
+            <button class="btn accent" value="ok">Sì</button>
+            <button class="btn" value="cancel">No</button>
+        </div>
+    </form>
+</dialog>
 
 <dialog class="dialog" id="confirm-dialog">
     <form method="dialog">

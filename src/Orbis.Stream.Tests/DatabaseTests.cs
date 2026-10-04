@@ -27,6 +27,7 @@ public sealed class TemporaryDatabase : IDisposable
         var bootstrapper = new DatabaseBootstrapper(
             _connectionFactory,
             Repository<VideoSettingRepository>(),
+            Repository<VideoRepository>(),
             NullLogger<DatabaseBootstrapper>.Instance);
         bootstrapper.StartAsync(CancellationToken.None).GetAwaiter().GetResult();
 
@@ -86,6 +87,46 @@ public sealed class DatabaseSchemaTests
         command.CommandText = "SELECT COUNT(*) FROM sqlite_master WHERE type = 'table' AND name IN "
             + "('video', 'setting', 'video_setting', 'audio_setting', 'video_settings_options', 'video_live_history')";
         Assert.Equal(6L, Convert.ToInt64(command.ExecuteScalar(), System.Globalization.CultureInfo.InvariantCulture));
+    }
+
+    /// <summary>
+    /// A run that ended with the window still on, or with the machine going down, leaves its video
+    /// rows marked LIVE. Nothing is streaming while the application opens, so the rows are released
+    /// at startup: left alone, the grid shows a live that stopped weeks ago next to the one that is
+    /// really on air, and a start on that channel is refused over it.
+    /// </summary>
+    [Fact]
+    public async Task StartAsync_ReleasesTheLivesLeftRunning()
+    {
+        using var database = new TemporaryDatabase();
+        var videos = database.Repository<VideoRepository>();
+        videos.Insert(new VideoEntity
+        {
+            Name = "left-running.mp4",
+            VideoPath = "/clips/left-running.mp4",
+            Extension = "mp4",
+            LiveStatus = LiveStatus.Live,
+            ShouldBeStop = true,
+            StartDateLive = new DateTime(2026, 2, 1, 10, 0, 0, DateTimeKind.Local),
+            ChannelName = "channel",
+            Message = "Video live started: /clips/left-running.mp4",
+            VideoSettingId = 1
+        });
+
+        await new DatabaseBootstrapper(
+            database.ConnectionFactory,
+            database.Repository<VideoSettingRepository>(),
+            videos,
+            NullLogger<DatabaseBootstrapper>.Instance)
+            .StartAsync(CancellationToken.None);
+
+        var released = Assert.Single(videos.FindByLiveStatus(LiveStatus.Stopped));
+        Assert.Equal("left-running.mp4", released.Name);
+        Assert.False(released.ShouldBeStop);
+
+        // What it said about itself no longer holds: it did not stop, it was interrupted.
+        Assert.Null(released.Message);
+        Assert.Empty(videos.FindByLiveStatus(LiveStatus.Live));
     }
 
     [Fact]
@@ -421,6 +462,26 @@ public sealed class VideoRepositoryTests
         Assert.Equal("channel", loaded.ChannelName);
         Assert.Equal(1, loaded.VideoSettingId);
         Assert.Equal(new DateTime(2026, 2, 1, 10, 0, 0, DateTimeKind.Local), loaded.StartDateLive!.Value);
+    }
+
+    [Fact]
+    public void InsertAndFind_KeepsTheTileAndTheResolutionOfTheFile()
+    {
+        using var database = new TemporaryDatabase();
+        var videos = database.Repository<VideoRepository>();
+
+        var video = Video(1, LiveStatus.Offline, "clip", database.LiveHistoryId);
+        video.X = 10;
+        video.Y = 20;
+        video.Width = 640;
+        video.Height = 360;
+        video.SourceWidth = 1280;
+        video.SourceHeight = 720;
+
+        var loaded = videos.FindByPkid(videos.Insert(video))!;
+
+        Assert.Equal((10, 20, 640, 360), (loaded.X, loaded.Y, loaded.Width, loaded.Height));
+        Assert.Equal((1280, 720), (loaded.SourceWidth, loaded.SourceHeight));
     }
 
     [Fact]

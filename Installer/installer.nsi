@@ -16,7 +16,7 @@ Unicode true
 !include "x64.nsh"
 
 !ifndef APPVERSION
-  !define APPVERSION "2.0.5"
+  !define APPVERSION "2.0.15"
 !endif
 !ifndef PUBLISHDIR
   !define PUBLISHDIR "..\artifacts\publish"
@@ -29,7 +29,7 @@ Unicode true
 
 !define APPNAME      "Orbis Stream"
 !define APPEXE       "OrbisStream.exe"
-!define APPPUBLISHER "Orbis"
+!define APPPUBLISHER "Marco Amleto Guarino"
 !define REGKEY       "Software\Orbis\OrbisStream"
 !define UNINSTKEY    "Software\Microsoft\Windows\CurrentVersion\Uninstall\OrbisStream"
 !define WEBVIEW2KEY  "SOFTWARE\WOW6432Node\Microsoft\EdgeUpdate\Clients\{F3017226-FE2A-4295-8BDF-00C3A9A7E4C5}"
@@ -52,6 +52,7 @@ VIAddVersionKey "CompanyName"     "${APPPUBLISHER}"
 VIAddVersionKey "FileDescription" "${APPNAME} setup"
 VIAddVersionKey "FileVersion"     "${APPVERSION}.0"
 VIAddVersionKey "LegalCopyright"  "${APPPUBLISHER}"
+VIAddVersionKey "Comments"        "Created by ${APPPUBLISHER}"
 
 !define MUI_ABORTWARNING
 !define MUI_ICON "..\src\Orbis.Stream.App\wwwroot\favicon.ico"
@@ -195,12 +196,3 @@ Function un.onInit
   ${EndIf}
 FunctionEnd
 !endif
-
-Section "Uninstall"
-  Delete "$DESKTOP\${APPNAME}.lnk"
-  RMDir "$SMPROGRAMS\${APPNAME}"
-  Delete "$INSTDIR\uninstall.exe"
-  RMDir /r "$INSTDIR"
-  DeleteRegKey HKCU "${UNINSTKEY}"
-  DeleteRegKey HKCU "${REGKEY}"
-SectionEnd

@@ -52,8 +52,9 @@ public sealed class FfmpegCommandBuilderTests
     public void ThePreviewOfAFileIsThirtySharpFramesASecond()
     {
         // The picture of the file, slowed down and shrunk inside the graph, and written as the light
-        // picture: one file overwritten over and over, a temporary one renamed over it so the page
-        // never reads half a frame, and no audio rides along with it.
+        // picture: one file overwritten over and over, so ffmpeg never renames a frame on top of the
+        // one before it (a rename over an open file is refused on Windows, which left the preview of
+        // every live frozen on its first frame), and no audio rides along with it.
         var command = FfmpegCommandBuilder.Build(new FfmpegStreamRequest(
             "/videos/clip.mp4", "rtmp://ingest/live/key", Probe(), Setting(), PreviewPath: "/data/preview/7.jpg"));
 
@@ -64,7 +65,12 @@ public sealed class FfmpegCommandBuilderTests
         Assert.Contains("fps=30,scale=w='min(640,iw)':h=-2", text, StringComparison.Ordinal);
         Assert.Contains("-an -sn -dn", text, StringComparison.Ordinal);
         Assert.Contains("-c:v mjpeg -q:v 6", text, StringComparison.Ordinal);
-        Assert.Contains("-f image2 -update 1 -atomic_writing 1 /data/preview/7.jpg", text, StringComparison.Ordinal);
+        Assert.Contains("-f image2 -update 1 /data/preview/7.jpg", text, StringComparison.Ordinal);
+        Assert.DoesNotContain("-atomic_writing", text, StringComparison.Ordinal);
+
+        // One thread for the preview, which is the whole of the isolation from the live: the two
+        // encoders are one process, and the live is the one being sent to the platform.
+        Assert.Contains("-q:v 6 -threads 1 -f image2", text, StringComparison.Ordinal);
     }
 
     [Theory]
@@ -232,12 +238,14 @@ public sealed class FfmpegCompositionTests
         Assert.Contains("split=2", graph, StringComparison.Ordinal);
         Assert.Contains("fps=30,scale=w='min(640,iw)':h=-2", graph, StringComparison.Ordinal);
 
-        // It is one file overwritten over and over: a temporary one renamed over it, so the page
-        // never reads half a frame, and no audio rides along with it.
+        // It is one file overwritten over and over, with no rename on top of the frame before it, and
+        // no audio rides along with it.
         var text = string.Join(' ', command);
 
         Assert.Contains("-an -sn -dn -c:v mjpeg -q:v 6", text, StringComparison.Ordinal);
-        Assert.Contains("-f image2 -update 1 -atomic_writing 1 /data/preview/7.jpg", text, StringComparison.Ordinal);
+        Assert.Contains("-q:v 6 -threads 1 -f image2", text, StringComparison.Ordinal);
+        Assert.Contains("-f image2 -update 1 /data/preview/7.jpg", text, StringComparison.Ordinal);
+        Assert.DoesNotContain("-atomic_writing", text, StringComparison.Ordinal);
     }
 
     private static string GraphOf(IReadOnlyList<string> command) =>
@@ -253,19 +261,83 @@ public sealed class FfmpegCompositionTests
 
         // Each capture device is opened with the device ffmpeg knows it by.
         Assert.Contains("-f gdigrab -framerate 30 -i desktop", text, StringComparison.Ordinal);
-        Assert.Contains("-f dshow -i video=Integrated Camera", text, StringComparison.Ordinal);
-        Assert.Contains("-f dshow -i audio=Microphone", text, StringComparison.Ordinal);
+        Assert.Contains("-f dshow -rtbufsize 256M -thread_queue_size 1024 -i video=Integrated Camera", text, StringComparison.Ordinal);
+        Assert.Contains("-f dshow -rtbufsize 256M -thread_queue_size 1024 -i audio=Microphone", text, StringComparison.Ordinal);
 
         // Every picture is scaled into the rectangle it was dropped on.
-        Assert.Contains("scale=1920:1080:force_original_aspect_ratio=decrease", text, StringComparison.Ordinal);
-        Assert.Contains("scale=480:270:force_original_aspect_ratio=decrease", text, StringComparison.Ordinal);
+        Assert.Contains("scale=1920:1080:force_original_aspect_ratio=increase:force_divisible_by=2,crop=1920:1080", text, StringComparison.Ordinal);
+        Assert.Contains("scale=480:270:force_original_aspect_ratio=increase:force_divisible_by=2,crop=480:270", text, StringComparison.Ordinal);
 
         // And the result is one video and one audio stream, not one per source.
         Assert.Equal(2, command.Count(argument => argument == "-map"));
-        Assert.Contains("-map [orbisv] -map [orbisa]", text, StringComparison.Ordinal);
-        Assert.Contains("overlay=1400:700", text, StringComparison.Ordinal);
+        Assert.Contains("scale=480:270:force_original_aspect_ratio=increase:force_divisible_by=2,crop=480:270", text, StringComparison.Ordinal);
+        Assert.Contains("overlay=1400+(480-w)/2:700+(270-h)/2", text, StringComparison.Ordinal);
         Assert.Contains("[2:a]asetpts=PTS-STARTPTS", text, StringComparison.Ordinal);
         Assert.EndsWith("rtmp://ingest/live/key", text, StringComparison.Ordinal);
+    }
+
+    [Fact]
+    public void ACanvasOfFilesIsBoundedByItsLongestFile()
+    {
+        // The canvas ends with the longest of its files, the way a playlist ends with the last one:
+        // -t is an output option, so ffmpeg stops on its own and closes the connection to the
+        // platform instead of waiting to be asked.
+        var request = Request([Camera(0, 0, 1920, 1080)]) with { Duration = TimeSpan.FromSeconds(754.5) };
+        var command = FfmpegCommandBuilder.BuildComposition(request);
+        var text = string.Join(' ', command);
+
+        Assert.Contains("-t 754.5 rtmp://ingest/live/key", text, StringComparison.Ordinal);
+        Assert.True(command.ToList().IndexOf("-t") < command.ToList().IndexOf("rtmp://ingest/live/key"));
+    }
+
+    [Fact]
+    public void ACanvasIsNotBoundedWhileThereIsSomethingThatNeverEnds()
+    {
+        // A capture device produces frames for ever: there is no length to put on the live, and
+        // asking for one would cut a live that is running perfectly well.
+        Assert.DoesNotContain(
+            FfmpegCommandBuilder.BuildComposition(Request([Camera(0, 0, 640, 480)])),
+            argument => argument == "-t");
+    }
+
+    [Fact]
+    public void ACanvasStartedAgainFromWhereItStoppedStillLastsAsLong()
+    {
+        // The inputs read from the point the interrupted pass got to, so the clock of the output
+        // carries the part that was already on air.
+        var request = Request([Camera(0, 0, 1920, 1080)]) with
+        {
+            Duration = TimeSpan.FromSeconds(600),
+            ResumeFrom = TimeSpan.FromSeconds(120)
+        };
+
+        Assert.Contains(
+            "-t 720",
+            string.Join(' ', FfmpegCommandBuilder.BuildComposition(request)),
+            StringComparison.Ordinal);
+    }
+
+    [Fact]
+    public void ADeviceGetsARealTimeBufferLargerThanAFrame()
+    {
+        // The default 3 MB of dshow is less than one raw 1080p frame: the RTMP handshake alone
+        // filled it, and the live went on air dropping every frame of the webcam.
+        var command = FfmpegCommandBuilder.BuildComposition(Request([Camera(0, 0, 640, 480), Microphone()]));
+
+        Assert.Equal(2, command.Count(argument => argument == "-rtbufsize"));
+        Assert.All(
+            command.Select((argument, index) => (argument, index)).Where(entry => entry.argument == "-rtbufsize"),
+            entry => Assert.Equal("256M", command[entry.index + 1]));
+    }
+
+    [Theory]
+    [InlineData("rtmp://live.twitch.tv/app/live_477413959_abcdef", "Error opening output rtmp://live.twitch.tv/app/live_477413959_abcdef: I/O error", "Error opening output rtmp://live.twitch.tv/app/****: I/O error")]
+    [InlineData("rtmp://a.rtmp.youtube.com/live2/abcd-efgh-ijkl/", "abcd-efgh-ijkl twice abcd-efgh-ijkl", "**** twice ****")]
+    [InlineData("C:/videos/out.flv", "C:/videos/out.flv: I/O error", "C:/videos/out.flv: I/O error")]
+    [InlineData("rtmp://ingest/live/key", "rtmp://ingest/live/key", "rtmp://ingest/live/key")]
+    public void TheStreamKeyNeverReachesAnErrorMessage(string outputUrl, string error, string expected)
+    {
+        Assert.Equal(expected, FfmpegStreamingSession.RedactStreamKey(error, outputUrl));
     }
 
     [Fact]
@@ -276,7 +348,7 @@ public sealed class FfmpegCompositionTests
             Request([Camera(1400, 700, 480, 270)], width: 1280, height: 720)));
 
         Assert.StartsWith("color=c=black:s=1280x720:r=30[canvas];", graph, StringComparison.Ordinal);
-        Assert.Contains("[canvas][tile0]overlay=1400:700", graph, StringComparison.Ordinal);
+        Assert.Contains("[canvas][tile0]overlay=1400+(480-w)/2:700+(270-h)/2", graph, StringComparison.Ordinal);
         Assert.DoesNotContain("scale=1280:720", graph, StringComparison.Ordinal);
         Assert.EndsWith("realtime[orbisv]", graph, StringComparison.Ordinal);
     }
@@ -385,7 +457,7 @@ public sealed class FfmpegCompositionTests
 
         var text = string.Join(' ', command);
 
-        Assert.Contains("-ss 12 -thread_queue_size 1024 -readrate 1 -i /videos/intro.mp4", text, StringComparison.Ordinal);
+        Assert.Contains("-ss 12 -thread_queue_size 512 -readrate 1 -i /videos/intro.mp4", text, StringComparison.Ordinal);
 
         // A capture device cannot be seeked into, so the position is only given to the file.
         Assert.DoesNotContain("-f dshow -ss", text, StringComparison.Ordinal);
@@ -434,7 +506,7 @@ public sealed class FfmpegCompositionTests
             Request([Screen("desktop"), Camera(1411, 703, 481, 271)]));
 
         Assert.Contains("scale=480:270", string.Join(' ', command), StringComparison.Ordinal);
-        Assert.Contains("overlay=1410:702", string.Join(' ', command), StringComparison.Ordinal);
+        Assert.Contains("overlay=1410+(480-w)/2:702+(270-h)/2", string.Join(' ', command), StringComparison.Ordinal);
     }
 
     [Fact]
@@ -445,9 +517,9 @@ public sealed class FfmpegCompositionTests
 
         // The second camera goes over the first, and the first over the desktop: the order the user
         // arranged them in is the order they are drawn in.
-        var desktop = graph.IndexOf("[canvas][tile0]overlay=0:0", StringComparison.Ordinal);
-        var first = graph.IndexOf("[stack0][tile1]overlay=0:0", StringComparison.Ordinal);
-        var second = graph.IndexOf("[stack1][tile2]overlay=1280:0", StringComparison.Ordinal);
+        var desktop = graph.IndexOf("[canvas][tile0]overlay=0+(1920-w)/2:0+(1080-h)/2", StringComparison.Ordinal);
+        var first = graph.IndexOf("[stack0][tile1]overlay=0+(640-w)/2:0+(480-h)/2", StringComparison.Ordinal);
+        var second = graph.IndexOf("[stack1][tile2]overlay=1280+(640-w)/2:0+(480-h)/2", StringComparison.Ordinal);
         Assert.True(desktop > 0);
         Assert.True(first > desktop);
         Assert.True(second > first);
@@ -482,13 +554,15 @@ public sealed class FfmpegCompositionTests
 public sealed class SourceCatalogTests
 {
     [Fact]
-    public void DeviceList_OfFfmpeg5_NamesItsOwnKind()
+    public void DeviceList_OfFfmpeg5_NamesItsOwnKind_AndHandlesColons()
     {
         const string list = """
             [dshow @ 000001d2a4c5e3c0] "Integrated Camera" (video)
             [dshow @ 000001d2a4c5e3c0]   Alternative name "@device_pnp_\\?\usb#vid_04f2"
             [dshow @ 000001d2a4c5e3c0] "Microfono (Realtek(R) Audio)" (audio)
             [dshow @ 000001d2a4c5e3c0]   Alternative name "@device_cm_{33D9A762}"
+            [dshow @ 000001d2a4c5e3c0] "VirtualBox Webcam - Integrated Camera: Integrated C" (video)
+            [dshow @ 000001d2a4c5e3c0]   Alternative name "@device_pnp_\\?\usb#vid_04f2&colon"
             [dshow @ 000001d2a4c5e3c0] "OBS Virtual Camera" (none)
             dummy: Immediate exit requested
             """;
@@ -507,16 +581,25 @@ public sealed class SourceCatalogTests
             {
                 Assert.Equal(SourceKind.Microphone, microphone.Kind);
                 Assert.Equal("audio=Microfono (Realtek(R) Audio)", microphone.Target);
+            },
+            cameraWithColon =>
+            {
+                Assert.Equal(SourceKind.Camera, cameraWithColon.Kind);
+                Assert.Equal("VirtualBox Webcam - Integrated Camera: Integrated C", cameraWithColon.Name);
+                // The colon triggers fallback to the alternative name in Target
+                Assert.Equal("video=@device_pnp_\\\\?\\usb#vid_04f2&colon", cameraWithColon.Target);
             });
     }
 
     [Fact]
-    public void DeviceList_OfFfmpeg4_IsReadBySection()
+    public void DeviceList_OfFfmpeg4_IsReadBySection_AndHandlesColons()
     {
         const string list = """
             [dshow @ 0000020] DirectShow video devices (some may be both video and audio devices)
             [dshow @ 0000020]  "USB Camera"
             [dshow @ 0000020]     Alternative name "@device_pnp_x"
+            [dshow @ 0000020]  "USB Camera: HD"
+            [dshow @ 0000020]     Alternative name "@device_pnp_y"
             [dshow @ 0000020] DirectShow audio devices
             [dshow @ 0000020]  "Microphone (USB Camera)"
             [dshow @ 0000020]     Alternative name "@device_cm_y"
@@ -524,7 +607,7 @@ public sealed class SourceCatalogTests
 
         var options = CameraSourceProvider.Parse(list);
 
-        Assert.Equal(["video=USB Camera", "audio=Microphone (USB Camera)"], options.Select(option => option.Target));
+        Assert.Equal(["video=USB Camera", "video=@device_pnp_y", "audio=Microphone (USB Camera)"], options.Select(option => option.Target));
     }
 
     [Fact]

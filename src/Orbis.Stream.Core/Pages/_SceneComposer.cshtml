@@ -17,6 +17,7 @@
      data-w-failed="@T["sourcesFailed"]" data-w-video-group="@T["sourcesVideoGroup"]" data-w-audio-group="@T["sourcesAudioGroup"]"
      data-w-add="@T["addToCanvas"]" data-w-up="@T["bringForward"]" data-w-down="@T["sendBackward"]"
      data-w-fill="@T["fillCanvas"]" data-w-remove="@T["removeSource"]" data-w-sound="@T["soundOn"]"
+     data-w-drop-into-slot="@T["dropIntoSlot"]" data-w-drop-into-tile="@T["dropIntoTile"]" data-w-drop-as-layer="@T["dropAsLayer"]"
      data-w-audio-only="@T["audioOnly"]" data-w-new="@(T[layout ? "newLayout" : "blankLayout"])" data-w-unsaved="@T["unsavedChanges"]"
      data-w-needs-picture="@T["sceneNeedsPicture"]" data-w-needs-name="@T["sceneNeedsName"]" data-w-needs-slot="@T["layoutNeedsSlot"]"
      data-w-slot="@T["slot"]" data-w-slot-empty="@T["slotEmpty"]" data-w-slot-hint="@T["slotHint"]"
@@ -66,10 +67,12 @@
 
     <section class="composer-main">
         <div class="card composer-bar">
+            @* Both modes open a saved layout from here: the layout page to edit it, the live wizard
+               to fill its shapes. *@
             <label class="field">
                 <span class="caption">@T["layout"]</span>
-                <select class="input" data-composer-scenes>
-                    <option value="">@(T[layout ? "newLayout" : "blankLayout"])</option>
+                <select class="input" data-composer-layouts>
+                    <option value="">@(T[layout ? "newLayout" : "noLayoutSelected"])</option>
                 </select>
             </label>
             <label class="field grow">
@@ -86,9 +89,10 @@
                 </select>
             </label>
             <div class="composer-actions">
-                <span class="caption composer-dirty" data-composer-dirty hidden>@T["unsavedChanges"]</span>
                 @if (layout)
                 {
+                    @* Only a layout is saved by hand: the scene of a live is saved by the start button. *@
+                    <span class="caption composer-dirty" data-composer-dirty hidden>@T["unsavedChanges"]</span>
                     <button type="button" class="btn subtle icon-only danger" data-composer-delete hidden
                             data-confirm-text="@T["deleteLayoutConfirm"]" title="@T["deleteLayout"]" aria-label="@T["deleteLayout"]"><i class="icon">&#xE74D;</i></button>
                     <button type="button" class="btn accent" data-composer-save><i class="icon">&#xE74E;</i>@T["saveLayout"]</button>
@@ -109,7 +113,7 @@
                 <div class="composer-blank" data-composer-blank>
                     <i class="icon">@Html.Raw(layout ? "&#xE80A;" : "&#xE7F4;")</i>
                     <strong>@T["canvasEmpty"]</strong>
-                    <span class="caption">@(T[layout ? "layoutEmptyHint" : "canvasEmptyHint"])</span>
+                    <span class="caption">@(T[layout ? "layoutEmptyHint" : "canvasComposeHint"])</span>
                 </div>
             </div>
         </div>

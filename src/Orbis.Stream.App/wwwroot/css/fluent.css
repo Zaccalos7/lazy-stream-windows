@@ -237,6 +237,43 @@ a { color: var(--accent-text); text-decoration: none; }
 
 .nav-spacer { flex: 1; }
 
+/* Which build this is and who wrote it. It sits where the bar has nothing else to say, and it is
+   the way into the dialog that says it in full. */
+.nav-about {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  width: 100%;
+  padding: 6px 10px;
+  text-align: left;
+  color: var(--text-3);
+  background: none;
+  border: 1px solid transparent;
+  border-radius: var(--radius-sm);
+  cursor: pointer;
+}
+
+.nav-about:hover { background: var(--tint); border-color: var(--stroke); color: var(--text-2); }
+.nav-about .icon { font-size: 15px; }
+.nav-about-text { display: flex; flex-direction: column; min-width: 0; line-height: 1.35; }
+.nav-about-text strong { font-size: 11px; font-weight: 600; color: var(--text-2); }
+.nav-about-text small { font-size: 10px; color: var(--text-3); overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+
+/* The About dialog: the mark of the application beside its name, the two facts under it. */
+.about-body { display: flex; align-items: flex-start; gap: 16px; }
+
+.about-mark {
+  width: 48px;
+  height: 48px;
+  padding: 6px;
+  border-radius: var(--radius-squircle);
+  background: linear-gradient(180deg, var(--accent) 0%, var(--accent-hover) 100%);
+  box-shadow: 0 1px 4px rgba(0, 0, 0, 0.12);
+}
+
+.about-body .facts { grid-template-columns: 1fr; }
+.about-body .fact:last-child { border-bottom: none; }
+
 /* macOS Segmented Control */
 .segmented-control {
   display: flex;
@@ -274,9 +311,67 @@ a { color: var(--accent-text); text-decoration: none; }
   box-shadow: 0 1px 2px rgba(0, 0, 0, 0.08);
 }
 
-.nav form { padding: 10px 4px 0; border-top: 1px solid var(--stroke); }
-.nav form label.field { flex-direction: row; align-items: center; gap: 8px; }
-.nav form .caption .icon { font-size: 15px; color: var(--text-2); }
+/* The language picker: a native <select> can only hold text, so the flags that stood in for it
+   as emoji (two regional indicator letters, which a font swap turns into "IT") become pictures in
+   a menu of their own. A <details> keeps it openable with the keyboard, with no script. */
+.lang-picker { position: relative; margin-top: 10px; border-top: 1px solid var(--stroke); }
+.lang-picker > summary { list-style: none; cursor: pointer; }
+.lang-picker > summary::-webkit-details-marker { display: none; }
+
+.lang-current,
+.lang-menu a {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  height: 30px;
+  padding: 0 10px;
+  color: var(--text-2);
+  font-size: 13px;
+  font-weight: 500;
+  text-decoration: none;
+  border-radius: var(--radius-sm);
+}
+
+.lang-current:hover { background: var(--tint); color: var(--text); }
+.lang-current .icon { margin-left: auto; font-size: 11px; transition: transform 0.15s ease; }
+.lang-picker[open] .lang-current { background: var(--tint); color: var(--text); }
+.lang-picker[open] .lang-current .icon { transform: rotate(180deg); }
+
+/* The flags are drawn on a 3:2 canvas with the corners already rounded: one pixel of border is
+   all they need to read as a flag rather than as a rectangle of colour. */
+.lang-current img,
+.lang-menu img {
+  flex: none;
+  width: 22px;
+  height: 15px;
+  border-radius: 2px;
+  box-shadow: 0 0 0 1px rgba(0, 0, 0, 0.18), 0 1px 1px rgba(0, 0, 0, 0.12);
+}
+
+.lang-menu {
+  position: absolute;
+  bottom: calc(100% + 4px);
+  left: 4px;
+  right: 4px;
+  z-index: 20;
+  margin: 0;
+  padding: 4px;
+  max-height: min(60vh, 340px);
+  overflow-y: auto;
+  list-style: none;
+  background: var(--card);
+  border: 1px solid var(--stroke);
+  border-radius: var(--radius);
+  box-shadow: var(--shadow-card);
+  animation: rise 0.14s cubic-bezier(0.16, 1, 0.3, 1);
+}
+
+.lang-menu a:hover { background: var(--tint); color: var(--text); }
+.lang-menu a[aria-current="true"] { background: var(--accent); color: var(--on-accent); font-weight: 600; }
+.lang-current:focus-visible,
+.lang-menu a:focus-visible { outline: 2px solid var(--accent); outline-offset: -2px; }
+.lang-current:focus:not(:focus-visible),
+.lang-menu a:focus:not(:focus-visible) { outline: none; }
 
 .content { flex: 1; min-width: 0; overflow-y: auto; border-radius: var(--radius-lg); }
 
@@ -312,8 +407,8 @@ html.sidebar-closed .nav-title {
   justify-content: space-between;
   flex-wrap: wrap;
   gap: 14px;
-  margin-bottom: 18px;
-  padding: 20px 24px;
+  margin-bottom: 12px;
+  padding: 12px 20px;
   background: var(--panel);
   backdrop-filter: blur(24px) saturate(180%);
   -webkit-backdrop-filter: blur(24px) saturate(180%);
@@ -345,7 +440,11 @@ h3 { font: 600 13px/18px var(--font); letter-spacing: -0.01em; margin: 0; }
   .shell { padding: 6px; gap: 6px; }
   .nav { width: 50px; padding: 10px 4px; }
   .nav a { justify-content: center; padding: 0; }
-  .nav a span:not(.icon), .nav-title span, .nav form, .segmented-control { display: none; }
+  /* Direct children only: ".nav a span" would reach the language menu too and blank its labels. */
+  .nav > a span:not(.icon), .nav-title span, .lang-current span, .lang-current .icon, .segmented-control { display: none; }
+  /* The flag is enough of a label when the sidebar is a strip, and the menu still spells them out. */
+  .lang-current { justify-content: center; padding: 0; }
+  .lang-menu { left: -8px; min-width: 150px; }
   .nav-title { justify-content: center; padding: 0 0 12px; }
   .page { padding: 0 2px 18px; }
   .page-header { padding: 16px; }
@@ -555,6 +654,12 @@ textarea.input { resize: vertical; padding: 8px 10px; }
 }
 .input-affix .reveal:hover { color: var(--text); background: var(--tint-strong); }
 .input-affix .reveal[aria-pressed="true"] { color: var(--accent-text); background: var(--tint-strong); }
+
+/* Hide native Edge/Chromium password reveal button since we use a custom one */
+input[type="password"]::-ms-reveal,
+input[type="password"]::-ms-clear {
+  display: none;
+}
 
 /* Dropzone */
 .dropzone .input { border-style: dashed; }
@@ -807,6 +912,81 @@ table.list.roomy td.nowrap { white-space: nowrap; }
 .infobar.error { --hue: var(--critical); background: var(--critical-bg); border-color: rgba(255, 59, 48, 0.25); }
 .infobar.warning { --hue: var(--caution); background: var(--caution-bg); border-color: rgba(255, 149, 0, 0.25); }
 .infobar p { margin: 0; flex: 1; }
+
+/* ---------- Cleanup progress ---------- */
+
+/* The auto cleanup walks over the videos of the old lives, and the walk is the only thing the page
+   has to say while it goes on: which video it is on, how many there are and how many are gone. It
+   sits at the foot of the page, over the table but not on it. */
+.cleanup-progress {
+  position: fixed;
+  bottom: 20px;
+  left: 50%;
+  transform: translateX(-50%);
+  z-index: 9999;
+  width: min(460px, calc(100vw - 32px));
+  padding: 14px 18px;
+  border-radius: var(--radius-lg);
+  border: 1px solid var(--stroke);
+  border-left: 3px solid var(--accent);
+  background: var(--card);
+  box-shadow: var(--shadow-flyout);
+  animation: slideUp 0.25s cubic-bezier(0.16, 1, 0.3, 1);
+}
+
+.cleanup-progress h3 { display: flex; align-items: center; gap: 8px; margin: 0 0 8px; }
+.cleanup-progress .file { margin: 0 0 4px; font-size: 12px; color: var(--text-2); }
+.cleanup-progress .count { margin: 0; font-size: 12px; font-variant-numeric: tabular-nums; }
+.cleanup-progress.failed { border-left-color: var(--critical); }
+/* The class of the spinner sets its display, so hiding it takes a rule of its own. */
+.cleanup-progress .spinner[hidden] { display: none; }
+
+.cleanup-close {
+  position: absolute;
+  top: 6px;
+  right: 8px;
+  padding: 0 4px;
+  font-size: 16px;
+  line-height: 1;
+  color: var(--text-3);
+  background: none;
+  border: none;
+  cursor: pointer;
+}
+
+.cleanup-close:hover { color: var(--text); }
+
+.cleanup-bar {
+  height: 6px;
+  margin-top: 10px;
+  border-radius: 3px;
+  background: var(--stroke);
+  overflow: hidden;
+}
+
+.cleanup-bar > span {
+  display: block;
+  height: 100%;
+  width: 0;
+  border-radius: 3px;
+  background: var(--accent);
+  transition: width 0.2s ease;
+}
+
+.cleanup-progress.failed .cleanup-bar { display: none; }
+
+@keyframes slideUp {
+  from { transform: translate(-50%, 20px); opacity: 0; }
+  to { transform: translate(-50%, 0); opacity: 1; }
+}
+
+/* The auto cleanup of the live history is one line in the header of the page, beside its title. */
+.auto-cleanup { margin-bottom: 0; }
+.auto-cleanup-fields { display: flex; gap: 10px; align-items: end; flex-wrap: wrap; }
+.auto-cleanup-toggle { min-height: 34px; }
+/* A button is 30px and a control 34px: half the difference is what puts the two in the middle of
+   each other, where the eye looks for them, rather than one hanging off the other. */
+.auto-cleanup .btn { margin-bottom: 2px; }
 
 /* ---------- macOS Sheet Dialog ---------- */
 
@@ -1091,11 +1271,29 @@ a:hover > .platform-mark { background: var(--tint); }
 /* The light picture of the live, over a cover that shows until its first frame lands. */
 .preview-screen { position: relative; aspect-ratio: 16 / 9; border-radius: var(--radius-sm); overflow: hidden; background: #000; }
 .preview-screen .preview-cover { position: absolute; inset: 0; aspect-ratio: auto; border-radius: 0; }
-.preview-screen canvas { position: absolute; inset: 0; z-index: 1; width: 100%; height: 100%; }
+.preview-screen canvas, .preview-screen .preview-platform-player { position: absolute; inset: 0; z-index: 1; width: 100%; height: 100%; border: none; }
+/* The cover is drawn with a flex layout and the player and the canvas are placed on the stage, so
+   none of them would answer to `hidden` on their own: it is said here once, for all three. */
+.preview-screen [hidden] { display: none; }
 /* The lives on air to pick from: one control, not a row of buttons across the page. */
 .live-picker label.field { width: min(420px, 100%); }
 .preview-cover .icon { font-size: 30px; color: var(--text-3); }
 .preview-cover p { margin: 0; font-size: 12px; }
+
+.preview-embed-status {
+  position: absolute;
+  inset: 0;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: 10px;
+  background: rgba(0, 0, 0, 0.7);
+  color: var(--text);
+  font-size: 13px;
+  z-index: 2;
+}
+.preview-embed-status .spinner { border-top-color: var(--accent); }
+.preview-embed-status[hidden] { display: none; }
 
 .preview-bar { display: flex; align-items: center; gap: 10px; }
 .preview-id { flex: 1; min-width: 0; display: flex; flex-direction: column; }
@@ -1130,7 +1328,7 @@ a:hover > .platform-mark { background: var(--tint); }
 .composer {
   display: grid;
   gap: 14px;
-  grid-template-columns: 250px minmax(0, 1fr) 270px;
+  grid-template-columns: 220px minmax(0, 1fr) 240px;
   align-items: start;
 }
 
@@ -1194,6 +1392,9 @@ a:hover > .platform-mark { background: var(--tint); }
 .composer-stage {
   position: relative;
   width: 100%;
+  max-height: calc(100vh - 240px);
+  max-width: calc((100vh - 240px) * 16 / 9);
+  margin: 0 auto;
   overflow: hidden;
   background-color: #000;
   /* Thirds, so a tile can be lined up by eye before the guides kick in. */
@@ -1260,14 +1461,24 @@ a:hover > .platform-mark { background: var(--tint); }
   pointer-events: none;
 }
 .composer-tile-label .icon { font-size: 10px; }
-.composer-tile.is-selected { outline: 2px solid var(--accent); z-index: 1; }
-.composer-tile.is-drag-over { outline: 2px dashed var(--accent); opacity: 0.8; z-index: 2; }
+/* Selection and the drop target are outlines, never a lift: a tile keeps its place in the stack,
+   so what is on the canvas is what ffmpeg overlays. A tile that fills the frame and gets picked
+   must not come over the sagomas sitting on top of it. */
+.composer-tile.is-selected { outline: 2px solid var(--accent); }
+.composer-tile.is-drop-on { outline: 2px solid var(--accent); outline-offset: -2px; box-shadow: inset 0 0 0 999px color-mix(in srgb, var(--accent) 14%, transparent); }
 
 /* An empty slot of a layout: an outline waiting for a source, see-through so the slots under it
    stay visible, the way the skeleton reads before anything is dropped on it. */
 .composer-tile.is-slot { background: rgba(255, 255, 255, 0.04); outline: 2px dashed rgba(255, 255, 255, 0.4); outline-offset: -2px; }
 .composer-tile.is-slot.is-selected { outline: 2px dashed var(--accent); }
-.composer-tile.is-slot.is-drag-over { outline-color: var(--accent); background: rgba(255, 255, 255, 0.1); opacity: 1; }
+.composer-tile.is-slot.is-drop-on { background: color-mix(in srgb, var(--accent) 16%, transparent); outline-style: solid; }
+
+/* A shape that has been filled keeps the outline of the rectangle it is: the layout is read by its
+   shapes, and what is inside one can change from one live to the next. */
+.composer-tile.is-shape { outline: 2px dashed rgba(255, 255, 255, 0.55); outline-offset: -2px; }
+.composer-tile.is-shape.is-selected { outline: 2px dashed var(--accent); }
+.composer-tile.is-shape.is-drop-on { outline-style: solid; box-shadow: inset 0 0 0 999px color-mix(in srgb, var(--accent) 14%, transparent); }
+.composer-layer.is-shape { border-style: dashed; }
 .composer-slot {
   display: flex;
   flex-direction: column;
@@ -1306,6 +1517,49 @@ a:hover > .platform-mark { background: var(--tint); }
 .composer-guide.x { top: 0; bottom: 0; width: 1px; }
 .composer-guide.y { left: 0; right: 0; height: 1px; }
 .composer-guide[hidden] { display: none; }
+
+/* What the drag in the air is about to do: the rectangle the source will take, drawn where it will
+   take it. A drop that lands somewhere else than where the picture said it would is the one thing
+   that makes a drag feel broken. */
+.composer-drop {
+  position: absolute;
+  z-index: 3;
+  display: flex;
+  align-items: flex-start;
+  justify-content: center;
+  padding: 3px;
+  pointer-events: none;
+  border: 2px dashed var(--accent);
+  border-radius: var(--radius);
+  background: color-mix(in srgb, var(--accent) 12%, transparent);
+}
+.composer-drop[hidden] { display: none; }
+
+/* The first frame of the source being dragged, inside the rectangle it is about to take: the
+   sagoma fills with the picture of the video while the pointer is still moving. */
+.composer-drop > img {
+  position: absolute;
+  inset: 0;
+  width: 100%;
+  height: 100%;
+  object-fit: contain;
+  opacity: 0.85;
+}
+
+.composer-drop > img[hidden] { display: none; }
+
+.composer-drop-label {
+  max-width: 100%;
+  overflow: hidden;
+  white-space: nowrap;
+  text-overflow: ellipsis;
+  padding: 2px 6px;
+  font-size: 10px;
+  font-weight: 600;
+  color: #fff;
+  background: rgba(0, 0, 0, 0.62);
+  border-radius: 4px;
+}
 
 .composer-layers { position: sticky; top: 16px; }
 .composer-layers > .caption { margin: -4px 0 10px; }

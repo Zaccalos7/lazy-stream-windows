@@ -19,10 +19,15 @@
 @foreach (var setting in Model.Settings)
 {
     var active = setting.IsVideoAndAudioSettingActive ?? false;
+    var displayTitle = string.IsNullOrWhiteSpace(setting.Title)
+        ? T["untitled"]
+        : (setting.Title == "Default Low Twitch" ? T["defaultLowTwitch"]
+           : setting.Title == "Default Low YouTube" ? T["defaultLowYouTube"]
+           : setting.Title);
     <div class="row-card">
         <i class="icon lead">&#xE714;</i>
         <div class="grow">
-            <h3 class="truncate">@(string.IsNullOrWhiteSpace(setting.Title) ? T["untitled"] : setting.Title)</h3>
+            <h3 class="truncate">@displayTitle</h3>
             <div class="caption truncate">
                 @T["videoCodecName"]: @(setting.VideoCodecName ?? "N/A") ·
                 @T["bitrate"]: @VideoSettingForm.FormatBitrate(setting.VideoBitrate, T["milion"]) ·

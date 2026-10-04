@@ -24,6 +24,15 @@ public sealed class SettingEntity
     /// files. Null keeps the previous behaviour, so no existing configuration changes meaning.
     /// </summary>
     public long? ScenePkid { get; set; }
+
+    /// <summary>Whether automatic cleanup of old live history rows is enabled.</summary>
+    public bool AutoCleanupEnabled { get; set; }
+
+    /// <summary>How often to run the cleanup (in months). 0 = disabled.</summary>
+    public int AutoCleanupIntervalMonths { get; set; }
+
+    /// <summary>Delete live history rows older than this many months.</summary>
+    public int AutoCleanupOlderThanMonths { get; set; }
 }
 
 /// <summary>Port of <c>com.orbis.stream.model.VideoLiveHistory</c>.</summary>
@@ -161,6 +170,18 @@ public sealed class VideoEntity
     public int? Width { get; set; }
 
     public int? Height { get; set; }
+
+    /// <summary>Duration of the video file in milliseconds. Null for capture devices.</summary>
+    public long? DurationMilliseconds { get; set; }
+
+    /// <summary>
+    /// Resolution of the file itself, as ffprobe reads it when the row is written. Not the tile
+    /// (<see cref="Width"/>, <see cref="Height"/>): the pixels the video really has, which is the
+    /// most the output can be asked for without upscaling it. Null for capture devices.
+    /// </summary>
+    public int? SourceWidth { get; set; }
+
+    public int? SourceHeight { get; set; }
 
     /// <summary>Whether this source contributes audio to the mix.</summary>
     public bool AudioEnabled { get; set; }

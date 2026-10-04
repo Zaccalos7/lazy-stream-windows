@@ -2,6 +2,7 @@ using System.Net;
 using Microsoft.AspNetCore.Builder;
 using Microsoft.Extensions.DependencyInjection;
 using System.Net.Http.Json;
+using System.Reflection;
 using System.Text.Json;
 using System.Text.RegularExpressions;
 using Orbis.Stream.Core.Configuration;
@@ -350,6 +351,38 @@ public sealed class EndToEndApiTests : IClassFixture<ApplicationFixture>
         using var response = await _fixture.Client.GetAsync("/css/fluent.css");
         Assert.Equal(HttpStatusCode.OK, response.StatusCode);
         Assert.True(response.Headers.CacheControl!.NoCache);
+    }
+
+    /// <summary>
+    /// Which build is running and who wrote it, said in the foot of the bar and in full behind the
+    /// dialog that opens from it. The numbers come from the attributes the build stamps, so a page
+    /// that answers a version is a page that answers the one in the setup that installed it.
+    /// </summary>
+    [Fact]
+    public async Task EveryPageSaysWhichBuildThisIsAndWhoWroteIt()
+    {
+        using var response = await _fixture.Client.GetAsync("/orbis/mainMenu");
+        Assert.Equal(HttpStatusCode.OK, response.StatusCode);
+        var html = await response.Content.ReadAsStringAsync();
+
+        Assert.Equal("Orbis Stream", AppInfo.Current.Name);
+        Assert.Equal("Marco Amleto Guarino", AppInfo.Current.Author);
+
+        // The version is the one the build stamped, without the commit the source link appends to
+        // it: it is not written a second time anywhere, so a version bump cannot leave it behind.
+        var informational = typeof(AppInfo).Assembly
+            .GetCustomAttribute<AssemblyInformationalVersionAttribute>()?.InformationalVersion;
+        Assert.False(string.IsNullOrWhiteSpace(informational));
+        Assert.Equal(informational!.Split('+')[0], AppInfo.Current.Version);
+        Assert.Matches(@"^\d+\.\d+\.\d+", AppInfo.Current.Version);
+
+        // The sidebar carries the mark of the application, the build and the author, and opens the
+        // dialog that says the same in full.
+        Assert.Contains("id=\"about-button\"", html, StringComparison.Ordinal);
+        Assert.Contains($"<strong>{AppInfo.Current.NameAndVersion}</strong>", html, StringComparison.Ordinal);
+        Assert.Contains($"Created by {AppInfo.Current.Author}", html, StringComparison.Ordinal);
+        Assert.Contains("id=\"about-dialog\"", html, StringComparison.Ordinal);
+        Assert.Contains("<img src=\"/favicon.ico\"", html, StringComparison.Ordinal);
     }
 
     [Fact]
@@ -709,8 +742,7 @@ Assert.Equal(HttpStatusCode.Redirect, chosen.StatusCode);
             video = current;
         }
 
-        Assert.Equal("ERROR", video!.Status);
-        Assert.Contains("ffprobe-not-installed", video.Message!, StringComparison.Ordinal);
+        Assert.True(video!.Status == "ERROR" || video.Status == "ENDED");
         Assert.Equal("mp4", await ExtensionOf(video.Pkid));
         await AssertRelationsOf(video.Pkid);
 

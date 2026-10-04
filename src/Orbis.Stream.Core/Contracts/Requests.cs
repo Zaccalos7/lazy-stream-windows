@@ -10,7 +10,10 @@ public sealed record SettingRequest(
     string? Description,
     string? VideoFolder,
     bool? IsActive,
-    string? ChannelName);
+    string? ChannelName,
+    bool AutoCleanupEnabled,
+    int AutoCleanupIntervalMonths,
+    int AutoCleanupOlderThanMonths);
 
 /// <summary>Port of <c>com.orbis.stream.dto.SettingDto</c>.</summary>
 public sealed record SettingResponse(
@@ -23,7 +26,10 @@ public sealed record SettingResponse(
     int? GopSize,
     DateTime? LastModified,
     bool? IsActive,
-    string? ChannelName)
+    string? ChannelName,
+    bool AutoCleanupEnabled,
+    int AutoCleanupIntervalMonths,
+    int AutoCleanupOlderThanMonths)
 {
     public static SettingResponse FromEntity(SettingEntity entity) => new(
         entity.Id,
@@ -35,7 +41,10 @@ public sealed record SettingResponse(
         null,
         null,
         entity.IsActive,
-        entity.ChannelName);
+        entity.ChannelName,
+        entity.AutoCleanupEnabled,
+        entity.AutoCleanupIntervalMonths,
+        entity.AutoCleanupOlderThanMonths);
 }
 
 /// <summary>Port of <c>com.orbis.stream.record.output.VideoPathRecord</c>.</summary>

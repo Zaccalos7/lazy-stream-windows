@@ -311,5 +311,6 @@
   "olderThanNow": "지금보다 오래된 것",
   "noLayoutSelected": "No layout selected",
   "selectLayout": "Select layout",
-  "layoutSelected": "Layout selected"
+  "layoutSelected": "Layout selected",
+  "liveHistoryDescription": "상태, 비디오 이름 및 방송된 채널이 포함된 과거 라이브 기록입니다."
 }

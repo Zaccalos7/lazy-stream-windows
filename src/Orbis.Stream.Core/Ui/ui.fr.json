@@ -311,5 +311,6 @@
   "olderThanNow": "Plus anciennes que maintenant",
   "noLayoutSelected": "No layout selected",
   "selectLayout": "Select layout",
-  "layoutSelected": "Layout selected"
+  "layoutSelected": "Layout selected",
+  "liveHistoryDescription": "L'historique des directs passés avec les statuts, le nom de la vidéo et sur quelle chaîne elle a été diffusée."
 }

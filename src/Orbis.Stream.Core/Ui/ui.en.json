@@ -311,5 +311,6 @@
   "olderThanNow": "Older than now",
   "noLayoutSelected": "No layout selected",
   "selectLayout": "Select layout",
-  "layoutSelected": "Layout selected"
+  "layoutSelected": "Layout selected",
+  "liveHistoryDescription": "The history of past lives with statuses, the name of the video and on which channel it was broadcast."
 }

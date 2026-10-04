@@ -311,5 +311,6 @@
   "olderThanNow": "Nunc priora",
   "noLayoutSelected": "No layout selected",
   "selectLayout": "Select layout",
-  "layoutSelected": "Layout selected"
+  "layoutSelected": "Layout selected",
+  "liveHistoryDescription": "Historia directōrum praeteritōrum cum statibus, nōmine vīdeōrum et in quā canālī ēmissum est."
 }

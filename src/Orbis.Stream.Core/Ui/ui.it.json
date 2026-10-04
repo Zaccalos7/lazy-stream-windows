@@ -311,5 +311,6 @@
   "olderThanNow": "Più vecchi di adesso",
   "noLayoutSelected": "Nessun layout selezionato",
   "selectLayout": "Seleziona layout",
-  "layoutSelected": "Layout selected"
+  "layoutSelected": "Layout selected",
+  "liveHistoryDescription": "Lo storico delle live passate con gli stati, il nome del video e su che canale è stato trasmesso."
 }

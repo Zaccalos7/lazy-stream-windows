@@ -311,5 +311,6 @@
   "olderThanNow": "Старее текущего момента",
   "noLayoutSelected": "No layout selected",
   "selectLayout": "Select layout",
-  "layoutSelected": "Layout selected"
+  "layoutSelected": "Layout selected",
+  "liveHistoryDescription": "История прошлых прямых эфиров со статусами, названием видео и каналом, на котором оно транслировалось."
 }

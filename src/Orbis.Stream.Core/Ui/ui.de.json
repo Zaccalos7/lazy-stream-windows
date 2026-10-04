@@ -311,5 +311,6 @@
   "olderThanNow": "Jetzt oder älter",
   "noLayoutSelected": "No layout selected",
   "selectLayout": "Select layout",
-  "layoutSelected": "Layout selected"
+  "layoutSelected": "Layout selected",
+  "liveHistoryDescription": "Der Verlauf vergangener Live-Streams mit Status, dem Namen des Videos und auf welchem Kanal es übertragen wurde."
 }

@@ -311,5 +311,6 @@
   "olderThanNow": "現在より古いもの",
   "noLayoutSelected": "No layout selected",
   "selectLayout": "Select layout",
-  "layoutSelected": "Layout selected"
+  "layoutSelected": "Layout selected",
+  "liveHistoryDescription": "ステータス、ビデオ名、放送されたチャンネルを含む過去のライブ履歴。"
 }

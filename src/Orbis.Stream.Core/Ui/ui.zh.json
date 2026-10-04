@@ -311,5 +311,6 @@
   "olderThanNow": "比现在更早",
   "noLayoutSelected": "No layout selected",
   "selectLayout": "Select layout",
-  "layoutSelected": "Layout selected"
+  "layoutSelected": "Layout selected",
+  "liveHistoryDescription": "包含状态、视频名称和播出频道的过去直播历史记录。"
 }

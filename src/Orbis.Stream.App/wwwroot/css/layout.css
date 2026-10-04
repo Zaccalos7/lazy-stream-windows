@@ -91,6 +91,49 @@
 .nav-about-text strong { font-size: 11px; font-weight: 600; color: var(--text-2); }
 .nav-about-text small { font-size: 10px; color: var(--text-3); overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
 
+/* Update bell: shows when a newer version is available */
+.update-bell {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 32px;
+  height: 32px;
+  border: none;
+  background: transparent;
+  border-radius: var(--radius-sm);
+  cursor: pointer;
+  color: var(--text-2);
+  transition: background 0.12s ease, color 0.12s ease;
+}
+
+.update-bell:hover {
+  background: var(--tint);
+  color: var(--text);
+}
+
+.update-bell .icon {
+  font-size: 18px;
+  position: relative;
+}
+
+.update-bell .icon::after {
+  content: "";
+  position: absolute;
+  top: 0;
+  right: -2px;
+  width: 8px;
+  height: 8px;
+  background-color: var(--accent);
+  border-radius: 50%;
+  opacity: 0;
+  animation: bell-pulse 1.5s ease-in-out infinite;
+}
+
+@keyframes bell-pulse {
+  0%, 100% { opacity: 0; transform: scale(1); }
+  50% { opacity: 1; transform: scale(1.2); }
+}
+
 /* macOS Segmented Control */
 .segmented-control {
   display: flex;

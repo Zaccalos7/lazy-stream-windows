@@ -101,6 +101,34 @@ public static class OrbisEndpoints
             var frame = await service.GrabAsync(sourceKind, target, cancellationToken).ConfigureAwait(false);
             return frame is null ? Results.NoContent() : Results.File(frame, "image/jpeg");
         });
+
+        // The real resolution of a video file, read by ffprobe the moment it lands on the canvas:
+        // the still is scaled down, so it cannot say how many pixels the file has, and that is the
+        // most the composition can be streamed at without upscaling it.
+        app.MapGet("/preview/sources/probe", async (
+            string? target,
+            FfmpegProbe probe,
+            CancellationToken cancellationToken) =>
+        {
+            if (!SourceSnapshotService.IsSnapshottable(SourceKind.File, target))
+            {
+                return Results.NoContent();
+            }
+
+            try
+            {
+                var media = await probe
+                    .ProbeAsync(StreamingService.NormalizeUserPath(target!), cancellationToken)
+                    .ConfigureAwait(false);
+                return media.Width > 0 && media.Height > 0
+                    ? Results.Ok(new { width = media.Width, height = media.Height, durationSeconds = media.DurationSeconds })
+                    : Results.NoContent();
+            }
+            catch (Exception exception) when (exception is InvalidOperationException or System.ComponentModel.Win32Exception)
+            {
+                return Results.NoContent();
+            }
+        });
     }
 
     private static void MapLive(IEndpointRouteBuilder app)

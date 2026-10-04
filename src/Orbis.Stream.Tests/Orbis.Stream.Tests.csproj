@@ -24,7 +24,7 @@
   </ItemGroup>
 
   <ItemGroup>
-    <!-- The flags of the language selector, so a test can tell that every language has one. -->
+    
     <None Include="..\Orbis.Stream.App\wwwroot\flags\*.svg" Link="flags\%(Filename)%(Extension)" CopyToOutputDirectory="PreserveNewest" />
   </ItemGroup>
 

@@ -318,7 +318,6 @@ public sealed class LiveLinkTests
     public void UrlOf_HasNoLinkWithoutAPlatformOrAChannel(string? streamUrl, string? channelName) =>
         Assert.Null(LiveLinkView.UrlOf(streamUrl, channelName, null));
 
-
     [Fact]
     public void UrlOf_TakesTheChannelOfTheConfigurationNotThePlatform()
     {

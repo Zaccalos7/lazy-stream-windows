@@ -1001,7 +1001,6 @@
 
   const sizeText = option => option.width > 0 ? `${option.width}×${option.height}` : "";
 
-
   const createEntry = (option, isUsedItem = false) => {
     const entry = document.createElement("button");
     entry.type = "button";

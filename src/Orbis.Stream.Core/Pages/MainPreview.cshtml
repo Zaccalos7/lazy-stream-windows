@@ -18,7 +18,7 @@
 }
 
 @section Styles {
-    @* The picture of the live and the parameters it goes out with are all this page draws. *@
+    
     <link rel="stylesheet" href="/css/preview.css" />
 }
 <div class="page-header">
@@ -58,8 +58,6 @@
     </label>
 </div>
 
-@* The words the script needs to answer without asking the server: the page is drawn in the
-   language of the request, and a fetch has to speak the same one. *@
 <p data-preview-words hidden
    data-ok="@T["success"]" data-ko="@T["error"]"
    data-applied="@T["parametersApplied"]" data-failed="@T["parametersFailed"]"
@@ -72,8 +70,6 @@
      data-position="@live.PositionMilliseconds"
      data-playable="@(live.IsPlayable ? "1" : "0")">
 
-@* Nothing on air: the page waits for one (the push channel reloads it when a live starts), and
-   the canvas to start one is in the live wizard. *@
 @if (!live.IsLive)
 {
     <div class="card empty">
@@ -86,9 +82,7 @@ else
 {
     var parameters = live.Parameters;
 
-    @* The stage takes the shape of what is on air: a canvas that is not 16:9 (a vertical one, a
-       square one) inside a 16:9 box is a small picture with black bars, which is the wrong thing to
-       be looking at while checking the live. *@
+    
     var shape = live.Output.Width > 0 && live.Output.Height > 0
         ? $"aspect-ratio: {live.Output.Width.ToString(CultureInfo.InvariantCulture)} / {live.Output.Height.ToString(CultureInfo.InvariantCulture)}"
         : null;
@@ -102,9 +96,7 @@ else
     var platformLabel = LiveLinkView.LabelOf(platform);
     <div class="preview">
         <div class="preview-stage card">
-            @* What is on air, made light: the frames a few times a second that ffmpeg writes next to
-               the live, not a second copy of it. The canvas stays hidden, under the cover, until the
-               first of those frames has been decoded, so nothing empty or stale is ever shown. *@
+            
             <div class="preview-screen" style="@shape">
                 <div class="preview-cover" data-preview-cover>
                     <span class="spinner"></span>

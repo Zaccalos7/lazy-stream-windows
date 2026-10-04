@@ -604,7 +604,6 @@ public sealed class SettingRepositoryTests
         Assert.Equal(1, first);
         Assert.Equal(2, second);
 
-
     }
 
     [Fact]

@@ -11,9 +11,7 @@
     <meta name="viewport" content="width=device-width, initial-scale=1" />
     <title>@(ViewData["Title"] is string title ? $"{title} – Orbis Stream" : "Orbis Stream")</title>
     <link rel="icon" href="/favicon.ico" />
-    @* The stylesheets of the app, one concern each: the tokens first, then the ground, the shell,
-       the controls, the surfaces, the overlays and the feedback. A page that needs more says so
-       in its own "Styles" section, and only pays for what it draws. *@
+    
     <link rel="stylesheet" href="/css/tokens.css" />
     <link rel="stylesheet" href="/css/base.css" />
     <link rel="stylesheet" href="/css/layout.css" />
@@ -53,8 +51,7 @@
         <a href="/orbis/mainSetting" aria-current="@Current("mainSetting", "mainVideoSetting", "mainChannelSetting")"><i class="icon">&#xE713;</i><span>@T["settings"]</span></a>
         <a href="/orbis/mainTaskManager" aria-current="@Current("mainTaskManager")"><i class="icon">&#xE9D9;</i><span>@T["taskManager"]</span></a>
         <div class="nav-spacer"></div>
-        @* The selector draws the flag as a picture: a native <select> cannot hold one, and the
-           emoji that stood in for it is a pair of letters the platform may not even draw. *@
+        
         <details class="lang-picker">
             <summary class="lang-current" title="Language" aria-label="Language">
                 @{
@@ -83,8 +80,7 @@
             <button type="button" class="segment" data-theme-set="light" title="Light" aria-label="Light Theme"><i class="icon">&#xE706;</i></button>
             <button type="button" class="segment" data-theme-set="dark" title="Dark" aria-label="Dark Theme"><i class="icon">&#xE708;</i></button>
         </div>
-        @* Which build this is and who wrote it: the two lines at the foot of the bar are the only
-           place that says so without opening anything, the dialog behind them says it in full. *@
+        
         <button type="button" class="btn subtle icon-only update-bell" id="update-bell" title="Update Available" aria-label="Update Available" hidden>
             <i class="icon" style="position: relative;">&#xEA8F;<span style="position: absolute; top: 0; right: -2px; width: 6px; height: 6px; background-color: red; border-radius: 50%;"></span></i>
         </button>
@@ -139,8 +135,6 @@
     </form>
 </dialog>
 
-@* The About dialog: the mark, the name, the build and who wrote it. The numbers come from the
-   assembly the build stamps, so they cannot drift from the setup that installed them. *@
 <dialog class="dialog" id="about-dialog">
     <form method="dialog">
         <div class="dialog-body about-body">

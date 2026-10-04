@@ -79,8 +79,7 @@ else
                                     }
                                     @if (row.HasDetails)
                                     {
-                                        @* What the dialog opens is the composition for a scene and the
-                                           playlist for a folder, so it is called by the name it has here. *@
+                                        
                                         var detailsLabel = T[row.IsScene ? "sceneDetails" : "playlistDetails"];
                                         <a class="btn subtle icon-only" href="@Url.Page("/MainLive", new { Model.LiveStatus, Model.ChannelName, p = Model.PageIndex, details = historyPkid })"
                                            title="@detailsLabel" aria-label="@detailsLabel"><i class="icon">&#xE8FD;</i></a>
@@ -127,8 +126,7 @@ else
                                             <button class="btn subtle icon-only caution" title="@T["restartLiveIconLabel"]" aria-label="@T["restartLiveIconLabel"]"><i class="icon">&#xE72C;</i></button>
                                         </form>
                                     }
-                                    @* A running live cannot be deleted: its ffmpeg still reads the row to know when to stop.
-                                       On a playlist row the bin takes the whole playlist; one video goes from the details dialog. *@
+                                    
                                     @if (row.HasDetails)
                                     {
                                         <form method="post" asp-page="/MainLive" asp-page-handler="DeletePlaylist" asp-all-route-data="Model.PlaylistRoute(historyPkid)" data-confirm="@string.Format(T[row.IsScene ? "deleteSceneLiveConfirm" : "deletePlaylistConfirm"], row.Total)">
@@ -141,9 +139,7 @@ else
                                             <button class="btn subtle icon-only danger" disabled="@live" title="@T["deleteLiveRow"]" aria-label="@T["deleteLiveRow"]"><i class="icon">&#xE74D;</i></button>
                                         </form>
                                     }
-                                    @* A start, a stop or a restart runs the server (ffmpeg included), so
-                                       the answer takes a moment: this is what says the row is working,
-                                       next to the icons that asked for it. *@
+                                    
                                     <span class="spinner" data-while="busy" title="@T["loading"]"></span>
                                 </div>
                             </td>

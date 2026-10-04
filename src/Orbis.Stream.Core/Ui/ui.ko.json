@@ -311,5 +311,7 @@
   "olderThanNow": "지금보다 오래된 것",
   "noLayoutSelected": "No layout selected",
   "selectLayout": "Select layout",
-  "layoutSelected": "Layout selected"
+  "layoutSelected": "Layout selected",
+  "updateAvailable": "Update available",
+  "updateAvailableDialogText": "A new version is available, do you want to download it?"
 }

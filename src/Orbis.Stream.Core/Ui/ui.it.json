@@ -311,5 +311,7 @@
   "olderThanNow": "Più vecchi di adesso",
   "noLayoutSelected": "Nessun layout selezionato",
   "selectLayout": "Seleziona layout",
-  "layoutSelected": "Layout selected"
+  "layoutSelected": "Layout selected",
+  "updateAvailable": "Aggiornamento disponibile",
+  "updateAvailableDialogText": "C’è una nuova versione vuoi scaricarla?"
 }

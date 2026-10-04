@@ -12,8 +12,11 @@
 }
 
 <div class="page-header">
-    <div>
-        <h1>@T["liveHistory"]</h1>
+    <div style="display: flex; align-items: center; gap: 1rem;">
+        <a class="btn subtle icon-only" href="/orbis/mainLiveMenu" title="@T["back"]" aria-label="@T["back"]"><i class="icon">&#xE72B;</i></a>
+        <div>
+            <h1>@T["liveHistory"]</h1>
+        </div>
     </div>
     @* The form is the toolbar, as on the other pages: the picks and the buttons line up on the same
        row because they are one flex line, not two nested ones. Save answers on the InfoBar at the

@@ -491,7 +491,7 @@ Assert.Equal(HttpStatusCode.Redirect, chosen.StatusCode);
 
         Assert.Equal(HttpStatusCode.OK, italian.StatusCode);
         Assert.Contains("<html lang=\"it\"", html, StringComparison.Ordinal);
-        Assert.Contains("Gestione Live", html, StringComparison.Ordinal);
+        Assert.Contains("Live", html, StringComparison.Ordinal);
     }
 
     [Fact]

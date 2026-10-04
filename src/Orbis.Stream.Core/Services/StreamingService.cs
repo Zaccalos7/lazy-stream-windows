@@ -353,9 +353,7 @@ public sealed class StreamingService
             var videoPath = item.SourceKind == SourceKind.File
                 ? Path.GetFullPath(StreamingService.NormalizeUserPath(item.SourceTarget))
                 : SceneReference.ItemPath(item.SourceKind, item.SourceTarget);
-            var durationMs = item.SourceKind == SourceKind.File && File.Exists(videoPath)
-                ? ProbeDuration(videoPath)
-                : null;
+            var media = item.SourceKind == SourceKind.File ? ProbeFile(videoPath) : null;
 
             var video = new VideoEntity
             {
@@ -382,7 +380,9 @@ public sealed class StreamingService
                 Width = item.Width,
                 Height = item.Height,
                 AudioEnabled = item.AudioEnabled,
-                DurationMilliseconds = durationMs
+                DurationMilliseconds = media?.DurationMilliseconds,
+                SourceWidth = media?.Width,
+                SourceHeight = media?.Height
             };
 
             _videoRepository.Insert(video);
@@ -565,7 +565,7 @@ public sealed class StreamingService
         string channelName)
     {
         var fullPath = Path.GetFullPath(videoFile);
-        var durationMs = ProbeDuration(fullPath);
+        var media = ProbeFile(fullPath);
         return new VideoEntity
         {
             Name = Path.GetFileName(fullPath),
@@ -577,11 +577,16 @@ public sealed class StreamingService
             ShouldBeStop = false,
             StartDateLive = DateTime.Now,
             ChannelName = channelName,
-            DurationMilliseconds = durationMs
+            DurationMilliseconds = media?.DurationMilliseconds,
+            SourceWidth = media?.Width,
+            SourceHeight = media?.Height
         };
     }
 
-    private long? ProbeDuration(string fullPath)
+    /// <summary>What a file row stores about the file itself: one ffprobe for its length and its resolution.</summary>
+    private sealed record FileFacts(long? DurationMilliseconds, int? Width, int? Height);
+
+    private FileFacts? ProbeFile(string fullPath)
     {
         if (!File.Exists(fullPath))
         {
@@ -591,11 +596,14 @@ public sealed class StreamingService
         try
         {
             var probe = _probe.ProbeAsync(fullPath, CancellationToken.None).GetAwaiter().GetResult();
-            return probe.DurationSeconds > 0 ? (long)(probe.DurationSeconds * 1000) : null;
+            return new FileFacts(
+                probe.DurationSeconds > 0 ? (long)(probe.DurationSeconds * 1000) : null,
+                probe.Width > 0 ? probe.Width : null,
+                probe.Height > 0 ? probe.Height : null);
         }
         catch (Exception ex)
         {
-            _logger.LogWarning(ex, "Failed to probe duration for {Path}", fullPath);
+            _logger.LogWarning(ex, "Failed to probe {Path}", fullPath);
             return null;
         }
     }

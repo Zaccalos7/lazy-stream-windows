@@ -38,7 +38,7 @@
   const catalogBox = root.querySelector("[data-composer-catalog]");
   const usedBox = root.querySelector("[data-composer-used]");
   const layersBox = root.querySelector("[data-composer-layers]");
-  const scenesBox = root.querySelector("[data-composer-scenes]") || root.querySelector("[data-composer-layouts]");
+  const scenesBox = root.querySelector("[data-composer-layouts]");
   const nameBox = root.querySelector("[data-composer-name]");
   const sizeBox = root.querySelector("[data-composer-size]");
   const dirtyMark = root.querySelector("[data-composer-dirty]");
@@ -80,14 +80,15 @@
   const slots = () => scene.items.filter(isSlot);
   const sources = () => scene.items.filter(item => !isSlot(item));
 
+  // Only the layout page says so: in the live wizard the start button saves the scene itself.
   const markDirty = () => {
     dirty = true;
-    dirtyMark.hidden = false;
+    if (dirtyMark) dirtyMark.hidden = false;
   };
 
   const markClean = () => {
     dirty = false;
-    dirtyMark.hidden = true;
+    if (dirtyMark) dirtyMark.hidden = true;
   };
 
   // ---------- Geometry ----------
@@ -136,23 +137,23 @@
     point.x >= item.x && point.x <= item.x + item.w &&
     point.y >= item.y && point.y <= item.y + item.h;
 
+  const isFullFrame = item => item.x <= 0 && item.y <= 0 && item.w >= scene.width && item.h >= scene.height;
+
   // What a drop at that point is aimed at, worked out on the rectangles and not on what the
   // browser happened to hit: the tiles are positioned with percentages and stacked in array
   // order, so hit-testing would hand every drop to whichever tile happens to be painted last.
   //
-  // An empty sagoma is a box waiting for a source, so under the pointer it is always the answer,
-  // whatever is drawn over it. That is what makes a layout work: the full frame goes in the first
-  // sagoma and the second one is still there to be filled afterwards.
-  const slotUnder = point => slots().filter(item => covers(item, point)).pop() || null;
-
-  // A source that covers the whole frame is the backdrop of the composition, not one box among
-  // many: there is nowhere else on the canvas to aim at, so a drop anywhere on it lands as a new
-  // layer where the pointer is, the way a drop on bare canvas does.
-  const isBackdrop = item => item.x <= 0 && item.y <= 0 && item.w >= scene.width && item.h >= scene.height;
-
-  const tileUnder = point => pictures()
-    .filter(item => !isSlot(item) && !isBackdrop(item) && covers(item, point))
-    .pop() || null;
+  // 1. A box smaller than the frame under the pointer is aimed at on purpose: it wins, an empty
+  //    sagoma before a filled one.
+  // 2. Otherwise the pointer is only over the full frame, which covers everything: the shape the
+  //    user clicked last is what the drag is meant for (select sagoma 2, drag, it fills sagoma 2).
+  // 3. Otherwise the full-frame sagoma takes it. A full-frame source that is not a sagoma is the
+  //    backdrop of a free composition: a drop on it opens a new layer instead of replacing it.
+  const dropTarget = point => {
+    const under = pictures().filter(item => covers(item, point) && (isShape(item) || !isFullFrame(item)));
+    const inner = under.filter(item => !isFullFrame(item));
+    return inner.filter(isSlot).pop() || inner.pop() || selectedShape() || under.pop() || null;
+  };
 
   // ---------- Items ----------
 
@@ -177,6 +178,10 @@
       label: option.label || option.name || option.target,
       naturalWidth: option.width || 0,
       naturalHeight: option.height || 0,
+      // The pixels the source really has (ffprobe for a file, the catalog for a screen): what the
+      // output resolution is capped to. The still cannot say it, it is scaled down.
+      sourceWidth: option.width || 0,
+      sourceHeight: option.height || 0,
       // A file brings its sound along by default: that is what playing a video means. A
       // microphone is only there to be heard.
       audio: option.kind === Kind.File || option.kind === Kind.Microphone,
@@ -222,7 +227,17 @@
     render();
   };
 
-  const addSource = (option, at) => {
+  // Something new on the canvas, or something gone: the tile is drawn, and the resolution follows
+  // the biggest shape, once the real size of its video is known.
+  const changed = item => {
+    markDirty();
+    fitResolution();
+    render();
+    if (item) learnSize(item);
+  };
+
+  // A source on bare canvas: a new layer where the pointer is.
+  const addLayer = (option, at) => {
     const existing = scene.items.find(item => sameSource(item, option));
     if (existing) {
       // One device cannot be opened twice, and the same file twice is never what was meant.
@@ -231,90 +246,49 @@
       return;
     }
 
-    // Picked from the list rather than dropped somewhere: the skeleton is filled in order, the
-    // bottom slot first, which is the one the layout fills the frame with.
-    const empty = !at && hasPicture(option.kind) ? slots()[0] : null;
-    if (empty) {
-      replaceSource(empty.uid, option);
-      return;
-    }
-
     const item = itemFrom(option, at);
     scene.items.push(item);
     select(item.uid);
-    markDirty();
-    updateResolutionOptions();
-    render();
+    changed(item);
   };
 
-// A source that goes into a rectangle takes it whole: the box keeps its place in the stack, so
-// a full frame one stays under the boxes laid on top of it instead of jumping over them.
-const occupies = (target, item) => {
-  Object.assign(item, { x: target.x, y: target.y, w: target.w, h: target.h, autoSized: false });
-  // If the target was a full-frame slot (the background), the source should fill the canvas.
-  if (isSlot(target) && target.x <= 0 && target.y <= 0 && target.w >= scene.width && target.h >= scene.height) {
-    Object.assign(item, { x: 0, y: 0, w: scene.width, h: scene.height });
-  }
-  // The source remembers the slot it went into, so taking it off gives the skeleton back.
-  item.slotLabel = isSlot(target) ? target.label : target.slotLabel;
-  return item;
-};
-
-  const replaceSource = (uid, option) => {
-    const existing = scene.items.find(item => sameSource(item, option));
-    if (existing) {
-      notify("warning", word("twice"));
-      select(existing.uid);
-      return;
-    }
-
-    const targetIndex = scene.items.findIndex(item => item.uid === uid);
-    if (targetIndex < 0) return;
-    const targetItem = scene.items[targetIndex];
-
-    // A microphone has no picture to put in a rectangle: it joins the mix and the slot stays.
-    if (!hasPicture(option.kind)) {
-      addSource(option);
-      return;
-    }
-
-    const newItem = occupies(targetItem, itemFrom(option));
-
-    scene.items[targetIndex] = newItem;
-    tiles.get(uid)?.remove();
-    tiles.delete(uid);
-
-    select(newItem.uid);
-    markDirty();
-    updateResolutionOptions();
-    render();
+  // A source that goes into a rectangle takes it whole: the box keeps its place in the stack, so
+  // a full frame one stays under the boxes laid on top of it instead of jumping over them.
+  const occupies = (target, item) => {
+    Object.assign(item, { x: target.x, y: target.y, w: target.w, h: target.h, autoSized: false });
+    // The source remembers the slot it went into, so taking it off gives the skeleton back.
+    item.slotLabel = isSlot(target) ? target.label : target.slotLabel;
+    return item;
   };
 
-  // The one way a source reaches the canvas, whether it was dropped or picked: an empty sagoma
-  // under the pointer is filled, a source already on the canvas gives its rectangle to a new one
-  // laid over it, and bare canvas opens a new layer where the pointer is. Nothing is thrown away
-  // to make room for the drop, and a source that is already on the canvas is moved to the new
-  // spot rather than refused: dropping it in another box is how a box changes its mind.
   // The shape the user clicked last: the outline is coloured, so the drag that follows is meant for
-  // it even if the pointer is let go on bare canvas. The rectangle under the pointer still wins, so
-  // the answer only changes where there is nothing else to drop into.
+  // it even if the pointer is let go on the full frame around it.
   const selectedShape = () => {
     const item = scene.items.find(entry => entry.uid === selected);
     return item && isShape(item) ? item : null;
   };
 
+  // Picked from the list rather than dropped: the sagoma that was clicked if it is still empty,
+  // otherwise the skeleton is filled in order, then the clicked one has its video replaced.
+  const pickedTarget = () => {
+    const chosen = selectedShape();
+    return (chosen && isSlot(chosen) ? chosen : null) || slots()[0] || chosen;
+  };
+
+  // The one way a source reaches the canvas, whether it was dropped or picked: the target box is
+  // filled (see dropTarget), and with no box to fill a new layer opens where the pointer is. A
+  // source already on the canvas is moved to the new box rather than refused: dropping it in
+  // another box is how a box changes its mind.
   const place = (option, at) => {
     // A microphone has no picture to put in a rectangle: it joins the mix and every sagoma stays.
-    // Picked from the list rather than dropped somewhere, there is no pointer to follow either,
-    // and the list fills the skeleton in order.
-    if (!at || !hasPicture(option.kind)) {
-      addSource(option);
+    if (!hasPicture(option.kind)) {
+      addLayer(option);
       return;
     }
 
-    const target = slotUnder(at) || tileUnder(at) || selectedShape();
+    const target = at ? dropTarget(at) : pickedTarget();
     if (!target) {
-      addSource(option, at);
+      addLayer(option, at);
       return;
     }
 
@@ -324,8 +298,8 @@ const occupies = (target, item) => {
         select(taken.uid);
         return;
       }
-      // On its way to another box: the one it leaves behind does not come back as a hole.
-      removeItem(taken.uid, { giveSlotBack: false });
+      // On its way to another box: the one it leaves behind comes back as an empty sagoma.
+      removeItem(taken.uid);
     }
 
     const index = scene.items.findIndex(item => item.uid === target.uid);
@@ -336,9 +310,7 @@ const occupies = (target, item) => {
     tiles.delete(target.uid);
 
     select(item.uid);
-    markDirty();
-    updateResolutionOptions();
-    render();
+    changed(item);
   };
 
   const removeItem = (uid, { giveSlotBack = true } = {}) => {
@@ -355,8 +327,7 @@ const occupies = (target, item) => {
     } else {
       scene.items.splice(index, 1);
     }
-    markDirty();
-    render();
+    changed();
   };
 
   const moveInStack = (uid, step) => {
@@ -579,9 +550,8 @@ const occupies = (target, item) => {
       if (!isSlot(item) && canCarrySound(item.kind)) {
         actions.append(layerButton(item.audio ? "\uE767" : "\uE74F", word("sound"), () => {
           item.audio = !item.audio;
-    markDirty();
-    updateResolutionOptions();
-    render();
+          markDirty();
+          render();
         }, item.audio));
       }
       if (hasPicture(item.kind)) {
@@ -875,13 +845,13 @@ const occupies = (target, item) => {
   // rather than promising a box it will never take.
   const previewAt = (option, at) => {
     if (!hasPicture(option.kind)) return null;
-    const slot = slotUnder(at);
-    const target = slot || tileUnder(at);
+    // The same answer the drop will give: the ghost never promises a box the drop then misses.
+    const target = dropTarget(at);
     if (target) {
       return {
         box: { x: target.x, y: target.y, w: target.w, h: target.h },
         target,
-        label: slot ? `${word("drop-into-slot")} ${slot.label}` : `${word("drop-into-tile")} ${target.label}`
+        label: isSlot(target) ? `${word("drop-into-slot")} ${target.label}` : `${word("drop-into-tile")} ${titleOf(target)}`
       };
     }
     // Bare canvas. On a canvas with nothing on it yet the source takes the frame, and the ghost
@@ -1070,7 +1040,7 @@ const occupies = (target, item) => {
     });
 
     if (!isUsedItem) {
-      entry.addEventListener("click", () => addSource(option));
+      entry.addEventListener("click", () => place(option));
     } else {
       entry.addEventListener("click", () => {
         const item = scene.items.find(i => sameSource(i, option));
@@ -1120,59 +1090,95 @@ const occupies = (target, item) => {
     selected = null;
   };
 
-  // How many pixels a shape has, asked of the source inside it: a video says so on its still, a
-  // file the catalog has already listed says so there, and a shape nobody filled is the rectangle
-  // it was drawn as.
-  const naturalSizeOf = item => {
-    let w = item.naturalWidth || 0;
-    let h = item.naturalHeight || 0;
+  // ---------- Resolution ----------
 
-    if ((w <= 0 || h <= 0) && item.kind === Kind.File) {
-      const option = catalog.find(candidate => candidate.kind === Kind.File && candidate.target === item.target);
-      w = option?.width || 0;
-      h = option?.height || 0;
+  // The outputs on offer, smallest first.
+  const sizes = [[1280, 720], [1920, 1080], [2560, 1440], [3840, 2160]];
+
+  // The real resolution of a file, asked of ffprobe once per file: the catalog does not probe a
+  // whole folder for it, and the still is scaled down so it cannot tell.
+  const probes = new Map();
+  const probeSize = target => {
+    if (!probes.has(target)) {
+      probes.set(target, fetch(`/preview/sources/probe?target=${encodeURIComponent(target)}`)
+        .then(response => (response.status === 200 ? response.json() : null))
+        .catch(() => null)
+        .then(size => {
+          // A file that could not be read now may be readable on the next drop.
+          if (!size) probes.delete(target);
+          return size;
+        }));
     }
-
-    return { w: w || item.w, h: h || item.h };
+    return probes.get(target);
   };
 
-  // The composition is measured against the biggest shape on the canvas: it is the one the eye
-  // reads as the frame, and its video is what says how many pixels there are to fill. So the
-  // resolution cannot be offered above what that shape has, or the live would be upscaled out of
-  // a video that was never that big.
-  const findMaxSourceResolution = () => {
-    const biggest = pictures()
-      .map(item => ({ item, ...naturalSizeOf(item) }))
-      .sort((a, b) => (b.item.w * b.item.h) - (a.item.w * a.item.h) || a.item.uid - b.item.uid)
-      .find(entry => entry.w > 0 && entry.h > 0);
-
-    return biggest ? { maxW: biggest.w, maxH: biggest.h } : { maxW: 0, maxH: 0 };
+  // A file learns its size once it is on the canvas. The catalog entry keeps it, so the list shows
+  // it and the next drop of the same file knows it straight away.
+  const learnSize = async item => {
+    if (item.kind !== Kind.File || item.sourceWidth > 0) return;
+    const size = await probeSize(item.target);
+    if (!(size?.width > 0 && size?.height > 0)) return;
+    for (const option of catalog) {
+      if (option.kind === Kind.File && option.target === item.target) Object.assign(option, { width: size.width, height: size.height });
+    }
+    item.sourceWidth = size.width;
+    item.sourceHeight = size.height;
+    fitResolution();
+    render();
   };
 
-  const updateResolutionOptions = () => {
-    const { maxW, maxH } = findMaxSourceResolution();
-    const maxRes = Math.max(maxW, maxH);
-    const allSizes = [(1280, 720), (1920, 1080), (2560, 1440), (3840, 2160)];
-    let allowed = allSizes.filter(([w,h]) => Math.max(w,h) <= maxRes);
-    if (allowed.length === 0 && maxRes > 0) {
-      allowed = allSizes.filter(([w,h]) => Math.max(w,h) >= maxRes).slice(0,1);
-      if (allowed.length === 0) allowed = [[maxRes & ~1 || 1280, (maxRes & ~1 || 1280) * 9/16 | 0]];
-    }
-    if (allowed.length === 0) allowed = allSizes;
-    const current = `${scene.width}x${scene.height}`;
-    sizeBox.replaceChildren();
-    for (const [w,h] of allowed) {
-      sizeBox.append(new Option(`${w} × ${h}`, `${w}x${h}`));
-    }
-    if (![...sizeBox.options].some(o => o.value === current)) {
-      const [cw,ch] = current.split('x').map(Number);
-      sizeBox.append(new Option(`${cw} × ${ch}`, current));
-    }
-    sizeBox.value = current;
+  // The biggest shape on the canvas is the frame the eye reads, and its video says how many pixels
+  // there are to fill: the source whose size is known that takes the most room.
+  const biggestSource = () => sources()
+    .filter(item => hasPicture(item.kind) && item.sourceWidth > 0 && item.sourceHeight > 0)
+    .sort((a, b) => b.w * b.h - a.w * a.h || a.uid - b.uid)[0] || null;
+
+  // Nothing above the video is offered: the live would only upscale it. A portrait video is
+  // measured on its long side the same way. A video smaller than every size still gets the first.
+  const allowedSizes = source => {
+    if (!source) return sizes;
+    const long = Math.max(source.sourceWidth, source.sourceHeight);
+    const short = Math.min(source.sourceWidth, source.sourceHeight);
+    const allowed = sizes.filter(([w, h]) => w <= long && h <= short);
+    return allowed.length ? allowed : sizes.slice(0, 1);
   };
 
-  const setSizeBox = () => {
-    updateResolutionOptions();
+  // Every tile is scaled with the canvas, so a scene drawn for 1080p is the same scene in 720p.
+  const resizeCanvas = (width, height) => {
+    if (width === scene.width && height === scene.height) return;
+    const sx = width / scene.width;
+    const sy = height / scene.height;
+    for (const item of scene.items) {
+      if (!hasPicture(item.kind)) continue;
+      item.x *= sx;
+      item.y *= sy;
+      item.w *= sx;
+      item.h *= sy;
+    }
+    scene.width = width;
+    scene.height = height;
+    for (const item of scene.items) if (hasPicture(item.kind)) keepInside(item);
+    markDirty();
+  };
+
+  // The output follows the video of the biggest shape: when that video changes, the canvas takes
+  // the largest size it fills (a 720p video in sagoma 1 makes a 1280 × 720 live), and the list
+  // offers nothing above it. A smaller size picked by hand afterwards is kept.
+  let decidedBy = "";
+  const fitResolution = () => {
+    const source = biggestSource();
+    const allowed = allowedSizes(source);
+    const key = source ? `${source.uid}:${source.sourceWidth}x${source.sourceHeight}` : "";
+    const offered = allowed.some(([w, h]) => w === scene.width && h === scene.height);
+    if (source && (key !== decidedBy || !offered)) resizeCanvas(...allowed[allowed.length - 1]);
+    decidedBy = key;
+
+    sizeBox.replaceChildren(...allowed.map(([w, h]) => new Option(`${w} × ${h}`, `${w}x${h}`)));
+    // A layout drawn at a size that is not in the list keeps it until a video says otherwise.
+    if (!allowed.some(([w, h]) => w === scene.width && h === scene.height)) {
+      sizeBox.append(new Option(`${scene.width} × ${scene.height}`, `${scene.width}x${scene.height}`));
+    }
+    sizeBox.value = `${scene.width}x${scene.height}`;
   };
 
   const slotOf = (entry, index) => ({
@@ -1195,6 +1201,8 @@ const occupies = (target, item) => {
       label: entry.label || option?.name || entry.sourceTarget,
       naturalWidth: option?.width || entry.width,
       naturalHeight: option?.height || entry.height,
+      sourceWidth: option?.width || 0,
+      sourceHeight: option?.height || 0,
       audio: !!entry.audioEnabled,
       autoSized: false,
       x: entry.x, y: entry.y, w: entry.width, h: entry.height
@@ -1219,29 +1227,22 @@ const occupies = (target, item) => {
       items: items.map((entry, index) => asSlots ? slotOf(entry, index) : sourceOf(entry))
     };
     nameBox.value = scene.name;
-    if (layoutMode) {
-      if (scenesBox) scenesBox.value = layoutPkid === null ? "" : String(layoutPkid);
-    } else if (asSlots) {
-      // In compose mode, when a layout is selected, set the layout select
-      scenesBox.value = String(layoutPkid);
-    }
-    setSizeBox();
+    if (scenesBox) scenesBox.value = layoutPkid === null ? "" : String(layoutPkid);
+    decidedBy = "";
+    fitResolution();
     markClean();
     render();
+    for (const item of sources()) learnSize(item);
   };
 
+  // The first entry is the one the page was drawn with: "new layout" on the layout page, "no
+  // layout" in the live wizard.
+  const noLayout = scenesBox?.options[0]?.text || "";
+
   const drawScenes = () => {
-    // The layout page has no select: the list it would fill is drawn by the live wizard only.
     if (!scenesBox) return;
-    const current = layoutPkid === null ? "" : String(layoutPkid);
-    scenesBox.replaceChildren(new Option(word("noLayoutSelected") || "No layout selected", ""));
-    for (const saved of scenes) {
-      scenesBox.append(new Option(saved.name, String(saved.pkid)));
-    }
-    if (!layoutMode) {
-      // In compose mode, allow selecting any layout
-    }
-    scenesBox.value = current;
+    scenesBox.replaceChildren(new Option(noLayout, ""), ...scenes.map(saved => new Option(saved.name, String(saved.pkid))));
+    scenesBox.value = layoutPkid === null ? "" : String(layoutPkid);
   };
 
   // Only the layouts: the scene a live went on air with belongs to that live.
@@ -1255,18 +1256,11 @@ const occupies = (target, item) => {
     drawScenes();
   };
 
+  // A saved layout opens on the canvas as its shapes: on the layout page to be edited, in the live
+  // wizard to be filled. The empty entry starts again from a blank canvas.
   scenesBox?.addEventListener("change", () => {
     const pkid = scenesBox.value;
-    if (!pkid) {
-      // When selecting "no layout", clear the scene
-      loadScene(null);
-      return;
-    }
-    const saved = scenes.find(entry => String(entry.pkid) === pkid);
-    if (saved) {
-      // Load layout as slots - in compose mode, loading a layout should create a new scene based on it
-      loadScene(saved);
-    }
+    loadScene(pkid ? scenes.find(entry => String(entry.pkid) === pkid) || null : null);
   });
 
   nameBox.addEventListener("input", () => {
@@ -1274,23 +1268,9 @@ const occupies = (target, item) => {
     markDirty();
   });
 
-  // A new output size keeps the layout: every tile is scaled with the canvas, so a scene drawn
-  // for 1080p is the same scene in 720p.
+  // A new output size keeps the layout: every tile is scaled with the canvas.
   sizeBox.addEventListener("change", () => {
-    const [width, height] = sizeBox.value.split("x").map(Number);
-    const sx = width / scene.width;
-    const sy = height / scene.height;
-    for (const item of scene.items) {
-      if (!hasPicture(item.kind)) continue;
-      item.x *= sx;
-      item.y *= sy;
-      item.w *= sx;
-      item.h *= sy;
-    }
-    scene.width = width;
-    scene.height = height;
-    for (const item of scene.items) if (hasPicture(item.kind)) keepInside(item);
-    markDirty();
+    resizeCanvas(...sizeBox.value.split("x").map(Number));
     render();
   });
 
@@ -1381,7 +1361,13 @@ const occupies = (target, item) => {
 
   // Starting always streams what is on screen: the scene is saved first, as the scene of this live
   // only, so the live cannot go out with the version the user was looking at before the last drag.
+  // The live goes out at the resolution of the biggest shape: a video still being probed is waited
+  // for, so a click right after the drop does not start at the size of the empty layout.
   startButton?.addEventListener("click", async () => {
+    setBusy(true);
+    await Promise.all([...probes.values()]);
+    setBusy(false);
+    fitResolution();
     if ((dirty || scene.pkid === null) && !(await save())) return;
     document.querySelector("[data-composer-start-pkid]").value = String(scene.pkid);
     startForm?.requestSubmit();

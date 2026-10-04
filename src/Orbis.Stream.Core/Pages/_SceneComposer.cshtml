@@ -67,15 +67,14 @@
 
     <section class="composer-main">
         <div class="card composer-bar">
-            @if (!layout)
-            {
-                <label class="field">
-                    <span class="caption">@T["layout"]</span>
-                    <select class="input" data-composer-layouts>
-                        <option value="">@T["noLayoutSelected"]</option>
-                    </select>
-                </label>
-            }
+            @* Both modes open a saved layout from here: the layout page to edit it, the live wizard
+               to fill its shapes. *@
+            <label class="field">
+                <span class="caption">@T["layout"]</span>
+                <select class="input" data-composer-layouts>
+                    <option value="">@(T[layout ? "newLayout" : "noLayoutSelected"])</option>
+                </select>
+            </label>
             <label class="field grow">
                 <span class="caption">@(T[layout ? "layoutName" : "sceneName"])</span>
                 <input class="input" data-composer-name maxlength="255" placeholder="@(T[layout ? "newLayout" : "newScene"])" />
@@ -90,9 +89,10 @@
                 </select>
             </label>
             <div class="composer-actions">
-                <span class="caption composer-dirty" data-composer-dirty hidden>@T["unsavedChanges"]</span>
                 @if (layout)
                 {
+                    @* Only a layout is saved by hand: the scene of a live is saved by the start button. *@
+                    <span class="caption composer-dirty" data-composer-dirty hidden>@T["unsavedChanges"]</span>
                     <button type="button" class="btn subtle icon-only danger" data-composer-delete hidden
                             data-confirm-text="@T["deleteLayoutConfirm"]" title="@T["deleteLayout"]" aria-label="@T["deleteLayout"]"><i class="icon">&#xE74D;</i></button>
                     <button type="button" class="btn accent" data-composer-save><i class="icon">&#xE74E;</i>@T["saveLayout"]</button>

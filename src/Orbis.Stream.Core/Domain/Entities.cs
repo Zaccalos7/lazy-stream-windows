@@ -174,6 +174,15 @@ public sealed class VideoEntity
     /// <summary>Duration of the video file in milliseconds. Null for capture devices.</summary>
     public long? DurationMilliseconds { get; set; }
 
+    /// <summary>
+    /// Resolution of the file itself, as ffprobe reads it when the row is written. Not the tile
+    /// (<see cref="Width"/>, <see cref="Height"/>): the pixels the video really has, which is the
+    /// most the output can be asked for without upscaling it. Null for capture devices.
+    /// </summary>
+    public int? SourceWidth { get; set; }
+
+    public int? SourceHeight { get; set; }
+
     /// <summary>Whether this source contributes audio to the mix.</summary>
     public bool AudioEnabled { get; set; }
 }

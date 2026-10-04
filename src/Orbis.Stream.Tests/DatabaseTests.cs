@@ -465,6 +465,26 @@ public sealed class VideoRepositoryTests
     }
 
     [Fact]
+    public void InsertAndFind_KeepsTheTileAndTheResolutionOfTheFile()
+    {
+        using var database = new TemporaryDatabase();
+        var videos = database.Repository<VideoRepository>();
+
+        var video = Video(1, LiveStatus.Offline, "clip", database.LiveHistoryId);
+        video.X = 10;
+        video.Y = 20;
+        video.Width = 640;
+        video.Height = 360;
+        video.SourceWidth = 1280;
+        video.SourceHeight = 720;
+
+        var loaded = videos.FindByPkid(videos.Insert(video))!;
+
+        Assert.Equal((10, 20, 640, 360), (loaded.X, loaded.Y, loaded.Width, loaded.Height));
+        Assert.Equal((1280, 720), (loaded.SourceWidth, loaded.SourceHeight));
+    }
+
+    [Fact]
     public void FindPaged_AppliesFiltersSortingAndPaging()
     {
         using var database = new TemporaryDatabase();

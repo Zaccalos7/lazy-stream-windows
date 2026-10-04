@@ -313,4 +313,6 @@
   "selectLayout": "Select layout",
   "layoutSelected": "Layout selected",
   "liveHistoryDescription": "O histórico de diretos passados com estados, o nome do vídeo e em que canal foi transmitido."
+  "updateAvailable": "Update available",
+  "updateAvailableDialogText": "A new version is available, do you want to download it?"
 }

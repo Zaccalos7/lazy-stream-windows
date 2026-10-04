@@ -313,4 +313,6 @@
   "selectLayout": "Select layout",
   "layoutSelected": "Layout selected",
   "liveHistoryDescription": "The history of past lives with statuses, the name of the video and on which channel it was broadcast."
+  "updateAvailable": "Update available",
+  "updateAvailableDialogText": "A new version is available, do you want to download it?"
 }

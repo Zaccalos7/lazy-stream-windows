@@ -313,4 +313,6 @@
   "selectLayout": "Select layout",
   "layoutSelected": "Layout selected",
   "liveHistoryDescription": "Der Verlauf vergangener Live-Streams mit Status, dem Namen des Videos und auf welchem Kanal es übertragen wurde."
+  "updateAvailable": "Update available",
+  "updateAvailableDialogText": "A new version is available, do you want to download it?"
 }

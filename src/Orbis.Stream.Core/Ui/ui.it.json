@@ -313,4 +313,6 @@
   "selectLayout": "Seleziona layout",
   "layoutSelected": "Layout selected",
   "liveHistoryDescription": "Lo storico delle live passate con gli stati, il nome del video e su che canale è stato trasmesso."
+  "updateAvailable": "Aggiornamento disponibile",
+  "updateAvailableDialogText": "C’è una nuova versione vuoi scaricarla?"
 }

@@ -313,4 +313,6 @@
   "selectLayout": "Select layout",
   "layoutSelected": "Layout selected",
   "liveHistoryDescription": "Hodor hodor hodor hodor hodor hodor, hodor hodor hodor hodor hodor hodor hodor."
+  "updateAvailable": "Update available",
+  "updateAvailableDialogText": "A new version is available, do you want to download it?"
 }

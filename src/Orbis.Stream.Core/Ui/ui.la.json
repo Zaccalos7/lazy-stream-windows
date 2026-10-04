@@ -313,4 +313,6 @@
   "selectLayout": "Select layout",
   "layoutSelected": "Layout selected",
   "liveHistoryDescription": "Historia directōrum praeteritōrum cum statibus, nōmine vīdeōrum et in quā canālī ēmissum est."
+  "updateAvailable": "Update available",
+  "updateAvailableDialogText": "A new version is available, do you want to download it?"
 }

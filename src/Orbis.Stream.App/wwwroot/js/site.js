@@ -1018,20 +1018,16 @@ document.addEventListener("DOMContentLoaded", async () => {
 
             if (!dialog || !updateText || !bell) return;
 
-            updateText.textContent = document.documentElement.dataset.updateAvailableDialogText || "c’è una nuova versione vuoi scaricarla?";
+            bell.hidden = false;
 
             dialog.onclose = () => {
                 if (dialog.returnValue === "ok") {
                     window.open(updateUrl, "_blank");
-                } else {
-                    bell.hidden = false;
                 }
             };
 
-            dialog.showModal();
-
             bell.addEventListener("click", () => {
-                updateText.textContent = document.documentElement.dataset.updateInstallDialogText || "vuoi installare la versione nuova?";
+                updateText.textContent = document.documentElement.dataset.updateAvailableDialogText || "c’è una nuova versione vuoi scaricarla?";
                 dialog.showModal();
             });
         }

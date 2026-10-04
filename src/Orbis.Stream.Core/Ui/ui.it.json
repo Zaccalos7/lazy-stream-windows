@@ -313,6 +313,5 @@
   "selectLayout": "Seleziona layout",
   "layoutSelected": "Layout selected",
   "updateAvailable": "Aggiornamento disponibile",
-  "updateAvailableDialogText": "C’è una nuova versione vuoi scaricarla?",
-  "updateInstallDialogText": "vuoi installare la versione nuova?"
+  "updateAvailableDialogText": "C’è una nuova versione vuoi scaricarla?"
 }

@@ -311,5 +311,6 @@
   "olderThanNow": "Più vecchi di adesso",
   "noLayoutSelected": "Nessun layout selezionato",
   "selectLayout": "Seleziona layout",
-  "layoutSelected": "Layout selected"
+  "layoutSelected": "Layout selected",
+  "liveHistoryDescription": "Visualizza lo storico di tutte le tue live passate."
 }

@@ -22,9 +22,12 @@
     <link rel="stylesheet" href="/css/preview.css" />
 }
 <div class="page-header">
-    <div>
-        <h1>@T["livePreviewTitle"]</h1>
+    <div style="display: flex; align-items: center; gap: 1rem;">
+        <a class="btn subtle icon-only" href="/orbis/mainLiveMenu" title="@T["back"]" aria-label="@T["back"]"><i class="icon">&#xE72B;</i></a>
+        <div>
+            <h1>@T["livePreviewTitle"]</h1>
         <p class="subtitle">@T["livePreviewSubtitle"]</p>
+        </div>
     </div>
     @if (live.IsLive)
     {

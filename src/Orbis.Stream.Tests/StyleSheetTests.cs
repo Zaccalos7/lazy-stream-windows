@@ -21,7 +21,7 @@ public sealed partial class StyleSheetTests : IClassFixture<ApplicationFixture>
             ["preview"] = ["/orbis/mainPreview"],
             ["meters"] = ["/orbis/mainTaskManager"],
             ["cleanup"] = ["/orbis/mainLiveHistory"],
-            ["dashboard"] = ["/orbis/mainMenu"]
+            ["dashboard"] = ["/orbis/mainMenu", "/orbis/mainLiveMenu"]
         };
 
     private readonly ApplicationFixture _fixture;
@@ -46,6 +46,7 @@ public sealed partial class StyleSheetTests : IClassFixture<ApplicationFixture>
 
     [Theory]
     [InlineData("/orbis/mainMenu")]
+    [InlineData("/orbis/mainLiveMenu")]
     [InlineData("/orbis/mainLive")]
     [InlineData("/orbis/mainLiveHistory")]
     [InlineData("/orbis/mainLayout")]
@@ -75,6 +76,7 @@ public sealed partial class StyleSheetTests : IClassFixture<ApplicationFixture>
     [InlineData("/orbis/mainTaskManager")]
     [InlineData("/orbis/mainLiveHistory")]
     [InlineData("/orbis/mainMenu")]
+    [InlineData("/orbis/mainLiveMenu")]
     public async Task A_page_links_the_sheets_it_draws_and_only_those(string page)
     {
         var linked = await SheetsOfPageAsync( page);

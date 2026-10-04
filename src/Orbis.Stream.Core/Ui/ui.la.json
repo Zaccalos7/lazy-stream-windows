@@ -311,5 +311,6 @@
   "olderThanNow": "Nunc priora",
   "noLayoutSelected": "No layout selected",
   "selectLayout": "Select layout",
-  "layoutSelected": "Layout selected"
+  "layoutSelected": "Layout selected",
+  "liveHistoryDescription": "View the history of all your past live streams."
 }

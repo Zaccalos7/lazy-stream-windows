@@ -4,9 +4,12 @@
     ViewData["Title"] = T["layouts"];
 }
 <div class="page-header">
-    <div>
-        <h1>@T["layouts"]</h1>
+    <div style="display: flex; align-items: center; gap: 1rem;">
+        <a class="btn subtle icon-only" href="/orbis/mainLiveMenu" title="@T["back"]" aria-label="@T["back"]"><i class="icon">&#xE72B;</i></a>
+        <div>
+            <h1>@T["layouts"]</h1>
         <p class="subtitle">@T["layoutsDescription"]</p>
+        </div>
     </div>
     <a class="btn accent" href="/orbis/mainLayout"><i class="icon">&#xE710;</i>@T["newLayout"]</a>
 </div>

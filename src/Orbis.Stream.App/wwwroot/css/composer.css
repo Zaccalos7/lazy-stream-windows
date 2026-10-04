@@ -1,0 +1,281 @@
+/* Orbis Stream — the scene composer: the sources on the left, the canvas in the middle, the layers on
+   the right. A sheet of the live wizard and of the layouts page, loaded only by those two (see
+   the "Styles" section of MainLive.cshtml and MainLayout.cshtml). */
+/* The canvas is black on purpose in both themes: black is what an empty corner of it looks like
+   on air. */
+
+.composer {
+  display: grid;
+  gap: 14px;
+  grid-template-columns: 220px minmax(0, 1fr) 240px;
+  align-items: start;
+}
+
+.composer > .card { padding: 14px; }
+.composer-head { display: flex; align-items: center; justify-content: space-between; gap: 8px; margin-bottom: 8px; }
+.composer-head h3 { font: 600 13px/18px var(--font-display); }
+
+.composer-sidebar { display: flex; flex-direction: column; gap: 14px; position: sticky; top: 16px; }
+.composer-sidebar > .card { padding: 14px; }
+.composer-sources { display: flex; flex-direction: column; gap: 12px; }
+.composer-catalog { display: flex; flex-direction: column; gap: 4px; max-height: 35vh; overflow: auto; margin: 0 -4px; padding: 0 4px; }
+.composer-loading { display: flex; align-items: center; gap: 8px; padding: 10px 2px; }
+.composer-loading .spinner { display: inline-block; }
+.composer-group { margin: 10px 0 2px; font-weight: 600; text-transform: uppercase; letter-spacing: 0.04em; font-size: 10px; }
+.composer-group:first-child { margin-top: 0; }
+.composer-none { padding: 10px 2px; }
+
+.composer-source {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  width: 100%;
+  padding: 8px 10px;
+  font: inherit;
+  text-align: left;
+  color: var(--text);
+  background: var(--control);
+  border: 1px solid var(--stroke);
+  border-radius: var(--radius);
+  cursor: grab;
+  transition: border-color 0.12s, background 0.12s;
+}
+.composer-source:hover { border-color: var(--stroke-strong); background: var(--control-hover); }
+.composer-source:active { cursor: grabbing; }
+.composer-source:focus-visible { outline: none; box-shadow: var(--glow); }
+.composer-source > .icon { flex: none; font-size: 16px; color: var(--accent-text); }
+.composer-source .grow { flex: 1; min-width: 0; display: flex; flex-direction: column; }
+.composer-source strong { font-size: 12px; font-weight: 600; }
+.composer-source .composer-used { flex: none; font-size: 12px; color: var(--text-3); visibility: hidden; }
+.composer-source:hover .composer-used, .composer-source:focus-within .composer-used { visibility: visible; }
+.composer-source.is-used:hover .composer-used, .composer-source.is-used:focus-within .composer-used { color: var(--critical); }
+
+.composer-file-row { display: flex; gap: 6px; }
+.composer-file-row .input { flex: 1; min-width: 0; }
+
+.composer-main { display: flex; flex-direction: column; gap: 10px; min-width: 0; }
+.composer-bar { display: flex; flex-wrap: wrap; align-items: end; gap: 10px; }
+.composer-bar .field { min-width: 140px; }
+.composer-bar .field.grow { flex: 1; min-width: 180px; }
+.composer-actions { display: flex; align-items: center; gap: 8px; margin-left: auto; }
+.composer-dirty { color: var(--caution); font-weight: 600; white-space: nowrap; }
+
+.composer-stage-wrap {
+  padding: 10px;
+  background: var(--card);
+  border: 1px solid var(--stroke);
+  border-radius: var(--radius-lg);
+  box-shadow: var(--shadow-card);
+}
+
+.composer-stage {
+  position: relative;
+  width: 100%;
+  max-height: calc(100vh - 240px);
+  max-width: calc((100vh - 240px) * 16 / 9);
+  margin: 0 auto;
+  overflow: hidden;
+  background-color: #000;
+  /* Thirds, so a tile can be lined up by eye before the guides kick in. */
+  background-image:
+    linear-gradient(to right, transparent calc(33.333% - 0.5px), rgba(255, 255, 255, 0.06) calc(33.333% - 0.5px), rgba(255, 255, 255, 0.06) calc(33.333% + 0.5px), transparent calc(33.333% + 0.5px), transparent calc(66.666% - 0.5px), rgba(255, 255, 255, 0.06) calc(66.666% - 0.5px), rgba(255, 255, 255, 0.06) calc(66.666% + 0.5px), transparent calc(66.666% + 0.5px)),
+    linear-gradient(to bottom, transparent calc(33.333% - 0.5px), rgba(255, 255, 255, 0.06) calc(33.333% - 0.5px), rgba(255, 255, 255, 0.06) calc(33.333% + 0.5px), transparent calc(33.333% + 0.5px), transparent calc(66.666% - 0.5px), rgba(255, 255, 255, 0.06) calc(66.666% - 0.5px), rgba(255, 255, 255, 0.06) calc(66.666% + 0.5px), transparent calc(66.666% + 0.5px));
+  border-radius: var(--radius);
+  outline: 1px solid rgba(255, 255, 255, 0.08);
+  user-select: none;
+  touch-action: none;
+}
+.composer-stage:focus-visible { outline: 2px solid var(--accent); outline-offset: 2px; }
+.composer-stage.is-over { outline: 2px dashed var(--accent); outline-offset: -2px; }
+
+.composer-blank {
+  position: absolute;
+  inset: 0;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  gap: 6px;
+  color: rgba(255, 255, 255, 0.72);
+  text-align: center;
+  padding: 16px;
+  pointer-events: none;
+}
+.composer-blank .icon { font-size: 28px; color: rgba(255, 255, 255, 0.45); }
+.composer-blank .caption { color: rgba(255, 255, 255, 0.5); }
+.composer-blank[hidden] { display: none; }
+
+.composer-tile {
+  position: absolute;
+  display: grid;
+  background: #111;
+  outline: 1px solid rgba(255, 255, 255, 0.28);
+  cursor: move;
+  touch-action: none;
+}
+.composer-tile > img,
+.composer-tile > .composer-tile-cover { grid-area: 1 / 1; width: 100%; height: 100%; min-height: 0; }
+/* contain, like ffmpeg: a source is padded into its rectangle, never stretched. */
+.composer-tile > img { object-fit: contain; pointer-events: none; }
+.composer-tile > img[hidden], .composer-tile-cover[hidden] { display: none; }
+.composer-tile-cover { display: grid; place-items: center; background: repeating-linear-gradient(45deg, #151517 0 10px, #1b1b1e 10px 20px); }
+.composer-tile-cover .icon { font-size: clamp(14px, 3vw, 34px); color: rgba(255, 255, 255, 0.4); }
+.composer-tile-label {
+  position: absolute;
+  left: 4px;
+  top: 4px;
+  max-width: calc(100% - 8px);
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+  padding: 2px 6px;
+  overflow: hidden;
+  font-size: 10px;
+  font-weight: 600;
+  white-space: nowrap;
+  text-overflow: ellipsis;
+  color: #fff;
+  background: rgba(0, 0, 0, 0.62);
+  border-radius: 4px;
+  pointer-events: none;
+}
+.composer-tile-label .icon { font-size: 10px; }
+/* Selection and the drop target are outlines, never a lift: a tile keeps its place in the stack,
+   so what is on the canvas is what ffmpeg overlays. A tile that fills the frame and gets picked
+   must not come over the sagomas sitting on top of it. */
+.composer-tile.is-selected { outline: 2px solid var(--accent); }
+.composer-tile.is-drop-on { outline: 2px solid var(--accent); outline-offset: -2px; box-shadow: inset 0 0 0 999px color-mix(in srgb, var(--accent) 14%, transparent); }
+
+/* An empty slot of a layout: an outline waiting for a source, see-through so the slots under it
+   stay visible, the way the skeleton reads before anything is dropped on it. */
+.composer-tile.is-slot { background: rgba(255, 255, 255, 0.04); outline: 2px dashed rgba(255, 255, 255, 0.4); outline-offset: -2px; }
+.composer-tile.is-slot.is-selected { outline: 2px dashed var(--accent); }
+.composer-tile.is-slot.is-drop-on { background: color-mix(in srgb, var(--accent) 16%, transparent); outline-style: solid; }
+
+/* A shape that has been filled keeps the outline of the rectangle it is: the layout is read by its
+   shapes, and what is inside one can change from one live to the next. */
+.composer-tile.is-shape { outline: 2px dashed rgba(255, 255, 255, 0.55); outline-offset: -2px; }
+.composer-tile.is-shape.is-selected { outline: 2px dashed var(--accent); }
+.composer-tile.is-shape.is-drop-on { outline-style: solid; box-shadow: inset 0 0 0 999px color-mix(in srgb, var(--accent) 14%, transparent); }
+.composer-layer.is-shape { border-style: dashed; }
+.composer-slot {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  gap: 4px;
+  width: 100%;
+  height: 100%;
+  min-height: 0;
+  padding: 4px;
+  overflow: hidden;
+  text-align: center;
+  font-size: 11px;
+  color: rgba(255, 255, 255, 0.55);
+  pointer-events: none;
+}
+.composer-slot .icon { font-size: clamp(14px, 3vw, 30px); color: rgba(255, 255, 255, 0.45); }
+.composer-layer.is-slot { border-style: dashed; }
+
+.composer-handle {
+  position: absolute;
+  width: 12px;
+  height: 12px;
+  background: #fff;
+  border: 2px solid var(--accent);
+  border-radius: 3px;
+  display: none;
+}
+.composer-tile.is-selected .composer-handle { display: block; }
+.composer-handle.nw { left: -6px; top: -6px; cursor: nwse-resize; }
+.composer-handle.ne { right: -6px; top: -6px; cursor: nesw-resize; }
+.composer-handle.sw { left: -6px; bottom: -6px; cursor: nesw-resize; }
+.composer-handle.se { right: -6px; bottom: -6px; cursor: nwse-resize; }
+
+.composer-guide { position: absolute; z-index: 2; pointer-events: none; background: #ff2d95; }
+.composer-guide.x { top: 0; bottom: 0; width: 1px; }
+.composer-guide.y { left: 0; right: 0; height: 1px; }
+.composer-guide[hidden] { display: none; }
+
+/* What the drag in the air is about to do: the rectangle the source will take, drawn where it will
+   take it. A drop that lands somewhere else than where the picture said it would is the one thing
+   that makes a drag feel broken. */
+.composer-drop {
+  position: absolute;
+  z-index: 3;
+  display: flex;
+  align-items: flex-start;
+  justify-content: center;
+  padding: 3px;
+  pointer-events: none;
+  border: 2px dashed var(--accent);
+  border-radius: var(--radius);
+  background: color-mix(in srgb, var(--accent) 12%, transparent);
+}
+.composer-drop[hidden] { display: none; }
+
+/* The first frame of the source being dragged, inside the rectangle it is about to take: the
+   sagoma fills with the picture of the video while the pointer is still moving. */
+.composer-drop > img {
+  position: absolute;
+  inset: 0;
+  width: 100%;
+  height: 100%;
+  object-fit: contain;
+  opacity: 0.85;
+}
+
+.composer-drop > img[hidden] { display: none; }
+
+.composer-drop-label {
+  max-width: 100%;
+  overflow: hidden;
+  white-space: nowrap;
+  text-overflow: ellipsis;
+  padding: 2px 6px;
+  font-size: 10px;
+  font-weight: 600;
+  color: #fff;
+  background: rgba(0, 0, 0, 0.62);
+  border-radius: 4px;
+}
+
+.composer-layers { position: sticky; top: 16px; }
+.composer-layers > .caption { margin: -4px 0 10px; }
+.composer-layer-list { list-style: none; margin: 0; padding: 0; display: flex; flex-direction: column; gap: 4px; }
+/* Name on the first line, the controls under it: five buttons next to a file name leave the
+   name three letters wide. */
+.composer-layer {
+  display: grid;
+  grid-template-columns: auto minmax(0, 1fr);
+  align-items: center;
+  column-gap: 8px;
+  row-gap: 4px;
+  padding: 7px 6px 5px 10px;
+  border: 1px solid var(--stroke);
+  border-radius: var(--radius);
+  background: var(--control);
+  cursor: pointer;
+}
+.composer-layer:hover { border-color: var(--stroke-strong); }
+.composer-layer.is-selected { border-color: var(--accent); box-shadow: 0 0 0 1px var(--accent); }
+.composer-layer.is-audio { border-style: dashed; }
+.composer-layer > .icon { flex: none; font-size: 14px; color: var(--accent-text); }
+.composer-layer .grow { flex: 1; min-width: 0; display: flex; flex-direction: column; }
+.composer-layer strong { font-size: 12px; }
+.composer-layer .caption { font-variant-numeric: tabular-nums; }
+.composer-layer-actions { grid-column: 2; display: flex; margin-left: -6px; }
+.composer-layer-actions .btn.icon-only { width: 24px; height: 24px; min-height: 24px; }
+.composer-layer-actions .btn[aria-pressed="false"] { color: var(--text-3); }
+.composer-layer-actions .btn[aria-pressed="true"] { color: var(--success); }
+
+@media (max-width: 1300px) {
+  .composer { grid-template-columns: 240px minmax(0, 1fr); }
+  .composer-layers { grid-column: 1 / -1; position: static; }
+}
+
+@media (max-width: 860px) {
+  .composer { grid-template-columns: minmax(0, 1fr); }
+  .composer-sidebar, .composer-sources { position: static; }
+  .composer-catalog { max-height: none; }
+}

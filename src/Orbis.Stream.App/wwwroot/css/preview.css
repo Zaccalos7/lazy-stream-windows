@@ -1,0 +1,112 @@
+/* Orbis Stream — the live preview page: the picture of what is going out, the live to look at and
+   the parameters it goes out with.
+   Loaded only by the page that owns them (see the "Styles" section of MainPreview.cshtml). */
+
+/* The indicator of the preview page: it is the only place where "a live is running" is stated
+   without opening the live management, so it pulses the way a recording does. */
+.btn.live-indicator {
+  color: var(--on-accent);
+  background: var(--critical);
+  border-color: transparent;
+  box-shadow: none;
+  text-decoration: none;
+}
+.btn.live-indicator:hover { filter: brightness(1.06); }
+.btn.live-indicator .icon { font-size: 14px; }
+.btn.live-indicator.is-live .icon { animation: pulse 1.6s ease-in-out infinite; }
+/* On the live button the mark sits on the red of the button, where the colour of the brand would be
+   unreadable: it takes the colour of the text it is on instead. */
+.btn.live-indicator .platform-mark { width: 18px; height: 18px; color: var(--on-accent); }
+.btn.live-indicator .platform-mark svg { width: 15px; height: 15px; }
+
+@keyframes pulse {
+  0%, 100% { opacity: 1; }
+  50% { opacity: 0.45; }
+}
+
+.preview {
+  display: grid;
+  gap: 12px;
+  grid-template-columns: minmax(0, 1.55fr) minmax(320px, 1fr);
+  align-items: start;
+}
+
+.preview-stage {
+  position: relative;
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+  padding: 10px;
+  overflow: hidden;
+}
+
+.preview-stage video {
+  display: block;
+  width: 100%;
+  aspect-ratio: 16 / 9;
+  border-radius: var(--radius-sm);
+  background: #000;
+  object-fit: contain;
+}
+
+.preview-cover {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  gap: 8px;
+  aspect-ratio: 16 / 9;
+  color: var(--text-2);
+  text-align: center;
+  border-radius: var(--radius-sm);
+  background: var(--tint);
+}
+/* The light picture of the live, over a cover that shows until its first frame lands. */
+.preview-screen { position: relative; aspect-ratio: 16 / 9; border-radius: var(--radius-sm); overflow: hidden; background: #000; }
+.preview-screen .preview-cover { position: absolute; inset: 0; aspect-ratio: auto; border-radius: 0; }
+.preview-screen canvas, .preview-screen .preview-platform-player { position: absolute; inset: 0; z-index: 1; width: 100%; height: 100%; border: none; }
+/* The cover is drawn with a flex layout and the player and the canvas are placed on the stage, so
+   none of them would answer to `hidden` on their own: it is said here once, for all three. */
+.preview-screen [hidden] { display: none; }
+/* The lives on air to pick from: one control, not a row of buttons across the page. */
+.live-picker label.field { width: min(420px, 100%); }
+.preview-cover .icon { font-size: 30px; color: var(--text-3); }
+.preview-cover p { margin: 0; font-size: 12px; }
+
+.preview-embed-status {
+  position: absolute;
+  inset: 0;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: 10px;
+  background: rgba(0, 0, 0, 0.7);
+  color: var(--text);
+  font-size: 13px;
+  z-index: 2;
+}
+.preview-embed-status .spinner { border-top-color: var(--accent); }
+.preview-embed-status[hidden] { display: none; }
+
+.preview-bar { display: flex; align-items: center; gap: 10px; }
+.preview-id { flex: 1; min-width: 0; display: flex; flex-direction: column; }
+.preview-id strong { font-size: 13px; }
+.preview-time { font-variant-numeric: tabular-nums; white-space: nowrap; }
+
+.preview-params { display: flex; flex-direction: column; }
+.preview-params .section:first-child { margin-top: 0; }
+
+.preview-facts {
+  display: grid;
+  gap: 10px 14px;
+  grid-template-columns: repeat(auto-fill, minmax(120px, 1fr));
+}
+.preview-facts > div { display: flex; flex-direction: column; gap: 1px; min-width: 0; }
+.preview-facts strong { font-size: 13px; font-weight: 600; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+
+.preview [data-source-off][hidden] { display: none; }
+.preview .field .toggle { align-items: center; gap: 8px; min-height: 34px; }
+
+@media (max-width: 1100px) {
+  .preview { grid-template-columns: minmax(0, 1fr); }
+}

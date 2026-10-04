@@ -1,0 +1,34 @@
+/* Orbis Stream — the task manager page: the meters and the rings that read the machine.
+   Loaded only by the page that owns them (see the "Styles" section of MainTaskManager.cshtml). */
+
+/* ---------- Meters (Task Manager) ---------- */
+
+.meter { position: relative; overflow: hidden; display: flex; flex-direction: column; align-items: center; gap: 14px; padding: 20px 14px 22px; }
+.meter h3 { position: relative; display: flex; align-items: center; color: var(--text-2); text-transform: uppercase; letter-spacing: 0.04em; font-size: 10px; font-weight: 600; }
+.meter h3 .icon { color: var(--accent); font-size: 15px; }
+
+.ring {
+  --value: 0;
+  --color: var(--accent);
+  position: relative;
+  width: 120px;
+  height: 120px;
+  border-radius: 50%;
+  display: grid;
+  place-items: center;
+  background: conic-gradient(var(--color) calc(var(--value) * 1%), var(--stroke) 0);
+  transition: background 0.3s cubic-bezier(0.16, 1, 0.3, 1);
+}
+.ring::before {
+  content: attr(data-label);
+  display: grid;
+  place-items: center;
+  width: 96px;
+  height: 96px;
+  border-radius: 50%;
+  background: var(--card);
+  font: 700 22px/1 var(--font-display);
+  letter-spacing: -0.02em;
+}
+.ring.warn { --color: var(--caution); }
+.ring.bad { --color: var(--critical); }

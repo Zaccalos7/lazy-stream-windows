@@ -1,0 +1,55 @@
+/* Orbis Stream — overlays: the macOS sheet dialog and what goes inside it. */
+
+/* ---------- macOS Sheet Dialog ---------- */
+
+dialog.dialog {
+  width: min(520px, calc(100vw - 32px));
+  padding: 0;
+  overflow: hidden;
+  color: var(--text);
+  background: var(--panel-solid);
+  border: 1px solid var(--stroke-strong);
+  border-radius: var(--radius-xl);
+  box-shadow: var(--shadow-dialog);
+}
+dialog.dialog[open] { animation: pop 0.18s cubic-bezier(0.16, 1, 0.3, 1); }
+dialog.dialog::before { content: ""; display: block; height: 3px; background: var(--accent); }
+dialog.dialog::backdrop { background: var(--smoke); backdrop-filter: blur(8px); -webkit-backdrop-filter: blur(8px); }
+dialog.dialog.wide { width: min(840px, calc(100vw - 32px)); }
+dialog.dialog.x-wide { width: min(1140px, calc(100vw - 32px)); }
+/* The scene composer of the live wizard: nearly the whole window, because the canvas is the step. */
+dialog.dialog.compose { width: 100vw; height: 100vh; max-width: 100vw; max-height: 100vh; margin: 0; border-radius: 0; }
+dialog.dialog.compose[open] { display: flex; flex-direction: column; }
+dialog.dialog.compose .dialog-body { flex: 1; min-height: 0; max-height: none; }
+.dialog-head { display: flex; align-items: center; gap: 10px; padding: 14px 24px; border-bottom: 1px solid var(--stroke); }
+.dialog-head h2 { font-size: 18px; font-weight: 600; }
+.dialog-head .grow { flex: 1; min-width: 0; }
+.dialog-body { padding: 20px 24px; max-height: 70vh; overflow-y: auto; overscroll-behavior: contain; }
+.dialog-body h2 { font-size: 18px; margin-bottom: 12px; font-weight: 600; }
+.dialog-footer {
+  display: flex;
+  gap: 8px;
+  justify-content: flex-end;
+  padding: 12px 24px 16px;
+  border-top: 1px solid var(--stroke);
+  background: var(--tint);
+}
+.dialog-footer .btn { min-width: 90px; }
+
+@keyframes pop { from { opacity: 0; transform: translateY(6px) scale(0.98); } }
+
+/* ---------- The About dialog: the mark of the application beside its name, the two facts under it. ---------- */
+
+.about-body { display: flex; align-items: flex-start; gap: 16px; }
+
+.about-mark {
+  width: 48px;
+  height: 48px;
+  padding: 6px;
+  border-radius: var(--radius-squircle);
+  background: linear-gradient(180deg, var(--accent) 0%, var(--accent-hover) 100%);
+  box-shadow: 0 1px 4px rgba(0, 0, 0, 0.12);
+}
+
+.about-body .facts { grid-template-columns: 1fr; }
+.about-body .fact:last-child { border-bottom: none; }

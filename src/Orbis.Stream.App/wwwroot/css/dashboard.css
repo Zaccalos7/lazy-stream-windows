@@ -1,0 +1,42 @@
+/* Orbis Stream — the dashboard: the banner at its foot that asks for the coffee.
+   Loaded only by the page that owns it (see the "Styles" section of MainMenu.cshtml). */
+
+.btn.coffee {
+  color: #ffffff;
+  background: linear-gradient(180deg, #ff9500 0%, #e07b00 100%);
+  border-color: transparent;
+  box-shadow: 0 1px 4px rgba(255, 149, 0, 0.25);
+}
+.btn.coffee:hover { filter: brightness(1.05); }
+
+/* The weasel banner at the foot of the dashboard: as wide as the page and tall enough to be a
+   banner, with the two ends anchored and the words centred between them. */
+.coffee-banner {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: 18px;
+  width: 100%;
+  padding: 26px 32px;
+  color: #ffffff;
+  font-size: 22px;
+  font-weight: 600;
+  text-align: center;
+  text-decoration: none;
+  background: linear-gradient(180deg, #ff9500 0%, #e07b00 100%);
+  border: 1px solid transparent;
+  border-radius: var(--radius-sm);
+  box-shadow: 0 2px 10px rgba(255, 149, 0, 0.3);
+  transition: filter 120ms ease, transform 120ms ease;
+}
+.coffee-banner:hover { filter: brightness(1.05); text-decoration: none; }
+.coffee-banner:active { transform: translateY(1px); }
+
+/* The weasel, the words and the cup travel together in the middle: on a banner this wide, the two
+   ends pushed out to the corners read as two lonely icons rather than as one sign. */
+.coffee-banner-weasel,
+.coffee-banner-cup {
+  font-size: 34px;
+  line-height: 1;
+  flex: 0 0 auto;
+}

@@ -1,0 +1,179 @@
+/* Orbis Stream — controls: what a person presses, types into, ticks or drops a file on. */
+
+/* ---------- Buttons ---------- */
+
+.btn {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  gap: 6px;
+  height: 30px;
+  padding: 0 12px;
+  font: 500 12px/1 var(--font);
+  color: var(--text);
+  background: var(--control);
+  border: 1px solid var(--stroke-strong);
+  border-radius: var(--radius-sm);
+  cursor: pointer;
+  text-decoration: none;
+  white-space: nowrap;
+  box-shadow: 0 1px 2px rgba(0, 0, 0, 0.03);
+  transition: background 0.12s, border-color 0.12s, transform 0.08s;
+}
+
+.btn:hover { background: var(--control-hover); border-color: var(--stroke-strong); }
+.btn:active { transform: scale(0.98); }
+.btn:disabled { color: var(--text-3); background: var(--tint); border-color: transparent; box-shadow: none; cursor: not-allowed; }
+
+.btn.accent {
+  color: var(--on-accent);
+  background: var(--accent);
+  border-color: transparent;
+  box-shadow: 0 1px 3px rgba(0, 122, 255, 0.25);
+}
+.btn.accent:hover { background: var(--accent-hover); }
+.btn.accent:disabled { color: var(--text-3); background: var(--tint); box-shadow: none; }
+
+.btn.subtle { background: transparent; border-color: transparent; box-shadow: none; color: var(--text-2); }
+.btn.subtle:hover { background: var(--tint-strong); color: var(--text); }
+.btn.subtle:disabled { background: transparent; }
+
+.btn.danger { color: var(--critical); }
+.btn.danger:hover { background: var(--critical-bg); color: var(--critical); border-color: transparent; }
+.btn.success:not(:disabled) { color: var(--success); }
+.btn.success:not(:disabled):hover { background: var(--success-bg); border-color: transparent; }
+.btn.caution:not(:disabled) { color: var(--caution); }
+.btn.caution:not(:disabled):hover { background: var(--caution-bg); border-color: transparent; }
+
+.btn.icon-only { width: 30px; padding: 0; }
+.btn.icon-only .icon { font-size: 14px; }
+
+:focus-visible { outline: none; box-shadow: var(--glow); }
+
+/* ---------- Fields ---------- */
+
+label.field { display: flex; flex-direction: column; gap: 5px; }
+label.field > span { color: var(--text); font-weight: 500; font-size: 12px; }
+label.field > span.caption { color: var(--text-2); font-weight: 600; text-transform: uppercase; letter-spacing: 0.04em; font-size: 10px; }
+label.field > small { color: var(--text-3); font-size: 11px; }
+
+.input, select.input, textarea.input {
+  width: 100%;
+  min-height: 34px;
+  padding: 6px 10px;
+  font: inherit;
+  font-size: 12px;
+  color: var(--text);
+  background: var(--control);
+  border: 1px solid var(--stroke-strong);
+  border-radius: var(--radius-sm);
+  box-shadow: 0 1px 2px rgba(0, 0, 0, 0.02) inset;
+  transition: border-color 0.12s, box-shadow 0.12s, background 0.12s;
+}
+
+textarea.input { resize: vertical; padding: 8px 10px; }
+.input:hover { border-color: var(--text-3); }
+.input:focus { outline: none; border-color: var(--accent); box-shadow: var(--glow); }
+
+.form-grid { display: grid; gap: 12px; grid-template-columns: repeat(auto-fill, minmax(220px, 1fr)); }
+.form-grid.pair { grid-template-columns: repeat(2, minmax(0, 1fr)); }
+
+/* Input with reveal button */
+.input-affix { position: relative; display: flex; }
+.input-affix .input { padding-right: 42px; }
+.input-affix .reveal {
+  position: absolute;
+  top: 50%;
+  right: 4px;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 26px;
+  height: 26px;
+  padding: 0;
+  color: var(--text-2);
+  background: none;
+  border: 0;
+  border-radius: 4px;
+  cursor: pointer;
+  transform: translateY(-50%);
+  transition: color 0.12s, background 0.12s;
+}
+.input-affix .reveal:hover { color: var(--text); background: var(--tint-strong); }
+.input-affix .reveal[aria-pressed="true"] { color: var(--accent-text); background: var(--tint-strong); }
+
+/* Hide native Edge/Chromium password reveal button since we use a custom one */
+input[type="password"]::-ms-reveal,
+input[type="password"]::-ms-clear {
+  display: none;
+}
+
+/* Dropzone */
+.dropzone .input { border-style: dashed; }
+.dropzone > small { display: flex; align-items: center; gap: 6px; }
+.dropzone > small .icon { flex: none; font-size: 13px; color: var(--accent); }
+.dropzone.is-over .input {
+  border-style: solid;
+  border-color: var(--accent);
+  background: var(--tint);
+}
+.dropzone.is-over > small { color: var(--accent-text); font-weight: 600; }
+.dropzone.is-dropped .input { border-style: solid; border-color: var(--success); }
+.dropzone.is-dropped > small { color: var(--success); font-weight: 600; }
+.dropzone.is-dropped > small .icon { color: var(--success); }
+
+/* ToggleSwitch — iOS / macOS style */
+.toggle { display: inline-flex; align-items: center; cursor: pointer; }
+.toggle input {
+  appearance: none;
+  position: relative;
+  width: 38px;
+  height: 22px;
+  margin: 0;
+  border-radius: 11px;
+  background: var(--stroke-strong);
+  cursor: pointer;
+  transition: background 0.2s cubic-bezier(0.16, 1, 0.3, 1);
+}
+.toggle input::after {
+  content: "";
+  position: absolute;
+  top: 2px;
+  left: 2px;
+  width: 18px;
+  height: 18px;
+  border-radius: 50%;
+  background: #ffffff;
+  box-shadow: 0 1px 3px rgba(0, 0, 0, 0.2);
+  transition: transform 0.2s cubic-bezier(0.16, 1, 0.3, 1);
+}
+.toggle input:checked { background: var(--success); }
+.toggle input:checked::after { transform: translateX(16px); }
+
+/* ---------- Choices: a list of radios that look like cards ---------- */
+
+.choice-list { display: flex; flex-direction: column; gap: 6px; }
+.choice {
+  --hue: var(--accent);
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  padding: 10px 14px;
+  background: var(--control);
+  border: 1px solid var(--stroke-strong);
+  border-radius: var(--radius-lg);
+  cursor: pointer;
+  transition: border-color 0.12s, background 0.12s;
+}
+.choice.twitch { --hue: var(--twitch); }
+.choice.youtube { --hue: var(--youtube); }
+.choice > .icon { color: var(--text); font-size: 16px; }
+.choice:hover { border-color: var(--text-3); }
+.choice:has(input:checked) {
+  border-color: var(--hue);
+  background: color-mix(in srgb, var(--hue) 5%, var(--control));
+  box-shadow: 0 0 0 1px var(--hue);
+}
+.choice:has(input:checked) > .icon { color: var(--hue); }
+.choice input { accent-color: var(--hue); margin: 0; width: 15px; height: 15px; }
+.choice .badge { margin-left: 6px; }

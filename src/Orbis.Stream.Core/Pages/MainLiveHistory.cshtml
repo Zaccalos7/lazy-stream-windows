@@ -5,6 +5,11 @@
     var page = Model.Videos.Page;
     var pager = new PagerModel(page.Number, page.TotalPages, index => Url.Page("/MainLiveHistory", new { p = index })!);
 }
+
+@section Styles {
+    @* The popover of the cleanup at the foot of this page, and nothing else of its own. *@
+    <link rel="stylesheet" href="/css/cleanup.css" />
+}
 @* Storico Live è una pagina a sé: nel menu c'è già la voce, quindi nessun "indietro" né il
    collegamento a Gestione Live nell'intestazione. *@
 <div class="page-header">

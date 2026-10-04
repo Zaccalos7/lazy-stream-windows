@@ -172,10 +172,21 @@ on every sample of the push channel.
 
 ```
 src/Orbis.Stream.Core     backend: API, Razor pages, data, services, FFmpeg, i18n, system info
-src/Orbis.Stream.App      WPF/WebView2 shell, app icon, stylesheet and script in wwwroot
+src/Orbis.Stream.App      WPF/WebView2 shell, app icon, stylesheets and script in wwwroot
 src/Orbis.Stream.Tests    xUnit suite: API end-to-end, database, paging, i18n, FFmpeg
 Installer                 NSIS setup (installer.nsi) and the optional WiX MSI
 ```
+
+### Stylesheets
+
+`wwwroot/css` holds one concern per file. The layout links the seven shared sheets in order
+(`tokens`, `base`, `layout`, `controls`, `surfaces`, `overlays`, `feedback`); a sheet of a single
+page travels with that page in its own `Styles` section (`composer.css` on the live management
+and the layouts page, `preview.css`, `meters.css`, `cleanup.css`, `dashboard.css`), and the
+countdown page stands outside the shell and carries `tokens`, `base` and `countdown` on its own.
+Colours, shadows and radii are declared once, in `tokens.css`: a sheet that needs a tone names a
+property, and `StyleSheetTests` fails the build if a sheet reads a property no sheet defines or if
+a page stops linking the sheet that draws it.
 
 ## Tests
 

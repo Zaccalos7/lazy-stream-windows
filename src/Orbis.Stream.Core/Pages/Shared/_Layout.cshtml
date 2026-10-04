@@ -11,7 +11,17 @@
     <meta name="viewport" content="width=device-width, initial-scale=1" />
     <title>@(ViewData["Title"] is string title ? $"{title} – Orbis Stream" : "Orbis Stream")</title>
     <link rel="icon" href="/favicon.ico" />
-    <link rel="stylesheet" href="/css/fluent.css" />
+    @* The stylesheets of the app, one concern each: the tokens first, then the ground, the shell,
+       the controls, the surfaces, the overlays and the feedback. A page that needs more says so
+       in its own "Styles" section, and only pays for what it draws. *@
+    <link rel="stylesheet" href="/css/tokens.css" />
+    <link rel="stylesheet" href="/css/base.css" />
+    <link rel="stylesheet" href="/css/layout.css" />
+    <link rel="stylesheet" href="/css/controls.css" />
+    <link rel="stylesheet" href="/css/surfaces.css" />
+    <link rel="stylesheet" href="/css/overlays.css" />
+    <link rel="stylesheet" href="/css/feedback.css" />
+    @await RenderSectionAsync("Styles", required: false)
     <script>
         (function() {
             var theme = localStorage.getItem('orbis-theme') || 'dark';

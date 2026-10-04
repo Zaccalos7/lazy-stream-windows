@@ -16,6 +16,11 @@
             : span.ToString(@"m\:ss", CultureInfo.InvariantCulture);
     }
 }
+
+@section Styles {
+    @* The picture of the live and the parameters it goes out with are all this page draws. *@
+    <link rel="stylesheet" href="/css/preview.css" />
+}
 <div class="page-header">
     <div>
         <h1>@T["livePreviewTitle"]</h1>

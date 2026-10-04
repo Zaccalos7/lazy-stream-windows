@@ -6,6 +6,10 @@
     var cancelLink = Url.Page("/MainLive", new { Model.LiveStatus, Model.ChannelName, p = Model.PageIndex });
     var canStart = Model.ActiveSettings.Count > 0 && Model.ActiveConfigurations.Count > 0;
 }
+@section Styles {
+    @* The wizard of this page can open the scene composer, so its sheet comes with it. *@
+    <link rel="stylesheet" href="/css/composer.css" />
+}
 <div class="page-header">
     <div>
         <h1>@T["liveManagement"]</h1>

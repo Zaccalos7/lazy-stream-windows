@@ -984,8 +984,16 @@ document.addEventListener("DOMContentLoaded", async () => {
     if (!currentVersion) return;
 
     try {
-        const response = await fetch("https://sourceforge.net/projects/lazy-stream-windows/best_release.json");
-        const data = await response.json();
+        // Use jina.ai as CORS proxy to fetch SourceForge release info (SourceForge blocks direct CORS)
+        const proxyUrl = "https://r.jina.ai/http://sourceforge.net/projects/lazy-stream-windows/best_release.json";
+        const response = await fetch(proxyUrl);
+        const text = await response.text();
+        
+        // jina.ai returns markdown-wrapped JSON, extract the JSON part
+        const jsonMatch = text.match(/\{[\s\S]*\}/);
+        if (!jsonMatch) return;
+        const data = JSON.parse(jsonMatch[0]);
+        
         const latestRelease = data?.release?.filename;
         if (!latestRelease) return;
 
@@ -1027,9 +1035,14 @@ document.addEventListener("DOMContentLoaded", async () => {
             };
 
             bell.addEventListener("click", () => {
-                updateText.textContent = document.documentElement.dataset.updateAvailableDialogText || "c’è una nuova versione vuoi scaricarla?";
+                updateText.textContent = document.documentElement.dataset.updateAvailableDialogText || "c'è una nuova versione vuoi scaricarla?";
                 dialog.showModal();
             });
+        }
+    } catch (e) {
+        console.error("Failed to check for updates", e);
+    }
+});
         }
     } catch (e) {
         console.error("Failed to check for updates", e);

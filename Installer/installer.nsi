@@ -72,7 +72,17 @@ VIAddVersionKey "Comments"        "Created by ${APPPUBLISHER}"
 !insertmacro MUI_UNPAGE_CONFIRM
 !insertmacro MUI_UNPAGE_INSTFILES
 
+!include "Language\Klingon.nsh"
+!insertmacro MUI_LANGUAGE "Italian"
 !insertmacro MUI_LANGUAGE "English"
+!insertmacro MUI_LANGUAGE "Korean"
+!insertmacro MUI_LANGUAGE "Japanese"
+!insertmacro MUI_LANGUAGE "SimpChinese"
+!insertmacro MUI_LANGUAGE "TradChinese"
+!insertmacro MUI_LANGUAGE "Portuguese"
+!insertmacro MUI_LANGUAGE "Spanish"
+!insertmacro MUI_LANGUAGE "French"
+!insertmacro MUI_LANGUAGE "German"
 
 !macro Require64Bit
   ${IfNot} ${RunningX64}
@@ -105,6 +115,14 @@ VIAddVersionKey "Comments"        "Created by ${APPPUBLISHER}"
 !macroend
 
 Function .onInit
+  nsExec::ExecToStack '"$SYSDIR\cmd.exe" /c "$SYSDIR\tasklist.exe /FI $\"IMAGENAME eq OrbisStream.exe$\" /NH | find /I $\"OrbisStream.exe$\""'
+  Pop $0
+  Pop $1
+  ${If} $0 == 0
+    MessageBox MB_OK "verrà chiusa l’app per installre quella nuova"
+    nsExec::Exec '"$SYSDIR\taskkill.exe" /F /IM OrbisStream.exe'
+  ${EndIf}
+
   !insertmacro Require64Bit
   !insertmacro CheckWebView2
 FunctionEnd

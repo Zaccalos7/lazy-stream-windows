@@ -1018,7 +1018,7 @@ document.addEventListener("DOMContentLoaded", async () => {
 
             if (!dialog || !updateText || !bell) return;
 
-            updateText.textContent = "c’è una nuova versione vuoi scaricarla?";
+            updateText.textContent = document.documentElement.dataset.updateAvailableDialogText || "c’è una nuova versione vuoi scaricarla?";
 
             dialog.onclose = () => {
                 if (dialog.returnValue === "ok") {
@@ -1031,7 +1031,7 @@ document.addEventListener("DOMContentLoaded", async () => {
             dialog.showModal();
 
             bell.addEventListener("click", () => {
-                updateText.textContent = "vuoi installare la versione nuova?";
+                updateText.textContent = document.documentElement.dataset.updateInstallDialogText || "vuoi installare la versione nuova?";
                 dialog.showModal();
             });
         }

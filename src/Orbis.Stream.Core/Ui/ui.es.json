@@ -309,10 +309,10 @@
   "deleteSceneLiveConfirm": "¿Está seguro de que desea eliminar este directo ({0} fuentes)?",
   "olderThanYesterday": "Más antiguos que ayer",
   "olderThanNow": "Más antiguos que ahora",
-  "noLayoutSelected": "No layout selected",
-  "selectLayout": "Select layout",
-  "layoutSelected": "Layout selected",
-  "liveHistoryDescription": "View the history of all your past live streams."
-  "updateAvailable": "Update available",
-  "updateAvailableDialogText": "A new version is available, do you want to download it?"
+  "noLayoutSelected": "Ningún diseño seleccionado",
+  "selectLayout": "Seleccionar diseño",
+  "layoutSelected": "Diseño seleccionado",
+  "liveHistoryDescription": "Ver el historial de todas tus transmisiones pasadas.",
+  "updateAvailable": "Actualización disponible",
+  "updateAvailableDialogText": "Hay una nueva versión disponible, ¿quieres descargarla?"
 }

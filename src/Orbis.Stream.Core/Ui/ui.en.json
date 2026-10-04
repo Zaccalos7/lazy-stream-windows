@@ -312,7 +312,7 @@
   "noLayoutSelected": "No layout selected",
   "selectLayout": "Select layout",
   "layoutSelected": "Layout selected",
-  "liveHistoryDescription": "View the history of all your past live streams."
+  "liveHistoryDescription": "View the history of all your past live streams.",
   "updateAvailable": "Update available",
   "updateAvailableDialogText": "A new version is available, do you want to download it?"
 }

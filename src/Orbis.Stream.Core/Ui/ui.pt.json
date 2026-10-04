@@ -307,12 +307,12 @@
   "embedFailed": "Não foi possível carregar o leitor {0}: o canal não está em direto",
   "sceneSources": "Cena · {0} fontes",
   "deleteSceneLiveConfirm": "Tens a certeza de que queres eliminar esta live ({0} fontes)?",
-  "olderThanYesterday": "Older than yesterday",
+  "olderThanYesterday": "Mais antigos que ontem",
   "olderThanNow": "Mais antigos que agora",
-  "noLayoutSelected": "No layout selected",
-  "selectLayout": "Select layout",
-  "layoutSelected": "Layout selected",
-  "liveHistoryDescription": "View the history of all your past live streams."
-  "updateAvailable": "Update available",
-  "updateAvailableDialogText": "A new version is available, do you want to download it?"
+  "noLayoutSelected": "Nenhum layout selecionado",
+  "selectLayout": "Selecionar layout",
+  "layoutSelected": "Layout selecionado",
+  "liveHistoryDescription": "Ver o histórico de todas as suas transmissões passadas.",
+  "updateAvailable": "Atualização disponível",
+  "updateAvailableDialogText": "Há uma nova versão disponível, deseja baixá-la?"
 }

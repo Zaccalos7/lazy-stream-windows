@@ -309,10 +309,10 @@
   "deleteSceneLiveConfirm": "Möchten Sie diesen Livestream ({0} Quellen) wirklich löschen?",
   "olderThanYesterday": "Älter als gestern",
   "olderThanNow": "Jetzt oder älter",
-  "noLayoutSelected": "No layout selected",
-  "selectLayout": "Select layout",
-  "layoutSelected": "Layout selected",
-  "liveHistoryDescription": "View the history of all your past live streams."
-  "updateAvailable": "Update available",
-  "updateAvailableDialogText": "A new version is available, do you want to download it?"
+  "noLayoutSelected": "Kein Layout ausgewählt",
+  "selectLayout": "Layout auswählen",
+  "layoutSelected": "Layout ausgewählt",
+  "liveHistoryDescription": "Zeigen Sie den Verlauf all Ihrer vergangenen Live-Streams an.",
+  "updateAvailable": "Update verfügbar",
+  "updateAvailableDialogText": "Eine neue Version ist verfügbar, möchten Sie sie herunterladen?"
 }

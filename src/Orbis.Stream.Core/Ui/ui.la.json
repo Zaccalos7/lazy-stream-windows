@@ -307,12 +307,12 @@
   "embedFailed": "Lector {0} carricārī nōn potest: canalis nōn in āere est",
   "sceneSources": "Scaena · {0} fontēs",
   "deleteSceneLiveConfirm": "Ānnōn certus es hoc directum dēlēre ({0} fontēs)?",
-  "olderThanYesterday": "Older than yesterday",
+  "olderThanYesterday": "Prius heri",
   "olderThanNow": "Nunc priora",
-  "noLayoutSelected": "No layout selected",
-  "selectLayout": "Select layout",
-  "layoutSelected": "Layout selected",
-  "liveHistoryDescription": "View the history of all your past live streams."
-  "updateAvailable": "Update available",
-  "updateAvailableDialogText": "A new version is available, do you want to download it?"
+  "noLayoutSelected": "Nulla dispositio electa",
+  "selectLayout": "Dispositionem eligere",
+  "layoutSelected": "Dispositio electa",
+  "liveHistoryDescription": "Historiam omnium directorum tuorum praeteritorum videre.",
+  "updateAvailable": "Novatio adest",
+  "updateAvailableDialogText": "Versio nova adest, visne eam descendere?"
 }

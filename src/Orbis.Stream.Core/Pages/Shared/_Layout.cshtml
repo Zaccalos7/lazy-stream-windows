@@ -5,7 +5,7 @@
     var notice = ViewContext.ViewData.Model as OrbisPageModel;
 }
 <!DOCTYPE html>
-<html lang="@T.Language" data-initializing="@T["initializing"]" data-app-version="@AppInfo.Current.Version">
+<html lang="@T.Language" data-initializing="@T["initializing"]" data-app-version="@AppInfo.Current.Version" data-update-available-dialog-text="@T["updateAvailableDialogText"]">
 <head>
     <meta charset="utf-8" />
     <meta name="viewport" content="width=device-width, initial-scale=1" />
@@ -78,7 +78,7 @@
             <button type="button" class="segment" data-theme-set="dark" title="Dark" aria-label="Dark Theme"><i class="icon">&#xE708;</i></button>
         </div>
         
-        <button type="button" class="btn subtle icon-only update-bell" id="update-bell" title="Update Available" aria-label="Update Available" hidden>
+        <button type="button" class="btn subtle icon-only update-bell" id="update-bell" title="@T["updateAvailable"]" aria-label="@T["updateAvailable"]" hidden>
             <i class="icon" style="position: relative;">&#xEA8F;<span style="position: absolute; top: 0; right: -2px; width: 6px; height: 6px; background-color: red; border-radius: 50%;"></span></i>
         </button>
         <button type="button" class="nav-about" id="about-button" title="@T["about"]" aria-label="@T["about"]">
@@ -116,8 +116,8 @@
     <form method="dialog">
         <div class="dialog-body"><h2 id="update-dialog-text"></h2></div>
         <div class="dialog-footer">
-            <button class="btn accent" value="ok">Sì</button>
-            <button class="btn" value="cancel">No</button>
+            <button class="btn accent" value="ok">@T["confirm"]</button>
+            <button class="btn" value="cancel">@T["cancel"]</button>
         </div>
     </form>
 </dialog>

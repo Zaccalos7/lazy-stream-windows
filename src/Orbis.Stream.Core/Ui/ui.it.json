@@ -313,4 +313,6 @@
   "selectLayout": "Seleziona layout",
   "layoutSelected": "Layout selected",
   "liveHistoryDescription": "Visualizza lo storico di tutte le tue live passate."
+  "updateAvailable": "Aggiornamento disponibile",
+  "updateAvailableDialogText": "C’è una nuova versione vuoi scaricarla?"
 }

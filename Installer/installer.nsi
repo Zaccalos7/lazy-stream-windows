@@ -16,7 +16,7 @@ Unicode true
 !include "x64.nsh"
 
 !ifndef APPVERSION
-  !define APPVERSION "2.0.15"
+  !define APPVERSION "2.0.9"
 !endif
 !ifndef PUBLISHDIR
   !define PUBLISHDIR "..\artifacts\publish"
@@ -72,7 +72,7 @@ VIAddVersionKey "Comments"        "Created by ${APPPUBLISHER}"
 !insertmacro MUI_UNPAGE_CONFIRM
 !insertmacro MUI_UNPAGE_INSTFILES
 
-!include "Language\Klingon.nsh"
+
 !insertmacro MUI_LANGUAGE "Italian"
 !insertmacro MUI_LANGUAGE "English"
 !insertmacro MUI_LANGUAGE "Korean"

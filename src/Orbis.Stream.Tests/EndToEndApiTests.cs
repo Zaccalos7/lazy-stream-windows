@@ -364,7 +364,7 @@ public sealed class EndToEndApiTests : IClassFixture<ApplicationFixture>
         Assert.Equal(HttpStatusCode.OK, response.StatusCode);
         var html = await response.Content.ReadAsStringAsync();
 
-        Assert.Equal("2.0.13", AppInfo.Current.Version);
+        Assert.Equal("2.0.14", AppInfo.Current.Version);
         Assert.Equal("Orbis Stream", AppInfo.Current.Name);
         Assert.Equal("Marco Amleto Guarino", AppInfo.Current.Author);
 

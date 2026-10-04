@@ -82,7 +82,9 @@
 
   const markDirty = () => {
     dirty = true;
-    dirtyMark.hidden = false;
+    if (layoutMode) {
+      dirtyMark.hidden = false;
+    }
   };
 
   const markClean = () => {
@@ -280,7 +282,8 @@ const occupies = (target, item) => {
 
     const newItem = occupies(targetItem, itemFrom(option));
 
-    scene.items[targetIndex] = newItem;
+    scene.items.splice(targetIndex, 1);
+    scene.items.push(newItem);
     tiles.get(uid)?.remove();
     tiles.delete(uid);
 
@@ -331,7 +334,8 @@ const occupies = (target, item) => {
     const index = scene.items.findIndex(item => item.uid === target.uid);
     if (index < 0) return;
     const item = occupies(target, itemFrom(option));
-    scene.items[index] = item;
+    scene.items.splice(index, 1);
+    scene.items.push(item);
     tiles.get(target.uid)?.remove();
     tiles.delete(target.uid);
 
@@ -1152,23 +1156,33 @@ const occupies = (target, item) => {
   const updateResolutionOptions = () => {
     const { maxW, maxH } = findMaxSourceResolution();
     const maxRes = Math.max(maxW, maxH);
-    const allSizes = [(1280, 720), (1920, 1080), (2560, 1440), (3840, 2160)];
-    let allowed = allSizes.filter(([w,h]) => Math.max(w,h) <= maxRes);
+    const allSizes = [[1280, 720], [1920, 1080], [2560, 1440], [3840, 2160]];
+    let allowed = maxRes > 0 ? allSizes.filter(([w, h]) => Math.max(w, h) <= maxRes) : allSizes;
+
     if (allowed.length === 0 && maxRes > 0) {
-      allowed = allSizes.filter(([w,h]) => Math.max(w,h) >= maxRes).slice(0,1);
-      if (allowed.length === 0) allowed = [[maxRes & ~1 || 1280, (maxRes & ~1 || 1280) * 9/16 | 0]];
+      const fallbackSize = allSizes.find(([w, h]) => Math.max(w, h) >= maxRes) || [1280, 720];
+      allowed = [fallbackSize];
     }
-    if (allowed.length === 0) allowed = allSizes;
-    const current = `${scene.width}x${scene.height}`;
+
     sizeBox.replaceChildren();
-    for (const [w,h] of allowed) {
+    for (const [w, h] of allowed) {
       sizeBox.append(new Option(`${w} × ${h}`, `${w}x${h}`));
     }
-    if (![...sizeBox.options].some(o => o.value === current)) {
-      const [cw,ch] = current.split('x').map(Number);
-      sizeBox.append(new Option(`${cw} × ${ch}`, current));
+
+    const current = `${scene.width}x${scene.height}`;
+    let match = [...sizeBox.options].find(o => o.value === current);
+
+    if (match) {
+      sizeBox.value = current;
+    } else {
+      // If current size is no longer allowed, auto-select the highest allowed resolution.
+      const maxAllowed = allowed[allowed.length - 1];
+      const maxAllowedStr = `${maxAllowed[0]}x${maxAllowed[1]}`;
+      sizeBox.value = maxAllowedStr;
+      if (maxAllowedStr !== current) {
+        sizeBox.dispatchEvent(new Event("change"));
+      }
     }
-    sizeBox.value = current;
   };
 
   const setSizeBox = () => {

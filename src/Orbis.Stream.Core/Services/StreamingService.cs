@@ -565,7 +565,8 @@ public sealed class StreamingService
         string channelName)
     {
         var fullPath = Path.GetFullPath(videoFile);
-        var durationMs = ProbeDuration(fullPath);
+        var probe = ProbeMedia(fullPath);
+        var durationMs = probe?.DurationSeconds > 0 ? (long?)(long)(probe.DurationSeconds * 1000) : null;
         return new VideoEntity
         {
             Name = Path.GetFileName(fullPath),
@@ -577,11 +578,13 @@ public sealed class StreamingService
             ShouldBeStop = false,
             StartDateLive = DateTime.Now,
             ChannelName = channelName,
-            DurationMilliseconds = durationMs
+            DurationMilliseconds = durationMs,
+            Width = probe?.Width > 0 ? probe.Width : null,
+            Height = probe?.Height > 0 ? probe.Height : null
         };
     }
 
-    private long? ProbeDuration(string fullPath)
+    private MediaProbeResult? ProbeMedia(string fullPath)
     {
         if (!File.Exists(fullPath))
         {
@@ -590,14 +593,19 @@ public sealed class StreamingService
 
         try
         {
-            var probe = _probe.ProbeAsync(fullPath, CancellationToken.None).GetAwaiter().GetResult();
-            return probe.DurationSeconds > 0 ? (long)(probe.DurationSeconds * 1000) : null;
+            return _probe.ProbeAsync(fullPath, CancellationToken.None).GetAwaiter().GetResult();
         }
         catch (Exception ex)
         {
-            _logger.LogWarning(ex, "Failed to probe duration for {Path}", fullPath);
+            _logger.LogWarning(ex, "Failed to probe media for {Path}", fullPath);
             return null;
         }
+    }
+
+    private long? ProbeDuration(string fullPath)
+    {
+        var probe = ProbeMedia(fullPath);
+        return probe?.DurationSeconds > 0 ? (long)(probe.DurationSeconds * 1000) : null;
     }
 
     /// <summary>

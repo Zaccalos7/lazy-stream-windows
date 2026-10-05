@@ -1,0 +1,10 @@
+--- src/Orbis.Stream.Core/Pages/MainPreview.cshtml
++++ src/Orbis.Stream.Core/Pages/MainPreview.cshtml
+@@ -34,7 +34,7 @@
+         <div style="display: flex; gap: 0.5rem; align-items: center;">
+         <form method="post" asp-page-handler="Stop" asp-route-pkid="@live.VideoPkid" data-confirm="@T["stopLive"]">
+-            <button class="btn danger" aria-label="@T["stopLiveIconLabel"]">@T["stopLiveIconLabel"]</button>
++            <button class="btn danger" title="@T["stopLiveIconLabel"]" aria-label="@T["stopLiveIconLabel"]">@T["stopLiveIconLabel"]</button>
+         </form>
+         @if (Model.LiveUrl is { } liveUrl)
+         {

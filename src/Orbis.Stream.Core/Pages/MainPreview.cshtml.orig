@@ -18,7 +18,7 @@
 }
 
 @section Styles {
-    
+
     <link rel="stylesheet" href="/css/preview.css" />
 }
 <div class="page-header">
@@ -33,7 +33,7 @@
     {
         <div style="display: flex; gap: 0.5rem; align-items: center;">
         <form method="post" asp-page-handler="Stop" asp-route-pkid="@live.VideoPkid" data-confirm="@T["stopLive"]">
-            <button class="btn danger" title="@T["stopLiveIconLabel"]" aria-label="@T["stopLiveIconLabel"]">@T["stopLiveIconLabel"]</button>
+            <button class="btn danger" aria-label="@T["stopLiveIconLabel"]">@T["stopLiveIconLabel"]</button>
         </form>
         @if (Model.LiveUrl is { } liveUrl)
         {
@@ -90,7 +90,7 @@ else
 {
     var parameters = live.Parameters;
 
-    
+
     var shape = live.Output.Width > 0 && live.Output.Height > 0
         ? $"aspect-ratio: {live.Output.Width.ToString(CultureInfo.InvariantCulture)} / {live.Output.Height.ToString(CultureInfo.InvariantCulture)}"
         : null;
@@ -104,7 +104,7 @@ else
     var platformLabel = LiveLinkView.LabelOf(platform);
     <div class="preview">
         <div class="preview-stage card">
-            
+
             <div class="preview-screen" style="@shape">
                 <div class="preview-cover" data-preview-cover>
                     <span class="spinner"></span>

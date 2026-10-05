@@ -30,7 +30,7 @@ public partial class App : Application
         catch (Exception exception)
         {
             MessageBox.Show(
-                $"Impossibile avviare Orbis Stream:{Environment.NewLine}{exception.Message}",
+                AppText.StartError(exception.Message),
                 "Orbis Stream",
                 MessageBoxButton.OK,
                 MessageBoxImage.Error);
@@ -111,7 +111,7 @@ public partial class App : Application
     private void OnDispatcherUnhandledException(object sender, DispatcherUnhandledExceptionEventArgs e)
     {
         MessageBox.Show(
-            $"Errore inatteso:{Environment.NewLine}{e.Exception.Message}",
+            AppText.UnexpectedError(e.Exception.Message),
             "Orbis Stream",
             MessageBoxButton.OK,
             MessageBoxImage.Error);

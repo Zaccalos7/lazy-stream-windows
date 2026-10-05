@@ -33,6 +33,7 @@ public partial class MainWindow : Window
         _host = host;
 
         InitializeComponent();
+        StatusText.Text = AppText.Loading;
 
         // Full HD when restored, never more than the screen has room for: 1920x1080 DIPs is
         // 2400x1350 pixels at 125% scaling, and a window that size cannot be centered on anything.
@@ -75,7 +76,7 @@ public partial class MainWindow : Window
         catch (Exception exception)
         {
             LoadingBar.Visibility = Visibility.Collapsed;
-            StatusText.Text = $"Impossibile inizializzare il browser: {exception.Message}";
+            StatusText.Text = AppText.BrowserInitError(exception.Message);
         }
     }
 
@@ -106,7 +107,7 @@ public partial class MainWindow : Window
             // Only the first load reports on the splash: once the app is visible, a failed or
             // cancelled navigation (a quick double click) must not hide it again.
             LoadingBar.Visibility = Visibility.Collapsed;
-            StatusText.Text = $"Il browser non riesce a raggiungere {_options.ApplicationUrl}.";
+            StatusText.Text = AppText.BrowserReachError(_options.ApplicationUrl);
         }
     }
 

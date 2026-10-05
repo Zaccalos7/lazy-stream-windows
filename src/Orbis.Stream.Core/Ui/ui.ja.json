@@ -314,5 +314,8 @@
   "layoutSelected": "レイアウトが選択されました",
   "liveHistoryDescription": "過去のすべてのライブ配信の履歴を表示します。",
   "updateAvailable": "更新が利用可能です",
-  "updateAvailableDialogText": "新しいバージョンが利用可能です。ダウンロードしますか？"
+  "updateAvailableDialogText": "新しいバージョンが利用可能です。ダウンロードしますか？",
+  "dashboardSectionLive": "Streaming",
+  "dashboardSectionSettings": "Settings",
+  "dashboardSectionSystem": "System & Monitoring"
 }

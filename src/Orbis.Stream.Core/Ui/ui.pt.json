@@ -314,5 +314,8 @@
   "layoutSelected": "Layout selecionado",
   "liveHistoryDescription": "Ver o histórico de todas as suas transmissões passadas.",
   "updateAvailable": "Atualização disponível",
-  "updateAvailableDialogText": "Há uma nova versão disponível, deseja baixá-la?"
+  "updateAvailableDialogText": "Há uma nova versão disponível, deseja baixá-la?",
+  "dashboardSectionLive": "Streaming",
+  "dashboardSectionSettings": "Settings",
+  "dashboardSectionSystem": "System & Monitoring"
 }

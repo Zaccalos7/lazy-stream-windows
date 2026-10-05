@@ -314,5 +314,8 @@
   "layoutSelected": "Макет выбран",
   "liveHistoryDescription": "Просмотр истории всех ваших прошлых прямых эфиров.",
   "updateAvailable": "Доступно обновление",
-  "updateAvailableDialogText": "Доступна новая версия, хотите загрузить её?"
+  "updateAvailableDialogText": "Доступна новая версия, хотите загрузить её?",
+  "dashboardSectionLive": "Streaming",
+  "dashboardSectionSettings": "Settings",
+  "dashboardSectionSystem": "System & Monitoring"
 }

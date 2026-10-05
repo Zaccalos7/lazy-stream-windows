@@ -314,5 +314,8 @@
   "layoutSelected": "Dispositio electa",
   "liveHistoryDescription": "Historiam omnium directorum tuorum praeteritorum videre.",
   "updateAvailable": "Novatio adest",
-  "updateAvailableDialogText": "Versio nova adest, visne eam descendere?"
+  "updateAvailableDialogText": "Versio nova adest, visne eam descendere?",
+  "dashboardSectionLive": "Streaming",
+  "dashboardSectionSettings": "Settings",
+  "dashboardSectionSystem": "System & Monitoring"
 }

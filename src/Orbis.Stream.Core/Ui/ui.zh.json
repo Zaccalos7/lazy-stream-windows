@@ -314,5 +314,8 @@
   "layoutSelected": "已选择布局",
   "liveHistoryDescription": "查看您所有过去直播的历史记录。",
   "updateAvailable": "有可用更新",
-  "updateAvailableDialogText": "有新版本可用，是否要下载？"
+  "updateAvailableDialogText": "有新版本可用，是否要下载？",
+  "dashboardSectionLive": "Streaming",
+  "dashboardSectionSettings": "Settings",
+  "dashboardSectionSystem": "System & Monitoring"
 }

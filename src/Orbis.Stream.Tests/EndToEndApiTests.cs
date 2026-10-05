@@ -333,6 +333,46 @@ public sealed class EndToEndApiTests : IClassFixture<ApplicationFixture>
     }
 
     [Fact]
+    public void LowLatencySwitch_SurvivesASaveAndReadsBackAsItWasLeft()
+    {
+        var videoSettings = _fixture.Services.GetRequiredService<Orbis.Stream.Core.Services.VideoSettingService>();
+        var settingRepository = _fixture.Services.GetRequiredService<Orbis.Stream.Core.Data.VideoSettingRepository>();
+        var videoRepository = _fixture.Services.GetRequiredService<Orbis.Stream.Core.Data.VideoRepository>();
+
+        videoSettings.SaveSettingsVideo(new Orbis.Stream.Core.Contracts.VideoSettingsRequest(
+            null, "Low latency source", 27, "libx264", 0, 4_500_000, null, true, 2, [],
+            "flv", new Orbis.Stream.Core.Contracts.AudioSettingsRequest(86018, 128_000),
+            false, "custom", 1280, 720, 30));
+        var source = settingRepository.FindByTitleAndPlatform("Low latency source", "custom")!;
+        var pkid = videoRepository.Insert(new VideoEntity
+        {
+            Name = "low-latency-row",
+            VideoPath = "/videos/low-latency-row.mp4",
+            Extension = "mp4",
+            ChannelName = "low-latency-channel",
+            StartDateLive = DateTime.Now,
+            VideoSettingId = source.Id
+        });
+
+        // A setting made before the switch existed opens with it on, the way it always was.
+        var form = Orbis.Stream.Core.Pages.VideoSettingForm.From(videoSettings.FindSettingOf(pkid, null)!);
+        Assert.True(form.LowLatency);
+
+        // Off is what the user asked for, so the form has to leave it off and the next open see it.
+        form.LowLatency = false;
+        videoSettings.LinkAndSaveSettingsVideo(form.ToRequest(), pkid);
+
+        var reopened = Orbis.Stream.Core.Pages.VideoSettingForm.From(videoSettings.FindSettingOf(pkid, null)!);
+        Assert.False(reopened.LowLatency);
+
+        // And it is what reaches the encoder, from the stored options of the setting it saved.
+        var copy = videoRepository.FindByPkid(pkid)!.VideoSettingId;
+        var stored = settingRepository.FindById(copy!.Value)!;
+        var options = stored.VideoSettingsOptions.ToDictionary(option => option.Key!, option => option.Value);
+        Assert.Equal("0", options[VideoSettingLatency.OptionKey]);
+    }
+
+    [Fact]
     public async Task Root_RedirectsToTheClientRouter()
     {
         using var response = await _fixture.NoRedirectClient.GetAsync("/", HttpCompletionOption.ResponseHeadersRead);

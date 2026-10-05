@@ -98,19 +98,6 @@ public static class FfmpegCodecCatalog
         ("fastdecode", "Fast Decode")
     ];
 
-    /// <summary>
-    /// The option key the low latency switch is kept under, in the key/value options of a video
-    /// setting. A setting without it means what it always meant: low latency on.
-    /// </summary>
-    public const string LowLatencyOption = "lowlatency";
-
-    /// <summary>
-    /// Whether a setting asks the encoder for the smallest delay it can manage. Only an explicit
-    /// no turns it off, so every setting made before the switch existed keeps its behaviour.
-    /// </summary>
-    public static bool IsLowLatency(string? value) =>
-        value?.Trim().ToLowerInvariant() is not ("0" or "false" or "no" or "off");
-
     public static string ResolveVideoCodecName(int? videoCodec, string? videoCodecName)
     {
         if (!string.IsNullOrWhiteSpace(videoCodecName))

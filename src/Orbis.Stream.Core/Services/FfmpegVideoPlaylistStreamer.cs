@@ -1,4 +1,5 @@
 using System.Globalization;
+using Orbis.Stream.Core.Contracts;
 using Orbis.Stream.Core.Data;
 using Orbis.Stream.Core.Domain;
 using Orbis.Stream.Core.I18n;
@@ -599,7 +600,7 @@ public sealed class FfmpegVideoPlaylistStreamer : IVideoPlaylistStreamer
             while (true)
             {
                 cancellationToken.ThrowIfCancellationRequested();
-                var videoSetting = FindSetting(videoKey);
+                var videoSetting = CanvasSetting(videoKey, rows);
 
                 var items = rows
                     .Select(row => new FfmpegCompositionItem(
@@ -785,6 +786,69 @@ public sealed class FfmpegVideoPlaylistStreamer : IVideoPlaylistStreamer
         return videoSetting ?? throw new InvalidOperationException(
             $"video setting not found for video {videoKey} (videoSettingId={settingId?.ToString() ?? "null"})");
     }
+
+    /// <summary>
+    /// The setting a canvas goes on air with, with the low latency switch decided for it.
+    /// <para>A composition decodes every source on it, scales it and lays it over the others, and
+    /// only then encodes one picture. That is the one case where the machine, and not the network,
+    /// is what the live is waiting on, and a canvas that runs out of CPU does not fall behind
+    /// cleanly: it drops frames inside the picture, which is what a viewer reads as the live
+    /// stuttering. The low latency defaults are the ones that spend the least CPU per frame, so a
+    /// canvas of two or more pictures turns them on for itself.</para>
+    /// <para>The setting the rows were given is never edited here. It may be a seeded default, one
+    /// the wizard offers, or one another live is streaming with right now, and changing it would
+    /// change all of them under the user's feet. Rows that already own their setting keep that one
+    /// with the switch turned on; rows sharing somebody else's get a copy of their own, and that
+    /// copy is what they go on air with. The configuration the user chose stays as it was, and the
+    /// same goes for a canvas of a single source, which is not a composition and streams its
+    /// setting exactly as the user left it.</para>
+    /// </summary>
+    private VideoSettingEntity CanvasSetting(int videoKey, IReadOnlyList<VideoEntity> rows)
+    {
+        var setting = FindSetting(videoKey);
+        if (VideoSettingLatency.IsOn(setting) || rows.Count(row => row.SourceKind.HasPicture()) < 2)
+        {
+            return setting;
+        }
+
+        // Rows that own their setting are edited where it is; rows sharing one are given a copy,
+        // which is what LinkSetting does when the live page saves a setting by hand.
+        var shared = setting.Id is not { } id || !IsOnlyOf(id, rows);
+        var target = shared
+            ? VideoSettingsRequest.FromEntity(setting).ToEntity()
+            : setting;
+
+        target.Id = shared ? null : setting.Id;
+        target.IsDefaultConfiguration = shared ? false : setting.IsDefaultConfiguration;
+        target.IsVideoAndAudioSettingActive = shared ? false : setting.IsVideoAndAudioSettingActive;
+        target.LastModified = DateTime.Now;
+
+        VideoSettingLatency.Set(target, true);
+        target.Id ??= _videoSettingRepository.Insert(target);
+        _videoSettingRepository.Update(target);
+
+        foreach (var row in rows.Where(row => row.VideoSettingId != target.Id))
+        {
+            _videoRepository.SetVideoSetting(row.Pkid, target.Id.Value);
+        }
+
+        _logger.LogInformation(
+            "The canvas of {Rows} sources goes on air with low latency on, on the setting '{Setting}' of its own",
+            rows.Count,
+            target.Title);
+
+        return _videoSettingRepository.FindById(target.Id.Value) ?? target;
+    }
+
+    /// <summary>
+    /// Whether these rows are the only ones a setting belongs to: a seeded default is offered by
+    /// the wizard to every live, so it is never theirs to edit, and a setting another live is
+    /// streaming with would change under the feet of that live. A setting the rows carry alone is
+    /// theirs, and so is one they got from the wizard and nobody else is using.
+    /// </summary>
+    private bool IsOnlyOf(int settingId, IReadOnlyList<VideoEntity> rows) =>
+        _videoSettingRepository.FindById(settingId) is { IsDefaultConfiguration: not true }
+        && _videoRepository.FindPkidsByVideoSettingId(settingId).All(pkid => rows.Any(row => row.Pkid == pkid));
 
     /// <summary>Why the monitor stopped watching a transcode.</summary>
     private enum StreamOutcome

@@ -19,6 +19,12 @@ namespace Orbis.Stream.Core.Streaming;
 /// <para>Two threads: one reads (it may block on the encoder whenever it likes), one sends (it
 /// must never be late because of a read). The sending one runs above normal priority, so it is
 /// awake when a frame is due.</para>
+/// <para>What it does when it <em>is</em> late is the part a viewer feels. A slow moment of the
+/// network is a gap to win back, not a gap to drop: the clock the timestamps are measured against
+/// is never moved for lateness and no timestamp is ever rewritten, so the ingest always gets one
+/// contiguous timeline. The frames simply go out <see cref="CatchUpRate"/> times faster than real
+/// time until the live is even again, paced rather than in a burst, and it costs nothing when
+/// there is nothing to win back.</para>
 /// </summary>
 public sealed class FlvPacedRelay
 {
@@ -218,12 +224,11 @@ public sealed class FlvPacedRelay
 
             long? anchor = null;
             long baseTimestamp = 0;
+            var lastTarget = 0L;
 
-            // How much of the stream still has to be won back after a slow moment, in stopwatch
-            // ticks. Only the sending thread touches it.
-            var recovery = 0L;
             var maxForwardJump = HybridWaiter.Ticks(MaxForwardJump);
             var maxLead = HybridWaiter.Ticks(_profile.MaxLead);
+            var lateEnough = HybridWaiter.Ticks(TimeSpan.FromSeconds(1));
 
             while (NextTag() is { } tag)
             {
@@ -237,11 +242,21 @@ public sealed class FlvPacedRelay
                         {
                             anchor = HybridWaiter.Now - HybridWaiter.Ticks(_profile.Preroll);
                             baseTimestamp = tag.Timestamp;
+
+                            // The first frame is due now and leaves no wait behind it: the frame
+                            // after it is the first one the gap between frames measures.
+                            lastTarget = anchor.Value;
                         }
 
                         // targetTimeNanos = startTimeNanos + framePts, as in Java.
                         var target = anchor.Value + HybridWaiter.Ticks(TimeSpan.FromMilliseconds(tag.Timestamp - baseTimestamp));
-                        var late = HybridWaiter.Now - target;
+                        var now = HybridWaiter.Now;
+                        var late = now - target;
+
+                        // What this frame is owed since the one before it: its moment in the
+                        // stream, which is what the wait between two frames has to add up to.
+                        var due = Math.Max(0, target - lastTarget);
+                        lastTarget = target;
 
                         // The preroll is sent early on purpose: it is due before the clock the
                         // anchor sets, and it is not a late frame. Only what is late after the
@@ -264,54 +279,38 @@ public sealed class FlvPacedRelay
                                 _profile.Platform,
                                 -late / (double)System.Diagnostics.Stopwatch.Frequency);
                         }
+                        else if (inPreroll)
+                        {
+                            // Due before the clock says so: sent as it comes, in the one burst
+                            // that gives the ingest its head start.
+                            waiter.WaitUntil(target, token);
+                        }
                         else
                         {
-                            // Every frame waits for the wall clock its timestamps say, whether it
-                            // early or late: `late` here is how far past that moment we are, and it
-                            // is worked off below rather than waited on. The preroll is not a
-                            // shortfall: it is what was held back to be sent in one burst.
-                            if (!inPreroll)
-                            {
-                                recovery = Math.Min(recovery + Math.Max(0, late), maxLead);
-                            }
-
-                            if (recovery >= HybridWaiter.Ticks(TimeSpan.FromSeconds(1)))
+                            // A live that is keeping up waits exactly what the frame is owed, and
+                            // nothing here touches that. A live that fell behind waits a
+                            // CatchUpRate-th of it instead, which is the same thing as sending its
+                            // frames CatchUpRate times faster than real time: the shortfall is won
+                            // back over the frames the jitter buffer already holds, and a run of
+                            // frames that would otherwise go out as a burst goes out paced.
+                            //
+                            // Nothing else changes. The clock is not moved and no timestamp is
+                            // rewritten, so the ingest keeps seeing one contiguous timeline,
+                            // arriving slightly fast until it is even again. That is the whole
+                            // difference from moving the clock, which drops the gap instead of
+                            // winning it back, and a viewer reads a dropped gap as a rebuffer.
+                            var behind = late > 0 ? Math.Min(late, maxLead) : 0;
+                            if (behind >= lateEnough)
                             {
                                 Interlocked.Increment(ref _catchingUp);
                                 _logger.LogWarning(
                                     "The live to {Platform} fell {Late:0.0}s behind: sending at {Rate}x to win it back",
                                     _profile.Platform,
-                                    recovery / (double)System.Diagnostics.Stopwatch.Frequency,
+                                    behind / (double)System.Diagnostics.Stopwatch.Frequency,
                                     CatchUpRate);
                             }
 
-                            // A frame on time waits its whole moment: the pacing of a live that is keeping up is
-                            // untouched. Only a live that is behind is sent fast, and then the gap
-                            // is shortened by 1/CatchUpRate, so the frames go out CatchUpRate
-                            // times faster than real time and the shortfall is made up over the
-                            // frames the jitter buffer already holds. Nothing else changes: no
-                            // clock is moved, no timestamp is rewritten, and the ingest keeps
-                            // seeing a contiguous timeline.
-                            var full = target - HybridWaiter.Now;
-                            if (full > 0)
-                            {
-                                // What the frame is owed is `full`; what the catch-up takes off it
-                                // is at most the shortfall, so the faster sending never runs past
-                                // zero and turns into a burst, and never exceeds twice the rate.
-                                var spared = recovery > 0 ? Math.Min(full, recovery / CatchUpRate) : 0;
-                                waiter.WaitUntil(HybridWaiter.Now + full - spared, token);
-
-                                // The shortfall is reduced by what was actually gained, which is the
-                                // time not waited on: sending a frame early is as much of a gain as
-                                // waiting less for the next one.
-                                recovery = Math.Max(0, recovery - spared);
-                            }
-                            else
-                            {
-                                // Already past due, so this frame costs no wall clock at all: the
-                                // whole of its moment is gained back, up to what is owed.
-                                recovery = Math.Max(0, recovery - Math.Min(-full, maxLead));
-                            }
+                            waiter.WaitUntil(now + (behind > 0 ? due / CatchUpRate : due), token);
                         }
                     }
 

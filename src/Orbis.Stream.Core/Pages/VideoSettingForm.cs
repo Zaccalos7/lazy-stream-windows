@@ -88,7 +88,7 @@ public sealed class VideoSettingForm
         AudioBitrate = setting.AudioSettingRecord?.AudioBitrate,
         Preset = Option(setting, "preset"),
         Tune = Option(setting, "tune"),
-        LowLatency = FfmpegCodecCatalog.IsLowLatency(Option(setting, FfmpegCodecCatalog.LowLatencyOption)),
+        LowLatency = VideoSettingLatency.IsOn(Option(setting, VideoSettingLatency.OptionKey)),
         IsActive = setting.IsVideoAndAudioSettingActive ?? false
     };
 
@@ -103,7 +103,7 @@ public sealed class VideoSettingForm
         null,
         IsActive,
         GopSize,
-        [.. new[] { ("preset", Preset), ("tune", Tune), (FfmpegCodecCatalog.LowLatencyOption, LowLatency ? "1" : "0") }
+        [.. new[] { ("preset", Preset), ("tune", Tune), (VideoSettingLatency.OptionKey, LowLatency ? "1" : "0") }
             .Where(option => !string.IsNullOrEmpty(option.Item2))
             .Select(option => new VideoOptionRequest(option.Item1, option.Item2))],
         VideoFormat,

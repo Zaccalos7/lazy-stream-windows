@@ -811,11 +811,8 @@ public static class FfmpegCommandBuilder
         // The switch of the settings form. Off is the sane choice for a re-stream, where nothing
         // here reaches a viewer in less than the seconds the relay and the ingest already spend on
         // the way, and where an encoder that cannot look ahead starves itself after every keyframe.
-        var lowLatency = setting.VideoSettingsOptions
-            .Where(o => o.Key?.Trim() == FfmpegCodecCatalog.LowLatencyOption)
-            .ToList();
-        var fastEncoder = lowLatency.Count == 0
-            || FfmpegCodecCatalog.IsLowLatency(lowLatency[^1].Value);
+        // A canvas of two or more pictures turns it back on for itself (VideoSettingLatency).
+        var fastEncoder = VideoSettingLatency.IsOn(setting);
         
         if (isLibX264)
         {

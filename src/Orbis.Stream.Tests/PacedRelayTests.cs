@@ -151,42 +151,45 @@ public sealed class FlvPacedRelayTests
     [Fact]
     public async Task Relay_WinsTheGapBackInsteadOfWritingItOff()
     {
-        var profile = Paced with { MaxLead = TimeSpan.FromSeconds(4) };
+        // A jitter buffer of one second and a stall nearly twice that long: the old code gave up
+        // and moved its clock on anything past MaxCatchUp, which is where the gap used to vanish.
+        var profile = Paced with { MaxLead = TimeSpan.FromSeconds(1) };
 
-        // The third write blocks for 600 ms, like an uplink that stopped taking data. The first
-        // three writes are the header and the first two tags, so the stall lands in the middle.
-        var destination = new TimedStream { StallOnWrite = 3, Stall = TimeSpan.FromMilliseconds(600) };
+        // Writes one and two are the header and the first tag, so the stall lands in the middle.
+        var destination = new TimedStream { StallOnWrite = 3, Stall = TimeSpan.FromMilliseconds(1800) };
         var relay = new FlvPacedRelay(
             new MemoryStream(Flv([0, 50, 100, 150, 200, 250, 300])), destination, profile, NullLogger.Instance);
 
         relay.Start();
         await relay.Completion.WaitAsync(TimeSpan.FromSeconds(5));
 
-        // The clock is only moved for a jump of the timestamps, which a slow network is not.
+        // A slow network is a gap to win back, not a jump of the timestamps: the clock stays put.
         Assert.Equal(0, relay.Rebases);
-        Assert.True(relay.CatchingUp >= 1);
+        Assert.True(relay.CatchingUp >= 1, $"the relay reported {relay.CatchingUp} catch-ups");
     }
 
     [Fact]
     public async Task Relay_SendsFasterThanRealTimeWhileItIsBehind()
     {
-        // A long stream with a wide jitter buffer, stalled once for 400 ms half way through. Every
-        // tag is 100 ms of stream, so the wall clock of the run tells how fast the tail went out.
-        var stamps = Enumerable.Range(0, 21).Select(index => index * 100).ToArray();
-        var destination = new TimedStream { StallOnWrite = 12, Stall = TimeSpan.FromMilliseconds(400) };
+        // Ten seconds of stream in tags a tenth of a second apart, stalled once for a second half
+        // way through: enough queued behind the stall for the catch-up to have somewhere to go.
+        var stamps = Enumerable.Range(0, 101).Select(index => index * 100).ToArray();
+        var destination = new TimedStream { StallOnWrite = 52, Stall = TimeSpan.FromSeconds(1) };
         var relay = new FlvPacedRelay(
             new MemoryStream(Flv(stamps)), destination, Paced with { MaxLead = TimeSpan.FromSeconds(4) }, NullLogger.Instance);
 
         relay.Start();
-        await relay.Completion.WaitAsync(TimeSpan.FromSeconds(10));
+        await relay.Completion.WaitAsync(TimeSpan.FromSeconds(20));
 
         var tags = destination.Writes.Skip(1).ToList();
         Assert.Equal(stamps.Length, tags.Count);
 
-        // Everything the stall held up was won back rather than written off: the run finished
-        // ahead of the 2 s of stream it carries, instead of paying for the 400 ms twice.
+        // The stream is ten seconds long and the stall cost a second of it. Winning the second
+        // back means finishing in about ten seconds; writing it off means finishing in about
+        // eleven, and the ingest plays out a second it never received.
         var total = Stopwatch.GetElapsedTime(tags[0], tags[^1]).TotalMilliseconds;
-        Assert.True(total < 1700, $"the stream took {total:0} ms of wall clock for 2000 ms of video");
+        Assert.True(total < 10_400, $"the stream took {total:0} ms of wall clock for 10_000 ms of video");
+        Assert.Equal(0, relay.Rebases);
     }
 
     [Fact]
@@ -310,7 +313,7 @@ public sealed class RelayCommandTests
             [
                 new VideoSettingsOptionEntity
                 {
-                    Key = FfmpegCodecCatalog.LowLatencyOption,
+                    Key = VideoSettingLatency.OptionKey,
                     Value = stored
                 }
             ];
@@ -346,7 +349,7 @@ public sealed class RelayCommandTests
         [
             new VideoSettingsOptionEntity
             {
-                Key = FfmpegCodecCatalog.LowLatencyOption,
+                Key = VideoSettingLatency.OptionKey,
                 Value = "0"
             }
         ];

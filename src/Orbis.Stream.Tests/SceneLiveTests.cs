@@ -161,6 +161,90 @@ public sealed class SceneLiveTests : IAsyncLifetime
             Assert.False(row.ShouldBeStop, $"row {row.Pkid} ({row.Name}) kept its stop flag"));
     }
 
+    [Fact]
+    public async Task SceneLive_TurnsLowLatencyOn_ForItsOwnSettingAndNotForTheOneTheUserChose()
+    {
+        var ffmpeg = Tool("ffmpeg");
+        if (ffmpeg is null || Tool("ffprobe") is null)
+        {
+            _output.WriteLine("ffmpeg/ffprobe are not installed: the scene live test is skipped.");
+            return;
+        }
+
+        var (scenePkid, _, _) = await TwoFileSceneAsync();
+        var settings = _host.Services.GetRequiredService<VideoSettingRepository>();
+        var videos = _host.Services.GetRequiredService<VideoRepository>();
+
+        // The configuration the user picked, with low latency off on purpose: it is a re-stream and
+        // the lookahead is what keeps the encoder from starving itself after every keyframe.
+        var chosen = Setting() with { VideoOptions = [new VideoOptionRequest(VideoSettingLatency.OptionKey, "0")] };
+        var chosenId = settings.Insert(chosen.ToEntity());
+        Assert.False(VideoSettingLatency.IsOn(settings.FindById(chosenId)!));
+
+        var streaming = _host.Services.GetRequiredService<StreamingService>();
+        streaming.StartSceneLive(new StartSceneLiveRequest(
+            scenePkid,
+            new Uri(Path.Combine(_host.DataDirectory, "output")).AbsoluteUri,
+            "latency.flv",
+            "latency-platform",
+            "latency-channel",
+            chosen));
+
+        LiveRow Row() => Assert.Single(_host.Services.GetRequiredService<VideoService>()
+            .GetLivePage(null, "latency-channel", new PageRequest(0, 10, [])).Content);
+        Assert.True(await WaitForAsync(() => Row().Status == LiveStatus.Live), "the canvas never went live: " + Row().Video.Message);
+
+        var basePkid = Row().Video.Pkid!.Value;
+        var rows = videos.FindByLiveHistoryId(videos.FindByPkid(basePkid)!.VideoLiveHistoryId!.Value);
+        Assert.Equal(2, rows.Count);
+
+        // Two sources are one picture, so the canvas decides the switch on for itself: every row of
+        // the composition goes on air with it.
+        var onAirIds = rows.Select(row => row.VideoSettingId!.Value).Distinct().ToArray();
+        Assert.Single(onAirIds);
+        Assert.True(VideoSettingLatency.IsOn(settings.FindById(onAirIds[0])!));
+
+        // And it is a setting of its own that says so: the configuration the user chose is the one
+        // the live was started with, and it is left exactly as it was.
+        Assert.NotEqual(chosenId, onAirIds[0]);
+        var untouched = settings.FindById(chosenId)!;
+        Assert.False(VideoSettingLatency.IsOn(untouched));
+        Assert.Equal(Setting().Title, untouched.Title);
+
+        // A second play of the same composition reuses that copy instead of making another one.
+        streaming.StopVideoStreamingByPkid(basePkid);
+        Assert.True(await WaitForAsync(() => Row().Status != LiveStatus.Live), "the canvas did not stop");
+        streaming.StartVideo(_host.Services.GetRequiredService<VideoService>().FindVideo(basePkid));
+        Assert.True(await WaitForAsync(() => Row().Status == LiveStatus.Live), "the canvas did not restart: " + Row().Video.Message);
+
+        Assert.Equal(onAirIds[0], videos.FindByPkid(basePkid)!.VideoSettingId!.Value);
+        var copies = _host.Services.GetRequiredService<VideoSettingService>()
+            .GetAllVideoSettings(new Dictionary<string, string> { ["title"] = Setting().Title! });
+        Assert.Single(copies);
+
+        streaming.StopVideoStreamingByPkid(basePkid);
+    }
+
+    private async Task<(long ScenePkid, string Background, string Overlay)> TwoFileSceneAsync()
+    {
+        var folder = Path.Combine(_host.DataDirectory, "sources");
+        Directory.CreateDirectory(folder);
+        Directory.CreateDirectory(Path.Combine(_host.DataDirectory, "output"));
+        var background = Path.Combine(folder, "latency-background.mp4");
+        var overlay = Path.Combine(folder, "latency-overlay.mp4");
+        await RunAsync(Tool("ffmpeg")!, $"-y -f lavfi -i testsrc=size=320x180:rate=15 -t 30 -pix_fmt yuv420p \"{background}\"");
+        await RunAsync(Tool("ffmpeg")!, $"-y -f lavfi -i testsrc2=size=160x90:rate=15 -t 30 -pix_fmt yuv420p \"{overlay}\"");
+
+        var (_, scenePkid) = _host.Services.GetRequiredService<SceneService>().Save(new SceneRequest(
+            null, "Latency scene", null, 640, 360,
+            [
+                new SceneItemRequest(SourceKind.File, background, "Background", 0, 0, 640, 360, false),
+                new SceneItemRequest(SourceKind.File, overlay, "Overlay", 400, 20, 220, 124, false)
+            ]));
+
+        return (scenePkid, background, overlay);
+    }
+
     private static VideoSettingsRequest Setting() => JsonSerializer.Deserialize<VideoSettingsRequest>(
         """
         {

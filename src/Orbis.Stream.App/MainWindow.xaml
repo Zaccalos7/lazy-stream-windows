@@ -45,8 +45,7 @@
                        TextAlignment="Center"
                        TextWrapping="Wrap"
                        FontSize="14"
-                       Foreground="#B8B1D4"
-                       Text="Caricamento di Orbis Stream..." />
+                       Foreground="#B8B1D4" />
         </StackPanel>
 
     </Grid>

@@ -16,13 +16,13 @@
 
 @if (Model.Layouts.Count == 0)
 {
-    <div class="card empty"><i class="icon">&#xE80A;</i>@T["noDataPresent"]</div>
+    <div class="card empty"><i class="icon">&#xE8B9;</i>@T["noDataPresent"]</div>
 }
 
 @foreach (var layout in Model.Layouts)
 {
     <div class="row-card">
-        <i class="icon lead">&#xE80A;</i>
+        <i class="icon lead">&#xE8B9;</i>
         <div class="grow">
             <h3 class="truncate">@layout.Name</h3>
             @if (!string.IsNullOrWhiteSpace(layout.Description))

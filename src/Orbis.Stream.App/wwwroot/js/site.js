@@ -942,7 +942,10 @@ document.addEventListener("click", event => {
 document.addEventListener("click", event => {
   const toggle = event.target.closest?.("#sidebar-toggle");
   if (!toggle) return;
-  const closed = document.documentElement.classList.toggle("sidebar-closed");
+  event.preventDefault();
+  event.stopPropagation();
+  document.documentElement.classList.toggle("sidebar-closed");
+  const closed = document.documentElement.classList.contains("sidebar-closed");
   localStorage.setItem("orbis-sidebar", closed ? "closed" : "open");
 });
 
@@ -984,12 +987,9 @@ document.addEventListener("DOMContentLoaded", async () => {
     if (!currentVersion) return;
 
     try {
-        // Use jina.ai as CORS proxy to fetch SourceForge release info (SourceForge blocks direct CORS)
         const proxyUrl = "https://r.jina.ai/http://sourceforge.net/projects/lazy-stream-windows/best_release.json";
         const response = await fetch(proxyUrl);
         const text = await response.text();
-        
-        // jina.ai returns markdown-wrapped JSON, extract the JSON part
         const jsonMatch = text.match(/\{[\s\S]*\}/);
         if (!jsonMatch) return;
         const data = JSON.parse(jsonMatch[0]);
@@ -997,12 +997,10 @@ document.addEventListener("DOMContentLoaded", async () => {
         const latestRelease = data?.release?.filename;
         if (!latestRelease) return;
 
-        // Extracts version from "/2.0.5/OrbisStream-2.0.5-win-x64-setup.exe" -> "2.0.5"
         const match = latestRelease.match(/\/([0-9\.]+)\//);
         if (!match) return;
         const latestVersion = match[1];
 
-        // Basic version comparison (assumes semver-like format)
         const v1 = currentVersion.split('.').map(Number);
         const v2 = latestVersion.split('.').map(Number);
         let isNewer = false;
@@ -1010,12 +1008,8 @@ document.addEventListener("DOMContentLoaded", async () => {
         for (let i = 0; i < Math.max(v1.length, v2.length); i++) {
             const num1 = v1[i] || 0;
             const num2 = v2[i] || 0;
-            if (num2 > num1) {
-                isNewer = true;
-                break;
-            } else if (num2 < num1) {
-                break;
-            }
+            if (num2 > num1) { isNewer = true; break; }
+            else if (num2 < num1) break;
         }
 
         if (isNewer) {
@@ -1023,28 +1017,16 @@ document.addEventListener("DOMContentLoaded", async () => {
             const dialog = document.getElementById("update-dialog");
             const updateText = document.getElementById("update-dialog-text");
             const bell = document.getElementById("update-bell");
-
             if (!dialog || !updateText || !bell) return;
 
             bell.hidden = false;
 
-            dialog.onclose = () => {
-                if (dialog.returnValue === "ok") {
-                    window.open(updateUrl, "_blank");
-                }
-            };
+            dialog.onclose = () => { if (dialog.returnValue === "ok") window.open(updateUrl, "_blank"); };
 
             bell.addEventListener("click", () => {
                 updateText.textContent = document.documentElement.dataset.updateAvailableDialogText || "c'è una nuova versione vuoi scaricarla?";
                 dialog.showModal();
             });
         }
-    } catch (e) {
-        console.error("Failed to check for updates", e);
-    }
-});
-        }
-    } catch (e) {
-        console.error("Failed to check for updates", e);
-    }
+    } catch (e) { /* silent fail */ }
 });

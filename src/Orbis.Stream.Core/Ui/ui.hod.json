@@ -314,5 +314,8 @@
   "layoutSelected": "Hodor",
   "liveHistoryDescription": "Hodor Hodor Hodor Hodor Hodor Hodor Hodor.",
   "updateAvailable": "HODOR!",
-  "updateAvailableDialogText": "Hodor hodor! Hodor Hodor Hodor?"
+  "updateAvailableDialogText": "Hodor hodor! Hodor Hodor Hodor?",
+  "dashboardSectionLive": "Streaming",
+  "dashboardSectionSettings": "Settings",
+  "dashboardSectionSystem": "System & Monitoring"
 }

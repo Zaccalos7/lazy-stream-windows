@@ -314,5 +314,8 @@
   "layoutSelected": "leOaUt mIw",
   "liveHistoryDescription": "lIw hIstaj Hoch choHlu'mey yInI'.",
   "updateAvailable": "pItlh qo'",
-  "updateAvailableDialogText": "wej pItlh qo' DaH. Qapla' yInI'chom?"
+  "updateAvailableDialogText": "wej pItlh qo' DaH. Qapla' yInI'chom?",
+  "dashboardSectionLive": "Streaming",
+  "dashboardSectionSettings": "Settings",
+  "dashboardSectionSystem": "System & Monitoring"
 }

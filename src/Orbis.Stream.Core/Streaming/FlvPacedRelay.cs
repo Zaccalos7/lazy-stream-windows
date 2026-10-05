@@ -226,6 +226,9 @@ public sealed class FlvPacedRelay
             long baseTimestamp = 0;
             var lastTarget = 0L;
 
+            // When the catch-up under way began (stopwatch ticks); null while the live is on time.
+            long? catchingUpSince = null;
+
             var maxForwardJump = HybridWaiter.Ticks(MaxForwardJump);
             var maxLead = HybridWaiter.Ticks(_profile.MaxLead);
             var lateEnough = HybridWaiter.Ticks(TimeSpan.FromSeconds(1));
@@ -299,15 +302,29 @@ public sealed class FlvPacedRelay
                             // arriving slightly fast until it is even again. That is the whole
                             // difference from moving the clock, which drops the gap instead of
                             // winning it back, and a viewer reads a dropped gap as a rebuffer.
+                            //
+                            // A catch-up is one event, from the frame that is a second late to the
+                            // first one on time again: it is counted and logged once, not once a
+                            // frame. This thread is the one the frames wait on, and a line a frame
+                            // into the event log is milliseconds of every frame it is behind for.
                             var behind = late > 0 ? Math.Min(late, maxLead) : 0;
-                            if (behind >= lateEnough)
+                            if (behind >= lateEnough && catchingUpSince is null)
                             {
+                                catchingUpSince = now;
                                 Interlocked.Increment(ref _catchingUp);
                                 _logger.LogWarning(
                                     "The live to {Platform} fell {Late:0.0}s behind: sending at {Rate}x to win it back",
                                     _profile.Platform,
                                     behind / (double)System.Diagnostics.Stopwatch.Frequency,
                                     CatchUpRate);
+                            }
+                            else if (behind == 0 && catchingUpSince is { } since)
+                            {
+                                catchingUpSince = null;
+                                _logger.LogInformation(
+                                    "The live to {Platform} is on time again after {Seconds:0.0}s",
+                                    _profile.Platform,
+                                    (now - since) / (double)System.Diagnostics.Stopwatch.Frequency);
                             }
 
                             waiter.WaitUntil(now + (behind > 0 ? due / CatchUpRate : due), token);

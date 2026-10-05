@@ -21,7 +21,7 @@ public sealed class RuntimeOptionsTests
 
         Assert.Equal(directory.Path, options.DataDirectory);
         Assert.Equal(Path.Combine(directory.Path, "stream.db"), options.DatabasePath);
-        Assert.Equal(Path.Combine(directory.Path, "logs", "twitch.log"), options.LogFilePath);
+        Assert.Equal(Path.Combine(directory.Path, "logs"), options.LogDirectory);
     }
 
     [Fact]

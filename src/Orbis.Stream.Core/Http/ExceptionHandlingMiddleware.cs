@@ -102,6 +102,11 @@ public sealed class ExceptionHandlingMiddleware
                 StatusCodes.Status400BadRequest,
                 _responseFactory.BuildBadResponseWithoutMessageLabel(exception.Message).Body).ConfigureAwait(false);
         }
+        catch (OperationCanceledException) when (context.RequestAborted.IsCancellationRequested)
+        {
+            // The page went away while it waited (the preview long-polls a frame and is closed
+            // mid wait): there is nobody to answer and nothing went wrong.
+        }
         catch (Exception exception)
         {
             _logger.LogError(exception, "Unhandled error on {Method} {Path}", context.Request.Method, context.Request.Path);

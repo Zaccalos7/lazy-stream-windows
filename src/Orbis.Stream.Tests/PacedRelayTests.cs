@@ -176,7 +176,8 @@ public sealed class FlvPacedRelayTests
 
         // A slow network is a gap to win back, not a jump of the timestamps: the clock stays put.
         Assert.Equal(0, relay.Rebases);
-        Assert.True(relay.CatchingUp >= 1, $"the relay reported {relay.CatchingUp} catch-ups");
+        // One stall is one catch-up, however many frames it took to win back.
+        Assert.Equal(1, relay.CatchingUp);
     }
 
     [Fact]

@@ -316,12 +316,15 @@ public static class OrbisEndpoints
             HttpRequest request,
             HttpContext context) =>
         {
-            var embed = await service.EmbedAsync(
+            var found = await service.EmbedAsync(
                 Watched(request),
                 context.Request.Host.Host,
                 context.RequestAborted);
 
-            return embed is null ? Results.NotFound() : Results.Ok(embed);
+            // There is no address to play, but the reason travels with the answer: a channel that is
+            // off air and a platform that could not be reached are different things to tell a page,
+            // and the page is what repeats the answer for as long as it stays open.
+            return Results.Ok(new { embed = found.Embed, reason = found.Reason });
         });
 
         group.MapGet("/live/{pkid:int}/video", (int pkid, LivePreviewService service) =>

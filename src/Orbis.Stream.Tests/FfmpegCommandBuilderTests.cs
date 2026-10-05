@@ -463,6 +463,61 @@ public sealed class FfmpegCompositionTests
         Assert.DoesNotContain("-f dshow -ss", text, StringComparison.Ordinal);
     }
 
+    private static readonly FfmpegCompositionItem[] TwoFiles =
+    [
+        new(SourceKind.File, "/videos/left.mp4", 0, 0, 960, 1080, true),
+        new(SourceKind.File, "/videos/right.mp4", 960, 0, 960, 1080, true)
+    ];
+
+    [Theory]
+    [InlineData("rtmp://live.twitch.tv/app/key")]
+    [InlineData("rtmps://a.rtmps.youtube.com/live2/key")]
+    public void ACanvasOfFilesBehindARelayIsPacedByTheRelayAlone(string outputUrl)
+    {
+        // One clock per file is a scene in slow motion: the relay is the only one left.
+        var command = FfmpegCommandBuilder.BuildComposition(
+            Request(TwoFiles) with { OutputUrl = outputUrl, Profile = StreamPlatformProfile.For(outputUrl) });
+        var text = string.Join(' ', command);
+
+        Assert.DoesNotContain("-readrate", text, StringComparison.Ordinal);
+        Assert.DoesNotContain("realtime", GraphOf(command), StringComparison.Ordinal);
+        Assert.Contains("[stack1]null[orbisv]", GraphOf(command), StringComparison.Ordinal);
+        Assert.Equal("pipe:1", command[^1]);
+    }
+
+    [Fact]
+    public void ACanvasOfFilesWithoutARelayIsPacedOnceOnWhatComesOut()
+    {
+        var command = FfmpegCommandBuilder.BuildComposition(Request(TwoFiles));
+        var text = string.Join(' ', command);
+
+        Assert.DoesNotContain("-readrate", text, StringComparison.Ordinal);
+        Assert.Contains("realtime[orbisv]", GraphOf(command), StringComparison.Ordinal);
+    }
+
+    [Fact]
+    public void ACanvasWithADeviceKeepsTheFilesInStepWithIt()
+    {
+        var command = FfmpegCommandBuilder.BuildComposition(
+            Request([TwoFiles[0], Camera(1400, 700, 480, 270)]) with
+            {
+                OutputUrl = "rtmp://live.twitch.tv/app/key",
+                Profile = StreamPlatformProfile.Twitch
+            });
+        var text = string.Join(' ', command);
+
+        Assert.Contains("-readrate 1 -i /videos/left.mp4", text, StringComparison.Ordinal);
+        Assert.Contains("realtime[orbisv]", GraphOf(command), StringComparison.Ordinal);
+    }
+
+    [Fact]
+    public void ASnapshotIsNotPaced()
+    {
+        var text = string.Join(' ', FfmpegCommandBuilder.BuildSnapshot(SourceKind.File, "/videos/intro.mp4", 320));
+
+        Assert.DoesNotContain("-readrate", text, StringComparison.Ordinal);
+    }
+
     [Fact]
     public void TheEncoderIsTheSameOneAFileWouldUse()
     {

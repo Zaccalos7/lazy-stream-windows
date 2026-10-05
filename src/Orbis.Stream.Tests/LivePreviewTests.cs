@@ -505,10 +505,15 @@ public sealed class LivePreviewTests : IAsyncLifetime
     [Fact]
     public async Task ALiveOnAPlatform_IsAlsoWatchableWithThePlayerOfThatPlatform()
     {
-        // Nothing on air has nowhere to watch: the page keeps the picture ffmpeg writes.
+        // Nothing on air has nowhere to watch: the page keeps the picture ffmpeg writes. The answer
+        // is still a 200, because there is a reason to travel with it, and an error status would
+        // tell the page the server had a problem rather than that there is no player to draw.
         using (var offline = await _host.Client.GetAsync("/preview/live/embed"))
         {
-            Assert.Equal(HttpStatusCode.NotFound, offline.StatusCode);
+            Assert.Equal(HttpStatusCode.OK, offline.StatusCode);
+            var answer = JsonDocument.Parse(await offline.Content.ReadAsStringAsync()).RootElement;
+            Assert.Equal(JsonValueKind.Null, answer.GetProperty("embed").ValueKind);
+            Assert.Equal(JsonValueKind.Null, answer.GetProperty("reason").ValueKind);
         }
 
         if (!await StartLiveAsync())
@@ -540,7 +545,8 @@ public sealed class LivePreviewTests : IAsyncLifetime
         using var player = await _host.Client.GetAsync($"/preview/live/embed?live={_pkid}");
         Assert.Equal(HttpStatusCode.OK, player.StatusCode);
 
-        var embed = JsonDocument.Parse(await player.Content.ReadAsStringAsync()).RootElement;
+        var embed = JsonDocument.Parse(await player.Content.ReadAsStringAsync())
+            .RootElement.GetProperty("embed");
         Assert.Equal("twitch", embed.GetProperty("platform").GetString());
 
         // The channel of the configuration, and not the field named platform stream name: a live

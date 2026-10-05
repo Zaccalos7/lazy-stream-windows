@@ -20,12 +20,12 @@ public sealed class LivePlatformEmbedTests
     {
         var embeds = Platform(_ => new HttpResponseMessage(HttpStatusCode.OK));
 
-        var embed = await embeds.ResolveAsync(Twitch, "reproChannel", "twitch", "localhost", default);
+        var found = await embeds.ResolveAsync(Twitch, "reproChannel", "twitch", "localhost", default);
 
-        Assert.NotNull(embed);
-        Assert.Equal("twitch", embed!.Platform);
-        Assert.Contains("channel=reprochannel", embed.Url, StringComparison.Ordinal);
-        Assert.Contains("parent=localhost", embed.Url, StringComparison.Ordinal);
+        Assert.NotNull(found.Embed);
+        Assert.Equal("twitch", found.Embed!.Platform);
+        Assert.Contains("channel=reprochannel", found.Embed.Url, StringComparison.Ordinal);
+        Assert.Contains("parent=localhost", found.Embed.Url, StringComparison.Ordinal);
     }
 
     [Fact]
@@ -33,10 +33,10 @@ public sealed class LivePlatformEmbedTests
     {
         var embeds = Platform(_ => new HttpResponseMessage(HttpStatusCode.OK));
 
-        var embed = await embeds.ResolveAsync(Twitch, "reproChannel", "twitch", "orbis.example", default);
+        var found = await embeds.ResolveAsync(Twitch, "reproChannel", "twitch", "orbis.example", default);
 
-        Assert.NotNull(embed);
-        Assert.Contains("parent=orbis.example", embed!.Url, StringComparison.Ordinal);
+        Assert.NotNull(found.Embed);
+        Assert.Contains("parent=orbis.example", found.Embed!.Url, StringComparison.Ordinal);
     }
 
     [Fact]
@@ -44,8 +44,8 @@ public sealed class LivePlatformEmbedTests
     {
         var embeds = Platform(_ => new HttpResponseMessage(HttpStatusCode.OK));
 
-        Assert.Null(await embeds.ResolveAsync("rtmp://my.cdn.example/live", "channel", null, "localhost", default));
-        Assert.Null(await embeds.ResolveAsync(null, "channel", null, "localhost", default));
+        Assert.Null((await embeds.ResolveAsync("rtmp://my.cdn.example/live", "channel", null, "localhost", default)).Embed);
+        Assert.Null((await embeds.ResolveAsync(null, "channel", null, "localhost", default)).Embed);
     }
 
     [Theory]
@@ -56,7 +56,7 @@ public sealed class LivePlatformEmbedTests
     {
         var embeds = Platform(_ => new HttpResponseMessage(HttpStatusCode.OK));
 
-        Assert.Null(await embeds.ResolveAsync(Twitch, channel, platformStreamName, "localhost", default));
+        Assert.Null((await embeds.ResolveAsync(Twitch, channel, platformStreamName, "localhost", default)).Embed);
     }
 
     [Fact]
@@ -65,10 +65,10 @@ public sealed class LivePlatformEmbedTests
         // A live that came through the API keeps the channel in the field named platform stream name.
         var embeds = Platform(_ => new HttpResponseMessage(HttpStatusCode.OK));
 
-        var embed = await embeds.ResolveAsync(Twitch, null, "reproChannel", "localhost", default);
+        var found = await embeds.ResolveAsync(Twitch, null, "reproChannel", "localhost", default);
 
-        Assert.NotNull(embed);
-        Assert.Contains("channel=reprochannel", embed!.Url, StringComparison.Ordinal);
+        Assert.NotNull(found.Embed);
+        Assert.Contains("channel=reprochannel", found.Embed!.Url, StringComparison.Ordinal);
     }
 
     [Fact]
@@ -82,12 +82,12 @@ public sealed class LivePlatformEmbedTests
             return Text(page);
         });
 
-        var embed = await embeds.ResolveAsync(YouTube, "reproChannel", "youtube", "localhost", default);
+        var found = await embeds.ResolveAsync(YouTube, "reproChannel", "youtube", "localhost", default);
 
-        Assert.NotNull(embed);
-        Assert.Equal("youtube", embed!.Platform);
-        Assert.Equal("reproChannel", embed.Channel);
-        Assert.StartsWith("https://www.youtube.com/embed/RU6gEobXVHA?", embed.Url, StringComparison.Ordinal);
+        Assert.NotNull(found.Embed);
+        Assert.Equal("youtube", found.Embed!.Platform);
+        Assert.Equal("reproChannel", found.Embed.Channel);
+        Assert.StartsWith("https://www.youtube.com/embed/RU6gEobXVHA?", found.Embed.Url, StringComparison.Ordinal);
     }
 
     [Fact]
@@ -99,7 +99,7 @@ public sealed class LivePlatformEmbedTests
                 ? Streams("RU6gEobXVHA")
                 : Ended()));
 
-        Assert.Null(await embeds.ResolveAsync(YouTube, "reproChannel", "youtube", "localhost", default));
+        Assert.Null((await embeds.ResolveAsync(YouTube, "reproChannel", "youtube", "localhost", default)).Embed);
     }
 
     [Fact]
@@ -108,14 +108,32 @@ public sealed class LivePlatformEmbedTests
         var handler = Page(_ => Watch(onAir: true));
         var embeds = new LivePlatformEmbeds(new HttpClient(handler), NullLogger<LivePlatformEmbeds>.Instance);
 
-        var embed = await embeds.ResolveAsync(YouTube, "@reproChannel", "youtube", "localhost", default);
+        var found = await embeds.ResolveAsync(YouTube, "@reproChannel", "youtube", "localhost", default);
 
-        Assert.NotNull(embed);
+        Assert.NotNull(found.Embed);
         Assert.StartsWith("https://www.youtube.com/@reproChannel/streams", handler.Asked[0].ToString(), StringComparison.Ordinal);
     }
 
     [Fact]
-    public async Task YouTube_AChannelThatIsNotOnAir_HasNoPlayer()
+    public async Task YouTube_AsksTheStreamsPageOfAChannelIdOnThePageOfAChannelId()
+    {
+        // A configuration is filled in with whatever the studio hands over, and the two are not the
+        // same address: /@handle is the handle and /channel/UC... is the id. The preview asks out of
+        // the same builder the live page links with, so the two cannot disagree about the channel.
+        var handler = Page(_ => Watch(onAir: true));
+        var embeds = new LivePlatformEmbeds(new HttpClient(handler), NullLogger<LivePlatformEmbeds>.Instance);
+
+        var found = await embeds.ResolveAsync(YouTube, "UCuAXFkgsw1L7xaCfnd5JJOw", "youtube", "localhost", default);
+
+        Assert.NotNull(found.Embed);
+        Assert.StartsWith(
+            "https://www.youtube.com/channel/UCuAXFkgsw1L7xaCfnd5JJOw/streams",
+            handler.Asked[0].ToString(),
+            StringComparison.Ordinal);
+    }
+
+    [Fact]
+    public async Task YouTube_AChannelThatIsNotOnAir_HasNoPlayer_AndNoReasonToBlameThePlatform()
     {
         // The top of the page of the streams of a channel that is off air is its last broadcast: a
         // player given that id plays an old video, which is a worse answer than none.
@@ -124,15 +142,40 @@ public sealed class LivePlatformEmbedTests
                 ? Streams("RU6gEobXVHA")
                 : Watch(onAir: false)));
 
-        Assert.Null(await embeds.ResolveAsync(YouTube, "reproChannel", "youtube", "localhost", default));
+        var found = await embeds.ResolveAsync(YouTube, "reproChannel", "youtube", "localhost", default);
+
+        Assert.Null(found.Embed);
+
+        // Nothing is wrong and nothing is to be said: this is an answer, not a failure.
+        Assert.Null(found.Reason);
     }
 
     [Fact]
-    public async Task YouTube_ThatCannotBeAsked_HasNoPlayer()
+    public async Task YouTube_APageThatNeverArrives_SaysSo_InsteadOfSayingTheChannelIsOffAir()
     {
-        var embeds = Platform(_ => new HttpResponseMessage(HttpStatusCode.OK) { Content = new StringContent(string.Empty) });
+        // The whole reason the reason exists. A handle that is not a handle, a platform that answers
+        // this machine with a page that is not YouTube and a network that is down all end here, and
+        // a page told "the channel is not live" would say it for ever about a live that is fine.
+        var embeds = Platform(_ => new HttpResponseMessage(HttpStatusCode.NotFound));
 
-        Assert.Null(await embeds.ResolveAsync(YouTube, "reproChannel", "youtube", "localhost", default));
+        var found = await embeds.ResolveAsync(YouTube, "reproChannel", "youtube", "localhost", default);
+
+        Assert.Null(found.Embed);
+        Assert.NotNull(found.Reason);
+        Assert.Contains("reproChannel", found.Reason!, StringComparison.Ordinal);
+    }
+
+    [Fact]
+    public async Task YouTube_AStreamsPageThatArrivesEmpty_IsAChannelWithoutALive_NotAFailure()
+    {
+        // The page was read and had no video on it. That is the answer, and it is not the same as
+        // never having got the page.
+        var embeds = Platform(_ => Text(string.Empty));
+
+        var found = await embeds.ResolveAsync(YouTube, "reproChannel", "youtube", "localhost", default);
+
+        Assert.Null(found.Embed);
+        Assert.Null(found.Reason);
     }
 
     [Fact]

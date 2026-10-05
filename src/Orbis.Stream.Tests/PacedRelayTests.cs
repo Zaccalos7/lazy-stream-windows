@@ -541,6 +541,74 @@ public sealed class PacedRelayFfmpegTests
         }
     }
 
+    [Theory]
+    [InlineData(StreamPlatform.Twitch)]
+    [InlineData(StreamPlatform.YouTube)]
+    public async Task Relay_StreamsACanvasOfTwoFilesInRealTime(StreamPlatform platform)
+    {
+        var ffmpeg = Which("ffmpeg");
+        var ffprobe = Which("ffprobe");
+        if (ffmpeg is null || ffprobe is null)
+        {
+            _output.WriteLine("ffmpeg/ffprobe are not installed: the relay test is skipped.");
+            return;
+        }
+
+        var directory = Directory.CreateTempSubdirectory("orbis-relay-canvas-");
+        try
+        {
+            // Two files with sound, side by side: the scene that used to drift into slow motion.
+            var left = Path.Combine(directory.FullName, "left.mp4");
+            var right = Path.Combine(directory.FullName, "right.mp4");
+            var output = Path.Combine(directory.FullName, "out.flv");
+            await RunAsync(ffmpeg,
+                $"-y -f lavfi -i testsrc=size=640x360:rate=30 -f lavfi -i sine=frequency=440 -t 6 -pix_fmt yuv420p -shortest \"{left}\"");
+            await RunAsync(ffmpeg,
+                $"-y -f lavfi -i testsrc2=size=640x360:rate=25 -f lavfi -i sine=frequency=660 -t 6 -pix_fmt yuv420p -shortest \"{right}\"");
+
+            var locator = new FfmpegToolLocator(ffmpeg, ffprobe);
+            var profile = (platform == StreamPlatform.YouTube ? StreamPlatformProfile.YouTube : StreamPlatformProfile.Twitch)
+                with { Transport = RelayTransport.FfmpegSender };
+            var setting = new VideoSettingEntity
+            {
+                Title = "test",
+                VideoCodec = 27,
+                VideoCodecName = "libx264",
+                PixelFormat = 0,
+                VideoBitrate = 800_000,
+                VideoFormat = "flv",
+                GopSize = 2,
+                AudioSetting = new AudioSettingEntity { AudioCodec = 86018, AudioBitrate = 96_000 }
+            };
+            FfmpegCompositionItem[] items =
+            [
+                new(SourceKind.File, left, 0, 0, 640, 360, AudioEnabled: true),
+                new(SourceKind.File, right, 640, 0, 640, 360, AudioEnabled: true)
+            ];
+
+            var started = Stopwatch.GetTimestamp();
+            await using var session = FfmpegStreamingSession.StartComposition(
+                locator, 1, items, output, setting, 1280, 360, 30, NullLogger.Instance,
+                duration: TimeSpan.FromSeconds(6), profile: profile);
+
+            var exitCode = await session.WaitForExitAsync(new CancellationTokenSource(TimeSpan.FromSeconds(30)).Token);
+            var elapsed = Stopwatch.GetElapsedTime(started);
+            _output.WriteLine($"{platform}: exit {exitCode} in {elapsed.TotalSeconds:0.00}s, position {session.PositionMilliseconds} ms");
+            _output.WriteLine(await session.ReadErrorAsync());
+
+            Assert.Equal(0, exitCode);
+            Assert.InRange(session.PositionMilliseconds, 5500, 6500);
+
+            // One clock for the whole scene: six seconds of canvas take six seconds, less the
+            // preroll, however many files are on it.
+            Assert.InRange(elapsed.TotalSeconds, 6 - profile.Preroll.TotalSeconds - 0.5, 6 + 2);
+        }
+        finally
+        {
+            directory.Delete(recursive: true);
+        }
+    }
+
     private static string? Which(string tool) =>
         (Environment.GetEnvironmentVariable("PATH") ?? string.Empty)
             .Split(Path.PathSeparator)

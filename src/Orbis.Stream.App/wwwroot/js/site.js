@@ -448,27 +448,38 @@ const previewRetry = 15000;
 const embedStatus = preview?.querySelector(".preview-embed-status");
 const embedText = embedStatus?.querySelector("[data-embed-text]");
 
+// Why there is no player, as the server said it. Kept between polls so the message on the page is
+// the reason for this round and not a leftover from the one before.
+let embedReason = null;
+
 const resolvePlatformPlayer = async () => {
   if (!previewPlatformPlayer || previewPkid <= 0) return;
   if (embedStatus) embedStatus.hidden = false;
+  embedReason = null;
   try {
     const response = await fetch(`/preview/live/embed?live=${previewPkid}`, { cache: "no-store" });
     if (response.ok) {
-      const embed = await response.json();
-      if (embed?.url) {
-        showPlatformPlayer(embed.url);
+      const answer = await response.json();
+      // The player to draw, if the live is on air somewhere a player can show it.
+      if (answer?.embed?.url) {
+        showPlatformPlayer(answer.embed.url);
         if (embedStatus) embedStatus.hidden = true;
         // Keep polling to stay updated
         if (previewIsLive) setTimeout(resolvePlatformPlayer, previewRetry);
         return;
       }
+      embedReason = answer?.reason || null;
     }
   } catch {
     // The server is not answering: the local picture stays, which is what it is for.
   }
   if (embedStatus && embedText) {
-    const platform = previewMark("embedFailed", "Unable to load {0} player: channel is not live");
-    embedText.textContent = platform.replace("{0}", "Twitch/YouTube");
+    // The reason comes from the server and is what the page repeats for as long as it stays open,
+    // so it has to say which of the two things happened: a channel that is off air, or a platform
+    // this application failed to reach. Only the first is about the live.
+    const reason = embedReason
+      || previewMark("embedFailed", "Unable to load {0} player: channel is not live").replace("{0}", "Twitch/YouTube");
+    embedText.textContent = reason;
   }
   if (previewIsLive) setTimeout(resolvePlatformPlayer, previewRetry);
 };

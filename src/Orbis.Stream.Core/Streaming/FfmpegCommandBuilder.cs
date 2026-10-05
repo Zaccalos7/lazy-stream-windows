@@ -239,13 +239,27 @@ public static class FfmpegCommandBuilder
         var relay = profile is { UsesRelay: true };
         var arguments = GlobalArguments(relay);
 
+        // Who keeps the time of the canvas. A capture device does, whenever there is one: it
+        // produces frames in real time, and the files are read at their own rate to stay in step
+        // with it.
+        //
+        // A canvas of nothing but files has no such source, and a -readrate on every file is one
+        // clock per file: each input measures its lag against its own start, and once the encoder
+        // or the relay holds them back, each wins it back on its own at 1.05x (the default of
+        // -readrate_catchup). The overlay keeps the pictures in step by their timestamps, so the
+        // canvas moves at the pace of whichever file is furthest behind, slower than real time for
+        // as long as it is behind - two videos on a scene are a live in slow motion. So the canvas
+        // gets one clock, on what comes out: the relay when there is one, exactly as a single file
+        // does, otherwise the realtime filter at the end of the graph. The files are decoded as
+        // fast as that clock asks, and the overlay lines them up frame by frame.
+        var onlyFiles = items.All(item => item.Kind == SourceKind.File);
+        var pacedInputs = !onlyFiles;
+        var pacedGraph = !(onlyFiles && relay);
+
         // Every input is opened before any filter is configured, which is the order ffmpeg needs.
-        // The inputs keep their own clock here even with a relay: a device produces frames in real
-        // time and the files of the canvas have to stay in step with it, so the relay only smooths
-        // what comes out.
         for (var index = 0; index < items.Count; index++)
         {
-            AppendInput(arguments, items[index], request.ResumeFrom, frameRate);
+            AppendInput(arguments, items[index], request.ResumeFrom, frameRate, pacedInputs);
         }
 
         // The silent track is the input after the last source, so the indexes of the graph stay put.
@@ -257,7 +271,7 @@ public static class FfmpegCommandBuilder
 
         // A label of the graph can feed one output only: with a preview the composed picture is
         // split in two, and the copy is shrunk inside the graph (-vf cannot act on a graph output).
-        var graph = BuildFilterGraph(items, pictures, canvasWidth, canvasHeight, frameRate);
+        var graph = BuildFilterGraph(items, pictures, canvasWidth, canvasHeight, frameRate, pacedGraph);
         var videoLabel = VideoLabel;
         if (request.PreviewPath is not null)
         {
@@ -387,10 +401,9 @@ public static class FfmpegCommandBuilder
         List<string> arguments = ["-hide_banner", "-nostdin", "-loglevel", "error"];
 
         // A file is looked at a second in, past the black frame most videos open on; the pacing
-        // -re adds for a live would only make the one frame slower.
+        // -readrate adds for a live would only make the one frame slower.
         var item = new FfmpegCompositionItem(kind, target, 0, 0, 0, 0, AudioEnabled: false);
-        AppendInput(arguments, item, kind == SourceKind.File ? TimeSpan.FromSeconds(1) : TimeSpan.Zero, frameRate: 5d);
-        arguments.Remove("-re");
+        AppendInput(arguments, item, kind == SourceKind.File ? TimeSpan.FromSeconds(1) : TimeSpan.Zero, frameRate: 5d, paced: false);
 
         arguments.AddRange(
         [
@@ -459,11 +472,12 @@ public static class FfmpegCommandBuilder
         List<string> arguments,
         FfmpegCompositionItem item,
         TimeSpan resumeFrom,
-        double frameRate)
+        double frameRate,
+        bool paced)
     {
         // A capture device cannot be seeked into and does not need pacing: it produces frames when
         // there are frames to produce. A file does both, and carries on from where the interrupted
-        // pass of this live stopped.
+        // pass of this live stopped; it is paced only when a device sets the time of the canvas.
         if (item.Kind == SourceKind.File)
         {
             if (resumeFrom > TimeSpan.Zero)
@@ -474,8 +488,12 @@ public static class FfmpegCommandBuilder
 
             arguments.Add("-thread_queue_size");
             arguments.Add("512");
-            arguments.Add("-readrate");
-            arguments.Add("1");
+            if (paced)
+            {
+                arguments.Add("-readrate");
+                arguments.Add("1");
+            }
+
             arguments.Add("-i");
             arguments.Add(item.Target);
             return;
@@ -544,7 +562,8 @@ public static class FfmpegCommandBuilder
         IReadOnlyList<(FfmpegCompositionItem Item, int Index)> pictures,
         int canvasWidth,
         int canvasHeight,
-        double frameRate)
+        double frameRate,
+        bool paced)
     {
         var graph = new StringBuilder();
 
@@ -587,7 +606,10 @@ public static class FfmpegCommandBuilder
 
         // The blank canvas has no clock of its own and would be drawn as fast as the encoder can
         // take it once the last file on it ends: realtime holds the output to the wall clock.
-        graph.Append(CultureInfo.InvariantCulture, $"[{composed}]realtime[{VideoLabel}]");
+        // Behind a relay that clock is the relay's, and a second one here would only keep the
+        // encoder from running ahead into the jitter buffer (and the preroll from ever going out).
+        var clock = paced ? "realtime" : "null";
+        graph.Append(CultureInfo.InvariantCulture, $"[{composed}]{clock}[{VideoLabel}]");
         return graph.ToString();
     }
 

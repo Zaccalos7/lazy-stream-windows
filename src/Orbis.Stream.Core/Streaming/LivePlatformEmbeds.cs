@@ -62,7 +62,7 @@ public sealed class LivePlatformEmbeds
 
     /// <summary>What YouTube says about a video, before it localises anything on the page.</summary>
     private static readonly Regex OnAirNow = new(
-        "\"isLiveContent\":true",
+        "\"isLive(?:Content)?\":true",
         RegexOptions.CultureInvariant);
 
     private readonly HttpClient _http;

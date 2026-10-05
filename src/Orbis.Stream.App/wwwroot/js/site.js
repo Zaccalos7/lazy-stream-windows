@@ -742,15 +742,65 @@ document.addEventListener("submit", event => {
   }
 });
 
+// ---------- The shell: the hamburger of the side bar, and the foot of it ----------
+//
+// The hamburger closes the side bar and, clicked again, brings it back. The state is a class on
+// <html>, the same one the layout reads before the first paint, and it is kept in localStorage so a
+// page that opens again finds the side bar as the user left it. The button carries the state too
+// (aria-expanded), so what the window shows and what the page says are never two different things.
+//
+// The listener sits on the button itself rather than on the document: the icon inside it is what
+// the pointer is really over, and a click that has to travel to the root to be understood is a
+// click a handler registered later on the same root can lose. The flag on the element makes a
+// second load of this file harmless: two listeners on the same button would undo each other, and
+// the side bar would never move.
+const sidebarButton = document.getElementById("sidebar-toggle");
+
+if (sidebarButton && !sidebarButton.dataset.sidebarBound) {
+  sidebarButton.dataset.sidebarBound = "1";
+
+  const paintSidebar = closed => {
+    document.documentElement.classList.toggle("sidebar-closed", closed);
+    sidebarButton.setAttribute("aria-expanded", closed ? "false" : "true");
+    try {
+      localStorage.setItem("orbis-sidebar", closed ? "closed" : "open");
+    } catch {
+      // A window with no storage of its own still toggles the side bar, it just forgets it.
+    }
+  };
+
+  // The state the page was drawn with, said out loud to the button that changes it.
+  paintSidebar(document.documentElement.classList.contains("sidebar-closed"));
+
+  sidebarButton.addEventListener("click", event => {
+    event.preventDefault();
+    paintSidebar(!document.documentElement.classList.contains("sidebar-closed"));
+  });
+}
+
 // The About dialog: the version and who wrote the application are in the foot of the side bar, and
 // this is where they are said in full.
-document.addEventListener("click", event => {
-  const shortcut = event.target.closest?.("[data-open-about], #about-button");
-  const about = document.getElementById("about-dialog");
-  if (!shortcut || !about || about.open) return;
-  event.preventDefault();
-  about.showModal();
-});
+const aboutButton = document.getElementById("about-button");
+const aboutDialog = document.getElementById("about-dialog");
+
+if (aboutDialog && !aboutDialog.dataset.aboutBound) {
+  aboutDialog.dataset.aboutBound = "1";
+
+  const openAbout = event => {
+    event?.preventDefault();
+    if (!aboutDialog.open) aboutDialog.showModal();
+  };
+
+  // The foot of the side bar, which is where the two facts already are, is the way in.
+  aboutButton?.addEventListener("click", openAbout);
+
+  // Anywhere else on a page that says it with data-open-about opens the same dialog.
+  document.addEventListener("click", event => {
+    const shortcut = event.target.closest?.("[data-open-about]");
+    if (!shortcut || shortcut === aboutButton) return;
+    openAbout(event);
+  });
+}
 
 // The side bar starts a live from anywhere: on this page the dialog is already there, elsewhere
 // the link goes to the page with ?start=1, which draws it open.
@@ -936,17 +986,6 @@ document.addEventListener("click", event => {
     button.title = label;
     button.setAttribute("aria-label", label);
   }
-});
-
-// Sidebar toggle
-document.addEventListener("click", event => {
-  const toggle = event.target.closest?.("#sidebar-toggle");
-  if (!toggle) return;
-  event.preventDefault();
-  event.stopPropagation();
-  document.documentElement.classList.toggle("sidebar-closed");
-  const closed = document.documentElement.classList.contains("sidebar-closed");
-  localStorage.setItem("orbis-sidebar", closed ? "closed" : "open");
 });
 
 // Dismiss infobar/toast notifications after 7 seconds

@@ -37,9 +37,9 @@
 </head>
 <body>
 <div class="shell">
-    <nav class="nav" aria-label="Orbis Stream">
+    <nav class="nav" id="orbis-sidebar" aria-label="Orbis Stream">
         <div class="nav-title">
-            <button class="btn subtle icon-only" id="sidebar-toggle" title="Toggle Sidebar" aria-label="Toggle Sidebar"><i class="icon">&#xE700;</i></button>
+            <button type="button" class="btn subtle icon-only" id="sidebar-toggle" title="Toggle Sidebar" aria-label="Toggle Sidebar" aria-controls="orbis-sidebar" aria-expanded="true"><i class="icon">&#xE700;</i></button>
             <img src="/favicon.ico" alt="" />
             <span>Orbis Stream</span>
         </div>
@@ -81,7 +81,7 @@
         <button type="button" class="update-bell" id="update-bell" title="@T["updateAvailable"]" aria-label="@T["updateAvailable"]" hidden>
             <i class="icon" aria-hidden="true">&#xEA8F;</i>
         </button>
-        <button type="button" class="nav-about" id="about-button" title="@T["about"]" aria-label="@T["about"]">
+        <button type="button" class="nav-about" id="about-button" data-open-about title="@T["about"]" aria-label="@T["about"]" aria-haspopup="dialog">
             <i class="icon" aria-hidden="true">&#xE946;</i>
             <span class="nav-about-text">
                 <strong>@AppInfo.Current.NameAndVersion</strong>
@@ -132,26 +132,26 @@
     </form>
 </dialog>
 
-<dialog class="dialog" id="about-dialog">
+@* The version and who wrote the application, said as big as the window allows: the foot of the
+   side bar carries the same two facts in one line each, and this is where they are read. *@
+<dialog class="dialog about" id="about-dialog">
     <form method="dialog">
         <div class="dialog-body about-body">
-            <img src="/favicon.ico" alt="" class="about-mark" width="48" height="48" />
-            <div class="grow">
-                <h2>@AppInfo.Current.NameAndVersion</h2>
-                <dl class="facts">
-                    <div class="fact">
-                        <dt>@T["aboutVersion"]</dt>
-                        <dd>@AppInfo.Current.Version</dd>
+            <img src="/favicon.ico" alt="" class="about-mark" width="72" height="72" />
+            <h2 class="about-name">@AppInfo.Current.Name</h2>
+            <dl class="about-facts">
+                <div class="about-fact">
+                    <dt>@T["aboutVersion"]</dt>
+                    <dd class="about-value" data-about-version>@AppInfo.Current.Version</dd>
+                </div>
+                @if (AppInfo.Current.Author is { Length: > 0 } author)
+                {
+                    <div class="about-fact">
+                        <dt>@T["aboutAuthor"]</dt>
+                        <dd class="about-value" data-about-author>@author</dd>
                     </div>
-                    @if (AppInfo.Current.Author is { Length: > 0 } author)
-                    {
-                        <div class="fact">
-                            <dt>@T["aboutAuthor"]</dt>
-                            <dd>@author</dd>
-                        </div>
-                    }
-                </dl>
-            </div>
+                }
+            </dl>
         </div>
         <div class="dialog-footer">
             <button class="btn accent" value="ok">@T["close"]</button>

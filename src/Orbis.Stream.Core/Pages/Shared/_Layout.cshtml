@@ -42,6 +42,9 @@
             <button type="button" class="btn subtle icon-only" id="sidebar-toggle" title="Toggle Sidebar" aria-label="Toggle Sidebar" aria-controls="orbis-sidebar" aria-expanded="true"><i class="icon">&#xE700;</i></button>
             <img src="/favicon.ico" alt="" />
             <span>Orbis Stream</span>
+            <button type="button" class="update-bell" id="update-bell" title="@T["updateAvailable"]" aria-label="@T["updateAvailable"]" hidden>
+                <i class="icon" aria-hidden="true">&#xEA8F;</i>
+            </button>
         </div>
         <a href="/orbis/mainMenu" aria-current="@Current("mainMenu")"><i class="icon">&#xE80F;</i><span>@T["dashboard"]</span></a>
         <a href="/orbis/mainLiveMenu" aria-current="@Current("mainLiveMenu", "mainLive", "countdown", "mainLiveHistory", "mainLayoutList", "mainLayout", "mainPreview")"><i class="icon">&#xE714;</i><span>Live</span></a>
@@ -49,6 +52,11 @@
         <a href="/orbis/mainSetting" aria-current="@Current("mainSetting", "mainVideoSetting", "mainChannelSetting")"><i class="icon">&#xE713;</i><span>@T["settings"]</span></a>
         <div class="nav-spacer"></div>
         
+        <div class="segmented-control" role="radiogroup" aria-label="Theme">
+            <button type="button" class="segment" data-theme-set="light" title="Light" aria-label="Light Theme"><i class="icon">&#xE706;</i></button>
+            <button type="button" class="segment" data-theme-set="dark" title="Dark" aria-label="Dark Theme"><i class="icon">&#xE708;</i></button>
+        </div>
+
         <details class="lang-picker">
             <summary class="lang-current" title="Language" aria-label="Language">
                 @{
@@ -73,14 +81,7 @@
                 }
             </ul>
         </details>
-        <div class="segmented-control" role="radiogroup" aria-label="Theme">
-            <button type="button" class="segment" data-theme-set="light" title="Light" aria-label="Light Theme"><i class="icon">&#xE706;</i></button>
-            <button type="button" class="segment" data-theme-set="dark" title="Dark" aria-label="Dark Theme"><i class="icon">&#xE708;</i></button>
-        </div>
         
-        <button type="button" class="update-bell" id="update-bell" title="@T["updateAvailable"]" aria-label="@T["updateAvailable"]" hidden>
-            <i class="icon" aria-hidden="true">&#xEA8F;</i>
-        </button>
         <button type="button" class="nav-about" id="about-button" data-open-about title="@T["about"]" aria-label="@T["about"]" aria-haspopup="dialog">
             <i class="icon" aria-hidden="true">&#xE946;</i>
             <span class="nav-about-text">

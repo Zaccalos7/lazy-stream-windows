@@ -91,6 +91,25 @@ public sealed class LivePlatformEmbedTests
     }
 
     [Fact]
+    public async Task YouTube_IsPlayedOnTheVideoTheChannelIsBroadcasting_Legacy()
+    {
+        var embeds = Platform(request =>
+        {
+            var page = request.RequestUri!.AbsolutePath.EndsWith("/streams", StringComparison.Ordinal)
+                ? Streams("RU6gEobXVHA")
+                : LegacyWatch(onAir: true);
+            return Text(page);
+        });
+
+        var embed = await embeds.ResolveAsync(YouTube, "reproChannel", "youtube", "localhost", default);
+
+        Assert.NotNull(embed);
+        Assert.Equal("youtube", embed!.Platform);
+        Assert.Equal("reproChannel", embed.Channel);
+        Assert.StartsWith("https://www.youtube.com/embed/RU6gEobXVHA?", embed.Url, StringComparison.Ordinal);
+    }
+
+    [Fact]
     public async Task YouTube_TrimsTheAtSignOfTheHandle()
     {
         var handler = Page(_ => Watch(onAir: true));
@@ -172,6 +191,10 @@ public sealed class LivePlatformEmbedTests
 
     /// <summary>A page of a video, which says whether it is live content.</summary>
     private static string Watch(bool onAir) =>
+        "<html><script>var ytInitialPlayerResponse = " +
+        "{\"isLive\":" + (onAir ? "true" : "false") + "}};</script></html>";
+
+    private static string LegacyWatch(bool onAir) =>
         "<html><script>var ytInitialPlayerResponse = " +
         "{\"isLiveContent\":" + (onAir ? "true" : "false") + "}};</script></html>";
 

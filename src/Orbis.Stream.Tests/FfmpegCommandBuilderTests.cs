@@ -114,6 +114,7 @@ public sealed class FfmpegCommandBuilderTests
     [Theory]
     [InlineData("rtmp://ingest/live", "key", "rtmp://ingest/live/key")]
     [InlineData("rtmp://ingest/live/", "key", "rtmp://ingest/live/key")]
+    [InlineData(" rtmps://a.rtmps.youtube.com/live2 ", "abcd-efgh-ijkl \r\n", "rtmps://a.rtmps.youtube.com/live2/abcd-efgh-ijkl")]
     public void BuildStreamingUrl_JoinsWithASingleSeparator(string url, string key, string expected)
     {
         Assert.Equal(expected, FfmpegCommandBuilder.BuildStreamingUrl(url, key));

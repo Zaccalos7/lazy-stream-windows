@@ -27,7 +27,21 @@ public sealed record FfmpegCompositionItem(
     int Y,
     int Width,
     int Height,
-    bool AudioEnabled);
+    bool AudioEnabled,
+    /// <summary>A file the GPU was measured to decode faster than the CPU (see MediaProxyService).</summary>
+    bool HardwareDecoding = false);
+
+/// <summary>
+/// What makes a light copy (see <see cref="FfmpegCommandBuilder.BuildProxy"/>): the GPU decoder or
+/// the CPU, and a GPU encoder (h264_nvenc, h264_qsv, h264_amf) or x264.
+/// </summary>
+public sealed record ProxyEncoding(bool HardwareDecoding, string? Encoder)
+{
+    public static readonly ProxyEncoding Cpu = new(false, null);
+
+    public override string ToString() =>
+        (HardwareDecoding ? "GPU decoding" : "CPU decoding") + ", " + (Encoder ?? "x264");
+}
 
 /// <summary>
 /// Everything needed to stream a canvas: the sources, where they sit, and the encoder setting they
@@ -387,6 +401,85 @@ public static class FfmpegCommandBuilder
     }
 
     /// <summary>
+    /// The light copy of a heavy file a canvas streams instead of it (see MediaProxyService): no
+    /// bigger than <paramref name="maxWidth"/> x <paramref name="maxHeight"/>, never scaled up, 8 bit
+    /// H.264 and AAC, on the same timeline as the file so a live resumes in it at the same second.
+    /// <para>The scale comes first, so whatever follows works on a fraction of the pixels. An HDR
+    /// file is tone mapped to SDR after it: dropping ten bits of PQ to eight without it is the
+    /// grey, washed out picture a live of an HDR file otherwise has.</para>
+    /// <para><paramref name="encoding"/> says what does the work: the CPU, the GPU decoder, a GPU
+    /// encoder. The filters stay on the CPU either way, so a decoded frame comes back from the GPU
+    /// before it is scaled, and that copy is why the GPU is not always the faster one. A
+    /// <paramref name="trial"/> runs the same command on the first seconds of the file into
+    /// nothing, which is how the faster one is found.</para>
+    /// <para>The progress goes to stdout, for the log to say how far a long file got.</para>
+    /// </summary>
+    public static IReadOnlyList<string> BuildProxy(
+        string inputPath,
+        string outputPath,
+        int maxWidth,
+        int maxHeight,
+        bool toneMap,
+        ProxyEncoding? encoding = null,
+        TimeSpan? trial = null)
+    {
+        encoding ??= ProxyEncoding.Cpu;
+
+        var filter = string.Create(CultureInfo.InvariantCulture,
+            $"scale=w='min({maxWidth},iw)':h='min({maxHeight},ih)':force_original_aspect_ratio=decrease:force_divisible_by=2");
+        if (toneMap)
+        {
+            filter += ",zscale=t=linear:npl=100,format=gbrpf32le,zscale=p=bt709,tonemap=tonemap=hable:desat=0,zscale=t=bt709:m=bt709:r=tv";
+        }
+
+        filter += ",format=yuv420p";
+
+        List<string> arguments =
+            ["-hide_banner", "-nostdin", "-y", "-loglevel", "error", "-nostats", "-progress", "pipe:1"];
+
+        if (encoding.HardwareDecoding)
+        {
+            // Whatever decoder the machine has (d3d11va, dxva2, cuda, qsv, vaapi), and the CPU when
+            // none of them opens: auto never fails a command for want of a GPU.
+            arguments.AddRange(["-hwaccel", "auto"]);
+        }
+
+        arguments.AddRange(["-i", inputPath, "-map", "0:v:0", "-map", "0:a:0?", "-vf", filter]);
+        arguments.AddRange(ProxyVideoEncoder(encoding.Encoder));
+
+        if (toneMap)
+        {
+            arguments.AddRange(["-color_primaries", "bt709", "-color_trc", "bt709", "-colorspace", "bt709"]);
+        }
+
+        arguments.AddRange(["-c:a", "aac", "-b:a", "192k"]);
+
+        if (trial is { } seconds)
+        {
+            arguments.AddRange(["-t", Seconds(seconds), "-f", "null", "-"]);
+            return arguments;
+        }
+
+        // The output is written under a name that is not the proxy's until it is whole, so the
+        // container is named rather than read off the extension.
+        arguments.AddRange(["-f", "mp4", outputPath]);
+        return arguments;
+    }
+
+    /// <summary>
+    /// The quality a copy is made at, as each encoder spells it: about what CRF 20 is to x264, which
+    /// is more than the live will keep once it encodes it again at its own bitrate.
+    /// </summary>
+    private static string[] ProxyVideoEncoder(string? encoder) => encoder switch
+    {
+        null => ["-c:v", "libx264", "-preset", "veryfast", "-crf", "20"],
+        "h264_nvenc" => ["-c:v", encoder, "-preset", "p4", "-rc", "vbr", "-cq", "21", "-b:v", "0"],
+        "h264_qsv" => ["-c:v", encoder, "-preset", "veryfast", "-global_quality", "21"],
+        "h264_amf" => ["-c:v", encoder, "-quality", "speed", "-rc", "cqp", "-qp_i", "20", "-qp_p", "22"],
+        _ => ["-c:v", encoder]
+    };
+
+    /// <summary>
     /// One frame of a source as a JPEG on stdout, for the tile the canvas draws before the live
     /// starts. The source is opened exactly the way the live will open it, so a device that cannot
     /// be snapshotted is a device that would not have streamed either.
@@ -488,6 +581,12 @@ public static class FfmpegCommandBuilder
 
             arguments.Add("-thread_queue_size");
             arguments.Add("512");
+            if (item.HardwareDecoding)
+            {
+                arguments.Add("-hwaccel");
+                arguments.Add("auto");
+            }
+
             if (paced)
             {
                 arguments.Add("-readrate");
@@ -755,6 +854,13 @@ public static class FfmpegCommandBuilder
         ArgumentNullException.ThrowIfNull(streamUrl);
         ArgumentNullException.ThrowIfNull(streamKey);
 
+        // A key is copied from the dashboard of the platform and pasted, and a space or a line
+        // break comes along more often than not. The ingest takes the publish all the same - the
+        // key is checked after it - so a key with a space on the end is a live that connects, is
+        // accepted, and never appears on the channel. Neither a key nor an address has a space
+        // that means anything.
+        streamUrl = streamUrl.Trim();
+        streamKey = streamKey.Trim();
         return streamUrl.EndsWith('/') ? streamUrl + streamKey : streamUrl + "/" + streamKey;
     }
 

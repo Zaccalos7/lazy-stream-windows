@@ -53,6 +53,11 @@ public static class OrbisServiceCollectionExtensions
         services.AddSingleton<FfmpegProbe>();
         services.AddSingleton<StreamingSessionRegistry>();
         services.AddSingleton<LivePreviewFrames>();
+        services.AddSingleton(provider => new MediaProxyService(
+            options,
+            provider.GetRequiredService<FfmpegToolLocator>(),
+            provider.GetRequiredService<FfmpegProbe>(),
+            provider.GetRequiredService<Microsoft.Extensions.Logging.ILogger<MediaProxyService>>()));
         services.AddSingleton<FfmpegVideoPlaylistStreamer>();
         services.AddSingleton<IVideoPlaylistStreamer>(provider => (IVideoPlaylistStreamer)provider.GetRequiredService<FfmpegVideoPlaylistStreamer>());
 

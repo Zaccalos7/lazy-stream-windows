@@ -42,6 +42,7 @@ public sealed class FfmpegVideoPlaylistStreamer : IVideoPlaylistStreamer
     private readonly Localizer _localizer;
     private readonly LiveChangeNotifier _notifier;
     private readonly LivePreviewFrames _frames;
+    private readonly MediaProxyService _proxies;
     private readonly ILogger<FfmpegVideoPlaylistStreamer> _logger;
 
     public FfmpegVideoPlaylistStreamer(
@@ -54,6 +55,7 @@ public sealed class FfmpegVideoPlaylistStreamer : IVideoPlaylistStreamer
         Localizer localizer,
         LiveChangeNotifier notifier,
         LivePreviewFrames frames,
+        MediaProxyService proxies,
         ILogger<FfmpegVideoPlaylistStreamer> logger)
     {
         _videoRepository = videoRepository;
@@ -65,6 +67,7 @@ public sealed class FfmpegVideoPlaylistStreamer : IVideoPlaylistStreamer
         _localizer = localizer;
         _notifier = notifier;
         _frames = frames;
+        _proxies = proxies;
         _logger = logger;
     }
 
@@ -452,6 +455,26 @@ public sealed class FfmpegVideoPlaylistStreamer : IVideoPlaylistStreamer
     /// What ffprobe says about every file of the canvas, asked once: the sound of a file decides
     /// whether it joins the mix, and its length decides whether the live waits for it.
     /// </summary>
+    /// <summary>
+    /// What ffmpeg opens for each file of a canvas: its light copy when it has one that fits the
+    /// tile, otherwise the file, on the GPU when the GPU decodes it faster. Decided once a live, so
+    /// a reconfigured pass resumes in the same picture it left; the copy is on the same timeline,
+    /// so the position is the same either way.
+    /// </summary>
+    private Dictionary<VideoEntity, MediaInput> FileInputsOf(
+        IReadOnlyList<VideoEntity> rows, IReadOnlyDictionary<string, MediaProbeResult> probes)
+    {
+        var inputs = new Dictionary<VideoEntity, MediaInput>(ReferenceEqualityComparer.Instance);
+        foreach (var row in rows.Where(row => row.SourceKind == SourceKind.File))
+        {
+            inputs[row] = probes.TryGetValue(row.VideoPath, out var probe)
+                ? _proxies.Resolve(row.VideoPath, probe, row.Width ?? 0, row.Height ?? 0)
+                : new MediaInput(row.VideoPath, false);
+        }
+
+        return inputs;
+    }
+
     private async Task<Dictionary<string, MediaProbeResult>> ProbedFilesAsync(
         IReadOnlyList<VideoEntity> rows,
         CancellationToken cancellationToken)
@@ -590,6 +613,7 @@ public sealed class FfmpegVideoPlaylistStreamer : IVideoPlaylistStreamer
             var probes = await ProbedFilesAsync(rows, cancellationToken).ConfigureAwait(false);
             var silent = SilentFilesOf(rows, probes);
             var duration = onlyFiles ? LongestFileDuration(rows, probes) : null;
+            var inputs = FileInputsOf(rows, probes);
             if (duration is { } canvasLength)
             {
                 _logger.LogInformation(
@@ -605,12 +629,13 @@ public sealed class FfmpegVideoPlaylistStreamer : IVideoPlaylistStreamer
                 var items = rows
                     .Select(row => new FfmpegCompositionItem(
                         row.SourceKind,
-                        row.SourceKind == SourceKind.File ? row.VideoPath : row.SourceTarget ?? string.Empty,
+                        row.SourceKind == SourceKind.File ? inputs[row].Path : row.SourceTarget ?? string.Empty,
                         row.X ?? 0,
                         row.Y ?? 0,
                         row.Width ?? 0,
                         row.Height ?? 0,
-                        row.AudioEnabled && !silent.Contains(row)))
+                        row.AudioEnabled && !silent.Contains(row),
+                        row.SourceKind == SourceKind.File && inputs[row].HardwareDecoding))
                     .ToList();
 
                 var next = FfmpegStreamingSession.StartComposition(

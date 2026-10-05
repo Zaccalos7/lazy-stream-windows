@@ -102,6 +102,19 @@ public static class OrbisEndpoints
             return frame is null ? Results.NoContent() : Results.File(frame, "image/jpeg");
         });
 
+        // A file has just been laid on a tile: if it is too heavy to decode in real time, its light
+        // copy is made now, in the background, so it is ready long before the live is.
+        app.MapPost("/preview/sources/prepare", (string? target, MediaProxyService proxies) =>
+        {
+            if (!SourceSnapshotService.IsSnapshottable(SourceKind.File, target))
+            {
+                return Results.NoContent();
+            }
+
+            proxies.Prepare(target!);
+            return Results.Accepted();
+        });
+
         // The real resolution of a video file, read by ffprobe the moment it lands on the canvas:
         // the still is scaled down, so it cannot say how many pixels the file has, and that is the
         // most the composition can be streamed at without upscaling it.

@@ -174,26 +174,39 @@ public static class StreamPlatforms
     }
 
     /// <summary>
-    /// Points an RTMPS url at the host YouTube serves RTMPS on (see <see cref="YouTubeRtmpsHost"/>).
-    /// Every other url, a plain RTMP one to YouTube included, is returned as it was.
+    /// Points a YouTube ingest at the host YouTube serves RTMPS on (see <see cref="YouTubeRtmpsHost"/>).
+    /// <para>Both halves are rewritten, and the scheme is one of them: a plain
+    /// <c>rtmp://a.rtmp.youtube.com</c> is turned into <c>rtmps://a.rtmps.youtube.com</c>, not only
+    /// the host of an url that already said rtmps. YouTube takes ingest over TLS and nothing else,
+    /// so a plain RTMP url to it cannot produce a live whatever it is paired with. What the server
+    /// does with such a connection is what makes it hard to see: it can answer the handshake and
+    /// the publish as it always did and leave the broadcast off air, so the live reads as connected
+    /// and there is nothing to watch. A url that already says rtmps, on any other host, is left
+    /// exactly as it was.</para>
     /// </summary>
     public static string NormalizeIngestUrl(string outputUrl)
     {
         ArgumentNullException.ThrowIfNull(outputUrl);
 
         if (!Uri.TryCreate(outputUrl, UriKind.Absolute, out var uri)
-            || !uri.Scheme.Equals("rtmps", StringComparison.OrdinalIgnoreCase)
+            || !uri.Scheme.StartsWith("rtmp", StringComparison.OrdinalIgnoreCase)
             || !IsOrUnder(uri.Host, YouTubeRtmpHost))
         {
             return outputUrl;
         }
 
         // a.rtmp.youtube.com -> a.rtmps.youtube.com, b.rtmp... -> b.rtmps...: the primary and the
-        // backup ingest keep their letter. Only the authority is rewritten, so the key is untouched.
+        // backup ingest keep their letter. Only the scheme and the authority are rewritten, so the
+        // app and the key are untouched.
         var host = uri.Host;
         var fixedHost = host[..^YouTubeRtmpHost.Length] + YouTubeRtmpsHost;
         var at = outputUrl.IndexOf(host, StringComparison.OrdinalIgnoreCase);
-        return at < 0 ? outputUrl : outputUrl[..at] + fixedHost + outputUrl[(at + host.Length)..];
+        if (at < 0)
+        {
+            return outputUrl;
+        }
+
+        return string.Concat("rtmps://", fixedHost, outputUrl.AsSpan(at + host.Length));
     }
 
     private static bool IsOrUnder(string host, string domain) =>

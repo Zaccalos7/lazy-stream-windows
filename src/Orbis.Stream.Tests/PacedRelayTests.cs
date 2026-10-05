@@ -26,10 +26,21 @@ public sealed class StreamPlatformTests
     [InlineData("rtmps://a.rtmp.youtube.com/live2/abcd-efgh", "rtmps://a.rtmps.youtube.com/live2/abcd-efgh")]
     [InlineData("rtmps://b.rtmp.youtube.com:443/live2/abcd-efgh", "rtmps://b.rtmps.youtube.com:443/live2/abcd-efgh")]
     [InlineData("rtmps://a.rtmps.youtube.com/live2/abcd-efgh", "rtmps://a.rtmps.youtube.com/live2/abcd-efgh")]
-    [InlineData("rtmp://a.rtmp.youtube.com/live2/abcd-efgh", "rtmp://a.rtmp.youtube.com/live2/abcd-efgh")]
+    [InlineData("rtmp://a.rtmp.youtube.com/live2/abcd-efgh", "rtmps://a.rtmps.youtube.com/live2/abcd-efgh")]
+    [InlineData("RTMP://A.RTMP.YOUTUBE.COM/live2/abcd-efgh", "rtmps://a.rtmps.youtube.com/live2/abcd-efgh")]
     [InlineData("rtmp://live.twitch.tv/app/key", "rtmp://live.twitch.tv/app/key")]
-    public void NormalizeIngestUrl_PointsRtmpsAtTheRtmpsHostOfYouTube(string url, string expected) =>
+    [InlineData("rtmps://ingest.live-video.net/app/key", "rtmps://ingest.live-video.net/app/key")]
+    [InlineData("rtmp://my.cdn.example/live/key", "rtmp://my.cdn.example/live/key")]
+    public void NormalizeIngestUrl_PutsYouTubeOnTheTlsItOnlyTakesIngestOver(string url, string expected) =>
         Assert.Equal(expected, StreamPlatforms.NormalizeIngestUrl(url));
+
+    [Fact]
+    public void NormalizeIngestUrl_LeavesAnUnreadableUrlAlone()
+    {
+        // Nothing to rewrite, and a live must not be lost to a url the parser cannot read.
+        Assert.Equal("not a url at all", StreamPlatforms.NormalizeIngestUrl("not a url at all"));
+        Assert.Equal("rtmp://a.rtmps.youtube.com/live2/k", "rtmp://a.rtmps.youtube.com/live2/k");
+    }
 
     [Fact]
     public void For_GivesEveryPlatformItsProfile()
@@ -266,6 +277,9 @@ public sealed class RelayCommandTests
 {
     private static readonly MediaProbeResult Silent = new(1280, 720, 30, false, 0, 10);
 
+    /// <summary>A probe of a file that does carry a sound, which YouTube cannot do without.</summary>
+    private static readonly MediaProbeResult WithSound = Silent with { HasAudio = true, AudioChannels = 2 };
+
     private static VideoSettingEntity Setting() => new()
     {
         Title = "test",
@@ -366,6 +380,31 @@ public sealed class RelayCommandTests
 
         // The rate control is what a viewer sees as quality, so it is untouched by the switch.
         Assert.Contains("-rc cbr", text, StringComparison.Ordinal);
+    }
+
+    [Theory]
+    [InlineData("rtmps://a.rtmps.youtube.com/live2/key", true)]
+    [InlineData("rtmp://live.twitch.tv/app/key", false)]
+    public void Relay_AStreamThatMustCarrySoundMapsItAsMandatory(string url, bool expected)
+    {
+        var setting = Setting();
+        setting.VideoSettingsOptions = [];
+        var text = string.Join(' ', FfmpegCommandBuilder.Build(new FfmpegStreamRequest(
+            "/videos/clip.mp4", url, WithSound, setting,
+            Profile: StreamPlatformProfile.For(url))));
+
+        // An optional audio map is what lets ffmpeg carry on and send a live with no sound at all.
+        // Where the platform needs the sound it must stop instead, or the ingest accepts a stream
+        // that is never broadcast and nothing says why.
+        if (expected)
+        {
+            Assert.Contains("-map 0:a:0", text, StringComparison.Ordinal);
+            Assert.DoesNotContain("0:a:0?", text, StringComparison.Ordinal);
+        }
+        else
+        {
+            Assert.Contains("0:a:0?", text, StringComparison.Ordinal);
+        }
     }
 
     [Fact]

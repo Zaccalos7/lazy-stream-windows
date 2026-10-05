@@ -151,7 +151,16 @@ public static class FfmpegCommandBuilder
         if (probe.HasAudio)
         {
             arguments.Add("-map");
-            arguments.Add("0:a:0?");
+
+            // The `?` that makes a map optional is what keeps ffmpeg alive when the stream it names
+            // is not there, and on a platform that needs a sound that is the worst thing it could do:
+            // the live would go out with a picture and no sound, the ingest would accept the publish
+            // as it always does, and nothing would ever be broadcast - a live that reads as
+            // connected and is not there, with nothing in the log to say why. Where the platform
+            // needs the sound the map is mandatory, so ffmpeg stops on the first frame with its own
+            // message about the track, which is a mistake the user can act on. Everywhere else the
+            // optional map is kept: a live with no sound is a normal thing on Twitch.
+            arguments.Add(profile is { RequiresAudio: true } ? "0:a:0" : "0:a:0?");
         }
         else if (silence)
         {

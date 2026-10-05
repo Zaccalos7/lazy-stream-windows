@@ -152,24 +152,27 @@ public sealed class DatabaseSchemaTests
     }
 
     /// <summary>
-    /// The YouTube ingest of the first versions (RTMPS scheme, RTMP host) moves to the RTMPS host,
-    /// in the configurations and in the lives, except for a key already saved on the new one.
+    /// Every YouTube ingest the earlier versions offered moves to the one YouTube takes over TLS,
+    /// in the configurations and in the lives, except for a key already saved on the new one. A
+    /// plain RTMP url to YouTube is one of them: the connection can be answered and the broadcast
+    /// still never start, which is a live that reads as connected and is not there.
     /// </summary>
-    [Fact]
-    public void EnsureCreated_MovesTheOldYouTubeIngest()
+    [Theory]
+    [InlineData("rtmps://a.rtmp.youtube.com/live2")]
+    [InlineData("rtmp://a.rtmp.youtube.com/live2")]
+    public void EnsureCreated_MovesTheOldYouTubeIngest(string old)
     {
-        const string Old = "rtmps://a.rtmp.youtube.com/live2";
         const string New = "rtmps://a.rtmps.youtube.com/live2";
 
         using var database = new TemporaryDatabase();
         var settings = database.Repository<SettingRepository>();
-        settings.Insert(new SettingEntity { Id = 1, StreamUrl = Old, StreamKey = "moved", ChannelName = "channel" });
-        settings.Insert(new SettingEntity { Id = 2, StreamUrl = Old, StreamKey = "twin", ChannelName = "channel" });
+        settings.Insert(new SettingEntity { Id = 1, StreamUrl = old, StreamKey = "moved", ChannelName = "channel" });
+        settings.Insert(new SettingEntity { Id = 2, StreamUrl = old, StreamKey = "twin", ChannelName = "channel" });
         settings.Insert(new SettingEntity { Id = 3, StreamUrl = New, StreamKey = "twin", ChannelName = "channel" });
         settings.Insert(new SettingEntity { Id = 4, StreamUrl = "rtmp://live.twitch.tv/app", StreamKey = "moved", ChannelName = "channel" });
 
         using var connection = database.ConnectionFactory.Open();
-        Execute(connection, $"UPDATE video_live_history SET stream_url = '{Old}'");
+        Execute(connection, $"UPDATE video_live_history SET stream_url = '{old}'");
 
         DatabaseSchema.EnsureCreated(connection, NullLogger.Instance);
 
@@ -181,7 +184,7 @@ public sealed class DatabaseSchemaTests
         }
 
         Assert.Equal(New, UrlOf("SELECT stream_url FROM setting WHERE id = 1"));
-        Assert.Equal(Old, UrlOf("SELECT stream_url FROM setting WHERE id = 2"));
+        Assert.Equal(old, UrlOf("SELECT stream_url FROM setting WHERE id = 2"));
         Assert.Equal("rtmp://live.twitch.tv/app", UrlOf("SELECT stream_url FROM setting WHERE id = 4"));
         Assert.Equal(New, UrlOf($"SELECT stream_url FROM video_live_history WHERE pkid = {database.LiveHistoryId}"));
     }

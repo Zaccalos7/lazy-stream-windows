@@ -303,26 +303,31 @@ public static class DatabaseSchema
     }
 
     /// <summary>
-    /// The YouTube ingest the first versions offered paired the RTMPS scheme with the RTMP host.
-    /// The configurations and the lives saved with it move to the RTMPS host: a live restarted from
-    /// its history streams to the url it was saved with, and the platform of a live is recognised by
-    /// the exact url, so a row left behind would lose its player and its link. A configuration whose
-    /// key is already saved on the new url stays where it is, since the pair is unique.
+    /// The YouTube ingests the earlier versions offered, and the one to move to. YouTube takes
+    /// ingest over TLS and nothing else, and a plain RTMP url to it cannot produce a live: the
+    /// connection can be answered and the broadcast still never start, so the app reports a live
+    /// that is not there. Both the pairing the first versions had (the RTMPS scheme on the plain
+    /// RTMP host) and a plain RTMP url are moved to the host that serves RTMPS.
+    /// <para>A live restarted from its history streams to the url it was saved with, and the
+    /// platform of a live is recognised by the exact url, so a row left behind would lose its
+    /// player and its link. A configuration whose key is already saved on the new url stays where
+    /// it is, since the pair is unique.</para>
     /// </summary>
     internal static int MoveToTheYouTubeIngest(SqliteConnection connection)
     {
-        const string Old = "rtmps://a.rtmp.youtube.com/live2";
         const string New = "rtmps://a.rtmps.youtube.com/live2";
 
         using var command = connection.CreateCommand();
         command.CommandText = """
             UPDATE setting SET stream_url = $new
-            WHERE lower(stream_url) = $old
+            WHERE lower(stream_url) IN ($rtmpsOnRtmp, $plainRtmp)
               AND NOT EXISTS (SELECT 1 FROM setting AS twin WHERE twin.stream_url = $new AND twin.stream_key = setting.stream_key);
-            UPDATE video_live_history SET stream_url = $new WHERE lower(stream_url) = $old;
+            UPDATE video_live_history SET stream_url = $new
+            WHERE lower(stream_url) IN ($rtmpsOnRtmp, $plainRtmp);
             """;
-        command.Parameters.AddWithValue("$old", Old);
         command.Parameters.AddWithValue("$new", New);
+        command.Parameters.AddWithValue("$rtmpsOnRtmp", "rtmps://a.rtmp.youtube.com/live2");
+        command.Parameters.AddWithValue("$plainRtmp", "rtmp://a.rtmp.youtube.com/live2");
         return command.ExecuteNonQuery();
     }
 

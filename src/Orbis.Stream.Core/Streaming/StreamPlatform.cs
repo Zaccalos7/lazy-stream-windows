@@ -57,12 +57,7 @@ public sealed record StreamPlatformProfile(
     /// </summary>
     TimeSpan MaxLead,
 
-    /// <summary>
-    /// How late the relay may fall behind (a network that stopped taking data for a while) before
-    /// it stops trying to catch up and moves its clock instead. Below it the late frames are sent
-    /// as fast as the network takes them, exactly like the Java loop did.
-    /// </summary>
-    TimeSpan MaxCatchUp,
+    
 
     /// <summary>How long the ingest has to start taking data before the live is declared failed.</summary>
     TimeSpan ConnectTimeout,
@@ -89,15 +84,15 @@ public sealed record StreamPlatformProfile(
     double KeyframeSeconds)
 {
     /// <summary>
-    /// Twitch: the pacing of the Java version, unchanged in spirit. No head start, a short queue
-    /// so the preview stays next to what is on air, and late frames sent at once.
+    /// Twitch: no head start, and a short jitter buffer so the preview stays next to what is on
+    /// air. The buffer is the whole margin there is, which is why the relay wins a slow moment
+    /// back by sending a little fast rather than by writing the gap off.
     /// </summary>
     public static readonly StreamPlatformProfile Twitch = new(
         StreamPlatform.Twitch,
         UsesRelay: true,
         Preroll: TimeSpan.Zero,
         MaxLead: TimeSpan.FromSeconds(1),
-        MaxCatchUp: TimeSpan.FromSeconds(5),
         ConnectTimeout: TimeSpan.FromSeconds(20),
         StallTimeout: TimeSpan.FromSeconds(15),
         ReconnectAttempts: 3,
@@ -116,7 +111,6 @@ public sealed record StreamPlatformProfile(
         UsesRelay: true,
         Preroll: TimeSpan.FromSeconds(2),
         MaxLead: TimeSpan.FromSeconds(4),
-        MaxCatchUp: TimeSpan.FromSeconds(10),
         ConnectTimeout: TimeSpan.FromSeconds(30),
         StallTimeout: TimeSpan.FromSeconds(20),
         ReconnectAttempts: 5,
@@ -131,7 +125,6 @@ public sealed record StreamPlatformProfile(
         UsesRelay: false,
         Preroll: TimeSpan.Zero,
         MaxLead: TimeSpan.Zero,
-        MaxCatchUp: TimeSpan.Zero,
         ConnectTimeout: TimeSpan.FromSeconds(30),
         StallTimeout: TimeSpan.FromSeconds(30),
         ReconnectAttempts: 0,

@@ -38,6 +38,13 @@ public sealed class FlvPacedRelay
     /// </summary>
     private static readonly TimeSpan MaxForwardJump = TimeSpan.FromSeconds(5);
 
+    /// <summary>
+    /// How much faster than real time the relay sends while it has a backlog to win back. Two is
+    /// enough to drain the jitter buffer and leave again without flooding an uplink that has just
+    /// been the reason for the lag.
+    /// </summary>
+    private const int CatchUpRate = 2;
+
     private readonly System.IO.Stream _source;
     private readonly IFlvSink _sink;
     private readonly StreamPlatformProfile _profile;
@@ -57,6 +64,7 @@ public sealed class FlvPacedRelay
     private long _onAirSinceTicks;
     private long _lastAdvanceTicks = Environment.TickCount64;
     private int _rebases;
+    private int _catchingUp;
     private long _worstLateMilliseconds;
 
     public FlvPacedRelay(System.IO.Stream source, IFlvSink sink, StreamPlatformProfile profile, ILogger logger)
@@ -94,6 +102,13 @@ public sealed class FlvPacedRelay
 
     /// <summary>How many times the clock was moved because the network fell too far behind.</summary>
     public int Rebases => Volatile.Read(ref _rebases);
+
+    /// <summary>
+    /// How many times the relay fell a second behind and had to send faster than real time to get
+    /// back on schedule. A number that keeps climbing is a live that is losing more than its
+    /// jitter buffer holds, which is what a viewer sees as buffering.
+    /// </summary>
+    public int CatchingUp => Volatile.Read(ref _catchingUp);
 
     public void Start()
     {
@@ -203,8 +218,12 @@ public sealed class FlvPacedRelay
 
             long? anchor = null;
             long baseTimestamp = 0;
-            var maxCatchUp = HybridWaiter.Ticks(_profile.MaxCatchUp);
+
+            // How much of the stream still has to be won back after a slow moment, in stopwatch
+            // ticks. Only the sending thread touches it.
+            var recovery = 0L;
             var maxForwardJump = HybridWaiter.Ticks(MaxForwardJump);
+            var maxLead = HybridWaiter.Ticks(_profile.MaxLead);
 
             while (NextTag() is { } tag)
             {
@@ -224,8 +243,11 @@ public sealed class FlvPacedRelay
                         var target = anchor.Value + HybridWaiter.Ticks(TimeSpan.FromMilliseconds(tag.Timestamp - baseTimestamp));
                         var late = HybridWaiter.Now - target;
 
-                        // The preroll is sent early on purpose: only what is late after it counts.
-                        if (tag.Timestamp - baseTimestamp >= Milliseconds(_profile.Preroll))
+                        // The preroll is sent early on purpose: it is due before the clock the
+                        // anchor sets, and it is not a late frame. Only what is late after the
+                        // preroll counts, as a shortfall or in the log.
+                        var inPreroll = tag.Timestamp - baseTimestamp < Milliseconds(_profile.Preroll);
+                        if (!inPreroll)
                         {
                             _worstLateMilliseconds = Math.Max(
                                 _worstLateMilliseconds, late * 1000 / System.Diagnostics.Stopwatch.Frequency);
@@ -242,21 +264,54 @@ public sealed class FlvPacedRelay
                                 _profile.Platform,
                                 -late / (double)System.Diagnostics.Stopwatch.Frequency);
                         }
-                        else if (late > maxCatchUp && maxCatchUp > 0)
-                        {
-                            // The network held the sender back for longer than is worth catching
-                            // up: the clock moves to now, so the backlog is not sent in one long
-                            // burst that a weak uplink would choke on again.
-                            anchor += late;
-                            Interlocked.Increment(ref _rebases);
-                            _logger.LogWarning(
-                                "The live to {Platform} fell {Late:0.0}s behind: the relay clock was moved",
-                                _profile.Platform,
-                                late / (double)System.Diagnostics.Stopwatch.Frequency);
-                        }
                         else
                         {
-                            waiter.WaitUntil(target, token);
+                            // Every frame waits for the wall clock its timestamps say, whether it
+                            // early or late: `late` here is how far past that moment we are, and it
+                            // is worked off below rather than waited on. The preroll is not a
+                            // shortfall: it is what was held back to be sent in one burst.
+                            if (!inPreroll)
+                            {
+                                recovery = Math.Min(recovery + Math.Max(0, late), maxLead);
+                            }
+
+                            if (recovery >= HybridWaiter.Ticks(TimeSpan.FromSeconds(1)))
+                            {
+                                Interlocked.Increment(ref _catchingUp);
+                                _logger.LogWarning(
+                                    "The live to {Platform} fell {Late:0.0}s behind: sending at {Rate}x to win it back",
+                                    _profile.Platform,
+                                    recovery / (double)System.Diagnostics.Stopwatch.Frequency,
+                                    CatchUpRate);
+                            }
+
+                            // A frame on time waits its whole moment: the pacing of a live that is keeping up is
+                            // untouched. Only a live that is behind is sent fast, and then the gap
+                            // is shortened by 1/CatchUpRate, so the frames go out CatchUpRate
+                            // times faster than real time and the shortfall is made up over the
+                            // frames the jitter buffer already holds. Nothing else changes: no
+                            // clock is moved, no timestamp is rewritten, and the ingest keeps
+                            // seeing a contiguous timeline.
+                            var full = target - HybridWaiter.Now;
+                            if (full > 0)
+                            {
+                                // What the frame is owed is `full`; what the catch-up takes off it
+                                // is at most the shortfall, so the faster sending never runs past
+                                // zero and turns into a burst, and never exceeds twice the rate.
+                                var spared = recovery > 0 ? Math.Min(full, recovery / CatchUpRate) : 0;
+                                waiter.WaitUntil(HybridWaiter.Now + full - spared, token);
+
+                                // The shortfall is reduced by what was actually gained, which is the
+                                // time not waited on: sending a frame early is as much of a gain as
+                                // waiting less for the next one.
+                                recovery = Math.Max(0, recovery - spared);
+                            }
+                            else
+                            {
+                                // Already past due, so this frame costs no wall clock at all: the
+                                // whole of its moment is gained back, up to what is owed.
+                                recovery = Math.Max(0, recovery - Math.Min(-full, maxLead));
+                            }
                         }
                     }
 
@@ -270,10 +325,11 @@ public sealed class FlvPacedRelay
             }
 
             _logger.LogInformation(
-                "Relay to {Platform} finished: worst lateness {Late} ms, {Rebases} clock moves",
+                "Relay to {Platform} finished: worst lateness {Late} ms, {Rebases} clock moves, {CatchingUp} catch-ups",
                 _profile.Platform,
                 _worstLateMilliseconds,
-                Rebases);
+                Rebases,
+                CatchingUp);
             _sink.Complete();
             completed = true;
         }

@@ -807,6 +807,15 @@ public static class FfmpegCommandBuilder
         var hasPreset = setting.VideoSettingsOptions.Any(o => o.Key?.Trim() == "preset");
         var hasTune = setting.VideoSettingsOptions.Any(o => o.Key?.Trim() == "tune");
         var hasProfile = setting.VideoSettingsOptions.Any(o => o.Key?.Trim() == "profile");
+
+        // The switch of the settings form. Off is the sane choice for a re-stream, where nothing
+        // here reaches a viewer in less than the seconds the relay and the ingest already spend on
+        // the way, and where an encoder that cannot look ahead starves itself after every keyframe.
+        var lowLatency = setting.VideoSettingsOptions
+            .Where(o => o.Key?.Trim() == FfmpegCodecCatalog.LowLatencyOption)
+            .ToList();
+        var fastEncoder = lowLatency.Count == 0
+            || FfmpegCodecCatalog.IsLowLatency(lowLatency[^1].Value);
         
         if (isLibX264)
         {
@@ -815,7 +824,7 @@ public static class FfmpegCommandBuilder
                 arguments.Add("-preset");
                 arguments.Add("ultrafast");
             }
-            if (!hasTune)
+            if (!hasTune && fastEncoder)
             {
                 arguments.Add("-tune");
                 arguments.Add("zerolatency");
@@ -825,9 +834,12 @@ public static class FfmpegCommandBuilder
                 arguments.Add("-profile:v");
                 arguments.Add("main");
             }
-            // Reduce CPU further: disable scenecut and lookahead
+            // Reduce CPU further: disable scenecut and lookahead. The lookahead is what makes the
+            // encoder able to see a forced keyframe coming, so without it the rate control buffer
+            // fills on the keyframe and the frames after it have nothing left to spend: that is a
+            // stall of the encoder, which the ingest reads as the live going quiet.
             var hasX264Params = setting.VideoSettingsOptions.Any(o => o.Key?.Trim() == "x264-params");
-            if (!hasX264Params)
+            if (!hasX264Params && fastEncoder)
             {
                 arguments.Add("-x264-params");
                 arguments.Add("scenecut=0:rc_lookahead=0");
@@ -850,7 +862,7 @@ public static class FfmpegCommandBuilder
                 arguments.Add("-preset");
                 arguments.Add(isNvenc ? "p1" : "veryfast");  // NVENC: p1=fastest, QSV/AMF: veryfast
             }
-            if (!hasTune && isNvenc)
+            if (!hasTune && isNvenc && fastEncoder)
             {
                 arguments.Add("-tune");
                 arguments.Add("ll");  // NVENC low latency
@@ -866,7 +878,7 @@ public static class FfmpegCommandBuilder
                 arguments.Add("23");   // Quality level for CQP modes
             }
             // NVENC: zero latency mode
-            if (isNvenc)
+            if (isNvenc && fastEncoder)
             {
                 var hasDelay = setting.VideoSettingsOptions.Any(o => o.Key?.Trim() == "delay");
                 if (!hasDelay)

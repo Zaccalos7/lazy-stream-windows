@@ -149,11 +149,12 @@ public sealed class FlvPacedRelayTests
     }
 
     [Fact]
-    public async Task Relay_MovesItsClockWhenTheNetworkFellTooFarBehind()
+    public async Task Relay_WinsTheGapBackInsteadOfWritingItOff()
     {
-        var profile = Paced with { MaxCatchUp = TimeSpan.FromMilliseconds(200) };
+        var profile = Paced with { MaxLead = TimeSpan.FromSeconds(4) };
 
-        // The third write blocks for 600 ms, like an uplink that stopped taking data.
+        // The third write blocks for 600 ms, like an uplink that stopped taking data. The first
+        // three writes are the header and the first two tags, so the stall lands in the middle.
         var destination = new TimedStream { StallOnWrite = 3, Stall = TimeSpan.FromMilliseconds(600) };
         var relay = new FlvPacedRelay(
             new MemoryStream(Flv([0, 50, 100, 150, 200, 250, 300])), destination, profile, NullLogger.Instance);
@@ -161,7 +162,31 @@ public sealed class FlvPacedRelayTests
         relay.Start();
         await relay.Completion.WaitAsync(TimeSpan.FromSeconds(5));
 
-        Assert.True(relay.Rebases >= 1);
+        // The clock is only moved for a jump of the timestamps, which a slow network is not.
+        Assert.Equal(0, relay.Rebases);
+        Assert.True(relay.CatchingUp >= 1);
+    }
+
+    [Fact]
+    public async Task Relay_SendsFasterThanRealTimeWhileItIsBehind()
+    {
+        // A long stream with a wide jitter buffer, stalled once for 400 ms half way through. Every
+        // tag is 100 ms of stream, so the wall clock of the run tells how fast the tail went out.
+        var stamps = Enumerable.Range(0, 21).Select(index => index * 100).ToArray();
+        var destination = new TimedStream { StallOnWrite = 12, Stall = TimeSpan.FromMilliseconds(400) };
+        var relay = new FlvPacedRelay(
+            new MemoryStream(Flv(stamps)), destination, Paced with { MaxLead = TimeSpan.FromSeconds(4) }, NullLogger.Instance);
+
+        relay.Start();
+        await relay.Completion.WaitAsync(TimeSpan.FromSeconds(10));
+
+        var tags = destination.Writes.Skip(1).ToList();
+        Assert.Equal(stamps.Length, tags.Count);
+
+        // Everything the stall held up was won back rather than written off: the run finished
+        // ahead of the 2 s of stream it carries, instead of paying for the 400 ms twice.
+        var total = Stopwatch.GetElapsedTime(tags[0], tags[^1]).TotalMilliseconds;
+        Assert.True(total < 1700, $"the stream took {total:0} ms of wall clock for 2000 ms of video");
     }
 
     [Fact]
@@ -241,6 +266,7 @@ public sealed class RelayCommandTests
     private static VideoSettingEntity Setting() => new()
     {
         Title = "test",
+        Id = 1,
         VideoCodec = 27,
         VideoCodecName = "libx264",
         PixelFormat = 0,
@@ -267,6 +293,76 @@ public sealed class RelayCommandTests
 
         // Twitch does not need a sound: a silent file stays silent.
         Assert.DoesNotContain("anullsrc", text, StringComparison.Ordinal);
+    }
+
+    [Theory]
+    [InlineData("1", true)]
+    [InlineData("0", false)]
+    [InlineData("false", false)]
+    [InlineData("no", false)]
+    [InlineData(null, true)]
+    public void LowLatencySwitch_KeepsTheEncoderDefaultsOnlyWhenItIsOn(string? stored, bool expected)
+    {
+        var setting = Setting();
+        if (stored is not null)
+        {
+            setting.VideoSettingsOptions =
+            [
+                new VideoSettingsOptionEntity
+                {
+                    Key = FfmpegCodecCatalog.LowLatencyOption,
+                    Value = stored
+                }
+            ];
+        }
+
+        var text = string.Join(' ', FfmpegCommandBuilder.Build(new FfmpegStreamRequest(
+            "/videos/clip.mp4", "rtmp://live.twitch.tv/app/key", Silent, setting,
+            Profile: StreamPlatformProfile.Twitch)));
+
+        foreach (var flag in new[] { "-tune zerolatency", "scenecut=0:rc_lookahead=0" })
+        {
+            if (expected)
+            {
+                Assert.Contains(flag, text, StringComparison.Ordinal);
+            }
+            else
+            {
+                Assert.DoesNotContain(flag, text, StringComparison.Ordinal);
+            }
+        }
+
+        // What is not low latency either way: the preset is about the CPU, not the delay, and the
+        // switch is not allowed to quietly re-encode the machine's weakest encoder.
+        Assert.Contains("-preset ultrafast", text, StringComparison.Ordinal);
+    }
+
+    [Fact]
+    public void LowLatencySwitch_ReachesTheHardwareEncoderToo()
+    {
+        var setting = Setting();
+        setting.VideoCodecName = "h264_nvenc";
+        setting.VideoSettingsOptions =
+        [
+            new VideoSettingsOptionEntity
+            {
+                Key = FfmpegCodecCatalog.LowLatencyOption,
+                Value = "0"
+            }
+        ];
+
+        var text = string.Join(' ', FfmpegCommandBuilder.Build(new FfmpegStreamRequest(
+            "/videos/clip.mp4", "rtmp://live.twitch.tv/app/key", Silent, setting,
+            Profile: StreamPlatformProfile.Twitch)));
+
+        Assert.DoesNotContain("-delay 0", text, StringComparison.Ordinal);
+
+        // The tune the switch took away is NVENC's "ll", and nothing else pairs a -tune here: the
+        // x264 tune is not in this command line at all.
+        Assert.DoesNotContain("-tune ll", text, StringComparison.Ordinal);
+
+        // The rate control is what a viewer sees as quality, so it is untouched by the switch.
+        Assert.Contains("-rc cbr", text, StringComparison.Ordinal);
     }
 
     [Fact]

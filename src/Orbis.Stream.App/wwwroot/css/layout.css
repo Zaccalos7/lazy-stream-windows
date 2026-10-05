@@ -39,7 +39,7 @@
   box-shadow: 0 1px 4px rgba(0, 0, 0, 0.12);
 }
 
-.nav-title span { color: var(--text); font-weight: 600; }
+.nav-title span { color: var(--text); font-weight: 600; flex: 1; }
 
 .nav a {
   display: flex;
@@ -76,11 +76,12 @@
   align-items: center;
   gap: 10px;
   width: 100%;
-  padding: 6px 10px;
+  padding: 10px 10px 6px;
   text-align: left;
   color: var(--text-3);
   background: none;
   border: 1px solid transparent;
+  border-top: 1px solid var(--stroke);
   border-radius: var(--radius-sm);
   cursor: pointer;
 }
@@ -144,6 +145,7 @@
   border: 1px solid var(--stroke);
   gap: 2px;
   margin-bottom: 6px;
+  margin-top: 10px;
 }
 
 .segmented-control .segment {
@@ -174,7 +176,7 @@
 /* The language picker: a native <select> can only hold text, so the flags that stood in for it
    as emoji (two regional indicator letters, which a font swap turns into "IT") become pictures in
    a menu of their own. A <details> keeps it openable with the keyboard, with no script. */
-.lang-picker { position: relative; margin-top: 10px; border-top: 1px solid var(--stroke); }
+.lang-picker { position: relative; margin-top: 6px; margin-bottom: 6px; }
 .lang-picker > summary { list-style: none; cursor: pointer; }
 .lang-picker > summary::-webkit-details-marker { display: none; }
 
@@ -254,12 +256,13 @@ html.sidebar-closed .nav {
 html.sidebar-closed .nav > *:not(.nav-title) {
   display: none;
 }
-html.sidebar-closed .nav-title > *:not(#sidebar-toggle) {
+html.sidebar-closed .nav-title > *:not(#sidebar-toggle):not(#update-bell) {
   display: none;
 }
 html.sidebar-closed .nav-title {
   padding: 0;
   justify-content: center;
+  flex-direction: column;
 }
 
 /* Page footer */
@@ -308,7 +311,7 @@ html.sidebar-closed .nav-title {
   /* The flag is enough of a label when the sidebar is a strip, and the menu still spells them out. */
   .lang-current { justify-content: center; padding: 0; }
   .lang-menu { left: -8px; min-width: 150px; }
-  .nav-title { justify-content: center; padding: 0 0 12px; }
+  .nav-title { justify-content: center; flex-direction: column; padding: 0 0 12px; }
   .page { padding: 0 2px 18px; }
   .page-header { padding: 16px; }
 }

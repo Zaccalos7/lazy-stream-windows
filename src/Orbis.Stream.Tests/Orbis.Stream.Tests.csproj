@@ -26,6 +26,9 @@
   <ItemGroup>
     
     <None Include="..\Orbis.Stream.App\wwwroot\flags\*.svg" Link="flags\%(Filename)%(Extension)" CopyToOutputDirectory="PreserveNewest" />
+    <!-- The stylesheets the shell ships, so StyleSheetTests reads the sheets the pages really link
+         instead of an empty folder: it compares the links of a page with what is on disk. -->
+    <None Include="..\Orbis.Stream.App\wwwroot\css\*.css" Link="css\%(Filename)%(Extension)" CopyToOutputDirectory="PreserveNewest" />
   </ItemGroup>
 
   <ItemGroup>

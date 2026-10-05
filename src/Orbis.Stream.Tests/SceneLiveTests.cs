@@ -218,9 +218,9 @@ public sealed class SceneLiveTests : IAsyncLifetime
         Assert.True(await WaitForAsync(() => Row().Status == LiveStatus.Live), "the canvas did not restart: " + Row().Video.Message);
 
         Assert.Equal(onAirIds[0], videos.FindByPkid(basePkid)!.VideoSettingId!.Value);
-        var copies = _host.Services.GetRequiredService<VideoSettingService>()
+        var named = _host.Services.GetRequiredService<VideoSettingService>()
             .GetAllVideoSettings(new Dictionary<string, string> { ["title"] = Setting().Title! });
-        Assert.Single(copies);
+        Assert.Equal([chosenId, onAirIds[0]], named.Select(setting => setting.Id!.Value).Order());
 
         streaming.StopVideoStreamingByPkid(basePkid);
     }

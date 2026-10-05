@@ -317,5 +317,7 @@
   "updateAvailableDialogText": "새 버전을 사용할 수 있습니다. 다운로드하시겠습니까?",
   "dashboardSectionLive": "Streaming",
   "dashboardSectionSettings": "Settings",
-  "dashboardSectionSystem": "System & Monitoring"
+  "dashboardSectionSystem": "System & Monitoring",
+  "lowLatency": "노은 지연",
+  "lowLatencyHelp": "인코더에 최소 지연을 가리합니다(루크어헤드 없음, scenecut 없음). 재발상에서는 뒤쪽이 속도를 지정하므로 큄속 시 오니다."
 }

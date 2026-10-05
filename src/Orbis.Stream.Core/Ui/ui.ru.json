@@ -317,5 +317,7 @@
   "updateAvailableDialogText": "Доступна новая версия, хотите загрузить её?",
   "dashboardSectionLive": "Streaming",
   "dashboardSectionSettings": "Settings",
-  "dashboardSectionSystem": "System & Monitoring"
+  "dashboardSectionSystem": "System & Monitoring",
+  "lowLatency": "Низкая задержка",
+  "lowLatencyHelp": "Требует от кодировщика минимальной задержки: без упрежающего видения и без scenecut. Выключите его для ретрансмиссии: темп там задаёт релей дальше по цепочке."
 }

@@ -317,5 +317,7 @@
   "updateAvailableDialogText": "wej pItlh qo' DaH. Qapla' yInI'chom?",
   "dashboardSectionLive": "Streaming",
   "dashboardSectionSettings": "Settings",
-  "dashboardSectionSystem": "System & Monitoring"
+  "dashboardSectionSystem": "System & Monitoring",
+  "lowLatency": "qap 'ej",
+  "lowLatencyHelp": "encoderyoq vumrghach qap. look-ahead vumrghach Hogh, scenecut vumrghach Hogh. qaSpa'DIch DIch'I' poHDaq taH relIHS. Hagh taH."
 }

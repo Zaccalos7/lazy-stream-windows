@@ -317,5 +317,7 @@
   "updateAvailableDialogText": "Une nouvelle version est disponible, voulez-vous la télécharger ?",
   "dashboardSectionLive": "Streaming",
   "dashboardSectionSettings": "Settings",
-  "dashboardSectionSystem": "System & Monitoring"
+  "dashboardSectionSystem": "System & Monitoring",
+  "lowLatency": "Faible latence",
+  "lowLatencyHelp": "Demande à l'encodeur le plus petit délai possible : sans look-ahead ni scenecut. Désactivez-le pour une rediffusion, où le relais impose déjà le rythme."
 }

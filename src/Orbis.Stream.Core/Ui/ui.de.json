@@ -317,5 +317,7 @@
   "updateAvailableDialogText": "Eine neue Version ist verfügbar, möchten Sie sie herunterladen?",
   "dashboardSectionLive": "Streaming",
   "dashboardSectionSettings": "Settings",
-  "dashboardSectionSystem": "System & Monitoring"
+  "dashboardSectionSystem": "System & Monitoring",
+  "lowLatency": "Geringe Latenz",
+  "lowLatencyHelp": "Verlangt vom Encoder die kleinste mögliche Verzögerung: kein Lookahead, kein Scenecut. Ausschalten bei einer Weiterübertragung, dort setzt der Relay den Takt ohnehin."
 }

@@ -317,5 +317,7 @@
   "updateAvailableDialogText": "Versio nova adest, visne eam descendere?",
   "dashboardSectionLive": "Streaming",
   "dashboardSectionSettings": "Settings",
-  "dashboardSectionSystem": "System & Monitoring"
+  "dashboardSectionSystem": "System & Monitoring",
+  "lowLatency": "Latentia minima",
+  "lowLatencyHelp": "Exigit ab incodificatori minimam moram: sine look-ahead, sine scenecut. Exstingue pro interceptione, quia ibi iam relais tempus definit."
 }

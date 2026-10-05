@@ -317,5 +317,7 @@
   "updateAvailableDialogText": "有新版本可用，是否要下载？",
   "dashboardSectionLive": "Streaming",
   "dashboardSectionSettings": "Settings",
-  "dashboardSectionSystem": "System & Monitoring"
+  "dashboardSectionSystem": "System & Monitoring",
+  "lowLatency": "低延迟",
+  "lowLatencyHelp": "要求编码器尽量低的延迟（无前瞻、无 scenecut）。转播时请关闭，因为下游的 relay 已经在控制节奏。"
 }

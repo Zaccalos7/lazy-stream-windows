@@ -317,5 +317,7 @@
   "updateAvailableDialogText": "Hodor hodor! Hodor Hodor Hodor?",
   "dashboardSectionLive": "Streaming",
   "dashboardSectionSettings": "Settings",
-  "dashboardSectionSystem": "System & Monitoring"
+  "dashboardSectionSystem": "System & Monitoring",
+  "lowLatency": "Hodor",
+  "lowLatencyHelp": "Hodor Hodor Hodor. Hodor Hodor Hodor Hodor Hodor. Hodor Hodor."
 }

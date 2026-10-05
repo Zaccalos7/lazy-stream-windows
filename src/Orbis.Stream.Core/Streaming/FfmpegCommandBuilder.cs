@@ -11,7 +11,13 @@ public sealed record FfmpegStreamRequest(
     MediaProbeResult Probe,
     VideoSettingEntity Setting,
     TimeSpan ResumeFrom = default,
-    string? PreviewPath = null);
+    string? PreviewPath = null,
+    /// <summary>
+    /// The platform the live goes to. With a relay the encoder writes FLV on its standard output
+    /// for the pacer instead of reaching the ingest itself (see <see cref="FlvPacedRelay"/>).
+    /// Null is the single ffmpeg of before.
+    /// </summary>
+    StreamPlatformProfile? Profile = null);
 
 /// <summary>One source on the canvas, as the command line needs it.</summary>
 public sealed record FfmpegCompositionItem(
@@ -47,12 +53,14 @@ public sealed record FfmpegCompositionRequest(
     /// <para>Null for a canvas with a capture device on it: a device has no end to reach.</para>
     /// </summary>
     TimeSpan? Duration = null,
-    string? PreviewPath = null);
+    string? PreviewPath = null,
+    StreamPlatformProfile? Profile = null);
 
 /// <summary>
 /// Translates the <c>FFmpegFrameRecorder</c> configuration of <c>StreamService</c> into the
 /// equivalent ffmpeg command line. The Java version decoded every frame in Java and re-encoded
-/// it with real time pacing; <c>-re</c> gives the same pacing to the ffmpeg process.
+/// it with real time pacing. For a known platform that pacing is back, on the encoded frames, in
+/// <see cref="FlvPacedRelay"/>; for any other destination <c>-re</c> gives it to the ffmpeg process.
 /// </summary>
 public static class FfmpegCommandBuilder
 {
@@ -103,8 +111,10 @@ public static class FfmpegCommandBuilder
         // read from the file (25 is the fallback of the probe, kept for a probe that knows nothing).
         var output = ResolveOutput(setting, probe);
         var frameRate = output.FrameRate;
+        var profile = request.Profile;
+        var relay = profile is { UsesRelay: true };
 
-        var arguments = GlobalArguments();
+        var arguments = GlobalArguments(relay);
 
         // Where to carry on from, before the input: as an input option ffmpeg seeks there and starts
         // reading immediately, where an output option would decode and throw the frames away.
@@ -115,13 +125,24 @@ public static class FfmpegCommandBuilder
         }
 
         // -re is an input option: read at the rate the file plays at, which is what the Java
-        // version did by pacing the frames it decoded.
+        // version did by pacing the frames it decoded. With a relay the pacer is that clock, on
+        // the encoded frames, and the encoder runs as far ahead as the relay lets it.
         arguments.Add("-thread_queue_size");
         arguments.Add("512");
-        arguments.Add("-readrate");
-        arguments.Add("1");
+        if (!relay)
+        {
+            arguments.Add("-readrate");
+            arguments.Add("1");
+        }
+
         arguments.Add("-i");
         arguments.Add(request.InputPath);
+
+        var silence = NeedsSilence(profile, probe.HasAudio);
+        if (silence)
+        {
+            AppendSilenceInput(arguments, profile!);
+        }
 
         // JavaCV mapped the grabbed video/audio streams of the input file.
         arguments.Add("-map");
@@ -132,11 +153,28 @@ public static class FfmpegCommandBuilder
             arguments.Add("-map");
             arguments.Add("0:a:0?");
         }
+        else if (silence)
+        {
+            arguments.Add("-map");
+            arguments.Add("1:a:0");
+        }
 
         AppendEncoderArguments(
-            arguments, setting, frameRate, probe.HasAudio, probe.AudioChannels, ScaleFilter(setting));
+            arguments,
+            setting,
+            frameRate,
+            probe.HasAudio || silence,
+            silence ? 2 : probe.AudioChannels,
+            ScaleFilter(setting),
+            profile);
 
-        arguments.Add(request.OutputUrl);
+        // The silent track never ends: the picture decides when the live does.
+        if (silence)
+        {
+            arguments.Add("-shortest");
+        }
+
+        AppendDestination(arguments, request.OutputUrl, relay);
 
         if (request.PreviewPath is { } previewPath)
         {
@@ -188,12 +226,24 @@ public static class FfmpegCommandBuilder
             frameRate = 25d;
         }
 
-        var arguments = GlobalArguments();
+        var profile = request.Profile;
+        var relay = profile is { UsesRelay: true };
+        var arguments = GlobalArguments(relay);
 
         // Every input is opened before any filter is configured, which is the order ffmpeg needs.
+        // The inputs keep their own clock here even with a relay: a device produces frames in real
+        // time and the files of the canvas have to stay in step with it, so the relay only smooths
+        // what comes out.
         for (var index = 0; index < items.Count; index++)
         {
             AppendInput(arguments, items[index], request.ResumeFrom, frameRate);
+        }
+
+        // The silent track is the input after the last source, so the indexes of the graph stay put.
+        var silence = NeedsSilence(profile, HasAudioMix(items));
+        if (silence)
+        {
+            AppendSilenceInput(arguments, profile!);
         }
 
         // A label of the graph can feed one output only: with a preview the composed picture is
@@ -219,11 +269,23 @@ public static class FfmpegCommandBuilder
             arguments.Add("-map");
             arguments.Add($"[{AudioLabel}]");
         }
+        else if (silence)
+        {
+            arguments.Add("-map");
+            arguments.Add(string.Create(CultureInfo.InvariantCulture, $"{items.Count}:a:0"));
+        }
 
         // The composed picture is already the size the canvas is, so the encoder is not asked to
         // scale again: -vf here would resize the result of the composition, not its base.
         AppendEncoderArguments(
-            arguments, setting, frameRate, HasAudioMix(items), channels: 0, scaleFilter: null);
+            arguments, setting, frameRate, HasAudioMix(items) || silence, channels: silence ? 2 : 0, scaleFilter: null, profile);
+
+        // A canvas of devices has no end and neither has the silent track: -shortest only matters
+        // for a canvas of files, whose picture ends when its longest file does.
+        if (silence)
+        {
+            arguments.Add("-shortest");
+        }
 
         // The length of the canvas is an output option: it counts what goes on air, whatever the
         // inputs do. It stands before the destination, which is where every output option goes.
@@ -235,7 +297,7 @@ public static class FfmpegCommandBuilder
             arguments.Add(Seconds(duration + request.ResumeFrom));
         }
 
-        arguments.Add(request.OutputUrl);
+        AppendDestination(arguments, request.OutputUrl, relay);
 
         if (request.PreviewPath is { } previewPath)
         {
@@ -334,10 +396,29 @@ public static class FfmpegCommandBuilder
         return arguments;
     }
 
-    /// <summary>The options that are the same however the frames were produced.</summary>
-    private static List<string> GlobalArguments()
+    /// <summary>
+    /// The options that are the same however the frames were produced. With a relay the standard
+    /// output carries the stream, so the progress is read off the sender instead: it is the one
+    /// that knows what reached the ingest.
+    /// </summary>
+    private static List<string> GlobalArguments(bool relay = false)
     {
         var threadCount = Math.Max(1, Environment.ProcessorCount / 2);
+        if (relay)
+        {
+            return
+            [
+                "-hide_banner",
+                "-nostdin",
+                "-y",
+                "-loglevel",
+                "error",
+                "-threads",
+                threadCount.ToString(CultureInfo.InvariantCulture),
+                "-nostats"
+            ];
+        }
+
         return
         [
             "-hide_banner",
@@ -656,12 +737,16 @@ public static class FfmpegCommandBuilder
         double frameRate,
         bool hasAudio,
         int channels,
-        string? scaleFilter)
+        string? scaleFilter,
+        StreamPlatformProfile? profile = null)
     {
-        if (!string.IsNullOrWhiteSpace(setting.VideoFormat))
+        // The relay reads FLV whatever the setting names: it is the container of RTMP, and the
+        // only one whose tags carry the timestamp the pacer needs.
+        var format = profile is { UsesRelay: true } ? "flv" : setting.VideoFormat?.Trim();
+        if (!string.IsNullOrWhiteSpace(format))
         {
             arguments.Add("-f");
-            arguments.Add(setting.VideoFormat.Trim());
+            arguments.Add(format);
         }
 
         var codecName = FfmpegCodecCatalog.ResolveVideoCodecName(setting.VideoCodec, setting.VideoCodecName);
@@ -694,8 +779,9 @@ public static class FfmpegCommandBuilder
             arguments.Add((setting.VideoBitrate.Value * 2).ToString(CultureInfo.InvariantCulture));
         }
 
-        // Ensure constant frame rate output for stable streaming
-        arguments.Add("-vsync");
+        // Constant frame rate output for stable streaming. -fps_mode is the name -vsync has had
+        // since ffmpeg 5.1; the old one is deprecated and only warns, for now.
+        arguments.Add("-fps_mode");
         arguments.Add("cfr");
 
         // Twitch strictly requires a keyframe every 2 seconds: gop = fps * gopSize.
@@ -703,6 +789,17 @@ public static class FfmpegCommandBuilder
         {
             arguments.Add("-g");
             arguments.Add(((int)(frameRate * setting.GopSize.Value)).ToString(CultureInfo.InvariantCulture));
+        }
+
+        // -g counts frames, and a frame count is only a duration at the rate it was computed
+        // with: a scene cut or a rate that is not a whole number moves the keyframes off the
+        // two seconds the platforms check. Forcing them on the clock pins them there.
+        var keyframeSeconds = setting.GopSize is > 0 ? setting.GopSize.Value : profile?.KeyframeSeconds ?? 0;
+        if (profile is { KeyframeSeconds: > 0 } && keyframeSeconds > 0
+            && !setting.VideoSettingsOptions.Any(o => o.Key?.Trim() == "force_key_frames"))
+        {
+            arguments.Add("-force_key_frames");
+            arguments.Add(string.Create(CultureInfo.InvariantCulture, $"expr:gte(t,n_forced*{Number(keyframeSeconds)})"));
         }
 
         // x264-specific low-CPU options (applied when user hasn't overridden via VideoSettingsOptions)
@@ -794,28 +891,128 @@ public static class FfmpegCommandBuilder
             }
         }
 
-        if (!hasAudio || setting.AudioSetting is null)
+        if (!hasAudio)
+        {
+            return;
+        }
+
+        // A platform that requires sound gets AAC even from a setting that names no audio: a
+        // track that is mapped and not encoded is a command ffmpeg refuses.
+        var audio = setting.AudioSetting;
+        if (audio is null && profile is not { RequiresAudio: true })
         {
             return;
         }
 
         arguments.Add("-c:a");
-        arguments.Add(FfmpegCodecCatalog.ResolveAudioCodecName(setting.AudioSetting.AudioCodec));
+        arguments.Add(audio is null ? "aac" : FfmpegCodecCatalog.ResolveAudioCodecName(audio.AudioCodec));
 
-        if (setting.AudioSetting.AudioBitrate is > 0)
+        var audioBitrate = audio?.AudioBitrate is > 0 ? audio.AudioBitrate.Value : audio is null ? 128_000 : 0;
+        if (audioBitrate > 0)
         {
             arguments.Add("-b:a");
-            arguments.Add(setting.AudioSetting.AudioBitrate.Value.ToString(CultureInfo.InvariantCulture));
+            arguments.Add(audioBitrate.ToString(CultureInfo.InvariantCulture));
         }
 
         arguments.Add("-ar");
-        arguments.Add("44100");
+        arguments.Add((profile?.AudioSampleRate ?? 44_100).ToString(CultureInfo.InvariantCulture));
 
         if (channels > 0)
         {
             arguments.Add("-ac");
             arguments.Add(channels.ToString(CultureInfo.InvariantCulture));
         }
+    }
+
+    /// <summary>
+    /// Where the encoded stream goes: the ingest itself, or, with a relay, the standard output in
+    /// FLV for the pacer. Every packet is flushed as soon as it is muxed, so the pacer sees each
+    /// frame when it exists instead of in 32 KB lumps; and the muxer is told not to go back to the
+    /// start to write a duration, which a pipe cannot do.
+    /// </summary>
+    private static void AppendDestination(List<string> arguments, string outputUrl, bool relay)
+    {
+        if (!relay)
+        {
+            arguments.Add(outputUrl);
+            return;
+        }
+
+        arguments.Add("-flvflags");
+        arguments.Add("no_duration_filesize");
+        arguments.Add("-flush_packets");
+        arguments.Add("1");
+        arguments.Add("pipe:1");
+    }
+
+    /// <summary>
+    /// The second ffmpeg of a relay, for <see cref="RelayTransport.FfmpegSender"/> only - the
+    /// fallback of the RTMP that .NET speaks itself (<see cref="Rtmp.RtmpPublisher"/>). It reads
+    /// the paced FLV on its standard input and copies it to the ingest without touching a frame. It is the process that
+    /// talks to the platform, so it is also the one whose progress says what reached it: the
+    /// position of the live and the proof that the ingest is taking the stream are both read here.
+    /// </summary>
+    public static IReadOnlyList<string> BuildSender(string outputUrl, StreamPlatformProfile profile)
+    {
+        ArgumentNullException.ThrowIfNull(outputUrl);
+        ArgumentNullException.ThrowIfNull(profile);
+
+        return
+        [
+            "-hide_banner",
+            "-nostdin",
+            "-loglevel",
+            "error",
+            "-progress",
+            "pipe:1",
+            "-nostats",
+            "-stats_period",
+            "0.2",
+
+            // The stream is the encoder's own output: nothing to discover in it but the two codecs,
+            // which the FLV header and its first tags already name. A long probe would only hold
+            // the connection back by that much.
+            "-probesize",
+            "65536",
+            "-analyzeduration",
+            "500000",
+            "-f",
+            "flv",
+            "-i",
+            "pipe:0",
+            "-map",
+            "0",
+            "-c",
+            "copy",
+            "-f",
+            "flv",
+            "-flvflags",
+            "no_duration_filesize",
+
+            // A connection that hangs - an ingest that never answers, a network that stopped
+            // taking data - fails after this long instead of looking like a live for ever.
+            "-rw_timeout",
+            ((long)profile.ConnectTimeout.TotalMilliseconds * 1000).ToString(CultureInfo.InvariantCulture),
+            outputUrl
+        ];
+    }
+
+    /// <summary>Whether the platform needs a sound the source does not have.</summary>
+    private static bool NeedsSilence(StreamPlatformProfile? profile, bool hasAudio) =>
+        profile is { RequiresAudio: true } && !hasAudio;
+
+    /// <summary>
+    /// A silent stereo track at the rate of the platform. YouTube keeps a live with no audio
+    /// stream off air - the connection is accepted, the broadcast never starts - and silence is
+    /// the cheapest audio there is.
+    /// </summary>
+    private static void AppendSilenceInput(List<string> arguments, StreamPlatformProfile profile)
+    {
+        arguments.Add("-f");
+        arguments.Add("lavfi");
+        arguments.Add("-i");
+        arguments.Add(string.Create(
+            CultureInfo.InvariantCulture, $"anullsrc=channel_layout=stereo:sample_rate={profile.AudioSampleRate}"));
     }
 
     private static int Even(int value) => value - (value % 2);

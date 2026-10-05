@@ -2,36 +2,57 @@ using System.Collections.Concurrent;
 using System.Diagnostics;
 using Microsoft.Extensions.Logging;
 using Orbis.Stream.Core.Domain;
+using Orbis.Stream.Core.Streaming.Rtmp;
 
 namespace Orbis.Stream.Core.Streaming;
 
-/// <summary>A running ffmpeg process, killable on demand (the .NET equivalent of stopping the recorder).</summary>
+/// <summary>
+/// A running live, killable on demand (the .NET equivalent of stopping the recorder). For a custom
+/// ingest it is one ffmpeg. For a known platform it is the encoder and the paced relay (see
+/// <see cref="FlvPacedRelay"/>), which speaks RTMP to the ingest itself - or, as a fallback, hands
+/// the stream to a sender ffmpeg - all torn down together.
+/// </summary>
 public sealed class FfmpegStreamingSession : IAsyncDisposable
 {
+    /// <summary>How long the encoder may take to end on its own once the sender is gone.</summary>
+    private static readonly TimeSpan EncoderGrace = TimeSpan.FromSeconds(2);
+
     private readonly Process _process;
+    private readonly Process? _sender;
+    private readonly FlvPacedRelay? _relay;
     private readonly ILogger _logger;
     private readonly Task<string> _standardError;
+    private readonly Task<string>? _senderError;
     private readonly Task _standardOutput;
     private readonly long _resumedFromMilliseconds;
     private readonly string _outputUrl;
     private long _positionMilliseconds;
+    private long _bytesOnAir;
+    private long _lastAdvanceTicks = Environment.TickCount64;
+    private long _onAirSinceTicks;
     private int _stopRequested;
     private int _restartRequested;
     private int _endedNaturally;
 
     private FfmpegStreamingSession(
         Process process,
+        Process? sender,
+        FlvPacedRelay? relay,
         int videoPkid,
         string inputPath,
         MediaProbeResult probe,
         MediaOutput output,
         TimeSpan resumeFrom,
         string outputUrl,
+        StreamPlatformProfile profile,
         ILogger logger)
     {
         _process = process;
+        _sender = sender;
+        _relay = relay;
         _logger = logger;
         _outputUrl = outputUrl;
+        Profile = profile;
 
         // ffmpeg counts from where it was asked to seek to, not from the start of the file: the
         // position of the live is that count plus the point it resumed from. Without it a stop after
@@ -43,11 +64,47 @@ public sealed class FfmpegStreamingSession : IAsyncDisposable
         Probe = probe;
         Output = output;
         _standardError = ReadToEndAsync(process.StandardError);
+        _senderError = sender is null ? null : ReadToEndAsync(sender.StandardError);
 
         // Nothing else reads what ffmpeg writes on its standard output, and the pipe it writes
         // <c>-progress</c> into is small: a session that left it alone would block ffmpeg itself.
-        _standardOutput = FollowProgressAsync();
+        // With a relay the encoder's output is the stream, and the progress is the sender's; with
+        // the native transport there is no sender, and the relay itself knows what went on air.
+        _standardOutput = IsNative ? Task.CompletedTask : FollowProgressAsync(sender ?? process);
     }
+
+    /// <summary>The relay speaks RTMP itself: what is on air is what it sent.</summary>
+    private bool IsNative => _relay is not null && _sender is null;
+
+    /// <summary>The platform this live is delivered to, and how.</summary>
+    public StreamPlatformProfile Profile { get; }
+
+    /// <summary>
+    /// Whether the ingest is taking the stream: the process that talks to it has written bytes to
+    /// the connection and the output clock has moved. Before this a live is only a process that
+    /// was started, which is what the pages used to show as LIVE whatever the platform made of it.
+    /// </summary>
+    public bool IsOnAir => OnAirSinceTicks != 0;
+
+    /// <summary>How long the live has been on air; zero when it is not.</summary>
+    public TimeSpan OnAirFor
+    {
+        get
+        {
+            var since = OnAirSinceTicks;
+            return since == 0 ? TimeSpan.Zero : TimeSpan.FromMilliseconds(Environment.TickCount64 - since);
+        }
+    }
+
+    /// <summary>How long ago the position on air last moved forward.</summary>
+    public TimeSpan SinceLastAdvance => TimeSpan.FromMilliseconds(
+        Environment.TickCount64 - (IsNative ? _relay!.LastAdvanceTicks : Interlocked.Read(ref _lastAdvanceTicks)));
+
+    /// <summary>
+    /// Natively, on air is the ingest having accepted the publish and taken a first frame; through
+    /// ffmpeg it is bytes on the connection and a clock that moved.
+    /// </summary>
+    private long OnAirSinceTicks => IsNative ? _relay!.OnAirSinceTicks : Interlocked.Read(ref _onAirSinceTicks);
 
     public int VideoPkid { get; }
 
@@ -69,7 +126,9 @@ public sealed class FfmpegStreamingSession : IAsyncDisposable
     public DateTimeOffset StartedAt { get; } = DateTimeOffset.UtcNow;
 
     /// <summary>How far the transcode got, as ffmpeg last reported it. Zero until the first report.</summary>
-    public long PositionMilliseconds => Interlocked.Read(ref _positionMilliseconds);
+    public long PositionMilliseconds => IsNative
+        ? _resumedFromMilliseconds + _relay!.PositionMilliseconds
+        : Interlocked.Read(ref _positionMilliseconds);
 
     public bool StopRequested => Volatile.Read(ref _stopRequested) == 1;
 
@@ -89,31 +148,25 @@ public sealed class FfmpegStreamingSession : IAsyncDisposable
             return;
         }
 
+        await KillAllAsync().ConfigureAwait(false);
+    }
+
+    /// <summary>
+    /// Whether the live is over. With a relay that is whatever talks to the ingest - the relay
+    /// itself, or the sender ffmpeg: once it is gone nothing reaches the platform, whatever the
+    /// encoder is still doing (it is cleaned up after it).
+    /// </summary>
+    public bool HasExited => IsNative ? _relay!.Completion.IsCompleted : Exited(_sender ?? _process);
+
+    private static bool Exited(Process process)
+    {
         try
         {
-            if (!_process.HasExited)
-            {
-                _process.Kill(entireProcessTree: true);
-                await _process.WaitForExitAsync().ConfigureAwait(false);
-            }
+            return process.HasExited;
         }
         catch (InvalidOperationException)
         {
-        }
-    }
-
-    public bool HasExited
-    {
-        get
-        {
-            try
-            {
-                return _process.HasExited;
-            }
-            catch (InvalidOperationException)
-            {
-                return true;
-            }
+            return true;
         }
     }
 
@@ -126,10 +179,15 @@ public sealed class FfmpegStreamingSession : IAsyncDisposable
         MediaProbeResult probe,
         ILogger logger,
         TimeSpan resumeFrom = default,
-        string? previewPath = null)
+        string? previewPath = null,
+        StreamPlatformProfile? profile = null)
     {
-        var arguments = FfmpegCommandBuilder.Build(new FfmpegStreamRequest(inputPath, outputUrl, probe, setting, resumeFrom, previewPath));
-        return Launch(locator, videoPkid, inputPath, outputUrl, arguments, probe, FfmpegCommandBuilder.ResolveOutput(setting, probe), resumeFrom, logger);
+        // The platform is read off the ingest; a caller may name it, which is how a relay is
+        // exercised against a file on disk.
+        profile ??= StreamPlatformProfile.For(outputUrl);
+        var arguments = FfmpegCommandBuilder.Build(
+            new FfmpegStreamRequest(inputPath, outputUrl, probe, setting, resumeFrom, previewPath, profile));
+        return Launch(locator, videoPkid, inputPath, outputUrl, arguments, probe, FfmpegCommandBuilder.ResolveOutput(setting, probe), resumeFrom, profile, logger);
     }
 
     /// <summary>
@@ -150,10 +208,12 @@ public sealed class FfmpegStreamingSession : IAsyncDisposable
         ILogger logger,
         TimeSpan resumeFrom = default,
         TimeSpan? duration = null,
-        string? previewPath = null)
+        string? previewPath = null,
+        StreamPlatformProfile? profile = null)
     {
+        profile ??= StreamPlatformProfile.For(outputUrl);
         var arguments = FfmpegCommandBuilder.BuildComposition(new FfmpegCompositionRequest(
-            items, outputUrl, setting, canvasWidth, canvasHeight, canvasFrameRate, resumeFrom, duration, previewPath));
+            items, outputUrl, setting, canvasWidth, canvasHeight, canvasFrameRate, resumeFrom, duration, previewPath, profile));
 
         // The composition is always sent at the size of the canvas: the resolution of the setting
         // is not applied on top of it (see BuildComposition), so it is not the one shown either.
@@ -167,7 +227,7 @@ public sealed class FfmpegStreamingSession : IAsyncDisposable
         var probe = new MediaProbeResult(
             canvasWidth, canvasHeight, frameRate, sound, sound ? 2 : 0, duration?.TotalSeconds ?? 0);
 
-        return Launch(locator, videoPkid, SceneDescriptionOf(items), outputUrl, arguments, probe, output, resumeFrom, logger);
+        return Launch(locator, videoPkid, SceneDescriptionOf(items), outputUrl, arguments, probe, output, resumeFrom, profile, logger);
     }
 
     private static FfmpegStreamingSession Launch(
@@ -179,9 +239,67 @@ public sealed class FfmpegStreamingSession : IAsyncDisposable
         MediaProbeResult probe,
         MediaOutput output,
         TimeSpan resumeFrom,
+        StreamPlatformProfile profile,
         ILogger logger)
     {
+        if (profile.UsesRelay && profile.Transport == RelayTransport.NativeRtmp)
+        {
+            var nativeEncoder = StartProcess(locator, arguments, redirectInput: false, inputPath);
+            var publisher = new RtmpPublisher(outputUrl, profile.ConnectTimeout, profile.StallTimeout, logger);
+            var nativeRelay = new FlvPacedRelay(nativeEncoder.StandardOutput.BaseStream, publisher, profile, logger);
+            nativeRelay.Start();
+
+            logger.LogInformation(
+                "ffmpeg started for {Input} -> {OutputUrl}, paced and published over RTMP to {Platform}",
+                inputPath,
+                RedactStreamKey(outputUrl, outputUrl),
+                profile.Platform);
+            return new FfmpegStreamingSession(
+                nativeEncoder, null, nativeRelay, videoPkid, inputPath, probe, output, resumeFrom, outputUrl, profile, logger);
+        }
+
+        if (!profile.UsesRelay)
+        {
+            var process = StartProcess(locator, arguments, redirectInput: false, inputPath);
+
+            // The output is named, not read off the end of the command line: the preview comes after it.
+            logger.LogInformation(
+                "ffmpeg started for {Input} -> {OutputUrl}", inputPath, RedactStreamKey(outputUrl, outputUrl));
+            return new FfmpegStreamingSession(
+                process, null, null, videoPkid, inputPath, probe, output, resumeFrom, outputUrl, profile, logger);
+        }
+
+        // The sender first, so it is already reading when the first frame comes through the relay.
+        var sender = StartProcess(locator, FfmpegCommandBuilder.BuildSender(outputUrl, profile), redirectInput: true, inputPath);
+        Process encoder;
+        try
+        {
+            encoder = StartProcess(locator, arguments, redirectInput: false, inputPath);
+        }
+        catch
+        {
+            KillQuietly(sender);
+            sender.Dispose();
+            throw;
+        }
+
+        var relay = new FlvPacedRelay(encoder.StandardOutput.BaseStream, sender.StandardInput.BaseStream, profile, logger);
+        relay.Start();
+
+        logger.LogInformation(
+            "ffmpeg started for {Input} -> {OutputUrl} through the {Platform} relay",
+            inputPath,
+            RedactStreamKey(outputUrl, outputUrl),
+            profile.Platform);
+        return new FfmpegStreamingSession(
+            encoder, sender, relay, videoPkid, inputPath, probe, output, resumeFrom, outputUrl, profile, logger);
+    }
+
+    private static Process StartProcess(
+        FfmpegToolLocator locator, IReadOnlyList<string> arguments, bool redirectInput, string inputPath)
+    {
         var startInfo = locator.CreateStartInfo(locator.FfmpegPath, arguments);
+        startInfo.RedirectStandardInput = redirectInput;
 
         var process = new Process { StartInfo = startInfo, EnableRaisingEvents = true };
         if (!process.Start())
@@ -189,10 +307,7 @@ public sealed class FfmpegStreamingSession : IAsyncDisposable
             throw new InvalidOperationException($"Unable to start ffmpeg for {inputPath}");
         }
 
-        // The output is named, not read off the end of the command line: the preview comes after it.
-        logger.LogInformation(
-            "ffmpeg started for {Input} -> {OutputUrl}", inputPath, RedactStreamKey(outputUrl, outputUrl));
-        return new FfmpegStreamingSession(process, videoPkid, inputPath, probe, output, resumeFrom, outputUrl, logger);
+        return process;
     }
 
     /// <summary>What the pages show instead of a path when a live is streaming a canvas.</summary>
@@ -206,24 +321,35 @@ public sealed class FfmpegStreamingSession : IAsyncDisposable
     /// Reads the <c>-progress</c> block of ffmpeg, which repeats the state of the transcode until
     /// the process ends. <c>out_time_us</c> is how far the output got since the point the input was
     /// seeked to, in microseconds; the sibling <c>out_time_ms</c> counts microseconds too, which is
-    /// why it is not the one used here.
+    /// why it is not the one used here. <c>total_size</c> is what was written to the first output -
+    /// the ingest - and it stays N/A until the connection to it is open: bytes there and a clock
+    /// that moves are what make a live on air rather than a process that was started.
     /// </summary>
-    private async Task FollowProgressAsync()
+    private async Task FollowProgressAsync(Process process)
     {
-        const string key = "out_time_us=";
+        const string timeKey = "out_time_us=";
+        const string sizeKey = "total_size=";
 
         try
         {
-            while (await _process.StandardOutput.ReadLineAsync().ConfigureAwait(false) is { } line)
+            while (await process.StandardOutput.ReadLineAsync().ConfigureAwait(false) is { } line)
             {
-                if (line.StartsWith(key, StringComparison.Ordinal)
-                    && long.TryParse(
-                        line[key.Length..].AsSpan(),
-                        System.Globalization.NumberStyles.Integer,
-                        System.Globalization.CultureInfo.InvariantCulture,
-                        out var microseconds))
+                if (TryRead(line, timeKey, out var microseconds) && microseconds >= 0)
                 {
-                    Interlocked.Exchange(ref _positionMilliseconds, _resumedFromMilliseconds + microseconds / 1000);
+                    var position = _resumedFromMilliseconds + microseconds / 1000;
+                    if (position > Interlocked.Exchange(ref _positionMilliseconds, position))
+                    {
+                        Interlocked.Exchange(ref _lastAdvanceTicks, Environment.TickCount64);
+                    }
+
+                    if (microseconds > 0 && Interlocked.Read(ref _bytesOnAir) > 0)
+                    {
+                        Interlocked.CompareExchange(ref _onAirSinceTicks, Environment.TickCount64, 0);
+                    }
+                }
+                else if (TryRead(line, sizeKey, out var bytes))
+                {
+                    Interlocked.Exchange(ref _bytesOnAir, bytes);
                 }
             }
         }
@@ -233,19 +359,118 @@ public sealed class FfmpegStreamingSession : IAsyncDisposable
         }
     }
 
+    private static bool TryRead(string line, string key, out long value)
+    {
+        value = 0;
+        return line.StartsWith(key, StringComparison.Ordinal)
+            && long.TryParse(
+                line.AsSpan(key.Length),
+                System.Globalization.NumberStyles.Integer,
+                System.Globalization.CultureInfo.InvariantCulture,
+                out value);
+    }
+
+    /// <summary>
+    /// The exit code of the live. With a relay the sender says whether the ingest took the stream;
+    /// once it is gone the encoder is given a moment to end (it ends by itself when the file did)
+    /// and killed otherwise, since nothing reads what it writes any more. A sender that ended
+    /// cleanly on an encoder that failed - or that had to be killed, still running with nobody
+    /// to send to - is the encoder's failure: the sender only ran out of input.
+    /// </summary>
     public async Task<int> WaitForExitAsync(CancellationToken cancellationToken)
     {
-        await _process.WaitForExitAsync(cancellationToken).ConfigureAwait(false);
+        if (IsNative)
+        {
+            return await WaitForNativeExitAsync(cancellationToken).ConfigureAwait(false);
+        }
+
+        if (_sender is null)
+        {
+            await _process.WaitForExitAsync(cancellationToken).ConfigureAwait(false);
+            return _process.ExitCode;
+        }
+
+        await _sender.WaitForExitAsync(cancellationToken).ConfigureAwait(false);
+
+        using (var grace = CancellationTokenSource.CreateLinkedTokenSource(cancellationToken))
+        {
+            grace.CancelAfter(EncoderGrace);
+            try
+            {
+                await _process.WaitForExitAsync(grace.Token).ConfigureAwait(false);
+            }
+            catch (OperationCanceledException) when (!cancellationToken.IsCancellationRequested)
+            {
+                KillQuietly(_process);
+                await _process.WaitForExitAsync(cancellationToken).ConfigureAwait(false);
+            }
+        }
+
+        return _sender.ExitCode != 0 ? _sender.ExitCode : _process.ExitCode;
+    }
+
+    /// <summary>
+    /// The native live is over when the relay is: a relay that completed handed the whole stream
+    /// over and closed the publish, and the encoder's exit code says whether the source was read
+    /// to the end. A relay that failed - the ingest refused or dropped the stream - is a failure
+    /// whatever the encoder did, and the encoder is killed since nobody reads it any more.
+    /// </summary>
+    private async Task<int> WaitForNativeExitAsync(CancellationToken cancellationToken)
+    {
+        var relay = _relay!;
+        await relay.Completion.ContinueWith(static _ => { }, cancellationToken, TaskContinuationOptions.None, TaskScheduler.Default)
+            .ConfigureAwait(false);
+
+        using (var grace = CancellationTokenSource.CreateLinkedTokenSource(cancellationToken))
+        {
+            grace.CancelAfter(EncoderGrace);
+            try
+            {
+                await _process.WaitForExitAsync(grace.Token).ConfigureAwait(false);
+            }
+            catch (OperationCanceledException) when (!cancellationToken.IsCancellationRequested)
+            {
+                KillQuietly(_process);
+                await _process.WaitForExitAsync(cancellationToken).ConfigureAwait(false);
+            }
+        }
+
+        if (!relay.Completion.IsCompletedSuccessfully)
+        {
+            return _process.ExitCode != 0 ? _process.ExitCode : 1;
+        }
+
         return _process.ExitCode;
     }
 
     /// <summary>
     /// What ffmpeg wrote on its standard error, with the stream key masked: ffmpeg names the output
     /// url in every error about it, and this text ends up on the live history page and in the log,
-    /// where a key in clear is a key anyone looking at the screen can stream with.
+    /// where a key in clear is a key anyone looking at the screen can stream with. With a relay the
+    /// two processes speak in turn: the sender about the ingest first, since that is where a live
+    /// usually breaks, then the encoder about the source.
     /// </summary>
-    public async Task<string> ReadErrorAsync() =>
-        RedactStreamKey(await _standardError.ConfigureAwait(false), _outputUrl);
+    public async Task<string> ReadErrorAsync()
+    {
+        var encoder = await _standardError.ConfigureAwait(false);
+        if (IsNative)
+        {
+            // The ingest's own words (a refused publish, a dropped connection) come first.
+            var relay = _relay!.Completion.Exception?.GetBaseException().Message ?? string.Empty;
+            return RedactStreamKey(
+                string.Join("\n", new[] { relay.Trim(), encoder.Trim() }.Where(text => text.Length > 0)), _outputUrl);
+        }
+
+        if (_senderError is null)
+        {
+            return RedactStreamKey(encoder, _outputUrl);
+        }
+
+        var sender = await _senderError.ConfigureAwait(false);
+        var both = string.Join(
+            "\n", new[] { sender.Trim(), encoder.Trim() }.Where(text => text.Length > 0));
+        return RedactStreamKey(both, _outputUrl);
+    }
 
     /// <summary>
     /// Replaces the stream key - the last segment of the output url - wherever it appears in a text.
@@ -287,17 +512,56 @@ public sealed class FfmpegStreamingSession : IAsyncDisposable
             return;
         }
 
+        await KillAllAsync().ConfigureAwait(false);
+        _logger.LogInformation("ffmpeg stopped for {Input}", InputPath);
+    }
+
+    /// <summary>
+    /// Kills a live that is broken (it stalled, or the ingest never took it) without calling it a
+    /// stop or an end: the caller decides whether it is reconnected or reported.
+    /// </summary>
+    public Task AbortAsync() => KillAllAsync();
+
+    /// <summary>
+    /// The encoder first, so nothing new enters the relay, then the relay, then the sender: the
+    /// connection to the ingest is the last thing to go.
+    /// </summary>
+    private async Task KillAllAsync()
+    {
+        KillQuietly(_process);
+
+        // Natively this also closes the RTMP connection, which unblocks a write stuck on a full
+        // send buffer: the relay thread ends instead of waiting on a network that is gone.
+        _relay?.Cancel();
+        if (_sender is not null)
+        {
+            KillQuietly(_sender);
+        }
+
         try
         {
-            if (!_process.HasExited)
+            await _process.WaitForExitAsync().ConfigureAwait(false);
+            if (_sender is not null)
             {
-                _process.Kill(entireProcessTree: true);
-                await _process.WaitForExitAsync().ConfigureAwait(false);
+                await _sender.WaitForExitAsync().ConfigureAwait(false);
             }
-
-            _logger.LogInformation("ffmpeg stopped for {Input}", InputPath);
         }
         catch (InvalidOperationException)
+        {
+            // Never started, or already disposed: there is nothing left to wait for.
+        }
+    }
+
+    private static void KillQuietly(Process process)
+    {
+        try
+        {
+            if (!process.HasExited)
+            {
+                process.Kill(entireProcessTree: true);
+            }
+        }
+        catch (Exception exception) when (exception is InvalidOperationException or System.ComponentModel.Win32Exception)
         {
             // The process already exited between the check and the kill.
         }
@@ -307,22 +571,21 @@ public sealed class FfmpegStreamingSession : IAsyncDisposable
     {
         try
         {
-            if (!_process.HasExited)
-            {
-                _process.Kill(entireProcessTree: true);
-                await _process.WaitForExitAsync().ConfigureAwait(false);
-            }
-        }
-        catch (InvalidOperationException)
-        {
-            // Nothing to clean up.
+            await KillAllAsync().ConfigureAwait(false);
         }
         finally
         {
-            // Both readers end on their own once the pipe is gone, and neither of them can fault:
-            // waiting for them releases the last reference to the process before it is disposed.
-            await Task.WhenAll(_standardError, _standardOutput).ConfigureAwait(false);
+            // The readers end on their own once the pipes are gone, and none of them can fault:
+            // waiting for them releases the last reference to the processes before they are disposed.
+            await Task.WhenAll(_standardError, _senderError ?? Task.FromResult(string.Empty), _standardOutput)
+                .ConfigureAwait(false);
+            if (_relay is not null)
+            {
+                await _relay.Completion.ContinueWith(static _ => { }, TaskScheduler.Default).ConfigureAwait(false);
+            }
+
             _process.Dispose();
+            _sender?.Dispose();
         }
     }
 }

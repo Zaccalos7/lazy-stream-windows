@@ -1,4 +1,5 @@
 using Orbis.Stream.Core.Domain;
+using Orbis.Stream.Core.Streaming;
 
 namespace Orbis.Stream.Core.Pages;
 
@@ -61,8 +62,11 @@ public static class LiveLinkView
             return null;
         }
 
+        // A configuration saved with the RTMPS url of before still points at YouTube: it is compared
+        // the way it is streamed, with the host the stream is sent to.
+        var normalized = StreamPlatforms.NormalizeIngestUrl(streamUrl);
         var platform = MainChannelSettingModel.Platforms
-            .FirstOrDefault(known => string.Equals(known.StreamUrl, streamUrl, StringComparison.OrdinalIgnoreCase));
+            .FirstOrDefault(known => string.Equals(known.StreamUrl, normalized, StringComparison.OrdinalIgnoreCase));
 
         return platform.Label is null ? null : platform.Value;
     }

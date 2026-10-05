@@ -12,7 +12,10 @@ namespace Orbis.Stream.Core.Pages;
 /// push channel repaints it, because a live that moves every second must not cost a request every
 /// second. The canvas a live is composed on is a step of the live wizard, not of this page.
 /// </summary>
-public sealed class MainPreviewModel(LivePreviewService preview) : OrbisPageModel
+public sealed class MainPreviewModel(
+    LivePreviewService preview,
+    StreamingService streaming,
+    Localizer localizer) : OrbisPageModel
 {
     private LiveSnapshot? _snapshot;
 
@@ -42,4 +45,15 @@ public sealed class MainPreviewModel(LivePreviewService preview) : OrbisPageMode
 
     public IActionResult OnGet() =>
         string.IsNullOrEmpty(Compose) ? Page() : Redirect("/orbis/mainLive?start=1");
+
+    public IActionResult OnPostStop(int pkid)
+    {
+        Try(() =>
+        {
+            streaming.StopVideoStreamingByPkid(pkid);
+            SetNotice(NoticeKind.Success, localizer.PrintMessage("live.stopped"));
+            return true;
+        });
+        return RedirectToPage();
+    }
 }

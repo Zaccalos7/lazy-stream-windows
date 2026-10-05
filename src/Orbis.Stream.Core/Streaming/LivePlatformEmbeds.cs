@@ -60,9 +60,14 @@ public sealed class LivePlatformEmbeds
         @"var ytInitialData = (?<json>.*?);</script>",
         RegexOptions.CultureInvariant | RegexOptions.Singleline);
 
-    /// <summary>What YouTube says about a video, before it localises anything on the page.</summary>
+    /// <summary>
+    /// What YouTube says about a video, before it localises anything on the page: the details of
+    /// the video say <c>isLive</c> and those of the broadcast <c>isLiveNow</c>, and both only while
+    /// it is on air. Not <c>isLiveContent</c>, which a broadcast keeps once it has ended: it is the
+    /// field that makes the last live of a channel off air look like a live.
+    /// </summary>
     private static readonly Regex OnAirNow = new(
-        "\"isLive(?:Content)?\":true",
+        "\"isLive(?:Now)?\":true",
         RegexOptions.CultureInvariant);
 
     private readonly HttpClient _http;

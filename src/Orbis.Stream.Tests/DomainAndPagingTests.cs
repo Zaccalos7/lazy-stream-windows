@@ -275,7 +275,7 @@ public sealed class UserPathTests
 public sealed class LiveLinkTests
 {
     private const string Twitch = "rtmp://live.twitch.tv/app";
-    private const string YouTube = "rtmps://a.rtmp.youtube.com/live2";
+    private const string YouTube = "rtmps://a.rtmps.youtube.com/live2";
 
     [Fact]
     public void PlatformOf_ReadsTheIngestOfTheLive()

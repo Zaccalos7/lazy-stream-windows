@@ -295,6 +295,35 @@ public static class DatabaseSchema
             SplitScenesIntoLayouts(connection);
             logger?.LogInformation("Saved scenes turned into layouts");
         }
+
+        if (MoveToTheYouTubeIngest(connection) is > 0 and var moved)
+        {
+            logger?.LogInformation("{Count} rows moved to the YouTube RTMPS ingest", moved);
+        }
+    }
+
+    /// <summary>
+    /// The YouTube ingest the first versions offered paired the RTMPS scheme with the RTMP host.
+    /// The configurations and the lives saved with it move to the RTMPS host: a live restarted from
+    /// its history streams to the url it was saved with, and the platform of a live is recognised by
+    /// the exact url, so a row left behind would lose its player and its link. A configuration whose
+    /// key is already saved on the new url stays where it is, since the pair is unique.
+    /// </summary>
+    internal static int MoveToTheYouTubeIngest(SqliteConnection connection)
+    {
+        const string Old = "rtmps://a.rtmp.youtube.com/live2";
+        const string New = "rtmps://a.rtmps.youtube.com/live2";
+
+        using var command = connection.CreateCommand();
+        command.CommandText = """
+            UPDATE setting SET stream_url = $new
+            WHERE lower(stream_url) = $old
+              AND NOT EXISTS (SELECT 1 FROM setting AS twin WHERE twin.stream_url = $new AND twin.stream_key = setting.stream_key);
+            UPDATE video_live_history SET stream_url = $new WHERE lower(stream_url) = $old;
+            """;
+        command.Parameters.AddWithValue("$old", Old);
+        command.Parameters.AddWithValue("$new", New);
+        return command.ExecuteNonQuery();
     }
 
     /// <summary>

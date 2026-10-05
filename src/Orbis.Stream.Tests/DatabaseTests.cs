@@ -152,6 +152,41 @@ public sealed class DatabaseSchemaTests
     }
 
     /// <summary>
+    /// The YouTube ingest of the first versions (RTMPS scheme, RTMP host) moves to the RTMPS host,
+    /// in the configurations and in the lives, except for a key already saved on the new one.
+    /// </summary>
+    [Fact]
+    public void EnsureCreated_MovesTheOldYouTubeIngest()
+    {
+        const string Old = "rtmps://a.rtmp.youtube.com/live2";
+        const string New = "rtmps://a.rtmps.youtube.com/live2";
+
+        using var database = new TemporaryDatabase();
+        var settings = database.Repository<SettingRepository>();
+        settings.Insert(new SettingEntity { Id = 1, StreamUrl = Old, StreamKey = "moved", ChannelName = "channel" });
+        settings.Insert(new SettingEntity { Id = 2, StreamUrl = Old, StreamKey = "twin", ChannelName = "channel" });
+        settings.Insert(new SettingEntity { Id = 3, StreamUrl = New, StreamKey = "twin", ChannelName = "channel" });
+        settings.Insert(new SettingEntity { Id = 4, StreamUrl = "rtmp://live.twitch.tv/app", StreamKey = "moved", ChannelName = "channel" });
+
+        using var connection = database.ConnectionFactory.Open();
+        Execute(connection, $"UPDATE video_live_history SET stream_url = '{Old}'");
+
+        DatabaseSchema.EnsureCreated(connection, NullLogger.Instance);
+
+        string UrlOf(string sql)
+        {
+            using var command = connection.CreateCommand();
+            command.CommandText = sql;
+            return (string)command.ExecuteScalar()!;
+        }
+
+        Assert.Equal(New, UrlOf("SELECT stream_url FROM setting WHERE id = 1"));
+        Assert.Equal(Old, UrlOf("SELECT stream_url FROM setting WHERE id = 2"));
+        Assert.Equal("rtmp://live.twitch.tv/app", UrlOf("SELECT stream_url FROM setting WHERE id = 4"));
+        Assert.Equal(New, UrlOf($"SELECT stream_url FROM video_live_history WHERE pkid = {database.LiveHistoryId}"));
+    }
+
+    /// <summary>
     /// A database written by 1.0.15 has no source columns and no scene tables. The migration has
     /// to add them without touching the rows the previous version wrote, because those rows are
     /// the lives the user is watching.

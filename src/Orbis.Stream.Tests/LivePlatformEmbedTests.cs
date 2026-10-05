@@ -13,7 +13,7 @@ namespace Orbis.Stream.Tests;
 public sealed class LivePlatformEmbedTests
 {
     private const string Twitch = "rtmp://live.twitch.tv/app";
-    private const string YouTube = "rtmps://a.rtmp.youtube.com/live2";
+    private const string YouTube = "rtmps://a.rtmps.youtube.com/live2";
 
     [Fact]
     public async Task Twitch_IsPlayedOnTheChannelOfTheConfiguration()
@@ -91,22 +91,15 @@ public sealed class LivePlatformEmbedTests
     }
 
     [Fact]
-    public async Task YouTube_IsPlayedOnTheVideoTheChannelIsBroadcasting_Legacy()
+    public async Task YouTube_ABroadcastThatHasEnded_HasNoPlayer()
     {
-        var embeds = Platform(request =>
-        {
-            var page = request.RequestUri!.AbsolutePath.EndsWith("/streams", StringComparison.Ordinal)
+        // An ended live is still live content: only the fields of the broadcast say it is over.
+        var embeds = Platform(request => Text(
+            request.RequestUri!.AbsolutePath.EndsWith("/streams", StringComparison.Ordinal)
                 ? Streams("RU6gEobXVHA")
-                : LegacyWatch(onAir: true);
-            return Text(page);
-        });
+                : Ended()));
 
-        var embed = await embeds.ResolveAsync(YouTube, "reproChannel", "youtube", "localhost", default);
-
-        Assert.NotNull(embed);
-        Assert.Equal("youtube", embed!.Platform);
-        Assert.Equal("reproChannel", embed.Channel);
-        Assert.StartsWith("https://www.youtube.com/embed/RU6gEobXVHA?", embed.Url, StringComparison.Ordinal);
+        Assert.Null(await embeds.ResolveAsync(YouTube, "reproChannel", "youtube", "localhost", default));
     }
 
     [Fact]
@@ -189,14 +182,18 @@ public sealed class LivePlatformEmbedTests
         "{\"lockupViewModel\":{\"contentId\":\"" + videoId + "\",\"contentType\":\"LOCKUP_CONTENT_TYPE_VIDEO\"}" +
         "};</script></html>";
 
-    /// <summary>A page of a video, which says whether it is live content.</summary>
+    /// <summary>A page of a live video, which says whether it is on air.</summary>
     private static string Watch(bool onAir) =>
         "<html><script>var ytInitialPlayerResponse = " +
-        "{\"isLive\":" + (onAir ? "true" : "false") + "}};</script></html>";
+        "{\"videoDetails\":{\"isLiveContent\":true" + (onAir ? ",\"isLive\":true" : "") + "}," +
+        "\"microformat\":{\"liveBroadcastDetails\":{\"isLiveNow\":" + (onAir ? "true" : "false") + "}}};</script></html>";
 
-    private static string LegacyWatch(bool onAir) =>
+    /// <summary>The page of a broadcast that has ended, as YouTube serves it.</summary>
+    private static string Ended() =>
         "<html><script>var ytInitialPlayerResponse = " +
-        "{\"isLiveContent\":" + (onAir ? "true" : "false") + "}};</script></html>";
+        "{\"videoDetails\":{\"isLiveContent\":true}," +
+        "\"microformat\":{\"liveBroadcastDetails\":{\"isLiveNow\":false," +
+        "\"startTimestamp\":\"2026-10-02T07:29:10+00:00\",\"endTimestamp\":\"2026-10-02T12:26:31+00:00\"}}};</script></html>";
 
     private sealed class RecordingHandler(Func<HttpRequestMessage, HttpResponseMessage> answer) : HttpMessageHandler
     {

@@ -56,4 +56,14 @@ public sealed class MainPreviewModel(
         });
         return RedirectToPage();
     }
+
+    public IActionResult OnPostSpot(int videoKey, string spotPath)
+    {
+        return Try(() =>
+        {
+            streaming.EnqueueSpot(spotPath, videoKey);
+            SetNotice(NoticeKind.Success, localizer.PrintMessage("live.yielded") ?? "Spot iniziato");
+            return true;
+        }) ? new OkResult() : RedirectToPage();
+    }
 }

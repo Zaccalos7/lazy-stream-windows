@@ -319,5 +319,8 @@
   "dashboardSectionSettings": "Settings",
   "dashboardSectionSystem": "System & Monitoring",
   "lowLatency": "Hodor",
-  "lowLatencyHelp": "Hodor Hodor Hodor. Hodor Hodor Hodor Hodor Hodor. Hodor Hodor."
+  "lowLatencyHelp": "Hodor Hodor Hodor. Hodor Hodor Hodor Hodor Hodor. Hodor Hodor.",
+  "playSpot": "Hodor hodor",
+  "playSpotHint": "Hodor hodor hodor. Hodor hodor hodor hodor hodor.",
+  "spotFile": "Hodor hodor hodor"
 }

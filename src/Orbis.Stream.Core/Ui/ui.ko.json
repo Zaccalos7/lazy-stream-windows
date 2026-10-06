@@ -319,5 +319,8 @@
   "dashboardSectionSettings": "Settings",
   "dashboardSectionSystem": "System & Monitoring",
   "lowLatency": "노은 지연",
-  "lowLatencyHelp": "인코더에 최소 지연을 가리합니다(루크어헤드 없음, scenecut 없음). 재발상에서는 뒤쪽이 속도를 지정하므로 큄속 시 오니다."
+  "lowLatencyHelp": "인코더에 최소 지연을 가리합니다(루크어헤드 없음, scenecut 없음). 재발상에서는 뒤쪽이 속도를 지정하므로 큄속 시 오니다.",
+  "playSpot": "광고 재생",
+  "playSpotHint": "방송할 광고 비디오를 선택하세요. 현재 스트림이 일시 중지되고 광고 후 자동으로 다시 시작됩니다.",
+  "spotFile": "광고 비디오 파일"
 }

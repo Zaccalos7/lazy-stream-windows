@@ -319,5 +319,8 @@
   "dashboardSectionSettings": "Settings",
   "dashboardSectionSystem": "System & Monitoring",
   "lowLatency": "Low latency",
-  "lowLatencyHelp": "Asks the encoder for the smallest delay it can manage: no lookahead, no scenecut. Turn it off for a re-stream, where the pacing is already done downstream."
+  "lowLatencyHelp": "Asks the encoder for the smallest delay it can manage: no lookahead, no scenecut. Turn it off for a re-stream, where the pacing is already done downstream.",
+  "playSpot": "Play Ad Spot",
+  "playSpotHint": "Select the ad video to broadcast. The current stream will pause and automatically resume after the spot.",
+  "spotFile": "Ad video file"
 }

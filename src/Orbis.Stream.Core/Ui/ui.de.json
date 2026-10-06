@@ -319,5 +319,8 @@
   "dashboardSectionSettings": "Settings",
   "dashboardSectionSystem": "System & Monitoring",
   "lowLatency": "Geringe Latenz",
-  "lowLatencyHelp": "Verlangt vom Encoder die kleinste mögliche Verzögerung: kein Lookahead, kein Scenecut. Ausschalten bei einer Weiterübertragung, dort setzt der Relay den Takt ohnehin."
+  "lowLatencyHelp": "Verlangt vom Encoder die kleinste mögliche Verzögerung: kein Lookahead, kein Scenecut. Ausschalten bei einer Weiterübertragung, dort setzt der Relay den Takt ohnehin.",
+  "playSpot": "Werbespot abspielen",
+  "playSpotHint": "Wählen Sie das Werbevideo aus. Der aktuelle Stream wird angehalten und danach automatisch fortgesetzt.",
+  "spotFile": "Werbevideo-Datei"
 }

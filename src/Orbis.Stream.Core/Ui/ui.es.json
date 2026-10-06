@@ -319,5 +319,8 @@
   "dashboardSectionSettings": "Settings",
   "dashboardSectionSystem": "System & Monitoring",
   "lowLatency": "Baja latencia",
-  "lowLatencyHelp": "Pide al codificador el menor retardo posible: sin look-ahead ni scenecut. Desactívalo en una retransmisión, donde el relay ya marca el ritmo."
+  "lowLatencyHelp": "Pide al codificador el menor retardo posible: sin look-ahead ni scenecut. Desactívalo en una retransmisión, donde el relay ya marca el ritmo.",
+  "playSpot": "Emitir anuncio",
+  "playSpotHint": "Seleccione el video publicitario a emitir. La transmisión actual se pausará y se reanudará automáticamente al finalizar el anuncio.",
+  "spotFile": "Archivo de video del anuncio"
 }

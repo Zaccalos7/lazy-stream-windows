@@ -319,5 +319,8 @@
   "dashboardSectionSettings": "Settings",
   "dashboardSectionSystem": "System & Monitoring",
   "lowLatency": "Latentia minima",
-  "lowLatencyHelp": "Exigit ab incodificatori minimam moram: sine look-ahead, sine scenecut. Exstingue pro interceptione, quia ibi iam relais tempus definit."
+  "lowLatencyHelp": "Exigit ab incodificatori minimam moram: sine look-ahead, sine scenecut. Exstingue pro interceptione, quia ibi iam relais tempus definit.",
+  "playSpot": "Lude praeconium",
+  "playSpotHint": "Elige visificum praeconii ad emittendum. Flumen praesens intermittetur et post praeconium sponte resumetur.",
+  "spotFile": "Fasciculus visificus praeconii"
 }

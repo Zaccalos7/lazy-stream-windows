@@ -319,5 +319,8 @@
   "dashboardSectionSettings": "Settings",
   "dashboardSectionSystem": "System & Monitoring",
   "lowLatency": "Faible latence",
-  "lowLatencyHelp": "Demande à l'encodeur le plus petit délai possible : sans look-ahead ni scenecut. Désactivez-le pour une rediffusion, où le relais impose déjà le rythme."
+  "lowLatencyHelp": "Demande à l'encodeur le plus petit délai possible : sans look-ahead ni scenecut. Désactivez-le pour une rediffusion, où le relais impose déjà le rythme.",
+  "playSpot": "Diffuser une publicité",
+  "playSpotHint": "Sélectionnez la vidéo publicitaire à diffuser. Le flux actuel sera mis en pause et reprendra automatiquement à la fin de la pub.",
+  "spotFile": "Fichier vidéo de la pub"
 }

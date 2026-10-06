@@ -32,6 +32,7 @@ public sealed class FfmpegStreamingSession : IAsyncDisposable
     private long _onAirSinceTicks;
     private int _stopRequested;
     private int _restartRequested;
+    private int _yieldRequested;
     private int _endedNaturally;
 
     private FfmpegStreamingSession(
@@ -138,6 +139,7 @@ public sealed class FfmpegStreamingSession : IAsyncDisposable
     /// loop watches this flag and does exactly that.
     /// </summary>
     public bool RestartRequested => Volatile.Read(ref _restartRequested) == 1;
+    public bool YieldRequested => Volatile.Read(ref _yieldRequested) == 1;
 
     public bool EndedNaturally => Volatile.Read(ref _endedNaturally) == 1;
 
@@ -316,6 +318,7 @@ public sealed class FfmpegStreamingSession : IAsyncDisposable
 
     /// <summary>Asks the streaming loop to start this transcode again with a new configuration.</summary>
     public void RequestRestart() => Interlocked.Exchange(ref _restartRequested, 1);
+    public void Yield() => Interlocked.Exchange(ref _yieldRequested, 1);
 
     /// <summary>
     /// Reads the <c>-progress</c> block of ffmpeg, which repeats the state of the transcode until

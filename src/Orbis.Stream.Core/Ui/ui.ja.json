@@ -319,5 +319,8 @@
   "dashboardSectionSettings": "Settings",
   "dashboardSectionSystem": "System & Monitoring",
   "lowLatency": "低遅延",
-  "lowLatencyHelp": "エンコーダーに最小の遅延を求ます（ロークアヘロッドなし、scenecut なし）。再配信ではリレイがリートを治めるのでオフにしてください。"
+  "lowLatencyHelp": "エンコーダーに最小の遅延を求ます（ロークアヘロッドなし、scenecut なし）。再配信ではリレイがリートを治めるのでオフにしてください。",
+  "playSpot": "広告を再生する",
+  "playSpotHint": "放送する広告動画を選択してください。現在のストリームは一時停止し、広告の後に自動的に再開されます。",
+  "spotFile": "広告動画ファイル"
 }

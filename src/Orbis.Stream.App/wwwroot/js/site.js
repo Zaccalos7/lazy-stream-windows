@@ -230,10 +230,16 @@ const paintPreviewPicture = () => {
   // The canvas is measured rather than set from the picture: setting its size clears it, and a
   // canvas cleared thirty times a second is a canvas that flickers.
   if (previewFrame.hidden) previewFrame.hidden = false;
+  const cover = preview?.querySelector("[data-preview-cover]");
+  if (cover && !cover.hidden) cover.hidden = true;
 
   const scale = window.devicePixelRatio || 1;
-  const width = Math.round(previewFrame.clientWidth * scale);
-  const height = Math.round(previewFrame.clientHeight * scale);
+  const parentWidth = previewFrame.parentElement?.clientWidth || 0;
+  const parentHeight = previewFrame.parentElement?.clientHeight || 0;
+  const clientW = previewFrame.clientWidth || parentWidth;
+  const clientH = previewFrame.clientHeight || parentHeight;
+  const width = Math.round(clientW * scale);
+  const height = Math.round(clientH * scale);
   if (width > 0 && height > 0 && (previewFrame.width !== width || previewFrame.height !== height)) {
     previewFrame.width = width;
     previewFrame.height = height;
@@ -312,6 +318,8 @@ const armPreviewFrame = () => {
   previewPicture = null;
   previewPainted = null;
   previewFrame.hidden = true;
+  const cover = preview?.querySelector("[data-preview-cover]");
+  if (cover) cover.hidden = false;
 };
 const previewVideo = preview?.querySelector("[data-preview-video]");
 const previewForm = preview?.querySelector("[data-preview-form]");
@@ -454,6 +462,11 @@ let embedReason = null;
 
 const resolvePlatformPlayer = async () => {
   if (!previewPlatformPlayer || previewPkid <= 0) return;
+  const platform = (preview?.dataset.platform || "").toLowerCase();
+  if (platform && platform !== "twitch") {
+    if (embedStatus) embedStatus.hidden = true;
+    return;
+  }
   if (embedStatus) embedStatus.hidden = false;
   embedReason = null;
   try {
@@ -478,7 +491,7 @@ const resolvePlatformPlayer = async () => {
     // so it has to say which of the two things happened: a channel that is off air, or a platform
     // this application failed to reach. Only the first is about the live.
     const reason = embedReason
-      || previewMark("embedFailed", "Unable to load {0} player: channel is not live").replace("{0}", "Twitch/YouTube");
+      || previewMark("embedFailed", "Unable to load {0} player: channel is not live").replace("{0}", "Twitch");
     embedText.textContent = reason;
   }
   if (previewIsLive) setTimeout(resolvePlatformPlayer, previewRetry);
@@ -498,7 +511,10 @@ if (previewIsLive) {
       armPreviewFrame();
     });
   }
-  resolvePlatformPlayer();
+  const platform = (preview?.dataset.platform || "").toLowerCase();
+  if (platform === "twitch") {
+    resolvePlatformPlayer();
+  }
 }
 
 const paintPreview = state => {

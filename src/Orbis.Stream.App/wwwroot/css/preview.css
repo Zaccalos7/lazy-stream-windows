@@ -88,6 +88,34 @@
 .preview-embed-status .spinner { border-top-color: var(--accent); }
 .preview-embed-status[hidden] { display: none; }
 
+.preview-badge-live {
+  position: absolute;
+  top: 10px;
+  left: 10px;
+  z-index: 2;
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  padding: 4px 9px;
+  border-radius: var(--radius-sm);
+  background: rgba(0, 0, 0, 0.65);
+  color: var(--text);
+  font-size: 11px;
+  font-weight: 600;
+  letter-spacing: 0.5px;
+  text-transform: uppercase;
+  backdrop-filter: blur(4px);
+  pointer-events: none;
+}
+.preview-badge-live .live-dot {
+  width: 7px;
+  height: 7px;
+  border-radius: 50%;
+  background: var(--critical);
+  box-shadow: 0 0 6px var(--critical);
+  animation: pulse 1.6s ease-in-out infinite;
+}
+
 .preview-bar { display: flex; align-items: center; gap: 10px; }
 .preview-id { flex: 1; min-width: 0; display: flex; flex-direction: column; }
 .preview-id strong { font-size: 13px; }

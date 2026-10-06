@@ -1,4 +1,5 @@
 using System.Globalization;
+using Orbis.Stream.Core.Contracts;
 using Orbis.Stream.Core.Data;
 using Orbis.Stream.Core.Domain;
 using Orbis.Stream.Core.I18n;
@@ -26,6 +27,12 @@ public sealed class FfmpegVideoPlaylistStreamer : IVideoPlaylistStreamer
     /// </summary>
     private const double DefaultCanvasFrameRate = 30d;
 
+    /// <summary>
+    /// How long a live has to have been on air for its reconnections to be forgiven: a live that
+    /// drops once an hour is a live on a bad network, not one that should end after three drops.
+    /// </summary>
+    private static readonly TimeSpan StableOnAir = TimeSpan.FromSeconds(60);
+
     private readonly VideoRepository _videoRepository;
     private readonly VideoSettingRepository _videoSettingRepository;
     private readonly SceneRepository _sceneRepository;
@@ -35,6 +42,7 @@ public sealed class FfmpegVideoPlaylistStreamer : IVideoPlaylistStreamer
     private readonly Localizer _localizer;
     private readonly LiveChangeNotifier _notifier;
     private readonly LivePreviewFrames _frames;
+    private readonly MediaProxyService _proxies;
     private readonly ILogger<FfmpegVideoPlaylistStreamer> _logger;
 
     public FfmpegVideoPlaylistStreamer(
@@ -47,6 +55,7 @@ public sealed class FfmpegVideoPlaylistStreamer : IVideoPlaylistStreamer
         Localizer localizer,
         LiveChangeNotifier notifier,
         LivePreviewFrames frames,
+        MediaProxyService proxies,
         ILogger<FfmpegVideoPlaylistStreamer> logger)
     {
         _videoRepository = videoRepository;
@@ -58,6 +67,7 @@ public sealed class FfmpegVideoPlaylistStreamer : IVideoPlaylistStreamer
         _localizer = localizer;
         _notifier = notifier;
         _frames = frames;
+        _proxies = proxies;
         _logger = logger;
     }
 
@@ -67,6 +77,8 @@ public sealed class FfmpegVideoPlaylistStreamer : IVideoPlaylistStreamer
         long videoLiveHistoryPkid,
         CancellationToken cancellationToken)
     {
+        outputUrl = StreamPlatforms.NormalizeIngestUrl(outputUrl);
+
         // Rows that came from a canvas are not a playlist: they are one picture, so they are grouped
         // and streamed as a single ffmpeg instead of one after the other.
         var groups = GroupAsync(videos).ToList();
@@ -250,6 +262,7 @@ public sealed class FfmpegVideoPlaylistStreamer : IVideoPlaylistStreamer
         // the new one is registered before the old one is killed. A preview that asks in between the
         // two has to see the live going on, not a moment where nothing is running.
         FfmpegStreamingSession? session = null;
+        var reconnects = new ReconnectBudget();
 
         try
         {
@@ -288,17 +301,41 @@ public sealed class FfmpegVideoPlaylistStreamer : IVideoPlaylistStreamer
                     await previous.DisposeAsync().ConfigureAwait(false);
                 }
 
-                var startedMessage = _localizer.PrintMessage("video.live.started", [inputPath]);
-                _logger.LogInformation("{Message}", startedMessage);
+                // A started process is not a live: the row says it is connecting until the ingest
+                // takes the stream, and only then that it is streaming.
+                var platform = PlatformName(next);
+                var connecting = _localizer.PrintMessage("video.live.connecting", [inputPath, platform]);
+                _logger.LogInformation("{Message}", connecting);
                 SaveMessageOnVideoLiveHistory(
-                    startedMessage, videoLiveHistoryPkid, inputPath, LiveStatus.Live, DateTime.Now);
+                    connecting, videoLiveHistoryPkid, inputPath, LiveStatus.Live, DateTime.Now);
 
-                var outcome = await MonitorAsync(session, videoKey, videoLiveHistoryPkid, inputPath, cancellationToken)
+                var outcome = await MonitorAsync(
+                        session,
+                        videoKey,
+                        videoLiveHistoryPkid,
+                        inputPath,
+                        () =>
+                        {
+                            var startedMessage = _localizer.PrintMessage("video.live.started", [inputPath]);
+                            _logger.LogInformation("{Message}", startedMessage);
+                            SaveMessageOnVideoLiveHistory(
+                                startedMessage, videoLiveHistoryPkid, inputPath, LiveStatus.Live, null);
+                        },
+                        cancellationToken)
                     .ConfigureAwait(false);
 
                 if (outcome == StreamOutcome.Stopped)
                 {
                     return true;
+                }
+
+                if (outcome == StreamOutcome.NeverOnAir)
+                {
+                    var notReceived = await NotReceivedMessageAsync(session, inputPath, platform).ConfigureAwait(false);
+                    _logger.LogError("{Message}", notReceived);
+                    SaveMessageOnVideoLiveHistory(
+                        notReceived, videoLiveHistoryPkid, inputPath, LiveStatus.Error, DateTime.Now, (long)resumeFrom.TotalMilliseconds);
+                    return false;
                 }
 
                 if (outcome == StreamOutcome.Reconfigured)
@@ -323,6 +360,29 @@ public sealed class FfmpegVideoPlaylistStreamer : IVideoPlaylistStreamer
                 {
                     await StopAndRecordAsync(session, videoKey, videoLiveHistoryPkid, inputPath).ConfigureAwait(false);
                     return true;
+                }
+
+                // A live that was on air and broke - the network dropped, the ingest closed the
+                // connection, the stream stopped moving - carries on from where it got to.
+                // An end reached by position kills the processes too: that exit code is not a break.
+                if (!session.EndedNaturally
+                    && (outcome == StreamOutcome.Stalled || exitCode != 0)
+                    && await ShouldReconnectAsync(
+                            session,
+                            reconnects,
+                            inputPath,
+                            message => SaveMessageOnVideoLiveHistory(message, videoLiveHistoryPkid, inputPath, LiveStatus.Live, null),
+                            cancellationToken)
+                        .ConfigureAwait(false))
+                {
+                    resumeFrom = TimeSpan.FromMilliseconds(session.PositionMilliseconds);
+                    continue;
+                }
+
+                if (outcome == StreamOutcome.Stalled)
+                {
+                    errorOutput = _localizer.PrintMessage("video.live.stalled", [inputPath, PlatformName(session)])
+                        + "\n" + errorOutput;
                 }
 
                 // Video ended normally (exitCode == 0): save position and clean up immediately
@@ -395,6 +455,26 @@ public sealed class FfmpegVideoPlaylistStreamer : IVideoPlaylistStreamer
     /// What ffprobe says about every file of the canvas, asked once: the sound of a file decides
     /// whether it joins the mix, and its length decides whether the live waits for it.
     /// </summary>
+    /// <summary>
+    /// What ffmpeg opens for each file of a canvas: its light copy when it has one that fits the
+    /// tile, otherwise the file, on the GPU when the GPU decodes it faster. Decided once a live, so
+    /// a reconfigured pass resumes in the same picture it left; the copy is on the same timeline,
+    /// so the position is the same either way.
+    /// </summary>
+    private Dictionary<VideoEntity, MediaInput> FileInputsOf(
+        IReadOnlyList<VideoEntity> rows, IReadOnlyDictionary<string, MediaProbeResult> probes)
+    {
+        var inputs = new Dictionary<VideoEntity, MediaInput>(ReferenceEqualityComparer.Instance);
+        foreach (var row in rows.Where(row => row.SourceKind == SourceKind.File))
+        {
+            inputs[row] = probes.TryGetValue(row.VideoPath, out var probe)
+                ? _proxies.Resolve(row.VideoPath, probe, row.Width ?? 0, row.Height ?? 0)
+                : new MediaInput(row.VideoPath, false);
+        }
+
+        return inputs;
+    }
+
     private async Task<Dictionary<string, MediaProbeResult>> ProbedFilesAsync(
         IReadOnlyList<VideoEntity> rows,
         CancellationToken cancellationToken)
@@ -525,6 +605,7 @@ public sealed class FfmpegVideoPlaylistStreamer : IVideoPlaylistStreamer
         var videoKey = baseRow.Pkid;
         var description = _localizer.PrintMessage("video.live.scene", [rows.Count.ToString(CultureInfo.InvariantCulture)]);
         FfmpegStreamingSession? session = null;
+        var reconnects = new ReconnectBudget();
 
         try
         {
@@ -532,6 +613,7 @@ public sealed class FfmpegVideoPlaylistStreamer : IVideoPlaylistStreamer
             var probes = await ProbedFilesAsync(rows, cancellationToken).ConfigureAwait(false);
             var silent = SilentFilesOf(rows, probes);
             var duration = onlyFiles ? LongestFileDuration(rows, probes) : null;
+            var inputs = FileInputsOf(rows, probes);
             if (duration is { } canvasLength)
             {
                 _logger.LogInformation(
@@ -542,17 +624,18 @@ public sealed class FfmpegVideoPlaylistStreamer : IVideoPlaylistStreamer
             while (true)
             {
                 cancellationToken.ThrowIfCancellationRequested();
-                var videoSetting = FindSetting(videoKey);
+                var videoSetting = CanvasSetting(videoKey, rows);
 
                 var items = rows
                     .Select(row => new FfmpegCompositionItem(
                         row.SourceKind,
-                        row.SourceKind == SourceKind.File ? row.VideoPath : row.SourceTarget ?? string.Empty,
+                        row.SourceKind == SourceKind.File ? inputs[row].Path : row.SourceTarget ?? string.Empty,
                         row.X ?? 0,
                         row.Y ?? 0,
                         row.Width ?? 0,
                         row.Height ?? 0,
-                        row.AudioEnabled && !silent.Contains(row)))
+                        row.AudioEnabled && !silent.Contains(row),
+                        row.SourceKind == SourceKind.File && inputs[row].HardwareDecoding))
                     .ToList();
 
                 var next = FfmpegStreamingSession.StartComposition(
@@ -577,16 +660,36 @@ public sealed class FfmpegVideoPlaylistStreamer : IVideoPlaylistStreamer
                     await previous.DisposeAsync().ConfigureAwait(false);
                 }
 
-                MarkRows(rows, LiveStatus.Live, description);
-                _logger.LogInformation("{Message}", description);
+                var platform = PlatformName(next);
+                var connecting = _localizer.PrintMessage("video.live.connecting", [description, platform]);
+                MarkRows(rows, LiveStatus.Live, connecting);
+                _logger.LogInformation("{Message}", connecting);
 
-                var outcome = await MonitorAsync(session, videoKey, videoLiveHistoryPkid, baseRow.VideoPath, cancellationToken)
+                var outcome = await MonitorAsync(
+                        session,
+                        videoKey,
+                        videoLiveHistoryPkid,
+                        baseRow.VideoPath,
+                        () =>
+                        {
+                            MarkRows(rows, LiveStatus.Live, description);
+                            _logger.LogInformation("{Message}", description);
+                        },
+                        cancellationToken)
                     .ConfigureAwait(false);
 
                 if (outcome == StreamOutcome.Stopped)
                 {
                     var stopped = _localizer.PrintMessage("live.stopped");
                     MarkRows(rows, LiveStatus.Stopped, stopped);
+                    return;
+                }
+
+                if (outcome == StreamOutcome.NeverOnAir)
+                {
+                    var notReceived = await NotReceivedMessageAsync(session, description, platform).ConfigureAwait(false);
+                    _logger.LogError("{Message}", notReceived);
+                    MarkRows(rows, LiveStatus.Error, notReceived);
                     return;
                 }
 
@@ -612,6 +715,23 @@ public sealed class FfmpegVideoPlaylistStreamer : IVideoPlaylistStreamer
                     await session.StopAsync().ConfigureAwait(false);
                     MarkRows(rows, LiveStatus.Stopped, stopped);
                     return;
+                }
+
+                // An end reached by position kills the processes too: that exit code is not a break.
+                if (!session.EndedNaturally
+                    && (outcome == StreamOutcome.Stalled || exitCode != 0)
+                    && await ShouldReconnectAsync(
+                            session, reconnects, description, message => MarkRows(rows, LiveStatus.Live, message), cancellationToken)
+                        .ConfigureAwait(false))
+                {
+                    resumeFrom = TimeSpan.FromMilliseconds(session.PositionMilliseconds);
+                    continue;
+                }
+
+                if (outcome == StreamOutcome.Stalled)
+                {
+                    errorOutput = _localizer.PrintMessage("video.live.stalled", [description, PlatformName(session)])
+                        + "\n" + errorOutput;
                 }
 
                 // Video ended normally (exitCode == 0): save position and clean up immediately
@@ -692,6 +812,69 @@ public sealed class FfmpegVideoPlaylistStreamer : IVideoPlaylistStreamer
             $"video setting not found for video {videoKey} (videoSettingId={settingId?.ToString() ?? "null"})");
     }
 
+    /// <summary>
+    /// The setting a canvas goes on air with, with the low latency switch decided for it.
+    /// <para>A composition decodes every source on it, scales it and lays it over the others, and
+    /// only then encodes one picture. That is the one case where the machine, and not the network,
+    /// is what the live is waiting on, and a canvas that runs out of CPU does not fall behind
+    /// cleanly: it drops frames inside the picture, which is what a viewer reads as the live
+    /// stuttering. The low latency defaults are the ones that spend the least CPU per frame, so a
+    /// canvas of two or more pictures turns them on for itself.</para>
+    /// <para>The setting the rows were given is never edited here. It may be a seeded default, one
+    /// the wizard offers, or one another live is streaming with right now, and changing it would
+    /// change all of them under the user's feet. Rows that already own their setting keep that one
+    /// with the switch turned on; rows sharing somebody else's get a copy of their own, and that
+    /// copy is what they go on air with. The configuration the user chose stays as it was, and the
+    /// same goes for a canvas of a single source, which is not a composition and streams its
+    /// setting exactly as the user left it.</para>
+    /// </summary>
+    private VideoSettingEntity CanvasSetting(int videoKey, IReadOnlyList<VideoEntity> rows)
+    {
+        var setting = FindSetting(videoKey);
+        if (VideoSettingLatency.IsOn(setting) || rows.Count(row => row.SourceKind.HasPicture()) < 2)
+        {
+            return setting;
+        }
+
+        // Rows that own their setting are edited where it is; rows sharing one are given a copy,
+        // which is what LinkSetting does when the live page saves a setting by hand.
+        var shared = setting.Id is not { } id || !IsOnlyOf(id, rows);
+        var target = shared
+            ? VideoSettingsRequest.FromEntity(setting).ToEntity()
+            : setting;
+
+        target.Id = shared ? null : setting.Id;
+        target.IsDefaultConfiguration = shared ? false : setting.IsDefaultConfiguration;
+        target.IsVideoAndAudioSettingActive = shared ? false : setting.IsVideoAndAudioSettingActive;
+        target.LastModified = DateTime.Now;
+
+        VideoSettingLatency.Set(target, true);
+        target.Id ??= _videoSettingRepository.Insert(target);
+        _videoSettingRepository.Update(target);
+
+        foreach (var row in rows.Where(row => row.VideoSettingId != target.Id))
+        {
+            _videoRepository.SetVideoSetting(row.Pkid, target.Id.Value);
+        }
+
+        _logger.LogInformation(
+            "The canvas of {Rows} sources goes on air with low latency on, on the setting '{Setting}' of its own",
+            rows.Count,
+            target.Title);
+
+        return _videoSettingRepository.FindById(target.Id.Value) ?? target;
+    }
+
+    /// <summary>
+    /// Whether these rows are the only ones a setting belongs to: a seeded default is offered by
+    /// the wizard to every live, so it is never theirs to edit, and a setting another live is
+    /// streaming with would change under the feet of that live. A setting the rows carry alone is
+    /// theirs, and so is one they got from the wizard and nobody else is using.
+    /// </summary>
+    private bool IsOnlyOf(int settingId, IReadOnlyList<VideoEntity> rows) =>
+        _videoSettingRepository.FindById(settingId) is { IsDefaultConfiguration: not true }
+        && _videoRepository.FindPkidsByVideoSettingId(settingId).All(pkid => rows.Any(row => row.Pkid == pkid));
+
     /// <summary>Why the monitor stopped watching a transcode.</summary>
     private enum StreamOutcome
     {
@@ -702,21 +885,35 @@ public sealed class FfmpegVideoPlaylistStreamer : IVideoPlaylistStreamer
         Stopped,
 
         /// <summary>The encoder configuration changed: start again from the current position.</summary>
-        Reconfigured
+        Reconfigured,
+
+        /// <summary>
+        /// The ingest never took the stream within the connect timeout of the platform. The live
+        /// was killed; it is an error, not something to retry, since a wrong key or a blocked
+        /// network fails the same way the second time.
+        /// </summary>
+        NeverOnAir,
+
+        /// <summary>The live was on air and stopped moving for longer than the platform allows: killed.</summary>
+        Stalled
     }
 
     /// <summary>
     /// Polls the stop flag like the Java version polled it every 50 frames, but also reacts
     /// immediately to the in-memory stop signal and to a change of parameters made from the
-    /// preview page.
+    /// preview page. It is also what tells a live from a process: <paramref name="onAir"/> runs
+    /// once, when the ingest starts taking the stream, and a live that never gets there, or that
+    /// stops moving once it did, is killed instead of being left on the page as LIVE.
     /// </summary>
     private async Task<StreamOutcome> MonitorAsync(
         FfmpegStreamingSession session,
         int videoKey,
         long videoLiveHistoryPkid,
         string inputPath,
+        Action onAir,
         CancellationToken cancellationToken)
     {
+        var announced = false;
         while (true)
         {
             if (session.StopRequested)
@@ -756,6 +953,38 @@ public sealed class FfmpegVideoPlaylistStreamer : IVideoPlaylistStreamer
                 return StreamOutcome.Finished;
             }
 
+            var profile = session.Profile;
+            if (!session.IsOnAir)
+            {
+                if (DateTimeOffset.UtcNow - session.StartedAt > profile.ConnectTimeout)
+                {
+                    _logger.LogWarning(
+                        "No byte reached {Platform} in {Seconds}s: the live is not on air",
+                        profile.Platform,
+                        profile.ConnectTimeout.TotalSeconds);
+                    await session.AbortAsync().ConfigureAwait(false);
+                    return StreamOutcome.NeverOnAir;
+                }
+            }
+            else
+            {
+                if (!announced)
+                {
+                    announced = true;
+                    onAir();
+                }
+
+                if (session.SinceLastAdvance > profile.StallTimeout)
+                {
+                    _logger.LogWarning(
+                        "The live to {Platform} has not moved for {Seconds:0}s: it is stalled",
+                        profile.Platform,
+                        session.SinceLastAdvance.TotalSeconds);
+                    await session.AbortAsync().ConfigureAwait(false);
+                    return StreamOutcome.Stalled;
+                }
+            }
+
             try
             {
                 await Task.Delay(StopFlagPollInterval, cancellationToken).ConfigureAwait(false);
@@ -766,6 +995,61 @@ public sealed class FfmpegVideoPlaylistStreamer : IVideoPlaylistStreamer
             }
         }
     }
+
+    /// <summary>
+    /// Whether a live that broke is reconnected, and the wait before it is. Only a live that was
+    /// on air is: one that never got there failed for a reason a second try does not change. A
+    /// live that stayed on air for a while starts its budget over, and the wait grows with every
+    /// attempt in a row so a network that is down is not hammered.
+    /// </summary>
+    private async Task<bool> ShouldReconnectAsync(
+        FfmpegStreamingSession session,
+        ReconnectBudget budget,
+        string label,
+        Action<string> report,
+        CancellationToken cancellationToken)
+    {
+        var profile = session.Profile;
+        if (!session.IsOnAir || profile.ReconnectAttempts <= 0)
+        {
+            return false;
+        }
+
+        if (session.OnAirFor >= StableOnAir)
+        {
+            budget.Used = 0;
+        }
+
+        if (budget.Used >= profile.ReconnectAttempts)
+        {
+            return false;
+        }
+
+        budget.Used++;
+        var message = _localizer.PrintMessage(
+            "video.live.reconnecting",
+            [label, PlatformName(session), budget.Used.ToString(CultureInfo.InvariantCulture), profile.ReconnectAttempts.ToString(CultureInfo.InvariantCulture)]);
+        _logger.LogWarning("{Message}", message);
+        report(message);
+
+        await Task.Delay(TimeSpan.FromSeconds(Math.Min(10, 2 * budget.Used)), cancellationToken).ConfigureAwait(false);
+        return true;
+    }
+
+    /// <summary>Why the platform never received the live, with what ffmpeg said about it.</summary>
+    private async Task<string> NotReceivedMessageAsync(FfmpegStreamingSession session, string label, string platform)
+    {
+        var errorOutput = await session.ReadErrorAsync().ConfigureAwait(false);
+        var message = _localizer.PrintMessage("video.live.not.received", [label, platform]);
+        return string.IsNullOrWhiteSpace(errorOutput) ? message : message + "\n" + errorOutput.Trim();
+    }
+
+    private static string PlatformName(FfmpegStreamingSession session) => session.Profile.Platform switch
+    {
+        StreamPlatform.Twitch => "Twitch",
+        StreamPlatform.YouTube => "YouTube",
+        _ => "RTMP"
+    };
 
     private async Task StopAndRecordAsync(
         FfmpegStreamingSession session,
@@ -827,6 +1111,12 @@ public sealed class FfmpegVideoPlaylistStreamer : IVideoPlaylistStreamer
         // This is the only place where the engine changes what a row shows, so it is also the
         // only place that has to tell the open pages that the row they drew is out of date.
         _notifier.Raise();
+    }
+
+    /// <summary>How many reconnections in a row a live has used.</summary>
+    private sealed class ReconnectBudget
+    {
+        public int Used { get; set; }
     }
 
     /// <summary>A video of the playlist, with what is known about it before ffmpeg is started.</summary>

@@ -307,9 +307,17 @@
   "embedFailed": "{0} pleIyer yInI'la'-be': chEn lIw-be'",
   "sceneSources": "sIn · soQ {0}",
   "deleteSceneLiveConfirm": "DIch lIw dIlIt-chom? (soQ {0})?",
-  "olderThanYesterday": "Older than yesterday",
+  "olderThanYesterday": "wa'Hu'vo' qul",
   "olderThanNow": "DaH 'ej bIQ'a'",
-  "noLayoutSelected": "No layout selected",
-  "selectLayout": "Select layout",
-  "layoutSelected": "Layout selected"
+  "noLayoutSelected": "leOaUt mIw pagh",
+  "selectLayout": "leOaUt mIq",
+  "layoutSelected": "leOaUt mIw",
+  "liveHistoryDescription": "lIw hIstaj Hoch choHlu'mey yInI'.",
+  "updateAvailable": "pItlh qo'",
+  "updateAvailableDialogText": "wej pItlh qo' DaH. Qapla' yInI'chom?",
+  "dashboardSectionLive": "Streaming",
+  "dashboardSectionSettings": "Settings",
+  "dashboardSectionSystem": "System & Monitoring",
+  "lowLatency": "qap 'ej",
+  "lowLatencyHelp": "encoderyoq vumrghach qap. look-ahead vumrghach Hogh, scenecut vumrghach Hogh. qaSpa'DIch DIch'I' poHDaq taH relIHS. Hagh taH."
 }

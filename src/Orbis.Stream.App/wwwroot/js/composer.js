@@ -365,6 +365,16 @@
   const snapshotUrl = item =>
     `/preview/sources/snapshot?kind=${item.kind}&target=${encodeURIComponent(item.target)}&v=${++stillAsked}`;
 
+  // A file laid on the canvas gets its light copy made now, while the scene is being put together:
+  // a 4K or HDR file is too heavy to decode in real time on air, and the copy takes as long as the
+  // file to make. Asked once per file per page; the server knows which files need one.
+  const prepared = new Set();
+  const prepare = item => {
+    if (item.kind !== Kind.File || !item.target || prepared.has(item.target)) return;
+    prepared.add(item.target);
+    fetch(`/preview/sources/prepare?target=${encodeURIComponent(item.target)}`, { method: "POST" }).catch(() => prepared.delete(item.target));
+  };
+
   // How many times a tile asks again before settling for its icon. A source that cannot be grabbed
   // on the first try is normal rather than broken: ffmpeg may still be listing the devices, and a
   // camera can be busy in another application for a moment.
@@ -424,6 +434,7 @@
 
     // Filled, and still the rectangle of the layout: the outline and the name of the shape stay.
     if (isShape(item)) tile.classList.add("is-shape");
+    prepare(item);
 
     const cover = document.createElement("div");
     cover.className = "composer-tile-cover";
@@ -1000,7 +1011,6 @@
   // ---------- The catalog ----------
 
   const sizeText = option => option.width > 0 ? `${option.width}×${option.height}` : "";
-
 
   const createEntry = (option, isUsedItem = false) => {
     const entry = document.createElement("button");

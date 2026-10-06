@@ -309,7 +309,15 @@
   "deleteSceneLiveConfirm": "Hodor hodor! {0} Hodor.",
   "olderThanYesterday": "HODOR hodor hodoR",
   "olderThanNow": "Hodor, Hodor Hodor!",
-  "noLayoutSelected": "No layout selected",
-  "selectLayout": "Select layout",
-  "layoutSelected": "Layout selected"
+  "noLayoutSelected": "Hodor",
+  "selectLayout": "Hodor",
+  "layoutSelected": "Hodor",
+  "liveHistoryDescription": "Hodor Hodor Hodor Hodor Hodor Hodor Hodor.",
+  "updateAvailable": "HODOR!",
+  "updateAvailableDialogText": "Hodor hodor! Hodor Hodor Hodor?",
+  "dashboardSectionLive": "Streaming",
+  "dashboardSectionSettings": "Settings",
+  "dashboardSectionSystem": "System & Monitoring",
+  "lowLatency": "Hodor",
+  "lowLatencyHelp": "Hodor Hodor Hodor. Hodor Hodor Hodor Hodor Hodor. Hodor Hodor."
 }

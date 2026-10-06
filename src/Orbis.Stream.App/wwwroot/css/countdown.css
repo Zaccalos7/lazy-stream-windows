@@ -1,0 +1,51 @@
+/* Orbis Stream — the countdown that runs on the screen that is about to go live. The page stands on
+   its own (no shell around it), so it loads the tokens, the ground and this, and nothing else. */
+
+/* Nothing else is on the page but the countdown and the picture: the window is the stage. */
+html, body {
+  margin: 0;
+  padding: 0;
+  width: 100%;
+  height: 100vh;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  background-color: var(--bg);
+  overflow: hidden;
+}
+
+.countdown-fullscreen {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  text-align: center;
+}
+
+.countdown-fullscreen h1 {
+  font-size: 3rem;
+  margin-bottom: 1rem;
+}
+
+.countdown-fullscreen .countdown {
+  font-size: 8rem;
+  margin: 1rem 0 2rem;
+  color: var(--accent);
+  font-weight: 800;
+  font-family: var(--font-display);
+  letter-spacing: -0.03em;
+}
+
+.countdown-fullscreen img {
+  max-width: min(800px, 90vw);
+  border-radius: 12px;
+  box-shadow: 0 12px 48px rgba(0, 0, 0, 0.3);
+}
+
+.countdown {
+  font: 800 80px/1 var(--font-display);
+  letter-spacing: -0.03em;
+  color: var(--accent);
+  margin: 20px 0;
+  text-align: center;
+}

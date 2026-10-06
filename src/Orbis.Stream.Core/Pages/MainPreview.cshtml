@@ -16,14 +16,26 @@
             : span.ToString(@"m\:ss", CultureInfo.InvariantCulture);
     }
 }
+
+@section Styles {
+    
+    <link rel="stylesheet" href="/css/preview.css" />
+}
 <div class="page-header">
-    <div>
-        <h1>@T["livePreviewTitle"]</h1>
+    <div style="display: flex; align-items: center; gap: 1rem;">
+        <a class="btn subtle icon-only" href="/orbis/mainLiveMenu" title="@T["back"]" aria-label="@T["back"]"><i class="icon">&#xE72B;</i></a>
+        <div>
+            <h1>@T["livePreviewTitle"]</h1>
         <p class="subtitle">@T["livePreviewSubtitle"]</p>
+        </div>
     </div>
     @if (live.IsLive)
     {
-        if (Model.LiveUrl is { } liveUrl)
+        <div style="display: flex; gap: 0.5rem; align-items: center;">
+        <form method="post" asp-page-handler="Stop" asp-route-pkid="@live.VideoPkid" data-confirm="@T["stopLive"]">
+            <button class="btn danger" title="@T["stopLiveIconLabel"]" aria-label="@T["stopLiveIconLabel"]">@T["stopLiveIconLabel"]</button>
+        </form>
+        @if (Model.LiveUrl is { } liveUrl)
         {
             <a class="btn live-indicator is-live" href="@liveUrl" target="_blank" rel="noopener noreferrer"
                title="@T["openLivePage"]@(" (" + Model.LivePlatform + ")")" aria-label="@T["liveNow"]">
@@ -34,6 +46,7 @@
         {
             <span class="btn live-indicator is-live" title="@T["liveNow"]"><i class="icon">&#xE7F4;</i>@T["liveNow"]</span>
         }
+        </div>
     }
 </div>
 
@@ -53,8 +66,6 @@
     </label>
 </div>
 
-@* The words the script needs to answer without asking the server: the page is drawn in the
-   language of the request, and a fetch has to speak the same one. *@
 <p data-preview-words hidden
    data-ok="@T["success"]" data-ko="@T["error"]"
    data-applied="@T["parametersApplied"]" data-failed="@T["parametersFailed"]"
@@ -65,10 +76,9 @@
      data-pkid="@live.VideoPkid"
      data-live="@(live.IsLive ? "1" : "0")"
      data-position="@live.PositionMilliseconds"
-     data-playable="@(live.IsPlayable ? "1" : "0")">
+     data-playable="@(live.IsPlayable ? "1" : "0")"
+     data-platform="@(LiveLinkView.PlatformOf(live.StreamUrl))">
 
-@* Nothing on air: the page waits for one (the push channel reloads it when a live starts), and
-   the canvas to start one is in the live wizard. *@
 @if (!live.IsLive)
 {
     <div class="card empty">
@@ -81,9 +91,7 @@ else
 {
     var parameters = live.Parameters;
 
-    @* The stage takes the shape of what is on air: a canvas that is not 16:9 (a vertical one, a
-       square one) inside a 16:9 box is a small picture with black bars, which is the wrong thing to
-       be looking at while checking the live. *@
+    
     var shape = live.Output.Width > 0 && live.Output.Height > 0
         ? $"aspect-ratio: {live.Output.Width.ToString(CultureInfo.InvariantCulture)} / {live.Output.Height.ToString(CultureInfo.InvariantCulture)}"
         : null;
@@ -97,9 +105,7 @@ else
     var platformLabel = LiveLinkView.LabelOf(platform);
     <div class="preview">
         <div class="preview-stage card">
-            @* What is on air, made light: the frames a few times a second that ffmpeg writes next to
-               the live, not a second copy of it. The canvas stays hidden, under the cover, until the
-               first of those frames has been decoded, so nothing empty or stale is ever shown. *@
+            
             <div class="preview-screen" style="@shape">
                 <div class="preview-cover" data-preview-cover>
                     <span class="spinner"></span>
@@ -113,6 +119,10 @@ else
                         scrolling="no"
                         hidden></iframe>
                 <canvas data-preview-frame role="img" aria-label="@live.VideoName" hidden></canvas>
+                @if (platform == "youtube")
+                {
+                    <div class="preview-badge-live" title="@T["liveNow"]"><span class="live-dot"></span><span>LIVE · @(platformLabel ?? "YouTube")</span></div>
+                }
                 <div class="preview-embed-status" hidden>
                     <span class="spinner"></span>
                     <span data-embed-text>@T["embedLoading"]</span>

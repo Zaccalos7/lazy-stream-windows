@@ -309,7 +309,15 @@
   "deleteSceneLiveConfirm": "Вы уверены, что хотите удалить этот эфир (источников: {0})?",
   "olderThanYesterday": "Старше чем вчера",
   "olderThanNow": "Старее текущего момента",
-  "noLayoutSelected": "No layout selected",
-  "selectLayout": "Select layout",
-  "layoutSelected": "Layout selected"
+  "noLayoutSelected": "Макет не выбран",
+  "selectLayout": "Выбрать макет",
+  "layoutSelected": "Макет выбран",
+  "liveHistoryDescription": "Просмотр истории всех ваших прошлых прямых эфиров.",
+  "updateAvailable": "Доступно обновление",
+  "updateAvailableDialogText": "Доступна новая версия, хотите загрузить её?",
+  "dashboardSectionLive": "Streaming",
+  "dashboardSectionSettings": "Settings",
+  "dashboardSectionSystem": "System & Monitoring",
+  "lowLatency": "Низкая задержка",
+  "lowLatencyHelp": "Требует от кодировщика минимальной задержки: без упрежающего видения и без scenecut. Выключите его для ретрансмиссии: темп там задаёт релей дальше по цепочке."
 }

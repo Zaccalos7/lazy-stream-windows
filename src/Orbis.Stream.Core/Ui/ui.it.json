@@ -311,5 +311,13 @@
   "olderThanNow": "Più vecchi di adesso",
   "noLayoutSelected": "Nessun layout selezionato",
   "selectLayout": "Seleziona layout",
-  "layoutSelected": "Layout selected"
+  "layoutSelected": "Layout selezionato",
+  "liveHistoryDescription": "Visualizza lo storico di tutte le tue live passate.",
+  "updateAvailable": "Aggiornamento disponibile",
+  "updateAvailableDialogText": "C’è una nuova versione vuoi scaricarla?",
+  "dashboardSectionLive": "Streaming",
+  "dashboardSectionSettings": "Impostazioni",
+  "dashboardSectionSystem": "Sistema e Monitoraggio",
+  "lowLatency": "Bassa latenza",
+  "lowLatencyHelp": "Chiede all'encoder il minimo ritardo possibile: niente lookahead, niente scenecut. Spegnilo per una ritrasmissione, dove il ritmo lo imposi già il relay."
 }

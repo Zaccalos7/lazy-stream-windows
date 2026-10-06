@@ -1,18 +1,16 @@
 <Project>
 
   <PropertyGroup>
-    <!-- Allows the net10.0-windows (WPF + WebView2) project to be compiled/verified
-         from Linux or macOS as well; on Windows 11 the property is a no-op. -->
+    
     <EnableWindowsTargeting Condition="'$(EnableWindowsTargeting)' == '' and !$([MSBuild]::IsOSPlatform('Windows'))">true</EnableWindowsTargeting>
     <ImplicitUsings>enable</ImplicitUsings>
     <Nullable>enable</Nullable>
     <InvariantGlobalization>false</InvariantGlobalization>
 
-    <!-- Kept in sync with Installer/OrbisStream.wxs: the MSI product version. -->
-    <Version>2.0.15</Version>
+    
+    <Version>2.1.0</Version>
     <Product>Orbis Stream</Product>
-    <!-- The author of the application: the pages and the About dialog read it back from the
-         assembly attribute this stamps, so it is written here once. -->
+    
     <Company>Marco Amleto Guarino</Company>
   </PropertyGroup>
 

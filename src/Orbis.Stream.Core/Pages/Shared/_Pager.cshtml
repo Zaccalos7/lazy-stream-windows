@@ -2,7 +2,7 @@
 @if (Model.Total > 1)
 {
     <nav class="pager" aria-label="Pagination">
-        @* Once the window has slid past the first page, a jump back to it. *@
+        
         @if (!Model.Window.Contains(0))
         {
             <a class="btn subtle icon-only" href="@Model.Href(0)" title="@T["firstPage"]" aria-label="@T["firstPage"]"><i class="icon">&#xE892;</i></a>

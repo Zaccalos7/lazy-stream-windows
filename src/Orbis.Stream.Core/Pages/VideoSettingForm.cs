@@ -43,6 +43,15 @@ public sealed class VideoSettingForm
 
     public string? Tune { get; set; }
 
+    /// <summary>
+    /// Whether the encoder is asked for the smallest delay it can manage: no lookahead, no
+    /// scenecut, no encoder delay. On by default, and worth turning off for a re-stream, because
+    /// without a lookahead the encoder cannot see the forced keyframe coming and empties its rate
+    /// control buffer on it, which starves the frames after every keyframe. The relay paces what
+    /// comes out anyway, so the jitter it costs buys nothing.
+    /// </summary>
+    public bool LowLatency { get; set; }
+
     public bool IsActive { get; set; }
 
     /// <summary>Everything but the extra options is required (the React form let the GOP size empty, but the column is NOT NULL).</summary>
@@ -79,6 +88,7 @@ public sealed class VideoSettingForm
         AudioBitrate = setting.AudioSettingRecord?.AudioBitrate,
         Preset = Option(setting, "preset"),
         Tune = Option(setting, "tune"),
+        LowLatency = VideoSettingLatency.IsOn(Option(setting, VideoSettingLatency.OptionKey)),
         IsActive = setting.IsVideoAndAudioSettingActive ?? false
     };
 
@@ -93,7 +103,7 @@ public sealed class VideoSettingForm
         null,
         IsActive,
         GopSize,
-        [.. new[] { ("preset", Preset), ("tune", Tune) }
+        [.. new[] { ("preset", Preset), ("tune", Tune), (VideoSettingLatency.OptionKey, LowLatency ? "1" : "0") }
             .Where(option => !string.IsNullOrEmpty(option.Item2))
             .Select(option => new VideoOptionRequest(option.Item1, option.Item2))],
         VideoFormat,

@@ -1,14 +1,18 @@
 @page "/orbis/mainLayout"
+@model MainLayoutModel
 @{
     ViewData["Title"] = T["layouts"];
+}
+@section Styles {
+    
+    <link rel="stylesheet" href="/css/composer.css" />
 }
 <div class="page-header">
     <div>
         <h1>@T["layouts"]</h1>
-        <p class="subtitle">@T["layoutsDescription"]</p>
+        <p class="subtitle"><a href="/orbis/mainLayoutList">@T["layouts"]</a> › @(Model.Edit is null ? T["newLayout"] : T["editModalTitle"])</p>
     </div>
+    <a class="btn" href="/orbis/mainLayoutList"><i class="icon">&#xE72B;</i>@T["back"]</a>
 </div>
 
-@* The skeletons a live is started from: slots only, no source. The live wizard opens one of them
-   empty and the sources are dropped into it there; what goes on air never comes back here. *@
-<partial name="_SceneComposer" model="new SceneComposerModel(null, Layout: true)" />
+<partial name="_SceneComposer" model="new SceneComposerModel(Model.Edit, Layout: true)" />

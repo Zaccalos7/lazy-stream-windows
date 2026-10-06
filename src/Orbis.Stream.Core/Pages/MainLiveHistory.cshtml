@@ -5,11 +5,18 @@
     var page = Model.Videos.Page;
     var pager = new PagerModel(page.Number, page.TotalPages, index => Url.Page("/MainLiveHistory", new { p = index })!);
 }
-@* Storico Live è una pagina a sé: nel menu c'è già la voce, quindi nessun "indietro" né il
-   collegamento a Gestione Live nell'intestazione. *@
+
+@section Styles {
+    
+    <link rel="stylesheet" href="/css/cleanup.css" />
+}
+
 <div class="page-header">
-    <div>
-        <h1>@T["liveHistory"]</h1>
+    <div style="display: flex; align-items: center; gap: 1rem;">
+        <a class="btn subtle icon-only" href="/orbis/mainLiveMenu" title="@T["back"]" aria-label="@T["back"]"><i class="icon">&#xE72B;</i></a>
+        <div>
+            <h1>@T["liveHistory"]</h1>
+        </div>
     </div>
     @* The form is the toolbar, as on the other pages: the picks and the buttons line up on the same
        row because they are one flex line, not two nested ones. Save answers on the InfoBar at the
@@ -53,7 +60,7 @@
                 <i class="icon">&#xE74E;</i> @T["save"]
             </button>
         </div>
-        @* Running it once is a thing of its own: it does not need the cleanup to be on. *@
+        
         <button type="button" class="btn subtle" id="runCleanupBtn" title="@T["runCleanupNow"]">
             <i class="icon">&#xE72C;</i> <span id="runCleanupLabel">@T["runCleanupNow"]</span>
         </button>

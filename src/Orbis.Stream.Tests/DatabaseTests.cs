@@ -152,6 +152,44 @@ public sealed class DatabaseSchemaTests
     }
 
     /// <summary>
+    /// Every YouTube ingest the earlier versions offered moves to the one YouTube takes over TLS,
+    /// in the configurations and in the lives, except for a key already saved on the new one. A
+    /// plain RTMP url to YouTube is one of them: the connection can be answered and the broadcast
+    /// still never start, which is a live that reads as connected and is not there.
+    /// </summary>
+    [Theory]
+    [InlineData("rtmps://a.rtmp.youtube.com/live2")]
+    [InlineData("rtmp://a.rtmp.youtube.com/live2")]
+    public void EnsureCreated_MovesTheOldYouTubeIngest(string old)
+    {
+        const string New = "rtmps://a.rtmps.youtube.com/live2";
+
+        using var database = new TemporaryDatabase();
+        var settings = database.Repository<SettingRepository>();
+        settings.Insert(new SettingEntity { Id = 1, StreamUrl = old, StreamKey = "moved", ChannelName = "channel" });
+        settings.Insert(new SettingEntity { Id = 2, StreamUrl = old, StreamKey = "twin", ChannelName = "channel" });
+        settings.Insert(new SettingEntity { Id = 3, StreamUrl = New, StreamKey = "twin", ChannelName = "channel" });
+        settings.Insert(new SettingEntity { Id = 4, StreamUrl = "rtmp://live.twitch.tv/app", StreamKey = "moved", ChannelName = "channel" });
+
+        using var connection = database.ConnectionFactory.Open();
+        Execute(connection, $"UPDATE video_live_history SET stream_url = '{old}'");
+
+        DatabaseSchema.EnsureCreated(connection, NullLogger.Instance);
+
+        string UrlOf(string sql)
+        {
+            using var command = connection.CreateCommand();
+            command.CommandText = sql;
+            return (string)command.ExecuteScalar()!;
+        }
+
+        Assert.Equal(New, UrlOf("SELECT stream_url FROM setting WHERE id = 1"));
+        Assert.Equal(old, UrlOf("SELECT stream_url FROM setting WHERE id = 2"));
+        Assert.Equal("rtmp://live.twitch.tv/app", UrlOf("SELECT stream_url FROM setting WHERE id = 4"));
+        Assert.Equal(New, UrlOf($"SELECT stream_url FROM video_live_history WHERE pkid = {database.LiveHistoryId}"));
+    }
+
+    /// <summary>
     /// A database written by 1.0.15 has no source columns and no scene tables. The migration has
     /// to add them without touching the rows the previous version wrote, because those rows are
     /// the lives the user is watching.
@@ -603,7 +641,6 @@ public sealed class SettingRepositoryTests
 
         Assert.Equal(1, first);
         Assert.Equal(2, second);
-
 
     }
 

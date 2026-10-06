@@ -5,13 +5,21 @@
     var notice = ViewContext.ViewData.Model as OrbisPageModel;
 }
 <!DOCTYPE html>
-<html lang="@T.Language" data-initializing="@T["initializing"]">
+<html lang="@T.Language" data-initializing="@T["initializing"]" data-app-version="@AppInfo.Current.Version" data-update-available-dialog-text="@T["updateAvailableDialogText"]">
 <head>
     <meta charset="utf-8" />
     <meta name="viewport" content="width=device-width, initial-scale=1" />
     <title>@(ViewData["Title"] is string title ? $"{title} – Orbis Stream" : "Orbis Stream")</title>
     <link rel="icon" href="/favicon.ico" />
-    <link rel="stylesheet" href="/css/fluent.css" />
+    
+    <link rel="stylesheet" href="/css/tokens.css" />
+    <link rel="stylesheet" href="/css/base.css" />
+    <link rel="stylesheet" href="/css/layout.css" />
+    <link rel="stylesheet" href="/css/controls.css" />
+    <link rel="stylesheet" href="/css/surfaces.css" />
+    <link rel="stylesheet" href="/css/overlays.css" />
+    <link rel="stylesheet" href="/css/feedback.css" />
+    @await RenderSectionAsync("Styles", required: false)
     <script>
         (function() {
             var theme = localStorage.getItem('orbis-theme') || 'dark';
@@ -29,38 +37,28 @@
 </head>
 <body>
 <div class="shell">
-    <nav class="nav" aria-label="Orbis Stream">
+    <nav class="nav" id="orbis-sidebar" aria-label="Orbis Stream">
         <div class="nav-title">
-            <button class="btn subtle icon-only" id="sidebar-toggle" title="Toggle Sidebar" aria-label="Toggle Sidebar"><i class="icon">&#xE700;</i></button>
+            <button type="button" class="btn subtle icon-only" id="sidebar-toggle" title="Toggle Sidebar" aria-label="Toggle Sidebar" aria-controls="orbis-sidebar" aria-expanded="true"><i class="icon">&#xE700;</i></button>
             <img src="/favicon.ico" alt="" />
             <span>Orbis Stream</span>
+            <button type="button" class="update-bell" id="update-bell" title="@T["updateAvailable"]" aria-label="@T["updateAvailable"]" hidden>
+                <i class="icon" aria-hidden="true">&#xEA8F;</i>
+            </button>
         </div>
         <a href="/orbis/mainMenu" aria-current="@Current("mainMenu")"><i class="icon">&#xE80F;</i><span>@T["dashboard"]</span></a>
-        <a href="/orbis/mainLive" aria-current="@Current("mainLive", "countdown")"><i class="icon">&#xE714;</i><span>@T["liveManagement"]</span></a>
-        <a href="/orbis/mainLiveHistory" aria-current="@Current("mainLiveHistory")"><i class="icon">&#xE81C;</i><span>@T["liveHistory"]</span></a>
-        <a href="/orbis/mainLayout" aria-current="@Current("mainLayout")"><i class="icon">&#xE80A;</i><span>@T["layouts"]</span></a>
-        <a href="/orbis/mainPreview" aria-current="@Current("mainPreview")"><i class="icon">&#xE7F4;</i><span>@T["preview"]</span></a>
-        <a href="/orbis/mainSetting" aria-current="@Current("mainSetting", "mainVideoSetting", "mainChannelSetting")"><i class="icon">&#xE713;</i><span>@T["settings"]</span></a>
+        <a href="/orbis/mainLiveMenu" aria-current="@Current("mainLiveMenu", "mainLive", "countdown", "mainLiveHistory")"><i class="icon">&#xE714;</i><span>Live</span></a>
+        <a href="/orbis/mainPreview" aria-current="@Current("mainPreview")"><i class="icon">&#xE7F4;</i><span>@T["livePreviewTitle"]</span></a>
+        <a href="/orbis/mainLayoutList" aria-current="@Current("mainLayoutList", "mainLayout")"><i class="icon">&#xE8B9;</i><span>@T["layouts"]</span></a>
         <a href="/orbis/mainTaskManager" aria-current="@Current("mainTaskManager")"><i class="icon">&#xE9D9;</i><span>@T["taskManager"]</span></a>
+        <a href="/orbis/mainSetting" aria-current="@Current("mainSetting", "mainVideoSetting", "mainChannelSetting")"><i class="icon">&#xE713;</i><span>@T["settings"]</span></a>
         <div class="nav-spacer"></div>
-        @* Which build this is and who wrote it: the two lines at the foot of the bar are the only
-           place that says so without opening anything, the dialog behind them says it in full. *@
-        <button type="button" class="nav-about" id="about-button" title="@T["about"]" aria-label="@T["about"]">
-            <i class="icon" aria-hidden="true">&#xE946;</i>
-            <span class="nav-about-text">
-                <strong>@AppInfo.Current.NameAndVersion</strong>
-                @if (AppInfo.Current.Author is { Length: > 0 } author)
-                {
-                    <small>@T["aboutAuthor"] @author</small>
-                }
-            </span>
-        </button>
+        
         <div class="segmented-control" role="radiogroup" aria-label="Theme">
             <button type="button" class="segment" data-theme-set="light" title="Light" aria-label="Light Theme"><i class="icon">&#xE706;</i></button>
             <button type="button" class="segment" data-theme-set="dark" title="Dark" aria-label="Dark Theme"><i class="icon">&#xE708;</i></button>
         </div>
-        @* The selector draws the flag as a picture: a native <select> cannot hold one, and the
-           emoji that stood in for it is a pair of letters the platform may not even draw. *@
+
         <details class="lang-picker">
             <summary class="lang-current" title="Language" aria-label="Language">
                 @{
@@ -85,6 +83,17 @@
                 }
             </ul>
         </details>
+        
+        <button type="button" class="nav-about" id="about-button" data-open-about title="@T["about"]" aria-label="@T["about"]" aria-haspopup="dialog">
+            <i class="icon" aria-hidden="true">&#xE946;</i>
+            <span class="nav-about-text">
+                <strong>@AppInfo.Current.NameAndVersion</strong>
+                @if (AppInfo.Current.Author is { Length: > 0 } author)
+                {
+                    <small>@T["aboutAuthor"] @author</small>
+                }
+            </span>
+        </button>
     </nav>
     <main class="content">
         <div class="page">
@@ -106,6 +115,16 @@
     </main>
 </div>
 
+<dialog class="dialog" id="update-dialog">
+    <form method="dialog">
+        <div class="dialog-body"><h2 id="update-dialog-text"></h2></div>
+        <div class="dialog-footer">
+            <button class="btn accent" value="ok">@T["confirm"]</button>
+            <button class="btn" value="cancel">@T["cancel"]</button>
+        </div>
+    </form>
+</dialog>
+
 <dialog class="dialog" id="confirm-dialog">
     <form method="dialog">
         <div class="dialog-body"><h2 data-text></h2></div>
@@ -116,28 +135,26 @@
     </form>
 </dialog>
 
-@* The About dialog: the mark, the name, the build and who wrote it. The numbers come from the
-   assembly the build stamps, so they cannot drift from the setup that installed them. *@
-<dialog class="dialog" id="about-dialog">
+@* The version and who wrote the application, said as big as the window allows: the foot of the
+   side bar carries the same two facts in one line each, and this is where they are read. *@
+<dialog class="dialog about" id="about-dialog">
     <form method="dialog">
         <div class="dialog-body about-body">
-            <img src="/favicon.ico" alt="" class="about-mark" width="48" height="48" />
-            <div class="grow">
-                <h2>@AppInfo.Current.NameAndVersion</h2>
-                <dl class="facts">
-                    <div class="fact">
-                        <dt>@T["aboutVersion"]</dt>
-                        <dd>@AppInfo.Current.Version</dd>
+            <img src="/favicon.ico" alt="" class="about-mark" width="72" height="72" />
+            <h2 class="about-name">@AppInfo.Current.Name</h2>
+            <dl class="about-facts">
+                <div class="about-fact">
+                    <dt>@T["aboutVersion"]</dt>
+                    <dd class="about-value" data-about-version>@AppInfo.Current.Version</dd>
+                </div>
+                @if (AppInfo.Current.Author is { Length: > 0 } author)
+                {
+                    <div class="about-fact">
+                        <dt>@T["aboutAuthor"]</dt>
+                        <dd class="about-value" data-about-author>@author</dd>
                     </div>
-                    @if (AppInfo.Current.Author is { Length: > 0 } author)
-                    {
-                        <div class="fact">
-                            <dt>@T["aboutAuthor"]</dt>
-                            <dd>@author</dd>
-                        </div>
-                    }
-                </dl>
-            </div>
+                }
+            </dl>
         </div>
         <div class="dialog-footer">
             <button class="btn accent" value="ok">@T["close"]</button>

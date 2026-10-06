@@ -3,12 +3,7 @@
     (int Width, int Height)[] sizes = [(1280, 720), (1920, 1080), (2560, 1440), (3840, 2160)];
     var layout = Model.Layout;
 }
-@* The canvas, in one of two modes. In the layout page it draws a skeleton: empty slots, saved to
-   be started from later. In the live wizard it opens a layout as those slots, the sources are
-   dropped into them, and what is on it when the live starts is saved as the scene of that live
-   only: it never joins the layouts. Everything here is drawn by the script: the sources are asked
-   for when the page opens (enumerating cameras runs ffmpeg). The words it needs travel as data
-   attributes, in the page language. *@
+
 <div class="composer" data-composer data-mode="@(layout ? "layout" : "compose")"
      data-scene="@Model.Scene"
      data-w-screens="@T["sourcesScreens"]" data-w-cameras="@T["sourcesCameras"]"
@@ -67,8 +62,7 @@
 
     <section class="composer-main">
         <div class="card composer-bar">
-            @* Both modes open a saved layout from here: the layout page to edit it, the live wizard
-               to fill its shapes. *@
+            
             <label class="field">
                 <span class="caption">@T["layout"]</span>
                 <select class="input" data-composer-layouts>
@@ -91,7 +85,7 @@
             <div class="composer-actions">
                 @if (layout)
                 {
-                    @* Only a layout is saved by hand: the scene of a live is saved by the start button. *@
+                    
                     <span class="caption composer-dirty" data-composer-dirty hidden>@T["unsavedChanges"]</span>
                     <button type="button" class="btn subtle icon-only danger" data-composer-delete hidden
                             data-confirm-text="@T["deleteLayoutConfirm"]" title="@T["deleteLayout"]" aria-label="@T["deleteLayout"]"><i class="icon">&#xE74D;</i></button>
@@ -111,7 +105,7 @@
                 <div class="composer-guide x" data-guide="x" hidden></div>
                 <div class="composer-guide y" data-guide="y" hidden></div>
                 <div class="composer-blank" data-composer-blank>
-                    <i class="icon">@Html.Raw(layout ? "&#xE80A;" : "&#xE7F4;")</i>
+                    <i class="icon">@Html.Raw(layout ? "&#xE8B9;" : "&#xE7F4;")</i>
                     <strong>@T["canvasEmpty"]</strong>
                     <span class="caption">@(T[layout ? "layoutEmptyHint" : "canvasComposeHint"])</span>
                 </div>

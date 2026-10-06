@@ -230,10 +230,16 @@ const paintPreviewPicture = () => {
   // The canvas is measured rather than set from the picture: setting its size clears it, and a
   // canvas cleared thirty times a second is a canvas that flickers.
   if (previewFrame.hidden) previewFrame.hidden = false;
+  const cover = preview?.querySelector("[data-preview-cover]");
+  if (cover && !cover.hidden) cover.hidden = true;
 
   const scale = window.devicePixelRatio || 1;
-  const width = Math.round(previewFrame.clientWidth * scale);
-  const height = Math.round(previewFrame.clientHeight * scale);
+  const parentWidth = previewFrame.parentElement?.clientWidth || 0;
+  const parentHeight = previewFrame.parentElement?.clientHeight || 0;
+  const clientW = previewFrame.clientWidth || parentWidth;
+  const clientH = previewFrame.clientHeight || parentHeight;
+  const width = Math.round(clientW * scale);
+  const height = Math.round(clientH * scale);
   if (width > 0 && height > 0 && (previewFrame.width !== width || previewFrame.height !== height)) {
     previewFrame.width = width;
     previewFrame.height = height;
@@ -312,6 +318,8 @@ const armPreviewFrame = () => {
   previewPicture = null;
   previewPainted = null;
   previewFrame.hidden = true;
+  const cover = preview?.querySelector("[data-preview-cover]");
+  if (cover) cover.hidden = false;
 };
 const previewVideo = preview?.querySelector("[data-preview-video]");
 const previewForm = preview?.querySelector("[data-preview-form]");
@@ -448,27 +456,43 @@ const previewRetry = 15000;
 const embedStatus = preview?.querySelector(".preview-embed-status");
 const embedText = embedStatus?.querySelector("[data-embed-text]");
 
+// Why there is no player, as the server said it. Kept between polls so the message on the page is
+// the reason for this round and not a leftover from the one before.
+let embedReason = null;
+
 const resolvePlatformPlayer = async () => {
   if (!previewPlatformPlayer || previewPkid <= 0) return;
+  const platform = (preview?.dataset.platform || "").toLowerCase();
+  if (platform && platform !== "twitch") {
+    if (embedStatus) embedStatus.hidden = true;
+    return;
+  }
   if (embedStatus) embedStatus.hidden = false;
+  embedReason = null;
   try {
     const response = await fetch(`/preview/live/embed?live=${previewPkid}`, { cache: "no-store" });
     if (response.ok) {
-      const embed = await response.json();
-      if (embed?.url) {
-        showPlatformPlayer(embed.url);
+      const answer = await response.json();
+      // The player to draw, if the live is on air somewhere a player can show it.
+      if (answer?.embed?.url) {
+        showPlatformPlayer(answer.embed.url);
         if (embedStatus) embedStatus.hidden = true;
         // Keep polling to stay updated
         if (previewIsLive) setTimeout(resolvePlatformPlayer, previewRetry);
         return;
       }
+      embedReason = answer?.reason || null;
     }
   } catch {
     // The server is not answering: the local picture stays, which is what it is for.
   }
   if (embedStatus && embedText) {
-    const platform = previewMark("embedFailed", "Unable to load {0} player: channel is not live");
-    embedText.textContent = platform.replace("{0}", "Twitch/YouTube");
+    // The reason comes from the server and is what the page repeats for as long as it stays open,
+    // so it has to say which of the two things happened: a channel that is off air, or a platform
+    // this application failed to reach. Only the first is about the live.
+    const reason = embedReason
+      || previewMark("embedFailed", "Unable to load {0} player: channel is not live").replace("{0}", "Twitch");
+    embedText.textContent = reason;
   }
   if (previewIsLive) setTimeout(resolvePlatformPlayer, previewRetry);
 };
@@ -487,7 +511,10 @@ if (previewIsLive) {
       armPreviewFrame();
     });
   }
-  resolvePlatformPlayer();
+  const platform = (preview?.dataset.platform || "").toLowerCase();
+  if (platform === "twitch") {
+    resolvePlatformPlayer();
+  }
 }
 
 const paintPreview = state => {
@@ -742,15 +769,65 @@ document.addEventListener("submit", event => {
   }
 });
 
+// ---------- The shell: the hamburger of the side bar, and the foot of it ----------
+//
+// The hamburger closes the side bar and, clicked again, brings it back. The state is a class on
+// <html>, the same one the layout reads before the first paint, and it is kept in localStorage so a
+// page that opens again finds the side bar as the user left it. The button carries the state too
+// (aria-expanded), so what the window shows and what the page says are never two different things.
+//
+// The listener sits on the button itself rather than on the document: the icon inside it is what
+// the pointer is really over, and a click that has to travel to the root to be understood is a
+// click a handler registered later on the same root can lose. The flag on the element makes a
+// second load of this file harmless: two listeners on the same button would undo each other, and
+// the side bar would never move.
+const sidebarButton = document.getElementById("sidebar-toggle");
+
+if (sidebarButton && !sidebarButton.dataset.sidebarBound) {
+  sidebarButton.dataset.sidebarBound = "1";
+
+  const paintSidebar = closed => {
+    document.documentElement.classList.toggle("sidebar-closed", closed);
+    sidebarButton.setAttribute("aria-expanded", closed ? "false" : "true");
+    try {
+      localStorage.setItem("orbis-sidebar", closed ? "closed" : "open");
+    } catch {
+      // A window with no storage of its own still toggles the side bar, it just forgets it.
+    }
+  };
+
+  // The state the page was drawn with, said out loud to the button that changes it.
+  paintSidebar(document.documentElement.classList.contains("sidebar-closed"));
+
+  sidebarButton.addEventListener("click", event => {
+    event.preventDefault();
+    paintSidebar(!document.documentElement.classList.contains("sidebar-closed"));
+  });
+}
+
 // The About dialog: the version and who wrote the application are in the foot of the side bar, and
 // this is where they are said in full.
-document.addEventListener("click", event => {
-  const shortcut = event.target.closest?.("[data-open-about], #about-button");
-  const about = document.getElementById("about-dialog");
-  if (!shortcut || !about || about.open) return;
-  event.preventDefault();
-  about.showModal();
-});
+const aboutButton = document.getElementById("about-button");
+const aboutDialog = document.getElementById("about-dialog");
+
+if (aboutDialog && !aboutDialog.dataset.aboutBound) {
+  aboutDialog.dataset.aboutBound = "1";
+
+  const openAbout = event => {
+    event?.preventDefault();
+    if (!aboutDialog.open) aboutDialog.showModal();
+  };
+
+  // The foot of the side bar, which is where the two facts already are, is the way in.
+  aboutButton?.addEventListener("click", openAbout);
+
+  // Anywhere else on a page that says it with data-open-about opens the same dialog.
+  document.addEventListener("click", event => {
+    const shortcut = event.target.closest?.("[data-open-about]");
+    if (!shortcut || shortcut === aboutButton) return;
+    openAbout(event);
+  });
+}
 
 // The side bar starts a live from anywhere: on this page the dialog is already there, elsewhere
 // the link goes to the page with ?start=1, which draws it open.
@@ -938,14 +1015,6 @@ document.addEventListener("click", event => {
   }
 });
 
-// Sidebar toggle
-document.addEventListener("click", event => {
-  const toggle = event.target.closest?.("#sidebar-toggle");
-  if (!toggle) return;
-  const closed = document.documentElement.classList.toggle("sidebar-closed");
-  localStorage.setItem("orbis-sidebar", closed ? "closed" : "open");
-});
-
 // Dismiss infobar/toast notifications after 7 seconds
 document.addEventListener("DOMContentLoaded", () => {
   // Use a MutationObserver to catch infobars that are added dynamically
@@ -976,4 +1045,54 @@ document.addEventListener("DOMContentLoaded", () => {
       setTimeout(() => { bar.style.display = "none"; }, 300);
     }, 7000);
   }
+});
+
+// Auto-updater Logic
+document.addEventListener("DOMContentLoaded", async () => {
+    const currentVersion = document.documentElement.dataset.appVersion;
+    if (!currentVersion) return;
+
+    try {
+        const proxyUrl = "https://r.jina.ai/http://sourceforge.net/projects/lazy-stream-windows/best_release.json";
+        const response = await fetch(proxyUrl);
+        const text = await response.text();
+        const jsonMatch = text.match(/\{[\s\S]*\}/);
+        if (!jsonMatch) return;
+        const data = JSON.parse(jsonMatch[0]);
+        
+        const latestRelease = data?.release?.filename;
+        if (!latestRelease) return;
+
+        const match = latestRelease.match(/\/([0-9\.]+)\//);
+        if (!match) return;
+        const latestVersion = match[1];
+
+        const v1 = currentVersion.split('.').map(Number);
+        const v2 = latestVersion.split('.').map(Number);
+        let isNewer = false;
+
+        for (let i = 0; i < Math.max(v1.length, v2.length); i++) {
+            const num1 = v1[i] || 0;
+            const num2 = v2[i] || 0;
+            if (num2 > num1) { isNewer = true; break; }
+            else if (num2 < num1) break;
+        }
+
+        if (isNewer) {
+            const updateUrl = data.release.url;
+            const dialog = document.getElementById("update-dialog");
+            const updateText = document.getElementById("update-dialog-text");
+            const bell = document.getElementById("update-bell");
+            if (!dialog || !updateText || !bell) return;
+
+            bell.hidden = false;
+
+            dialog.onclose = () => { if (dialog.returnValue === "ok") window.open(updateUrl, "_blank"); };
+
+            bell.addEventListener("click", () => {
+                updateText.textContent = document.documentElement.dataset.updateAvailableDialogText || "c'è una nuova versione vuoi scaricarla?";
+                dialog.showModal();
+            });
+        }
+    } catch (e) { /* silent fail */ }
 });

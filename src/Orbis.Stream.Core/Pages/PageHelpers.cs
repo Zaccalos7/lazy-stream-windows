@@ -1,4 +1,5 @@
 using Orbis.Stream.Core.Domain;
+using Orbis.Stream.Core.Streaming;
 
 namespace Orbis.Stream.Core.Pages;
 
@@ -61,8 +62,11 @@ public static class LiveLinkView
             return null;
         }
 
+        // A configuration saved with the RTMPS url of before still points at YouTube: it is compared
+        // the way it is streamed, with the host the stream is sent to.
+        var normalized = StreamPlatforms.NormalizeIngestUrl(streamUrl);
         var platform = MainChannelSettingModel.Platforms
-            .FirstOrDefault(known => string.Equals(known.StreamUrl, streamUrl, StringComparison.OrdinalIgnoreCase));
+            .FirstOrDefault(known => string.Equals(known.StreamUrl, normalized, StringComparison.OrdinalIgnoreCase));
 
         return platform.Label is null ? null : platform.Value;
     }
@@ -104,9 +108,8 @@ public static class LiveLinkView
             .FirstOrDefault(known => known.Value == platform).Label;
 
     /// <summary>
-    /// Page of a platform channel: on Twitch the channel, on YouTube the page of the handle
-    /// (<c>https://www.youtube.com/@handle</c>). A YouTube channel has no public page keyed by its
-    /// ingest data, so the handle is what the user typed in the configuration.
+    /// Page of a platform channel: on Twitch the channel, on YouTube the page of the channel, which
+    /// the address is built from.
     /// </summary>
     /// <param name="channelName">
     /// The channel of the configuration. The form of the configuration keeps the platform in the
@@ -127,8 +130,36 @@ public static class LiveLinkView
         return PlatformOf(streamUrl) switch
         {
             "twitch" => "https://www.twitch.tv/" + Uri.EscapeDataString(name),
-            "youtube" => "https://www.youtube.com/channel/" + Uri.EscapeDataString(name),
+            "youtube" => YouTubeChannelUrl(name),
             _ => null
         };
     }
+
+    /// <summary>
+    /// The page of a YouTube channel. A channel has two public addresses and they do not take each
+    /// other's names: the page of a handle is <c>/@handle</c>, and the page of a channel id is
+    /// <c>/channel/UC...</c>. <c>/channel/madajeeita207</c> is not the channel of the handle
+    /// madajeeita207, it is a page that does not exist, so which address to build is decided by
+    /// what the configuration holds rather than by picking one.
+    /// <para>This is the one place a YouTube channel address is built. The preview resolves the live
+    /// to watch out of it, and the live page links to it, so the two cannot end up disagreeing
+    /// about what the channel of a configuration is called.</para>
+    /// </summary>
+    public static string YouTubeChannelUrl(string name)
+    {
+        var channel = name.Trim();
+        return IsYouTubeChannelId(channel)
+            ? "https://www.youtube.com/channel/" + Uri.EscapeDataString(channel)
+            : "https://www.youtube.com/@" + Uri.EscapeDataString(channel.TrimStart('@'));
+    }
+
+    /// <summary>
+    /// A channel id is <c>UC</c> and twenty two more characters of the alphabet YouTube encodes
+    /// them with, which is what tells one apart from a handle: a handle is free to be any length,
+    /// but it is never this shape.
+    /// </summary>
+    private static bool IsYouTubeChannelId(string name) =>
+        name.Length == 24
+        && name.StartsWith("UC", StringComparison.Ordinal)
+        && name.All(character => char.IsAsciiLetterOrDigit(character) || character is '-' or '_');
 }

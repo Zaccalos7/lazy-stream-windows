@@ -309,7 +309,15 @@
   "deleteSceneLiveConfirm": "¿Está seguro de que desea eliminar este directo ({0} fuentes)?",
   "olderThanYesterday": "Más antiguos que ayer",
   "olderThanNow": "Más antiguos que ahora",
-  "noLayoutSelected": "No layout selected",
-  "selectLayout": "Select layout",
-  "layoutSelected": "Layout selected"
+  "noLayoutSelected": "Ningún diseño seleccionado",
+  "selectLayout": "Seleccionar diseño",
+  "layoutSelected": "Diseño seleccionado",
+  "liveHistoryDescription": "Ver el historial de todas tus transmisiones pasadas.",
+  "updateAvailable": "Actualización disponible",
+  "updateAvailableDialogText": "Hay una nueva versión disponible, ¿quieres descargarla?",
+  "dashboardSectionLive": "Streaming",
+  "dashboardSectionSettings": "Settings",
+  "dashboardSectionSystem": "System & Monitoring",
+  "lowLatency": "Baja latencia",
+  "lowLatencyHelp": "Pide al codificador el menor retardo posible: sin look-ahead ni scenecut. Desactívalo en una retransmisión, donde el relay ya marca el ritmo."
 }

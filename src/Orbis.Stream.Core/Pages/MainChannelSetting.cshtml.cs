@@ -8,11 +8,17 @@ namespace Orbis.Stream.Core.Pages;
 /// <summary>Streaming configurations (backend "settings"): one per platform, channel and key.</summary>
 public sealed class MainChannelSettingModel(SettingService settings, RequestValidator validator) : OrbisPageModel
 {
-    /// <summary>RTMP ingest of each platform, applied when the URL is left empty.</summary>
+    /// <summary>
+    /// RTMP ingest of each platform, applied when the URL is left empty. YouTube is the RTMPS host
+    /// (<c>a.rtmps</c>): the first versions paired the RTMPS scheme with the RTMP host, which only
+    /// worked because ffmpeg does not check the certificate (it is issued for <c>*.rtmps</c>).
+    /// </summary>
     public static readonly IReadOnlyList<(string Value, string Label, string StreamUrl)> Platforms =
     [
         ("twitch", "Twitch", "rtmp://live.twitch.tv/app"),
-        ("youtube", "YouTube", "rtmps://a.rtmp.youtube.com/live2")
+        // rtmps is served by a.rtmps.youtube.com: a.rtmp.youtube.com is the plain RTMP host, and its
+        // certificate does not name it (see StreamPlatforms.NormalizeIngestUrl).
+        ("youtube", "YouTube", "rtmps://a.rtmps.youtube.com/live2")
     ];
 
     public IReadOnlyList<SettingResponse> Configurations { get; private set; } = [];

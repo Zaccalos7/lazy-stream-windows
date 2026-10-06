@@ -307,9 +307,17 @@
   "embedFailed": "{0} プレイヤーを読み込めません: チャンネルがライブ配信中ではありません",
   "sceneSources": "シーン · ソース{0}個",
   "deleteSceneLiveConfirm": "このライブ配信（{0}個のソース）を削除してもよろしいですか？",
-  "olderThanYesterday": "Older than yesterday",
+  "olderThanYesterday": "昨日より古い",
   "olderThanNow": "現在より古いもの",
-  "noLayoutSelected": "No layout selected",
-  "selectLayout": "Select layout",
-  "layoutSelected": "Layout selected"
+  "noLayoutSelected": "レイアウトが選択されていません",
+  "selectLayout": "レイアウトを選択",
+  "layoutSelected": "レイアウトが選択されました",
+  "liveHistoryDescription": "過去のすべてのライブ配信の履歴を表示します。",
+  "updateAvailable": "更新が利用可能です",
+  "updateAvailableDialogText": "新しいバージョンが利用可能です。ダウンロードしますか？",
+  "dashboardSectionLive": "Streaming",
+  "dashboardSectionSettings": "Settings",
+  "dashboardSectionSystem": "System & Monitoring",
+  "lowLatency": "低遅延",
+  "lowLatencyHelp": "エンコーダーに最小の遅延を求ます（ロークアヘロッドなし、scenecut なし）。再配信ではリレイがリートを治めるのでオフにしてください。"
 }

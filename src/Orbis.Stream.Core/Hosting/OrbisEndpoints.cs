@@ -102,6 +102,19 @@ public static class OrbisEndpoints
             return frame is null ? Results.NoContent() : Results.File(frame, "image/jpeg");
         });
 
+        // A file has just been laid on a tile: if it is too heavy to decode in real time, its light
+        // copy is made now, in the background, so it is ready long before the live is.
+        app.MapPost("/preview/sources/prepare", (string? target, MediaProxyService proxies) =>
+        {
+            if (!SourceSnapshotService.IsSnapshottable(SourceKind.File, target))
+            {
+                return Results.NoContent();
+            }
+
+            proxies.Prepare(target!);
+            return Results.Accepted();
+        });
+
         // The real resolution of a video file, read by ffprobe the moment it lands on the canvas:
         // the still is scaled down, so it cannot say how many pixels the file has, and that is the
         // most the composition can be streamed at without upscaling it.
@@ -316,12 +329,15 @@ public static class OrbisEndpoints
             HttpRequest request,
             HttpContext context) =>
         {
-            var embed = await service.EmbedAsync(
+            var found = await service.EmbedAsync(
                 Watched(request),
                 context.Request.Host.Host,
                 context.RequestAborted);
 
-            return embed is null ? Results.NotFound() : Results.Ok(embed);
+            // There is no address to play, but the reason travels with the answer: a channel that is
+            // off air and a platform that could not be reached are different things to tell a page,
+            // and the page is what repeats the answer for as long as it stays open.
+            return Results.Ok(new { embed = found.Embed, reason = found.Reason });
         });
 
         group.MapGet("/live/{pkid:int}/video", (int pkid, LivePreviewService service) =>

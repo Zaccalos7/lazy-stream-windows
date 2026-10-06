@@ -7,11 +7,8 @@
         mc:Ignorable="d"
         Title="Orbis Stream" Height="1080" Width="1920" WindowStartupLocation="CenterScreen"
         WindowState="Maximized">
-    <!-- Opens maximized on whatever screen it starts on. The size is only what "Restore down"
-         goes back to, Full HD, cut to the screen in MainWindow.xaml.cs: it is measured in DIPs, so
-         at 125-150% scaling it is larger than a Full HD screen and opened off-center and cut off. -->
-    <!-- Splash in the colors of the web UI (fluent.css): the WebView2 stays hidden until the
-         first page has loaded, so the window never flashes white or grey. -->
+    
+    
     <Window.Background>
         <LinearGradientBrush StartPoint="0,0" EndPoint="1,1">
             <GradientStop Color="#2A1054" Offset="0" />
@@ -48,8 +45,7 @@
                        TextAlignment="Center"
                        TextWrapping="Wrap"
                        FontSize="14"
-                       Foreground="#B8B1D4"
-                       Text="Caricamento di Orbis Stream..." />
+                       Foreground="#B8B1D4" />
         </StackPanel>
 
     </Grid>

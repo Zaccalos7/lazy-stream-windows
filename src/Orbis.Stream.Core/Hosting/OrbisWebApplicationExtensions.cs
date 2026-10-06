@@ -14,6 +14,7 @@ using Orbis.Stream.Core.Configuration;
 using Orbis.Stream.Core.Contracts;
 using Orbis.Stream.Core.Http;
 using Orbis.Stream.Core.I18n;
+using Orbis.Stream.Core.Logging;
 
 namespace Orbis.Stream.Core.Hosting;
 
@@ -67,14 +68,19 @@ public static class OrbisWebApplicationExtensions
     }
 
     /// <summary>
-    /// The default host already writes console plus <c>logging:file:path</c>; the value is set
-    /// before the host is built so the log file lands in the resolved data directory, like the
-    /// <c>logging.file.name</c> property of the Java configuration did.
+    /// The log file of the Java configuration (<c>logging.file.name</c>), in the logs directory of
+    /// the data directory. ASP.NET Core has no file logger of its own, and the window has no
+    /// console, so without it only the warnings reached the Windows event log.
+    /// <para>The hosting and routing lines of every request stay out: the preview asks for a
+    /// frame thirty times a second, and two lines a request would bury everything else.</para>
     /// </summary>
     private static void ConfigureLogging(WebApplicationBuilder builder, OrbisRuntimeOptions options)
     {
-        builder.Configuration["logging:file:path"] = options.LogFilePath;
         builder.Logging.SetMinimumLevel(LogLevel.Information);
+        builder.Logging.AddFilter("Microsoft.AspNetCore", LogLevel.Warning);
+
+        // Registered with a factory so the container disposes it, and what is queued is written.
+        builder.Services.AddSingleton<ILoggerProvider>(_ => new FileLoggerProvider(options.LogDirectory));
     }
 
     private static void ConfigurePipeline(WebApplication app, OrbisRuntimeOptions options)

@@ -13,7 +13,11 @@ public sealed record MediaProbeResult(
     double FrameRate,
     bool HasAudio,
     int AudioChannels,
-    double DurationSeconds);
+    double DurationSeconds,
+    /// <summary>The pixel format of the video stream (yuv420p10le, ...); null when unknown.</summary>
+    string? PixelFormat = null,
+    /// <summary>The transfer characteristic of the video stream (smpte2084 is HDR10); null when untagged.</summary>
+    string? ColorTransfer = null);
 
 /// <summary>
 /// What an encoder is asked to produce: the source as it is, unless the setting overrides the
@@ -56,6 +60,8 @@ public sealed class FfmpegProbe
         var hasAudio = false;
         var audioChannels = 0;
         var duration = 0d;
+        string? pixelFormat = null;
+        string? colorTransfer = null;
 
         if (root.TryGetProperty("streams", out var streams) && streams.ValueKind == JsonValueKind.Array)
         {
@@ -78,6 +84,8 @@ public sealed class FfmpegProbe
                         ? ParseRatio(rFrameRateValue.GetString())
                         : 0;
                     frameRate = average > 0 ? average : nominal;
+                    pixelFormat = stream.TryGetProperty("pix_fmt", out var pixelFormatValue) ? pixelFormatValue.GetString() : pixelFormat;
+                    colorTransfer = stream.TryGetProperty("color_transfer", out var transferValue) ? transferValue.GetString() : colorTransfer;
                 }
                 else if (string.Equals(codecType, "audio", StringComparison.OrdinalIgnoreCase))
                 {
@@ -100,7 +108,8 @@ public sealed class FfmpegProbe
                 "No video stream detected in {Input} (width={Width}, height={Height})", inputPath, width, height);
         }
 
-        return new MediaProbeResult(width, height, frameRate <= 0 ? 25 : frameRate, hasAudio, audioChannels, duration);
+        return new MediaProbeResult(
+            width, height, frameRate <= 0 ? 25 : frameRate, hasAudio, audioChannels, duration, pixelFormat, colorTransfer);
     }
 
     private static double ParseRatio(string? value)

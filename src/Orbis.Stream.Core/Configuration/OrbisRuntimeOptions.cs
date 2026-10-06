@@ -20,7 +20,6 @@ public sealed class OrbisRuntimeOptions
 
     private const string DatabaseFileName = "stream.db";
     private const string LogDirectoryName = "logs";
-    private const string LogFileName = "twitch.log";
     private const string ImagesDirectoryName = "images";
 
     private OrbisRuntimeOptions(
@@ -36,7 +35,6 @@ public sealed class OrbisRuntimeOptions
         ImagesDirectory = imagesDirectory;
         DatabasePath = Path.Combine(dataDirectory, DatabaseFileName);
         LogDirectory = Path.Combine(dataDirectory, LogDirectoryName);
-        LogFilePath = Path.Combine(LogDirectory, LogFileName);
         Port = port;
         EmbeddedBrowser = embeddedBrowser;
         FfmpegPath = ffmpegPath;
@@ -49,8 +47,6 @@ public sealed class OrbisRuntimeOptions
     public string DatabasePath { get; }
 
     public string LogDirectory { get; }
-
-    public string LogFilePath { get; }
 
     public string ImagesDirectory { get; }
 

@@ -60,9 +60,14 @@ public sealed class LivePlatformEmbeds
         @"var ytInitialData = (?<json>.*?);</script>",
         RegexOptions.CultureInvariant | RegexOptions.Singleline);
 
-    /// <summary>What YouTube says about a video, before it localises anything on the page.</summary>
+    /// <summary>
+    /// What YouTube says about a video, before it localises anything on the page: the details of
+    /// the video say <c>isLive</c> and those of the broadcast <c>isLiveNow</c>, and both only while
+    /// it is on air. Not <c>isLiveContent</c>, which a broadcast keeps once it has ended: it is the
+    /// field that makes the last live of a channel off air look like a live.
+    /// </summary>
     private static readonly Regex OnAirNow = new(
-        "\"isLiveContent\":true",
+        "\"isLive(?:Now)?\":true",
         RegexOptions.CultureInvariant);
 
     private readonly HttpClient _http;
@@ -79,12 +84,29 @@ public sealed class LivePlatformEmbeds
         _logger = logger;
     }
 
+/// <summary>
+    /// The answer for a live that cannot be played where it goes, and why. There is a difference
+    /// between a channel that is not on air and a channel this application failed to ask about, and
+    /// a page told the first when the second is what happened repeats it for ever, because the
+    /// second is what happens every time. The reason is what keeps the two apart.
+    /// </summary>
+    public sealed record LivePlatformLookup(LivePlatformEmbed? Embed, string? Reason)
+    {
+        public static LivePlatformLookup Nothing { get; } = new(null, null);
+
+        public static LivePlatformLookup Of(LivePlatformEmbed? embed) => new(embed, null);
+
+        public static LivePlatformLookup Failed(string reason) => new(null, reason);
+    }
+
     /// <summary>
     /// The player of the platform the live is going to, or nothing when there is nothing to play:
     /// a configuration pointing at an ingest this application does not know, a live that is not
-    /// running, or a YouTube channel that is not on air.
+    /// running, or a YouTube channel that is not on air. What could not be asked is said apart from
+    /// what was asked and found empty, so a page is never told a channel is off air because a
+    /// request to the platform failed.
     /// </summary>
-    public async Task<LivePlatformEmbed?> ResolveAsync(
+    public async Task<LivePlatformLookup> ResolveAsync(
         string? streamUrl,
         string? channelName,
         string? platformStreamName,
@@ -94,14 +116,14 @@ public sealed class LivePlatformEmbeds
         var channel = (channelName ?? platformStreamName)?.Trim();
         if (string.IsNullOrEmpty(channel))
         {
-            return null;
+            return LivePlatformLookup.Nothing;
         }
 
         return LiveLinkView.PlatformOf(streamUrl) switch
         {
-            "twitch" => new LivePlatformEmbed("twitch", channel, TwitchUrl(channel, host)),
+            "twitch" => LivePlatformLookup.Of(new LivePlatformEmbed("twitch", channel, TwitchUrl(channel, host))),
             "youtube" => await YouTubeAsync(channel, cancellationToken),
-            _ => null
+            _ => LivePlatformLookup.Nothing
         };
     }
 
@@ -122,31 +144,41 @@ public sealed class LivePlatformEmbeds
     }
 
     /// <summary>The YouTube player of a live, once the id of the video is known.</summary>
-    private async Task<LivePlatformEmbed?> YouTubeAsync(string channel, CancellationToken cancellationToken)
+    private async Task<LivePlatformLookup> YouTubeAsync(string channel, CancellationToken cancellationToken)
     {
         var handle = channel.Trim().TrimStart('@');
         if (handle.Length == 0)
         {
-            return null;
+            return LivePlatformLookup.Nothing;
         }
 
-        var videoId = await LiveVideoAsync(handle, cancellationToken);
-        return videoId is null
-            ? null
-            : new LivePlatformEmbed(
-                "youtube",
-                handle,
-                // Muted and inline, so the browser lets it start on its own: a preview is opened
-                // without a gesture on the player and autoplay of sound is not one it will allow.
-                $"https://www.youtube.com/embed/{videoId}?autoplay=1&mute=1&playsinline=1&rel=0&modestbranding=1");
+        var found = await LiveVideoAsync(handle, cancellationToken);
+        if (found.VideoId is not { } videoId)
+        {
+            // Nothing to play, and the difference between a channel that is off air and a page this
+            // application could not read is the whole of what the user is looking for.
+            return found.Failure is { } failure
+                ? LivePlatformLookup.Failed(failure)
+                : LivePlatformLookup.Nothing;
+        }
+
+        return LivePlatformLookup.Of(new LivePlatformEmbed(
+            "youtube",
+            handle,
+            // Muted and inline, so the browser lets it start on its own: a preview is opened
+            // without a gesture on the player and autoplay of sound is not one it will allow.
+            $"https://www.youtube.com/embed/{videoId}?autoplay=1&mute=1&playsinline=1&rel=0&modestbranding=1"));
     }
 
-    /// <summary>The id of the video a channel is broadcasting right now, or nothing.</summary>
-    private async Task<string?> LiveVideoAsync(string handle, CancellationToken cancellationToken)
+    /// <summary>
+    /// The id of the video a channel is broadcasting right now, or nothing. <c>Failure</c> is what
+    /// could not be asked, as opposed to what was asked and found empty.
+    /// </summary>
+    private async Task<(string? VideoId, string? Failure)> LiveVideoAsync(string handle, CancellationToken cancellationToken)
     {
         if (Remembered(handle) is { } fresh)
         {
-            return fresh;
+            return (fresh, null);
         }
 
         await _gate.WaitAsync(cancellationToken);
@@ -154,12 +186,12 @@ public sealed class LivePlatformEmbeds
         {
             if (Remembered(handle) is { } again)
             {
-                return again;
+                return (again, null);
             }
 
-            var videoId = await LookUpAsync(handle, cancellationToken);
+            var (videoId, failure) = await LookUpAsync(handle, cancellationToken);
             _youtube[handle] = (videoId, DateTimeOffset.UtcNow);
-            return videoId;
+            return (videoId, failure);
         }
         catch (OperationCanceledException)
         {
@@ -169,8 +201,10 @@ public sealed class LivePlatformEmbeds
         {
             // A platform that cannot be asked is not a reason to fail the preview: the answer the
             // page already had is the one it keeps.
-            _logger.LogDebug(problem, "The live of the YouTube channel {Channel} could not be looked up.", handle);
-            return _youtube.TryGetValue(handle, out var last) ? last.VideoId : null;
+            _logger.LogWarning(problem, "The live of the YouTube channel {Channel} could not be looked up.", handle);
+            return _youtube.TryGetValue(handle, out var last)
+                ? (last.VideoId, null)
+                : (null, "YouTube could not be asked for the streams of the channel");
         }
         finally
         {
@@ -195,17 +229,31 @@ public sealed class LivePlatformEmbeds
     /// it is handed out: a channel that is not on air lists its last broadcast there too, and a
     /// player given the id of an old video plays an old video, which is a worse answer than none.
     /// </summary>
-    private async Task<string?> LookUpAsync(string handle, CancellationToken cancellationToken)
+    private async Task<(string? VideoId, string? Failure)> LookUpAsync(string handle, CancellationToken cancellationToken)
     {
-        var streams = await ReadAsync($"https://www.youtube.com/@{Uri.EscapeDataString(handle)}/streams", cancellationToken);
+        var streamsUrl = LiveLinkView.YouTubeChannelUrl(handle) + "/streams";
+        var streams = await ReadAsync(streamsUrl, cancellationToken);
+        if (streams is null)
+        {
+            // Not "the channel is off air": the page never arrived. A handle that is not a handle
+            // and a platform that answered a request from this machine with something else both end
+            // here, and both have to be told apart from a channel that is simply not broadcasting.
+            return (null, $"YouTube did not return the streams page of @{handle}");
+        }
+
         var candidate = CandidateOf(streams);
         if (candidate is null)
         {
-            return null;
+            return (null, null);
         }
 
         var watch = await ReadAsync($"https://www.youtube.com/watch?v={candidate}", cancellationToken);
-        return OnAirNow.IsMatch(watch) ? candidate : null;
+        if (watch is null)
+        {
+            return (null, $"YouTube did not return the page of the video {candidate}");
+        }
+
+        return OnAirNow.IsMatch(watch) ? (candidate, null) : (null, null);
     }
 
     /// <summary>The id of the first entry of the grid of a page of a channel, or nothing.</summary>
@@ -230,26 +278,36 @@ public sealed class LivePlatformEmbeds
         return entry.Success ? entry.Groups["id"].Value : null;
     }
 
-    /// <summary>The page at an address, or nothing when it cannot be read.</summary>
-    private async Task<string> ReadAsync(string url, CancellationToken cancellationToken)
+    /// <summary>
+    /// The page at an address, null when it could not be read at all. An empty page and a failed
+    /// request are not the same answer: the first is a page that was read and had nothing on it,
+    /// the second is a question this application got no answer to, and only the second is worth a
+    /// page being told about.
+    /// </summary>
+    private async Task<string?> ReadAsync(string url, CancellationToken cancellationToken)
     {
         try
         {
             using var response = await _http.GetAsync(url, HttpCompletionOption.ResponseHeadersRead, cancellationToken);
-            return response.IsSuccessStatusCode
-                ? await response.Content.ReadAsStringAsync(cancellationToken)
-                : string.Empty;
+            if (!response.IsSuccessStatusCode)
+            {
+                _logger.LogWarning(
+                    "The platform page {Url} answered {Status}.", url, (int)response.StatusCode);
+                return null;
+            }
+
+            return await response.Content.ReadAsStringAsync(cancellationToken);
         }
         catch (OperationCanceledException) when (!cancellationToken.IsCancellationRequested)
         {
             // The client gave up on the platform, not the page: nothing to ask, nothing to answer.
-            _logger.LogDebug("The platform page {Url} did not answer in time.", url);
-            return string.Empty;
+            _logger.LogWarning("The platform page {Url} did not answer in time.", url);
+            return null;
         }
         catch (HttpRequestException problem)
         {
-            _logger.LogDebug(problem, "The platform page {Url} could not be read.", url);
-            return string.Empty;
+            _logger.LogWarning(problem, "The platform page {Url} could not be read.", url);
+            return null;
         }
     }
 }

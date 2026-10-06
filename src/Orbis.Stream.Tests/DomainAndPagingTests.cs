@@ -275,7 +275,7 @@ public sealed class UserPathTests
 public sealed class LiveLinkTests
 {
     private const string Twitch = "rtmp://live.twitch.tv/app";
-    private const string YouTube = "rtmps://a.rtmp.youtube.com/live2";
+    private const string YouTube = "rtmps://a.rtmps.youtube.com/live2";
 
     [Fact]
     public void PlatformOf_ReadsTheIngestOfTheLive()
@@ -300,10 +300,24 @@ public sealed class LiveLinkTests
     }
 
     [Fact]
-    public void UrlOf_YouTubeIsThePageOfTheChannel()
+    public void UrlOf_YouTubeIsThePageOfTheHandle()
     {
-        Assert.Equal("https://www.youtube.com/channel/reproChannel", LiveLinkView.UrlOf(YouTube, "reproChannel", null));
-        Assert.Equal("https://www.youtube.com/channel/madajeeita207", LiveLinkView.UrlOf(YouTube, "madajeeita207", null));
+        // The page of a handle is /@handle. /channel/ takes a channel id and nothing else, so
+        // youtube.com/channel/madajeeita207 is not the channel of that handle: it is a page that is
+        // not there, which is a link that looks right and goes nowhere.
+        Assert.Equal("https://www.youtube.com/@reproChannel", LiveLinkView.UrlOf(YouTube, "reproChannel", null));
+        Assert.Equal("https://www.youtube.com/@madajeeita207", LiveLinkView.UrlOf(YouTube, "madajeeita207", null));
+        Assert.Equal("https://www.youtube.com/@madajeeita207", LiveLinkView.UrlOf(YouTube, "@madajeeita207", null));
+    }
+
+    [Fact]
+    public void UrlOf_YouTubeTakesAChannelIdWhereThePageOfOneIs()
+    {
+        // A configuration is filled in with whatever the studio hands over, and the studio hands
+        // over the channel id as readily as the handle. The id is the one that goes in /channel/.
+        Assert.Equal(
+            "https://www.youtube.com/channel/UCuAXFkgsw1L7xaCfnd5JJOw",
+            LiveLinkView.UrlOf(YouTube, "UCuAXFkgsw1L7xaCfnd5JJOw", null));
     }
 
     [Fact]
@@ -318,14 +332,13 @@ public sealed class LiveLinkTests
     public void UrlOf_HasNoLinkWithoutAPlatformOrAChannel(string? streamUrl, string? channelName) =>
         Assert.Null(LiveLinkView.UrlOf(streamUrl, channelName, null));
 
-
     [Fact]
     public void UrlOf_TakesTheChannelOfTheConfigurationNotThePlatform()
     {
         // The form of the configuration stores the platform in the field named platform stream
         // name, and the channel in the channel name: following the wrong one gave twitch.tv/twitch.
         Assert.Equal("https://www.twitch.tv/ciclovisione", LiveLinkView.UrlOf(Twitch, "ciclovisione", "twitch"));
-        Assert.Equal("https://www.youtube.com/channel/ciclovisione", LiveLinkView.UrlOf(YouTube, "ciclovisione", "youtube"));
+        Assert.Equal("https://www.youtube.com/@ciclovisione", LiveLinkView.UrlOf(YouTube, "ciclovisione", "youtube"));
     }
 
     [Fact]

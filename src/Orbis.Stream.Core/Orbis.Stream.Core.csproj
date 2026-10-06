@@ -24,7 +24,7 @@
 
   <ItemGroup>
     <None Include="Messages\*.properties" CopyToOutputDirectory="PreserveNewest" />
-    <!-- Interface strings of the Razor pages, one file per language (ported from the React build). -->
+    
     <EmbeddedResource Include="Ui\*.json" LogicalName="Ui.%(Filename).json" WithCulture="false" />
     <Content Remove="Ui\*.json" />
   </ItemGroup>

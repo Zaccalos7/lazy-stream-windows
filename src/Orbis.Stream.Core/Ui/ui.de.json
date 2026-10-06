@@ -309,7 +309,15 @@
   "deleteSceneLiveConfirm": "Möchten Sie diesen Livestream ({0} Quellen) wirklich löschen?",
   "olderThanYesterday": "Älter als gestern",
   "olderThanNow": "Jetzt oder älter",
-  "noLayoutSelected": "No layout selected",
-  "selectLayout": "Select layout",
-  "layoutSelected": "Layout selected"
+  "noLayoutSelected": "Kein Layout ausgewählt",
+  "selectLayout": "Layout auswählen",
+  "layoutSelected": "Layout ausgewählt",
+  "liveHistoryDescription": "Zeigen Sie den Verlauf all Ihrer vergangenen Live-Streams an.",
+  "updateAvailable": "Update verfügbar",
+  "updateAvailableDialogText": "Eine neue Version ist verfügbar, möchten Sie sie herunterladen?",
+  "dashboardSectionLive": "Streaming",
+  "dashboardSectionSettings": "Settings",
+  "dashboardSectionSystem": "System & Monitoring",
+  "lowLatency": "Geringe Latenz",
+  "lowLatencyHelp": "Verlangt vom Encoder die kleinste mögliche Verzögerung: kein Lookahead, kein Scenecut. Ausschalten bei einer Weiterübertragung, dort setzt der Relay den Takt ohnehin."
 }

@@ -3,6 +3,10 @@
 @{
     ViewData["Title"] = T["taskManager"];
 }
+@section Styles {
+    
+    <link rel="stylesheet" href="/css/meters.css" />
+}
 <div class="page-header">
     <div>
         <h1>@T["taskManager"]</h1>
@@ -10,8 +14,6 @@
     </div>
 </div>
 
-@* The meters are painted by the push channel: the server samples them and sends the values, so the
-   page asks for nothing. They stay in their loading until the first sample arrives. *@
 <div data-stats data-state="loading">
     <partial name="_Stats" model="Model" />
 </div>
@@ -26,8 +28,6 @@
     <partial name="_AppStats" model="Model" />
 </div>
 
-@* What the machine is needs WMI, which can take a second the first time. It is asked for on its
-   own, into a panel that only shows a loading when the answer is slow enough to be noticed. *@
 <div class="card section" data-load="@Url.Page("/MainTaskManager", "Facts")" data-delay="400">
     <h3><i class="icon">&#xE9D9;</i>&nbsp; @T["systemInfo"]</h3>
     <p class="caption" data-while="loading">

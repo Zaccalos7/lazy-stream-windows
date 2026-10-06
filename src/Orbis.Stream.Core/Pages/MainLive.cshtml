@@ -6,10 +6,17 @@
     var cancelLink = Url.Page("/MainLive", new { Model.LiveStatus, Model.ChannelName, p = Model.PageIndex });
     var canStart = Model.ActiveSettings.Count > 0 && Model.ActiveConfigurations.Count > 0;
 }
+@section Styles {
+    
+    <link rel="stylesheet" href="/css/composer.css" />
+}
 <div class="page-header">
-    <div>
-        <h1>@T["liveManagement"]</h1>
+    <div style="display: flex; align-items: center; gap: 1rem;">
+        <a class="btn subtle icon-only" href="/orbis/mainLiveMenu" title="@T["back"]" aria-label="@T["back"]"><i class="icon">&#xE72B;</i></a>
+        <div>
+            <h1>@T["liveManagement"]</h1>
         <p class="subtitle">@T["liveManagementDescription"]</p>
+        </div>
     </div>
     <div class="actions">
         @if (Model.Locked.Count > 0)
@@ -45,8 +52,6 @@
     </label>
 </form>
 
-@* The rows are redone when the server says one of them moved, not every few seconds: the change
-   it was drawn from travels with it, so the first push is a real change. *@
 <div data-refresh="@Url.Page("/MainLive", "Rows", new { Model.LiveStatus, Model.ChannelName, p = Model.PageIndex })" data-since="@Model.ChangeVersion">
     <partial name="_LiveRows" model="Model" />
 </div>
@@ -100,7 +105,6 @@
     </div>
 </dialog>
 
-@* Start a playlist: the same two picks, plus a folder whose videos are streamed one after the other. *@
 <dialog class="dialog wide" id="playlist-dialog" data-busy-host data-open="@(Model.OpenPlaylist ? "" : "0")">
     <form method="post" asp-page-handler="Playlist" asp-all-route-data="Model.FilterRoute">
         <div class="dialog-body">
@@ -138,7 +142,6 @@
     </form>
 </dialog>
 
-@* Videos left LIVE after a crash, an error or a stop made on the platform. *@
 <dialog class="dialog" id="unlock-dialog">
     <div class="dialog-body">
         <h2>@T["unLockVideo"]</h2>
@@ -172,8 +175,6 @@
     </div>
 </dialog>
 
-@* The videos of one playlist: its row on the page stands for all of them. The list redraws on
-   every change like the rows do, so the dialog follows the playlist while it streams. *@
 @if (Model.OpenedPlaylist is { } opened)
 {
     <dialog class="dialog x-wide" id="playlist-details" data-open>

@@ -1,0 +1,40 @@
+@page "/orbis/mainLayoutList"
+@model MainLayoutListModel
+@{
+    ViewData["Title"] = T["layouts"];
+}
+<div class="page-header">
+    <div style="display: flex; align-items: center; gap: 1rem;">
+        <a class="btn subtle icon-only" href="/orbis/mainLiveMenu" title="@T["back"]" aria-label="@T["back"]"><i class="icon">&#xE72B;</i></a>
+        <div>
+            <h1>@T["layouts"]</h1>
+        <p class="subtitle">@T["layoutsDescription"]</p>
+        </div>
+    </div>
+    <a class="btn accent" href="/orbis/mainLayout"><i class="icon">&#xE710;</i>@T["newLayout"]</a>
+</div>
+
+@if (Model.Layouts.Count == 0)
+{
+    <div class="card empty"><i class="icon">&#xE8B9;</i>@T["noDataPresent"]</div>
+}
+
+@foreach (var layout in Model.Layouts)
+{
+    <div class="row-card">
+        <i class="icon lead">&#xE8B9;</i>
+        <div class="grow">
+            <h3 class="truncate">@layout.Name</h3>
+            @if (!string.IsNullOrWhiteSpace(layout.Description))
+            {
+                <div class="caption truncate">@layout.Description</div>
+            }
+        </div>
+        <div class="actions">
+            <a class="btn subtle icon-only" href="/orbis/mainLayout?edit=@layout.Pkid" title="@T["seeDetails"]" aria-label="@T["seeDetails"]"><i class="icon">&#xE70F;</i></a>
+            <form method="post" asp-page-handler="Delete" asp-route-id="@layout.Pkid" data-confirm="@T["deleteLayoutConfirm"]">
+                <button class="btn subtle danger icon-only" title="@T["delete"]" aria-label="@T["delete"]"><i class="icon">&#xE74D;</i></button>
+            </form>
+        </div>
+    </div>
+}

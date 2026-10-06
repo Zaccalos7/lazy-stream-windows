@@ -1,0 +1,271 @@
+/* Orbis Stream — surfaces: the things that hold other things. Cards, the tiles of a dashboard, the
+   tables of a list, the facts of a details page, the marks of the platforms. */
+
+/* ---------- Cards & Containers ---------- */
+
+.card {
+  background: var(--card);
+  border: 1px solid var(--stroke);
+  border-radius: var(--radius-lg);
+  box-shadow: var(--shadow-card);
+  padding: 18px;
+}
+
+.grid { display: grid; gap: 12px; grid-template-columns: repeat(auto-fill, minmax(250px, 1fr)); }
+
+.grid > * { --hue: var(--accent); }
+
+a.tile {
+  --hue: var(--accent);
+  position: relative;
+  overflow: hidden;
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
+  padding: 20px;
+  color: var(--text);
+  text-decoration: none;
+  background: var(--card);
+  border: 1px solid var(--stroke);
+  border-radius: var(--radius-lg);
+  box-shadow: var(--shadow-card);
+  transition: transform 0.18s cubic-bezier(0.16, 1, 0.3, 1), box-shadow 0.18s, border-color 0.18s;
+}
+
+a.tile::before {
+  content: "";
+  position: absolute;
+  inset: 0 0 auto;
+  height: 3px;
+  background: var(--hue);
+  border-radius: var(--radius-lg) var(--radius-lg) 0 0;
+}
+
+a.tile:hover {
+  transform: translateY(-2px);
+  border-color: var(--stroke-strong);
+  box-shadow: var(--shadow-lift);
+}
+
+a.tile h3 { font: 600 15px/20px var(--font-display); letter-spacing: -0.01em; }
+a.tile p { margin: 3px 0 0; color: var(--text-2); font-size: 12px; }
+
+a.tile > .icon:first-child,
+.row-card > .icon.lead {
+  flex: none;
+  display: grid;
+  place-items: center;
+  width: 40px;
+  height: 40px;
+  font-size: 18px;
+  color: var(--on-accent);
+  border-radius: var(--radius-squircle);
+  background: linear-gradient(180deg, var(--hue) 0%, color-mix(in srgb, var(--hue) 85%, black) 100%);
+  box-shadow: 0 1px 4px color-mix(in srgb, var(--hue) 25%, transparent);
+}
+
+.row-card > .icon.lead { width: 36px; height: 36px; font-size: 16px; }
+
+/* Inset row card */
+.row-card {
+  --hue: var(--accent);
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  padding: 12px 16px;
+  min-height: 64px;
+  color: var(--text);
+  text-decoration: none;
+  background: var(--card);
+  border: 1px solid var(--stroke);
+  border-radius: var(--radius-lg);
+  box-shadow: var(--shadow-card);
+  transition: transform 0.15s ease, border-color 0.15s, box-shadow 0.15s;
+}
+
+.row-card:hover { border-color: var(--stroke-strong); }
+a.row-card:hover { transform: translateX(2px); box-shadow: var(--shadow-lift); border-color: var(--stroke-strong); }
+.row-card + .row-card { margin-top: 8px; }
+.row-card .grow { flex: 1; min-width: 0; }
+.row-card p { margin: 2px 0 0; color: var(--text-2); }
+.row-card.twitch { --hue: var(--twitch); }
+.row-card.youtube { --hue: var(--youtube); }
+.row-card > .icon:last-child:not(.lead) { color: var(--text-3); }
+a.row-card:hover > .icon:last-child { color: var(--hue); }
+
+.actions { display: flex; gap: 6px; align-items: center; flex-wrap: wrap; justify-content: flex-end; }
+
+.section { margin-top: 22px; }
+.section > h2 { font-size: 14px; line-height: 18px; margin-bottom: 8px; }
+h3.section { display: flex; align-items: center; gap: 8px; margin-bottom: 10px; font-size: 13px; font-weight: 600; }
+h3.section::before { content: ""; width: 3px; height: 12px; border-radius: 2px; background: var(--accent); }
+
+/* ---------- Empty state ---------- */
+
+.empty {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 10px;
+  padding: 40px 16px;
+  color: var(--text-2);
+  text-align: center;
+}
+.card.empty:has(> .icon) { border: 2px dashed var(--stroke-strong); box-shadow: none; background: var(--panel); }
+.empty > .icon {
+  display: grid;
+  place-items: center;
+  width: 48px;
+  height: 48px;
+  font-size: 22px;
+  color: var(--text);
+  border-radius: var(--radius-squircle);
+  background: var(--tint-strong);
+}
+.empty img { box-shadow: var(--shadow-lift); }
+
+/* ---------- Table Layout ---------- */
+
+.table-wrap {
+  overflow-x: auto;
+  background: var(--card);
+  border: 1px solid var(--stroke);
+  border-radius: var(--radius-lg);
+  box-shadow: var(--shadow-card);
+}
+
+table.list { width: 100%; border-collapse: collapse; }
+table.list th {
+  text-align: left;
+  font-weight: 600;
+  font-size: 10px;
+  letter-spacing: 0.04em;
+  text-transform: uppercase;
+  color: var(--text-2);
+  padding: 10px 14px;
+  background: var(--tint);
+  border-bottom: 1px solid var(--stroke);
+  white-space: nowrap;
+}
+table.list td { padding: 10px 14px; border-bottom: 1px solid var(--stroke); vertical-align: middle; }
+table.list tr:last-child td { border-bottom: 0; }
+table.list tbody tr { transition: background 0.12s; }
+table.list tbody tr:hover { background: var(--tint); }
+table.list td.path { max-width: 360px; }
+table.list td.num { white-space: nowrap; font-variant-numeric: tabular-nums; color: var(--text-2); }
+/* The video a playlist got to, in its details dialog: the one its row on the page stands for. */
+table.list tbody tr.is-current { background: color-mix(in srgb, var(--accent) 10%, transparent); }
+table.list tbody tr.is-current td:first-child { box-shadow: inset 3px 0 0 var(--accent); }
+
+table.list.roomy { font-size: 13px; }
+table.list.roomy th { font-size: 10px; padding: 12px 16px; }
+table.list.roomy td { padding: 12px 16px; }
+table.list.roomy td.path { max-width: 480px; }
+/* Same specificity as the rule above and on purpose after it: a wider dialog wins. */
+dialog.x-wide table.list td.path { max-width: 720px; }
+table.list.roomy td.nowrap { white-space: nowrap; }
+
+/* System information facts */
+.facts {
+  display: grid;
+  gap: 2px 24px;
+  grid-template-columns: repeat(auto-fit, minmax(300px, 1fr));
+  margin: 0;
+}
+.fact {
+  display: flex;
+  align-items: baseline;
+  gap: 10px;
+  padding: 8px 2px;
+  border-bottom: 1px solid var(--stroke);
+}
+.fact dt {
+  flex: none;
+  width: 160px;
+  font-size: 10px;
+  letter-spacing: 0.03em;
+  text-transform: uppercase;
+  font-weight: 600;
+  color: var(--text-2);
+}
+.fact dd { margin: 0; min-width: 0; overflow-wrap: anywhere; font-weight: 500; }
+
+/* A name beside the brand it goes to: a mark the size of the name, not the size of a button. */
+.platform { display: inline-flex; align-items: center; gap: 6px; white-space: nowrap; }
+.platform .icon { font-size: 15px; color: var(--accent-text); }
+/* Beside a name, the mark is the size of the name rather than the size of a button. */
+.platform .platform-mark { width: 16px; height: 16px; }
+.platform .platform-mark svg { width: 15px; height: 15px; }
+
+/* The platform marks: the brand of the channel a live is going to, drawn in the brand's own colour.
+   Sized to stand as a peer of the icon buttons beside it rather than as a speck between them. */
+.platform-mark {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 26px;
+  height: 26px;
+  flex: 0 0 auto;
+  color: var(--text-2);
+}
+.platform-mark svg { display: block; width: 17px; height: 17px; fill: currentColor; }
+a > .platform-mark { border-radius: 6px; }
+a:hover > .platform-mark { background: var(--tint); }
+.platform-twitch { color: #9146ff; }
+.platform-youtube { color: #ff0000; }
+.platform-generic { color: var(--text-2); }
+
+.toolbar { display: flex; gap: 10px; align-items: end; flex-wrap: wrap; margin-bottom: 14px; }
+.toolbar label.field { min-width: 160px; }
+
+.pager { display: flex; gap: 4px; justify-content: center; align-items: center; margin-top: 14px; }
+.pager .btn { min-width: 28px; padding: 0 8px; }
+.pager .btn[aria-current="page"] { color: var(--on-accent); background: var(--accent); border-color: transparent; }
+
+.live-rows-container {
+  display: flex;
+  flex-direction: column;
+  height: 65vh;
+  min-height: 400px;
+  max-height: 800px;
+  background: var(--card);
+  border: 1px solid var(--stroke);
+  border-radius: var(--radius-lg);
+  box-shadow: var(--shadow-card);
+  overflow: hidden;
+}
+
+.table-wrap-scrollable {
+  flex: 1;
+  overflow-y: auto;
+  overflow-x: hidden;
+}
+
+.table-wrap-scrollable .table-wrap {
+  border-radius: 0;
+  border: none;
+  box-shadow: none;
+  background: transparent;
+}
+
+.table-wrap-scrollable table.list th {
+  position: sticky;
+  top: 0;
+  z-index: 1;
+}
+
+/* The history has seven columns and a row for every past live, so it is given more of the window
+   than the live grid: with the grid's height the pager sat below the fold and went unseen. */
+.history-rows-container { height: 78vh; max-height: 900px; }
+
+.pager-fixed {
+  flex-shrink: 0;
+  padding: 12px 16px;
+  border-top: 1px solid var(--stroke);
+  background: var(--card);
+}
+
+.pager-fixed .pager {
+  margin-top: 0;
+  justify-content: center;
+}

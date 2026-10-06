@@ -1,0 +1,38 @@
+@page "/orbis/mainLiveMenu"
+@{
+    ViewData["Title"] = "Live";
+}
+@section Styles {
+    <link rel="stylesheet" href="/css/dashboard.css" />
+}
+<div class="page-header">
+    <div style="display: flex; align-items: center; gap: 1rem;">
+        <a class="btn subtle icon-only" href="/orbis/mainMenu" title="@T["back"]" aria-label="@T["back"]"><i class="icon">&#xE72B;</i></a>
+        <div>
+            <h1>Live</h1>
+            <p class="subtitle">@T["liveManagementDescription"]</p>
+        </div>
+    </div>
+    <div class="actions">
+        <a class="btn accent" style="font-size: 1.1em; padding: 10px 20px;" href="/orbis/mainLive?start=1"><i class="icon">&#xE768;</i>@T["startLiveButton"]</a>
+    </div>
+</div>
+
+<div class="grid">
+    <a class="tile" href="/orbis/mainLive">
+        <i class="icon">&#xE714;</i>
+        <div><h3>@T["liveManagement"]</h3><p>@T["liveManagementDescription"]</p></div>
+    </a>
+    <a class="tile" href="/orbis/mainPreview">
+        <i class="icon">&#xE7F4;</i>
+        <div><h3>@T["preview"]</h3><p>@T["previewDescription"]</p></div>
+    </a>
+    <a class="tile" href="/orbis/mainLayoutList">
+        <i class="icon">&#xE8B9;</i>
+        <div><h3>@T["layouts"]</h3><p>@T["layoutsDescription"]</p></div>
+    </a>
+    <a class="tile" href="/orbis/mainLiveHistory">
+        <i class="icon">&#xE81C;</i>
+        <div><h3>@T["liveHistory"]</h3><p>@T["liveHistoryDescription"]</p></div>
+    </a>
+</div>

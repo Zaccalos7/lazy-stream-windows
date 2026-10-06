@@ -29,12 +29,11 @@
   </ItemGroup>
 
   <ItemGroup>
-    <!-- Served from disk by the static file middleware: never bundle them into the single-file exe. -->
+    
     <None Include="wwwroot\**" CopyToOutputDirectory="PreserveNewest" ExcludeFromSingleFile="true" />
   </ItemGroup>
 
-  <!-- ApplicationIcon consumes the file, so the SDK no longer copies it: the web
-       pages still link /favicon.ico (tab and sidebar icon). -->
+  
   <Target Name="CopyWebIconToPublish" AfterTargets="Publish">
     <Copy SourceFiles="wwwroot\favicon.ico" DestinationFolder="$(PublishDir)wwwroot" SkipUnchangedFiles="true" />
   </Target>

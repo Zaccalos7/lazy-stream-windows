@@ -32,7 +32,7 @@ public sealed class SettingService
     {
         ArgumentNullException.ThrowIfNull(request);
 
-        CheckUniqueConstraint(request.StreamKey!, request.StreamUrl!);
+        CheckUniqueConstraint(request.StreamKey!.Trim(), request.StreamUrl!.Trim());
         _settingRepository.Insert(ToEntity(request));
 
         return _responses.Build("setting.created", StatusCodes.Status201Created);
@@ -129,8 +129,8 @@ public sealed class SettingService
     /// </summary>
     private static void ApplyNonNullValues(SettingRequest request, SettingEntity setting)
     {
-        setting.StreamUrl = request.StreamUrl ?? setting.StreamUrl;
-        setting.StreamKey = request.StreamKey ?? setting.StreamKey;
+        setting.StreamUrl = request.StreamUrl?.Trim() ?? setting.StreamUrl;
+        setting.StreamKey = request.StreamKey?.Trim() ?? setting.StreamKey;
         setting.PlatformStreamName = request.PlatformStreamName ?? setting.PlatformStreamName;
         setting.Description = request.Description ?? setting.Description;
         setting.VideoFolder = request.VideoFolder ?? setting.VideoFolder;
@@ -140,8 +140,9 @@ public sealed class SettingService
 
     private static SettingEntity ToEntity(SettingRequest request) => new()
     {
-        StreamUrl = request.StreamUrl!,
-        StreamKey = request.StreamKey!,
+        // Pasted from the dashboard of a platform: see FfmpegCommandBuilder.BuildStreamingUrl.
+        StreamUrl = request.StreamUrl!.Trim(),
+        StreamKey = request.StreamKey!.Trim(),
         PlatformStreamName = request.PlatformStreamName,
         Description = request.Description,
         // The column is NOT NULL for the rows written before the folder left the form.

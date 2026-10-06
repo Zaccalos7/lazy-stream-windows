@@ -311,5 +311,13 @@
   "olderThanNow": "Older than now",
   "noLayoutSelected": "No layout selected",
   "selectLayout": "Select layout",
-  "layoutSelected": "Layout selected"
+  "layoutSelected": "Layout selected",
+  "liveHistoryDescription": "View the history of all your past live streams.",
+  "updateAvailable": "Update available",
+  "updateAvailableDialogText": "A new version is available, do you want to download it?",
+  "dashboardSectionLive": "Streaming",
+  "dashboardSectionSettings": "Settings",
+  "dashboardSectionSystem": "System & Monitoring",
+  "lowLatency": "Low latency",
+  "lowLatencyHelp": "Asks the encoder for the smallest delay it can manage: no lookahead, no scenecut. Turn it off for a re-stream, where the pacing is already done downstream."
 }

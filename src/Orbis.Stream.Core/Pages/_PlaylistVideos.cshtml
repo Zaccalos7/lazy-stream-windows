@@ -1,6 +1,5 @@
 @model MainLiveModel
-@* The rows of a live in the details dialog, in streaming order: the one the row of the page stands
-   for is marked. The videos of a playlist can each be started from or taken out on their own. *@
+
 @if (Model.OpenedPlaylist is { } playlist)
 {
     <div class="table-wrap">
@@ -36,8 +35,7 @@
                         <div class="truncate"><strong>@video.Name</strong></div>
                         <div class="caption truncate" title="@video.VideoPath">@video.VideoPath</div>
                     </td>
-                    @* The sources of a canvas go on air together: there is no "from here" and no single
-                       one to take out, the live is started, stopped and deleted as a whole. *@
+                    
                     @if (!playlist.IsScene)
                     {
                         <td class="num">@(position > 0 && status != LiveStatus.Ended ? TimeSpan.FromMilliseconds(position).ToString(@"hh\:mm\:ss") : "–")</td>

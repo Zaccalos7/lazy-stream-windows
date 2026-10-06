@@ -309,7 +309,15 @@
   "deleteSceneLiveConfirm": "Êtes-vous sûr de vouloir supprimer ce direct ({0} sources) ?",
   "olderThanYesterday": "Plus ancien qu'hier",
   "olderThanNow": "Plus anciennes que maintenant",
-  "noLayoutSelected": "No layout selected",
-  "selectLayout": "Select layout",
-  "layoutSelected": "Layout selected"
+  "noLayoutSelected": "Aucune mise en page sélectionnée",
+  "selectLayout": "Sélectionner une mise en page",
+  "layoutSelected": "Mise en page sélectionnée",
+  "liveHistoryDescription": "Voir l'historique de tous vos directs passés.",
+  "updateAvailable": "Mise à jour disponible",
+  "updateAvailableDialogText": "Une nouvelle version est disponible, voulez-vous la télécharger ?",
+  "dashboardSectionLive": "Streaming",
+  "dashboardSectionSettings": "Settings",
+  "dashboardSectionSystem": "System & Monitoring",
+  "lowLatency": "Faible latence",
+  "lowLatencyHelp": "Demande à l'encodeur le plus petit délai possible : sans look-ahead ni scenecut. Désactivez-le pour une rediffusion, où le relais impose déjà le rythme."
 }

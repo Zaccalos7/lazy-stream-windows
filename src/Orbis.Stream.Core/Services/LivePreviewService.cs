@@ -140,14 +140,17 @@ public sealed class LivePreviewService
     /// viewers see it. Nothing when the live is not running, when the platform is one this
     /// application does not have a player for, or when the channel is not on air: the page falls
     /// back to the picture ffmpeg writes, which is the truth of the encoder either way.
+    /// <para>A channel that is off air and a platform this application failed to reach are told
+    /// apart here, because the page has something else to say about the second.</para>
     /// </summary>
     /// <param name="host">The host the page is served on, which Twitch has to be told about.</param>
-    public async Task<LivePlatformEmbed?> EmbedAsync(int? videoPkid, string? host, CancellationToken cancellationToken)
+    public async Task<LivePlatformEmbeds.LivePlatformLookup> EmbedAsync(
+        int? videoPkid, string? host, CancellationToken cancellationToken)
     {
         var snapshot = Snapshot(videoPkid);
         return snapshot.IsLive
             ? await _embeds.ResolveAsync(snapshot.StreamUrl, snapshot.ChannelName, snapshot.PlatformStreamName, host, cancellationToken)
-            : null;
+            : LivePlatformEmbeds.LivePlatformLookup.Nothing;
     }
 
     /// <summary>The live to watch: the one asked for while it runs, otherwise the last one started.</summary>

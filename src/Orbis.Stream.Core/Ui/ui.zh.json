@@ -309,7 +309,15 @@
   "deleteSceneLiveConfirm": "您确定要删除此直播（{0} 个源）吗？",
   "olderThanYesterday": "早于昨天",
   "olderThanNow": "比现在更早",
-  "noLayoutSelected": "No layout selected",
-  "selectLayout": "Select layout",
-  "layoutSelected": "Layout selected"
+  "noLayoutSelected": "未选择布局",
+  "selectLayout": "选择布局",
+  "layoutSelected": "已选择布局",
+  "liveHistoryDescription": "查看您所有过去直播的历史记录。",
+  "updateAvailable": "有可用更新",
+  "updateAvailableDialogText": "有新版本可用，是否要下载？",
+  "dashboardSectionLive": "Streaming",
+  "dashboardSectionSettings": "Settings",
+  "dashboardSectionSystem": "System & Monitoring",
+  "lowLatency": "低延迟",
+  "lowLatencyHelp": "要求编码器尽量低的延迟（无前瞻、无 scenecut）。转播时请关闭，因为下游的 relay 已经在控制节奏。"
 }

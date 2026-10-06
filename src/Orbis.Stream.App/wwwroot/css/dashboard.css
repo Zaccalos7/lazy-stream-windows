@@ -28,9 +28,16 @@
   border-radius: var(--radius-sm);
   box-shadow: 0 2px 10px rgba(255, 149, 0, 0.3);
   transition: filter 120ms ease, transform 120ms ease;
+  animation: pulse-weasel 2s infinite ease-in-out;
 }
-.coffee-banner:hover { filter: brightness(1.05); text-decoration: none; }
+.coffee-banner:hover { filter: brightness(1.05); text-decoration: none; animation-play-state: paused; }
 .coffee-banner:active { transform: translateY(1px); }
+
+@keyframes pulse-weasel {
+  0% { transform: scale(1); }
+  50% { transform: scale(1.02); }
+  100% { transform: scale(1); }
+}
 
 /* The weasel, the words and the cup travel together in the middle: on a banner this wide, the two
    ends pushed out to the corners read as two lonely icons rather than as one sign. */

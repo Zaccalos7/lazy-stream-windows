@@ -141,6 +141,19 @@ public sealed class StreamingService
         return StreamingVideo(videoLiveHistory, streamingUrl);
     }
 
+    public void EnqueueSpot(string spotPath, int videoLivePkid)
+    {
+        _streamer.EnqueueSpot(spotPath);
+
+        var video = CheckIfExistsAndReturnEntity(videoLivePkid);
+        var drivingRow = DrivingRowOf(video);
+
+        if (_sessions.TryGet(drivingRow.Pkid, out var session) && session is not null)
+        {
+            session.Yield();
+        }
+    }
+
     public void StopVideoStreamingByPkid(int videoLivePkid)
     {
         var video = CheckIfExistsAndReturnEntity(videoLivePkid);

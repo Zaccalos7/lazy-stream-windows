@@ -194,6 +194,16 @@ public sealed class MainLiveModel(
         return RedirectToPage(Filters);
     }
 
+    public IActionResult OnPostSpot(int videoKey, string spotPath)
+    {
+        return Try(() =>
+        {
+            streaming.EnqueueSpot(spotPath, videoKey);
+            SetNotice(NoticeKind.Success, localizer.PrintMessage("live.yielded") ?? "Spot iniziato");
+            return true;
+        }) ? new OkResult() : RedirectToPage();
+    }
+
     /// <summary>Play of a card: streams again the videos of the same live history, from where the
     /// interrupted one was stopped.</summary>
     public IActionResult OnPostReplay(int pkid)

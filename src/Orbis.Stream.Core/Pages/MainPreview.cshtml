@@ -234,3 +234,26 @@ else
     </div>
 }
 </div>
+
+<dialog class="dialog" id="spot-dialog">
+    <div class="dialog-head">
+        <h2>@T["playSpot"]</h2>
+    </div>
+    <form method="post" asp-page-handler="Spot">
+        <div class="dialog-body">
+            <input type="hidden" name="videoKey" value="" />
+            <p>@T["playSpotHint"]</p>
+            <label class="field dropzone">
+                <span>@T["spotFile"]</span>
+                <span class="composer-file-row">
+                    <input class="input" name="spotPath" required data-drop-path placeholder="C:\Video\spot.mp4" />
+                    <button type="button" class="btn" data-playlist-browse-folder>@T["add"]</button>
+                </span>
+            </label>
+        </div>
+        <div class="dialog-footer">
+            <button class="btn accent">@T["playSpot"]</button>
+            <button class="btn" type="button" commandfor="spot-dialog" command="close">@T["cancel"]</button>
+        </div>
+    </form>
+</dialog>

@@ -319,5 +319,8 @@
   "dashboardSectionSettings": "Settings",
   "dashboardSectionSystem": "System & Monitoring",
   "lowLatency": "Baixa latência",
-  "lowLatencyHelp": "Pede ao codificador o menor atraso possível: sem lookahead e sem scenecut. Desligue numa retransmissão, onde o relay já impõe o ritmo."
+  "lowLatencyHelp": "Pede ao codificador o menor atraso possível: sem lookahead e sem scenecut. Desligue numa retransmissão, onde o relay já impõe o ritmo.",
+  "playSpot": "Reproduzir anúncio",
+  "playSpotHint": "Selecione o vídeo do anúncio para transmitir. A transmissão atual será pausada e retomada automaticamente após o anúncio.",
+  "spotFile": "Arquivo de vídeo do anúncio"
 }

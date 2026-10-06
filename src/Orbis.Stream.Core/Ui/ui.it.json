@@ -319,5 +319,8 @@
   "dashboardSectionSettings": "Impostazioni",
   "dashboardSectionSystem": "Sistema e Monitoraggio",
   "lowLatency": "Bassa latenza",
-  "lowLatencyHelp": "Chiede all'encoder il minimo ritardo possibile: niente lookahead, niente scenecut. Spegnilo per una ritrasmissione, dove il ritmo lo imposi già il relay."
+  "lowLatencyHelp": "Chiede all'encoder il minimo ritardo possibile: niente lookahead, niente scenecut. Spegnilo per una ritrasmissione, dove il ritmo lo imposi già il relay.",
+  "playSpot": "Manda in onda spot",
+  "playSpotHint": "Seleziona il video dello spot da mandare in onda. La trasmissione attuale verrà messa in pausa e riprenderà automaticamente alla fine dello spot.",
+  "spotFile": "File video dello spot"
 }

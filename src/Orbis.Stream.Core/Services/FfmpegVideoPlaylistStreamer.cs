@@ -16,6 +16,13 @@ namespace Orbis.Stream.Core.Services;
 /// </summary>
 public sealed class FfmpegVideoPlaylistStreamer : IVideoPlaylistStreamer
 {
+    private readonly System.Collections.Concurrent.ConcurrentQueue<string> _spotsToPlay = new();
+
+    public void EnqueueSpot(string spotPath)
+    {
+        _spotsToPlay.Enqueue(spotPath);
+    }
+
     private static readonly TimeSpan StopFlagPollInterval = TimeSpan.FromMilliseconds(500);
 
     /// <summary>How close to the end a video has to be to count as streamed through.</summary>
@@ -111,17 +118,41 @@ public sealed class FfmpegVideoPlaylistStreamer : IVideoPlaylistStreamer
 
         for (var i = 0; i < queue.Count; i++)
         {
+            if (_spotsToPlay.TryDequeue(out var spotPath))
+            {
+                // Prepare a planned video for the spot (it's not part of the db playlist, so we mock it)
+                var spotVideo = new VideoEntity { VideoPath = spotPath, Name = "Spot", SourceKind = SourceKind.File, LiveStatus = LiveStatus.Offline };
+                var spotPlanned = new PlannedVideo(spotVideo, null, TimeSpan.Zero);
+                var spotOutcome = await StreamVideoAsync(spotPlanned, outputUrl, videoLiveHistoryPkid, cancellationToken, markEndedOnFinish: false)
+                    .ConfigureAwait(false);
+
+                if (spotOutcome == StreamOutcome.Stopped)
+                {
+                    return;
+                }
+
+                // Re-evaluate current video from its saved position
+                i--;
+                continue;
+            }
+
             var planned = queue[i];
             cancellationToken.ThrowIfCancellationRequested();
 
             // A stop is for the whole playlist, not for the video that happened to be on air: the
             // next one must not go live by itself. It stays where it is, so a play resumes here.
             var isLast = i == queue.Count - 1;
-            var stopped = await StreamVideoAsync(planned, outputUrl, videoLiveHistoryPkid, cancellationToken, markEndedOnFinish: isLast)
+            var outcome = await StreamVideoAsync(planned, outputUrl, videoLiveHistoryPkid, cancellationToken, markEndedOnFinish: isLast)
                 .ConfigureAwait(false);
-            if (stopped)
+            if (outcome == StreamOutcome.Stopped)
             {
                 return;
+            }
+            if (outcome == StreamOutcome.Yielded)
+            {
+                // A yield means we should pause the playlist (and we likely have a spot enqueued). Re-evaluate this item on the next iteration.
+                i--;
+                continue;
             }
 
             // If this was the last video in the playlist and it ended (not stopped), mark the live as ended.
@@ -247,7 +278,7 @@ public sealed class FfmpegVideoPlaylistStreamer : IVideoPlaylistStreamer
     }
 
     /// <returns>Whether the user stopped the live, as opposed to the video ending or failing.</returns>
-    private async Task<bool> StreamVideoAsync(
+    private async Task<StreamOutcome> StreamVideoAsync(
         PlannedVideo planned,
         string outputUrl,
         long videoLiveHistoryPkid,
@@ -326,7 +357,7 @@ public sealed class FfmpegVideoPlaylistStreamer : IVideoPlaylistStreamer
 
                 if (outcome == StreamOutcome.Stopped)
                 {
-                    return true;
+                    return StreamOutcome.Stopped;
                 }
 
                 if (outcome == StreamOutcome.NeverOnAir)
@@ -335,7 +366,7 @@ public sealed class FfmpegVideoPlaylistStreamer : IVideoPlaylistStreamer
                     _logger.LogError("{Message}", notReceived);
                     SaveMessageOnVideoLiveHistory(
                         notReceived, videoLiveHistoryPkid, inputPath, LiveStatus.Error, DateTime.Now, (long)resumeFrom.TotalMilliseconds);
-                    return false;
+                    return StreamOutcome.Finished;
                 }
 
                 if (outcome == StreamOutcome.Reconfigured)
@@ -359,7 +390,7 @@ public sealed class FfmpegVideoPlaylistStreamer : IVideoPlaylistStreamer
                 if (wasStopped)
                 {
                     await StopAndRecordAsync(session, videoKey, videoLiveHistoryPkid, inputPath).ConfigureAwait(false);
-                    return true;
+                    return StreamOutcome.Stopped;
                 }
 
                 // A live that was on air and broke - the network dropped, the ingest closed the
@@ -412,7 +443,7 @@ public sealed class FfmpegVideoPlaylistStreamer : IVideoPlaylistStreamer
                         SaveMessageOnVideoLiveHistory(
                             string.Empty, videoLiveHistoryPkid, inputPath, LiveStatus.Offline, null, finalPosition);
                     }
-                    return false;
+                    return StreamOutcome.Finished;
                 }
 
                 var streamingError = _localizer.PrintMessage(
@@ -422,7 +453,7 @@ public sealed class FfmpegVideoPlaylistStreamer : IVideoPlaylistStreamer
                 _logger.LogError("{Message}", streamingError);
                 SaveMessageOnVideoLiveHistory(
                     streamingError, videoLiveHistoryPkid, inputPath, LiveStatus.Error, DateTime.Now, 0);
-                return false;
+                return StreamOutcome.Finished;
             }
         }
         catch (OperationCanceledException)
@@ -436,7 +467,7 @@ public sealed class FfmpegVideoPlaylistStreamer : IVideoPlaylistStreamer
                 + exception.Message;
             _logger.LogError("{Message}", startingError);
             SaveMessageOnVideoLiveHistory(startingError, videoLiveHistoryPkid, inputPath, LiveStatus.Error, DateTime.Now, 0);
-            return false;
+            return StreamOutcome.Finished;
         }
         finally
         {
@@ -878,6 +909,7 @@ public sealed class FfmpegVideoPlaylistStreamer : IVideoPlaylistStreamer
     /// <summary>Why the monitor stopped watching a transcode.</summary>
     private enum StreamOutcome
     {
+        Yielded,
         /// <summary>The ffmpeg process ended on its own: the caller reads its exit code.</summary>
         Finished,
 
@@ -939,6 +971,12 @@ public sealed class FfmpegVideoPlaylistStreamer : IVideoPlaylistStreamer
             if (session.RestartRequested)
             {
                 return StreamOutcome.Reconfigured;
+            }
+
+            if (session.YieldRequested)
+            {
+                await StopAndRecordAsync(session, videoKey, videoLiveHistoryPkid, inputPath, isYield: true).ConfigureAwait(false);
+                return StreamOutcome.Yielded;
             }
 
             var durationMs = session.Probe.DurationSeconds > 0 ? (long)(session.Probe.DurationSeconds * 1000) : 0;
@@ -1055,15 +1093,19 @@ public sealed class FfmpegVideoPlaylistStreamer : IVideoPlaylistStreamer
         FfmpegStreamingSession session,
         int videoKey,
         long videoLiveHistoryPkid,
-        string inputPath)
+        string inputPath,
+        bool isYield = false)
     {
         await session.StopAsync().ConfigureAwait(false);
 
-        var message = _localizer.PrintMessage("live.stopped");
+        var message = isYield ? _localizer.PrintMessage("live.yielded") ?? "Yielded" : _localizer.PrintMessage("live.stopped");
         _logger.LogInformation("{Message}", message);
-        _videoRepository.SetStopFlag(videoKey, false);
-        SaveMessageOnVideoLiveHistory(
-            message, videoLiveHistoryPkid, inputPath, LiveStatus.Stopped, null, session.PositionMilliseconds);
+        if (videoKey > 0)
+        {
+            _videoRepository.SetStopFlag(videoKey, false);
+            SaveMessageOnVideoLiveHistory(
+                message, videoLiveHistoryPkid, inputPath, isYield ? LiveStatus.Offline : LiveStatus.Stopped, null, session.PositionMilliseconds);
+        }
     }
 
     /// <summary>
@@ -1132,6 +1174,8 @@ public sealed class FfmpegVideoPlaylistStreamer : IVideoPlaylistStreamer
 /// <summary>Abstraction of the playlist streamer, so the services can be unit tested without ffmpeg.</summary>
 public interface IVideoPlaylistStreamer
 {
+    void EnqueueSpot(string spotPath);
+
     Task StreamPlaylistAsync(
         IReadOnlyList<VideoEntity> videos,
         string outputUrl,

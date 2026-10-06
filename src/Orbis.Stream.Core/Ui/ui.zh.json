@@ -319,5 +319,8 @@
   "dashboardSectionSettings": "Settings",
   "dashboardSectionSystem": "System & Monitoring",
   "lowLatency": "低延迟",
-  "lowLatencyHelp": "要求编码器尽量低的延迟（无前瞻、无 scenecut）。转播时请关闭，因为下游的 relay 已经在控制节奏。"
+  "lowLatencyHelp": "要求编码器尽量低的延迟（无前瞻、无 scenecut）。转播时请关闭，因为下游的 relay 已经在控制节奏。",
+  "playSpot": "播放广告",
+  "playSpotHint": "选择要播放的广告视频。当前流将暂停，并在广告结束后自动恢复。",
+  "spotFile": "广告视频文件"
 }

@@ -319,5 +319,8 @@
   "dashboardSectionSettings": "Settings",
   "dashboardSectionSystem": "System & Monitoring",
   "lowLatency": "qap 'ej",
-  "lowLatencyHelp": "encoderyoq vumrghach qap. look-ahead vumrghach Hogh, scenecut vumrghach Hogh. qaSpa'DIch DIch'I' poHDaq taH relIHS. Hagh taH."
+  "lowLatencyHelp": "encoderyoq vumrghach qap. look-ahead vumrghach Hogh, scenecut vumrghach Hogh. qaSpa'DIch DIch'I' poHDaq taH relIHS. Hagh taH.",
+  "playSpot": "cha' much",
+  "playSpotHint": "much mIw wIv. choS vIjatlh 'ej much pIQchu' nach.",
+  "spotFile": "much mIw"
 }

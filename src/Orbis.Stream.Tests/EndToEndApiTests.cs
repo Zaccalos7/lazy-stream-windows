@@ -412,29 +412,29 @@ public sealed class EndToEndApiTests : IClassFixture<ApplicationFixture>
         settings.ModifySetting(saved.Id, new Orbis.Stream.Core.Contracts.SettingRequest(null, null, null, null, null, false, null, false, 0, 0));
         Assert.True(repository.FindById(saved.Id)!.FfmpegSender);
 
-        // The form sends it every time, and off is off.
+        // The form sends it every time, and off is off (unless it's YouTube, then it's ignored and always true).
         settings.ModifySetting(saved.Id, new Orbis.Stream.Core.Contracts.SettingRequest(
             url, key, "youtube", "", null, null, "ffmpeg-sender-channel", false, 0, 0, FfmpegSender: false));
-        Assert.False(repository.FindById(saved.Id)!.FfmpegSender);
+        Assert.True(repository.FindById(saved.Id)!.FfmpegSender);
     }
 
     [Fact]
-    public void FfmpegSenderSwitch_IsOnForANewYouTubeConfigurationAndNeverOnTwitch()
+    public void FfmpegSenderSwitch_IsOnForANewConfiguration()
     {
         var settings = _fixture.Services.GetRequiredService<SettingService>();
         var repository = _fixture.Services.GetRequiredService<SettingRepository>();
         const string youtube = "rtmps://a.rtmps.youtube.com/live2";
         const string twitch = "rtmp://live.twitch.tv/app";
 
-        // An API caller that says nothing gets the YouTube delivery.
+        // An API caller that says nothing gets the ffmpeg delivery.
         settings.AddNewConfiguration(new Orbis.Stream.Core.Contracts.SettingRequest(
             youtube, "ffmpeg-default-key", "youtube", "", null, true, "ffmpeg-default-channel", false, 0, 0));
         Assert.True(repository.FindByStreamUrlAndStreamKey(youtube, "ffmpeg-default-key")!.FfmpegSender);
 
-        // The form posts the hidden card on Twitch too: it is stored off.
+        // The switch also works for Twitch now.
         settings.AddNewConfiguration(new Orbis.Stream.Core.Contracts.SettingRequest(
             twitch, "ffmpeg-twitch-key", "twitch", "", null, true, "ffmpeg-twitch-channel", false, 0, 0, FfmpegSender: true));
-        Assert.False(repository.FindByStreamUrlAndStreamKey(twitch, "ffmpeg-twitch-key")!.FfmpegSender);
+        Assert.True(repository.FindByStreamUrlAndStreamKey(twitch, "ffmpeg-twitch-key")!.FfmpegSender);
     }
 
     [Fact]

@@ -574,6 +574,7 @@ const paintPreview = state => {
   setPreviewText("[data-preview-position]", previewClock(position) + " / " + previewClock(state.durationMilliseconds));
   for (const spinner of preview.querySelectorAll("[data-preview-restart]")) spinner.hidden = !state.reconfiguring;
   for (const bar of preview.querySelectorAll("[data-preview-offair]")) bar.hidden = !state.platformOffAir;
+  for (const bar of preview.querySelectorAll("[data-preview-unverified]")) bar.hidden = !state.platformUnverified;
 
   setPreviewText('[data-preview-fact="output.size"]', previewSize(state.output));
   setPreviewText('[data-preview-fact="output.fps"]', previewFps(state.output.frameRate));
@@ -770,6 +771,20 @@ const paintTuning = box => {
 for (const box of document.querySelectorAll("[data-low-latency]")) {
   paintTuning(box);
   box.addEventListener("change", () => paintTuning(box));
+}
+
+// Closing a YouTube warning closes it for the whole live, on the server: it would otherwise come
+// back with the next sample of the push channel, a second later.
+for (const button of preview?.querySelectorAll("[data-air-dismiss]") || []) {
+  button.addEventListener("click", async () => {
+    const bar = button.closest(".infobar");
+    if (bar) bar.hidden = true;
+    try {
+      await fetch(`/preview/live/${previewPkid}/air/dismiss`, { method: "POST" });
+    } catch {
+      // The next sample says what the server holds, whichever way this went.
+    }
+  });
 }
 
 // The one infobar of a page that answers with a fetch: it goes above the header, where the server

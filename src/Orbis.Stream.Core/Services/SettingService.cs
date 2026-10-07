@@ -137,23 +137,15 @@ public sealed class SettingService
         setting.VideoFolder = request.VideoFolder ?? setting.VideoFolder;
         setting.IsActive = request.IsActive ?? setting.IsActive;
         setting.ChannelName = request.ChannelName ?? setting.ChannelName;
-        setting.FfmpegSender = ChoosesTransport(setting) && (request.FfmpegSender ?? setting.FfmpegSender);
+        setting.FfmpegSender = StreamPlatformProfile.For(setting.StreamUrl).Platform == StreamPlatform.YouTube || (request.FfmpegSender ?? setting.FfmpegSender);
     }
-
-    /// <summary>
-    /// Whether the switch that picks the publisher means anything for this configuration: on
-    /// YouTube only (<see cref="StreamPlatformProfile.ChoosableTransport"/>). Anywhere else it is
-    /// stored off, so a configuration moved from YouTube to Twitch does not carry it along.
-    /// </summary>
-    private static bool ChoosesTransport(SettingEntity setting) =>
-        StreamPlatformProfile.For(setting.StreamUrl).ChoosableTransport;
 
     private static SettingEntity ToEntity(SettingRequest request)
     {
         var setting = NewEntity(request);
 
-        // A YouTube configuration publishes with ffmpeg unless it says otherwise.
-        setting.FfmpegSender = ChoosesTransport(setting) && (request.FfmpegSender ?? true);
+        // YouTube always publishes with ffmpeg.
+        setting.FfmpegSender = StreamPlatformProfile.For(setting.StreamUrl).Platform == StreamPlatform.YouTube || (request.FfmpegSender ?? true);
         return setting;
     }
 

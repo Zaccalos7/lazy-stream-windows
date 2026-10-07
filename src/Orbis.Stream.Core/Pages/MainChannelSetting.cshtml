@@ -116,17 +116,16 @@
                     <span>@T["description"]</span>
                     <textarea class="input" name="description" rows="3">@editing.Description</textarea>
                 </label>
-                @* YouTube only: how the live reaches the ingest. On, the YouTube delivery - ffmpeg keeps
+                @* How the live reaches the ingest. On, the ffmpeg delivery - ffmpeg keeps
                    the time and publishes over its own RTMPS; off, the relay and the RTMP of this
-                   application, as Twitch goes out. The card shows while YouTube is the platform
-                   picked above; whatever it posts for another platform, the server stores off. *@
-                <label class="option-card youtube" data-youtube-only>
-                    <svg class="option-card-mark" viewBox="0 0 24 24" aria-hidden="true"><path d="@LiveLinkView.MarkupOf("youtube")" /></svg>
+                   application. The option is always visible. YouTube cannot be turned off. *@
+                <label class="option-card">
+                    <svg class="option-card-mark" viewBox="0 0 24 24" aria-hidden="true" style="padding:0; display:flex; align-items:center; justify-content:center; color: var(--accent);"><i class="icon" style="font-size: 16px; margin: 0;">&#xE9D5;</i></svg>
                     <span class="option-card-text">
                         <strong>@T["ffmpegSender"]</strong>
                         <small>@T["ffmpegSenderHelp"]</small>
                     </span>
-                    <span class="toggle"><input type="checkbox" name="ffmpegSender" value="true" checked="@editing.FfmpegSender" /></span>
+                    <span class="toggle"><input type="checkbox" name="ffmpegSender" value="true" checked="@editing.FfmpegSender" data-force-true-when="youtube" /></span>
                 </label>
             </div>
             <div class="dialog-footer">

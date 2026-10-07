@@ -1356,3 +1356,25 @@ document.addEventListener("DOMContentLoaded", async () => {
         }
     } catch (e) { /* silent fail */ }
 });
+
+// Locks an option to a given value while a given radio is chosen.
+for (const force of document.querySelectorAll("input[type=checkbox][data-force-true-when]")) {
+  const form = force.closest("form");
+  if (!form) continue;
+
+  const target = force.dataset.forceTrueWhen;
+  const update = () => {
+    const radio = form.querySelector(`input[type=radio][value="${target}"]`);
+    if (radio && radio.checked) {
+      force.checked = true;
+      force.disabled = true;
+    } else {
+      force.disabled = false;
+    }
+  };
+
+  form.addEventListener("change", event => {
+    if (event.target.type === "radio") update();
+  });
+  update();
+}

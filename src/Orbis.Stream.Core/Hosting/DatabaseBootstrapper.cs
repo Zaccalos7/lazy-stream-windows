@@ -93,9 +93,8 @@ public sealed class DatabaseBootstrapper : IHostedService
     /// YouTube, the setting it goes on air with. A fixed 1080p30 at a constant 6 Mbps: YouTube
     /// judges a live against the resolution and the rate it announces, and "the size of the
     /// source" made the live whatever the first file was - a 360p clip, and YouTube asked for
-    /// 400 Kbps and reported the 6 Mbps it got as not enough video. No zerolatency and no
-    /// x264-params of its own: the first drops the B-frames a constant rate needs to look good,
-    /// the second used to replace the CBR parameters the YouTube profile adds to x264.
+    /// 400 Kbps and reported the 6 Mbps it got as not enough video. No x264-params of its own:
+    /// they used to replace the CBR parameters the YouTube profile adds to x264.
     /// </summary>
     private static readonly DefaultSpec YouTubeHigh = new(
         6_000_000, 128_000, 1920, 1080, 30,
@@ -123,25 +122,23 @@ public sealed class DatabaseBootstrapper : IHostedService
     };
 
     /// <summary>
-    /// The YouTube defaults the earlier versions seeded - source resolution at 8 Mbps with
-    /// zerolatency and their own x264-params, 720p at 2.5 Mbps with 96 Kbps of sound - are brought
-    /// to the current ones. Only a row that is still exactly what was seeded: one the user edited
-    /// is the user's.
+    /// The YouTube defaults the earlier versions seeded - source resolution at 8 Mbps, 720p at
+    /// 2.5 Mbps with 96 Kbps of sound - are brought to the current ones. They are recognised by
+    /// their numbers and not by their options: EncoderTuningService rewrites the options of the
+    /// defaults at every start. A row with other numbers is one the user edited, and stays theirs.
     /// </summary>
     private void UpgradeLegacyYouTubeDefaults()
     {
         foreach (var setting in _videoSettingRepository.FindByIsDefaultConfigurationTrueAndDefaultPlatformConfiguration("Youtube"))
         {
-            if (setting is { VideoWidth: null, VideoHeight: null, FrameRate: null, VideoBitrate: 8_000_000 }
-                && HasOptions(setting, ("preset", "veryfast"), ("tune", "zerolatency"), ("profile", "high"), ("x264-params", "rc_lookahead=20")))
+            if (setting is { VideoWidth: null, VideoHeight: null, FrameRate: null, VideoBitrate: 8_000_000 })
             {
                 Apply(setting, YouTubeHigh);
             }
         }
 
         if (_videoSettingRepository.FindByTitleAndPlatform(LowTitleOf("Youtube"), "Youtube") is
-            { VideoWidth: 1280, VideoHeight: 720, VideoBitrate: 2_500_000, AudioSetting.AudioBitrate: 96_000 } low
-            && HasOptions(low, ("preset", "ultrafast"), ("tune", "zerolatency"), ("profile", "main"), ("x264-params", "scenecut=0:rc_lookahead=0")))
+            { VideoWidth: 1280, VideoHeight: 720, VideoBitrate: 2_500_000, AudioSetting.AudioBitrate: 96_000 } low)
         {
             Apply(low, YouTubeLow);
         }
@@ -154,10 +151,6 @@ public sealed class DatabaseBootstrapper : IHostedService
             _logger.LogInformation("Default VideoSetting {Title} moved to the current YouTube settings", setting.Title);
         }
     }
-
-    private static bool HasOptions(VideoSettingEntity setting, params (string Key, string Value)[] options) =>
-        setting.VideoSettingsOptions.Count == options.Length
-        && options.All(option => setting.VideoSettingsOptions.Any(o => o.Key == option.Key && o.Value == option.Value));
 
     /// <summary>Writes what the seed decides onto a setting, new or already there.</summary>
     private static void Fill(VideoSettingEntity setting, DefaultSpec spec)

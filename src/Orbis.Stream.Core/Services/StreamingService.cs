@@ -189,6 +189,20 @@ public sealed class StreamingService
         }
     }
 
+    /// <summary>
+    /// The same stop, asked by this application rather than by the user, with the reason the row
+    /// keeps instead of the plain "live stopped".
+    /// </summary>
+    public void StopBecause(int videoLivePkid, string reason)
+    {
+        if (_sessions.TryGet(videoLivePkid, out var session) && session is not null)
+        {
+            session.StopReason = reason;
+        }
+
+        StopVideoStreamingByPkid(videoLivePkid);
+    }
+
     public void ResetFlag(int videoLivePkid)
     {
         var video = CheckIfExistsAndReturnEntity(videoLivePkid);

@@ -164,6 +164,12 @@ public sealed class FfmpegStreamingSession : IAsyncDisposable
     public bool StopRequested => Volatile.Read(ref _stopRequested) == 1;
 
     /// <summary>
+    /// Why the live is being stopped when it is not the user asking: what the row says once it is.
+    /// Null is the ordinary stop.
+    /// </summary>
+    public string? StopReason { get; set; }
+
+    /// <summary>
     /// Set when the encoder configuration changed under a running transcode. ffmpeg cannot change
     /// its options halfway, so the answer is to start it again from where it got to: the streaming
     /// loop watches this flag and does exactly that.

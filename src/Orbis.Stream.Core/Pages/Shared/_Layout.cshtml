@@ -5,7 +5,7 @@
     var notice = ViewContext.ViewData.Model as OrbisPageModel;
 }
 <!DOCTYPE html>
-<html lang="@T.Language" data-initializing="@T["initializing"]" data-app-version="@AppInfo.Current.Version" data-update-available-dialog-text="@T["updateAvailableDialogText"]">
+<html lang="@T.Language" dir="@(UiText.IsRightToLeft(T.Language) ? "rtl" : "ltr")" data-initializing="@T["initializing"]" data-app-version="@AppInfo.Current.Version" data-update-available-dialog-text="@T["updateAvailableDialogText"]">
 <head>
     <meta charset="utf-8" />
     <meta name="viewport" content="width=device-width, initial-scale=1" />

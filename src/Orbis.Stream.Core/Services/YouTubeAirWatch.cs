@@ -1,13 +1,13 @@
-using System.Collections.Concurrent;
 using Microsoft.Extensions.Hosting;
 using Microsoft.Extensions.Logging;
 using Orbis.Stream.Core.Data;
+using Orbis.Stream.Core.I18n;
 using Orbis.Stream.Core.Streaming;
 
 namespace Orbis.Stream.Core.Services;
 
 /// <summary>
-/// Whether YouTube is showing the lives it is being sent.
+/// Whether YouTube is showing the lives it is being sent, and whether it has ended one of them.
 /// <para>An ingest that takes the stream is not a broadcast on air. YouTube keeps the two apart:
 /// the stream key receives the RTMP, and Studio rates it "excellent", while the broadcast the
 /// viewers watch has a life of its own. With Auto-start off it waits in preview for someone to
@@ -20,6 +20,13 @@ namespace Orbis.Stream.Core.Services;
 /// flag as a warning, and the flag goes away the first time the live is found. A page that could
 /// not be read says nothing either way: the platform being unreachable is not the live being off
 /// air.</para>
+/// <para>A live that was found on air and then ended in Studio is stopped here too, the way the
+/// user would stop it, because a stream nobody can see is only an encoder working for nothing.
+/// That is the one thing this class does to a live, so it asks for more than an absence: the
+/// channel has no live any more, and the page of the very video that was on air says it is a live
+/// that is over - twice in a row. A page this application cannot read, or reads and does not
+/// understand, is never an end; and a broadcast YouTube replaced with a new one for the same
+/// stream is found again on the channel, which keeps the live going.</para>
 /// </summary>
 public sealed class YouTubeAirWatch : BackgroundService
 {
@@ -33,27 +40,25 @@ public sealed class YouTubeAirWatch : BackgroundService
     /// <summary>How often the lives are looked for. The lookup answers are held for longer anyway.</summary>
     private static readonly TimeSpan Interval = TimeSpan.FromSeconds(30);
 
-    /// <summary>How many answers in a row say "not on air" before the live is flagged.</summary>
-    internal const int Misses = 2;
-
     private readonly StreamingSessionRegistry _sessions;
     private readonly VideoRepository _videos;
     private readonly VideoLiveHistoryRepository _histories;
     private readonly LivePlatformEmbeds _embeds;
+    private readonly StreamingService _streaming;
+    private readonly Localizer _localizer;
     private readonly LiveChangeNotifier _notifier;
     private readonly ILogger<YouTubeAirWatch> _logger;
 
-    /// <summary>The answers in a row that said "not on air", by the video a session streams.</summary>
-    private readonly ConcurrentDictionary<int, int> _misses = new();
-
-    /// <summary>The playlist or canvas a flagged video is part of, so its row can be told too.</summary>
-    private readonly ConcurrentDictionary<int, long> _historyOf = new();
+    /// <summary>What is known of each live, by the video its session streams.</summary>
+    private readonly YouTubeAirState _state = new();
 
     public YouTubeAirWatch(
         StreamingSessionRegistry sessions,
         VideoRepository videos,
         VideoLiveHistoryRepository histories,
         LivePlatformEmbeds embeds,
+        StreamingService streaming,
+        Localizer localizer,
         LiveChangeNotifier notifier,
         ILogger<YouTubeAirWatch> logger)
     {
@@ -61,20 +66,20 @@ public sealed class YouTubeAirWatch : BackgroundService
         _videos = videos;
         _histories = histories;
         _embeds = embeds;
+        _streaming = streaming;
+        _localizer = localizer;
         _notifier = notifier;
         _logger = logger;
     }
 
     /// <summary>Whether the live of a video is being sent to YouTube and YouTube is not showing it.</summary>
-    public bool IsOffAir(int videoPkid) => _misses.TryGetValue(videoPkid, out var misses) && misses >= Misses;
+    public bool IsOffAir(int videoPkid) => _state.IsOffAir(videoPkid);
 
     /// <summary>
     /// The same question for a row of the live page, which stands for a whole playlist or canvas:
     /// the row is flagged when any of the videos of its history is.
     /// </summary>
-    public bool IsOffAir(int videoPkid, long? historyPkid) =>
-        IsOffAir(videoPkid)
-        || historyPkid is { } history && _historyOf.Any(entry => entry.Value == history && IsOffAir(entry.Key));
+    public bool IsOffAir(int videoPkid, long? historyPkid) => _state.IsOffAir(videoPkid, historyPkid);
 
     protected override async Task ExecuteAsync(CancellationToken stoppingToken)
     {
@@ -105,9 +110,9 @@ public sealed class YouTubeAirWatch : BackgroundService
         var running = _sessions.Running.Where(session => !session.HasExited).ToList();
         var changed = false;
 
-        foreach (var pkid in _misses.Keys.Where(pkid => running.All(session => session.VideoPkid != pkid)).ToList())
+        foreach (var pkid in _state.Known.Where(pkid => running.All(session => session.VideoPkid != pkid)).ToList())
         {
-            changed |= Forget(pkid);
+            changed |= _state.Forget(pkid);
         }
 
         foreach (var session in running)
@@ -121,7 +126,7 @@ public sealed class YouTubeAirWatch : BackgroundService
             // time YouTube needs before it is looked for.
             if (!session.IsOnAir || session.OnAirFor < Grace)
             {
-                changed |= Forget(session.VideoPkid);
+                changed |= _state.Forget(session.VideoPkid);
                 continue;
             }
 
@@ -132,11 +137,35 @@ public sealed class YouTubeAirWatch : BackgroundService
                 continue;
             }
 
-            _historyOf[session.VideoPkid] = history.Pkid;
+            _state.BelongsTo(session.VideoPkid, history.Pkid);
             var found = await _embeds.ResolveAsync(
                 history.StreamUrl, video.ChannelName, history.PlatformStreamName, null, cancellationToken)
                 .ConfigureAwait(false);
-            changed |= Observe(session.VideoPkid, found);
+            if (_state.Observe(session.VideoPkid, found))
+            {
+                changed = true;
+                if (_state.IsOffAir(session.VideoPkid))
+                {
+                    _logger.LogWarning(
+                        "The live of the video {Video} is being sent to YouTube but the channel has no public live.", session.VideoPkid);
+                }
+                else
+                {
+                    _logger.LogInformation("The live of the video {Video} is on air on YouTube.", session.VideoPkid);
+                }
+            }
+
+            // Not on the channel any more, after having been there: is the broadcast that was on
+            // air over? Only that page answers it.
+            if (found is { Embed: null, Reason: null } && _state.OnAirVideoOf(session.VideoPkid) is { } videoId)
+            {
+                var ended = await _embeds.HasEndedAsync(videoId, cancellationToken).ConfigureAwait(false);
+                if (_state.ObserveEnding(session.VideoPkid, ended))
+                {
+                    Stop(session.VideoPkid, videoId);
+                    changed = true;
+                }
+            }
         }
 
         if (changed)
@@ -145,45 +174,21 @@ public sealed class YouTubeAirWatch : BackgroundService
         }
     }
 
-    /// <summary>
-    /// Takes one answer about a live: found clears it, "not on air" counts one more miss, and a
-    /// page that could not be read leaves it as it was. True when the flag changed.
-    /// </summary>
-    internal bool Observe(int videoPkid, LivePlatformEmbeds.LivePlatformLookup found)
+    private void Stop(int videoPkid, string videoId)
     {
-        var before = IsOffAir(videoPkid);
-        if (found.Embed is not null)
+        _logger.LogWarning(
+            "The broadcast {Broadcast} of the video {Video} was ended on YouTube: the live is stopped here too.",
+            videoId,
+            videoPkid);
+        _state.Forget(videoPkid);
+        try
         {
-            _misses.TryRemove(videoPkid, out _);
+            _streaming.StopBecause(videoPkid, _localizer.PrintMessage("live.stopped.youtube"));
         }
-        else if (found.Reason is null)
+        catch (Exception problem)
         {
-            _misses.AddOrUpdate(videoPkid, 1, static (_, misses) => misses + 1);
+            // The live may have ended on its own in the meantime: there is nothing left to stop.
+            _logger.LogWarning(problem, "The live of the video {Video} could not be stopped.", videoPkid);
         }
-
-        var after = IsOffAir(videoPkid);
-        if (before != after)
-        {
-            if (after)
-            {
-                _logger.LogWarning(
-                    "The live of the video {Video} is being sent to YouTube but the channel has no public live.", videoPkid);
-            }
-            else
-            {
-                _logger.LogInformation("The live of the video {Video} is on air on YouTube.", videoPkid);
-            }
-        }
-
-        return before != after;
-    }
-
-    /// <summary>Drops what is known about a live. True when it was flagged.</summary>
-    internal bool Forget(int videoPkid)
-    {
-        var before = IsOffAir(videoPkid);
-        _misses.TryRemove(videoPkid, out _);
-        _historyOf.TryRemove(videoPkid, out _);
-        return before;
     }
 }

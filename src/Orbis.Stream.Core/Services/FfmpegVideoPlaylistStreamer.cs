@@ -833,7 +833,7 @@ public sealed class FfmpegVideoPlaylistStreamer : IVideoPlaylistStreamer
                     {
                         row.LastTimeStampBeforeStop = Math.Max(0, pausedPosition);
                     }
-                    var stopped = _localizer.PrintMessage("live.stopped");
+                    var stopped = session?.StopReason ?? _localizer.PrintMessage("live.stopped");
                     MarkRows(rows, LiveStatus.Stopped, stopped);
                     return;
                 }
@@ -925,7 +925,7 @@ public sealed class FfmpegVideoPlaylistStreamer : IVideoPlaylistStreamer
 
                 if (wasStopped)
                 {
-                    var stopped = _localizer.PrintMessage("live.stopped");
+                    var stopped = session.StopReason ?? _localizer.PrintMessage("live.stopped");
                     await session.StopAsync().ConfigureAwait(false);
                     MarkRows(rows, LiveStatus.Stopped, stopped);
                     return;
@@ -1393,7 +1393,9 @@ public sealed class FfmpegVideoPlaylistStreamer : IVideoPlaylistStreamer
     {
         await session.StopAsync().ConfigureAwait(false);
 
-        var message = isYield ? _localizer.PrintMessage("live.yielded") ?? "Yielded" : _localizer.PrintMessage("live.stopped");
+        var message = isYield
+            ? _localizer.PrintMessage("live.yielded") ?? "Yielded"
+            : session.StopReason ?? _localizer.PrintMessage("live.stopped");
         _logger.LogInformation("{Message}", message);
         if (videoKey > 0)
         {

@@ -111,38 +111,71 @@ else
     var platform = LiveLinkView.PlatformOf(live.StreamUrl);
     var platformLabel = LiveLinkView.LabelOf(platform);
     <div class="preview">
-        <div class="preview-stage card">
+        <div class="preview-main">
+            <div class="preview-stage card">
             
-            <div class="preview-screen" style="@shape">
-                <div class="preview-cover" data-preview-cover>
-                    <span class="spinner"></span>
-                    <p class="muted" data-cover-text>@T["previewWaiting"]</p>
+                <div class="preview-screen" style="@shape">
+                    <div class="preview-cover" data-preview-cover>
+                        <span class="spinner"></span>
+                        <p class="muted" data-cover-text>@T["previewWaiting"]</p>
+                    </div>
+                    <iframe class="preview-platform-player"
+                            data-platform-embed
+                            title="@(platformLabel ?? "Platform") live stream"
+                            allow="autoplay; fullscreen; picture-in-picture"
+                            allowfullscreen
+                            scrolling="no"
+                            hidden></iframe>
+                    <canvas data-preview-frame role="img" aria-label="@live.VideoName" hidden></canvas>
+                    @if (platform == "youtube")
+                    {
+                        <div class="preview-badge-live" title="@T["liveNow"]"><span class="live-dot"></span><span>LIVE · @(platformLabel ?? "YouTube")</span></div>
+                    }
+                    <div class="preview-embed-status" hidden>
+                        <span class="spinner"></span>
+                        <span data-embed-text>@T["embedLoading"]</span>
+                    </div>
                 </div>
-                <iframe class="preview-platform-player"
-                        data-platform-embed
-                        title="@(platformLabel ?? "Platform") live stream"
-                        allow="autoplay; fullscreen; picture-in-picture"
-                        allowfullscreen
-                        scrolling="no"
-                        hidden></iframe>
-                <canvas data-preview-frame role="img" aria-label="@live.VideoName" hidden></canvas>
-                @if (platform == "youtube")
-                {
-                    <div class="preview-badge-live" title="@T["liveNow"]"><span class="live-dot"></span><span>LIVE · @(platformLabel ?? "YouTube")</span></div>
-                }
-                <div class="preview-embed-status" hidden>
-                    <span class="spinner"></span>
-                    <span data-embed-text>@T["embedLoading"]</span>
+                <div class="preview-bar">
+                    <div class="preview-id">
+                        <strong class="truncate">@live.VideoName</strong>
+                        <span class="caption truncate">@live.ChannelName@(string.IsNullOrEmpty(platformLabel) ? "" : " · " + platformLabel)</span>
+                    </div>
+                    <span class="spinner" data-preview-restart hidden title="@T["reconfiguring"]"></span>
+                    <span class="caption preview-time" data-preview-position>@Time(live.PositionMilliseconds) / @Time(live.DurationMilliseconds)</span>
                 </div>
             </div>
-            <div class="preview-bar">
-                <div class="preview-id">
-                    <strong class="truncate">@live.VideoName</strong>
-                    <span class="caption truncate">@live.ChannelName@(string.IsNullOrEmpty(platformLabel) ? "" : " · " + platformLabel)</span>
-                </div>
-                <span class="spinner" data-preview-restart hidden title="@T["reconfiguring"]"></span>
-                <span class="caption preview-time" data-preview-position>@Time(live.PositionMilliseconds) / @Time(live.DurationMilliseconds)</span>
-            </div>
+
+            @* The level of every video of the canvas in the mix, under the picture it is heard with. The
+               slider is not a [data-param] and lives outside the form: a volume is its own request, for
+               one source, and leaves the encoder setting alone. The colour of a row is painted by the
+               script (site.js, paintVolume), which is the one place the thresholds are written. *@
+            @if (live.Sources is { Count: > 0 } sources)
+            {
+                <section class="card preview-mixer" data-mixer
+                         data-mute="@T["volumeMute"]" data-unmute="@T["volumeUnmute"]">
+                    <h3 class="section">@T["sourceVolumes"]</h3>
+                    <div class="mixer-rows">
+                        @foreach (var source in sources)
+                        {
+                            <div class="mixer-row" data-volume-row="@source.Pkid">
+                                <button type="button" class="btn subtle icon-only mixer-mute" data-volume-mute="@source.Pkid"
+                                        title="@T["volumeMute"]" aria-label="@T["volumeMute"]" aria-pressed="false"><i class="icon">&#xE995;</i></button>
+                                <div class="mixer-main">
+                                    <span class="mixer-name truncate" title="@source.Name">@source.Name</span>
+                                    <span class="mixer-track">
+                                        <input type="range" min="0" max="@LivePreviewService.MaximumVolume" step="5"
+                                               value="@source.Volume" data-volume="@source.Pkid" aria-label="@source.Name" />
+                                    </span>
+                                </div>
+                                <button type="button" class="mixer-value" data-volume-reset="@source.Pkid"
+                                        title="@T["volumeReset"]" aria-label="@T["volumeReset"]"><output data-volume-value="@source.Pkid">@source.Volume%</output></button>
+                            </div>
+                        }
+                    </div>
+                    <p class="caption">@T["sourceVolumesHint"]</p>
+                </section>
+            }
         </div>
 
         <form class="card preview-params" data-preview-form>
@@ -235,27 +268,6 @@ else
                     <small>bps</small>
                 </label>
             </div>
-
-            @* The level of every video of the canvas in the mix. The slider is not a [data-param]: a
-               volume is its own request, for one source, and leaves the encoder setting alone. *@
-            @if (live.Sources is { Count: > 0 } sources)
-            {
-                <h3 class="section">@T["sourceVolumes"]</h3>
-                <div class="preview-volumes">
-                    @foreach (var source in sources)
-                    {
-                        <label class="field">
-                            <span class="truncate" title="@source.Name">@source.Name</span>
-                            <span class="preview-volume">
-                                <input type="range" min="0" max="@LivePreviewService.MaximumVolume" step="5"
-                                       value="@source.Volume" data-volume="@source.Pkid" aria-label="@source.Name" />
-                                <output data-volume-value="@source.Pkid">@source.Volume%</output>
-                            </span>
-                        </label>
-                    }
-                </div>
-                <p class="caption">@T["sourceVolumesHint"]</p>
-            }
 
             <p class="caption preview-note"><i class="icon">&#xE946;</i>@T["applyNote"]</p>
         </form>

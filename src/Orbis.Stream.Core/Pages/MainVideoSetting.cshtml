@@ -54,14 +54,19 @@
 
 @if (Model.Form is not null)
 {
-    <dialog class="dialog wide" data-open>
+    <dialog class="dialog settings" data-open>
         <form method="post" asp-page-handler="Save">
             <div class="dialog-body">
                 <h2>@(Model.IsNew ? T["addNewAudioVideoConfiguration"] : T["editModalTitle"])</h2>
-                <div class="toolbar">
+                @* The two templates, each in the colour and with the mark of the platform it is made for. *@
+                <div class="toolbar preset-bar">
                     <span class="muted">@T["clickButtonToLoadVideoSettings"]</span>
-                    <a class="btn" href="?edit=@(Model.Form.Id?.ToString() ?? "new")&preset=Twitch">Twitch</a>
-                    <a class="btn" href="?edit=@(Model.Form.Id?.ToString() ?? "new")&preset=Youtube">YouTube</a>
+                    <a class="btn brand twitch" href="?edit=@(Model.Form.Id?.ToString() ?? "new")&preset=Twitch">
+                        <svg viewBox="0 0 24 24" aria-hidden="true"><path d="@LiveLinkView.MarkupOf("twitch")" /></svg>Twitch
+                    </a>
+                    <a class="btn brand youtube" href="?edit=@(Model.Form.Id?.ToString() ?? "new")&preset=Youtube">
+                        <svg viewBox="0 0 24 24" aria-hidden="true"><path d="@LiveLinkView.MarkupOf("youtube")" /></svg>YouTube
+                    </a>
                 </div>
                 <partial name="_VideoSettingFields" for="Form" />
             </div>

@@ -60,7 +60,7 @@ public sealed class VideoSettingForm
 
     public bool IsActive { get; set; }
 
-    /// <summary>Everything but the extra options is required (the React form let the GOP size empty, but the column is NOT NULL).</summary>
+    /// <summary>Everything but the extra options is required, and those too once low latency is off (the React form let the GOP size empty, but the column is NOT NULL).</summary>
     public bool IsComplete =>
         !string.IsNullOrWhiteSpace(Title)
         && VideoCodec is not null
@@ -72,7 +72,15 @@ public sealed class VideoSettingForm
         && AudioCodec is not null
         && AudioBitrate is not null
         && IsResolutionComplete
-        && FrameRate is not > 480;
+        && FrameRate is not > 480
+        && IsTuningComplete;
+
+    /// <summary>
+    /// Without low latency the encoder is tuned by hand: a preset and a tune are then part of the
+    /// setting, not extras. With it on, the latency options pick them and both may stay empty.
+    /// </summary>
+    public bool IsTuningComplete =>
+        LowLatency || (!string.IsNullOrWhiteSpace(Preset) && !string.IsNullOrWhiteSpace(Tune));
 
     /// <summary>The two halves of a resolution travel together: one alone is a half typed form.</summary>
     public bool IsResolutionComplete => VideoWidth is null == (VideoHeight is null);

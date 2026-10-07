@@ -9,34 +9,69 @@
 }
 .btn.coffee:hover { filter: brightness(1.05); }
 
-/* The weasel banner at the foot of the dashboard: as wide as the page and tall enough to be a
-   banner, with the two ends anchored and the words centred between them. */
+/* A small, elegant button at the right side of the dashboard header to ask for coffee. */
 .coffee-banner {
-  display: flex;
+  position: relative;
+  overflow: hidden;
+  display: inline-flex;
   align-items: center;
   justify-content: center;
-  gap: 18px;
-  width: 100%;
-  padding: 26px 32px;
-  color: #ffffff;
-  font-size: 22px;
-  font-weight: 600;
-  text-align: center;
+  gap: 6px;
+  padding: 6px 14px;
+  color: var(--text);
+  font-size: 13px;
+  font-weight: 500;
   text-decoration: none;
-  background: linear-gradient(180deg, #ff9500 0%, #e07b00 100%);
-  border: 1px solid transparent;
-  border-radius: var(--radius-sm);
-  box-shadow: 0 2px 10px rgba(255, 149, 0, 0.3);
-  transition: filter 120ms ease, transform 120ms ease;
+  background: var(--control);
+  border: 1px solid var(--stroke);
+  border-radius: 20px;
+  align-self: flex-start;
+  margin-top: 2px;
+  transition: all 150ms ease;
+  animation: elegant-pulse 3s infinite ease-in-out;
 }
-.coffee-banner:hover { filter: brightness(1.05); text-decoration: none; }
+.coffee-banner:hover {
+  background: var(--control-hover);
+  border-color: rgba(255, 149, 0, 0.6);
+  color: #e07b00;
+  text-decoration: none;
+  animation-play-state: paused;
+}
 .coffee-banner:active { transform: translateY(1px); }
 
-/* The weasel, the words and the cup travel together in the middle: on a banner this wide, the two
-   ends pushed out to the corners read as two lonely icons rather than as one sign. */
+/* Shimmer effect inside the button */
+.coffee-banner::before {
+  content: "";
+  position: absolute;
+  top: 0; left: -100%;
+  width: 50%; height: 100%;
+  background: linear-gradient(90deg, transparent, rgba(255, 149, 0, 0.2), transparent);
+  transform: skewX(-20deg);
+  animation: elegant-shine 3s infinite;
+}
+
+@keyframes elegant-pulse {
+  0% { box-shadow: 0 0 0 rgba(255, 149, 0, 0); }
+  50% { box-shadow: 0 0 10px rgba(255, 149, 0, 0.25); border-color: rgba(255, 149, 0, 0.4); }
+  100% { box-shadow: 0 0 0 rgba(255, 149, 0, 0); }
+}
+
+@keyframes elegant-shine {
+  0% { left: -100%; }
+  25% { left: 200%; }
+  100% { left: 200%; }
+}
+
 .coffee-banner-weasel,
 .coffee-banner-cup {
-  font-size: 34px;
+  font-size: 16px;
   line-height: 1;
   flex: 0 0 auto;
+  position: relative;
+  z-index: 1;
+}
+
+.coffee-banner-text {
+  position: relative;
+  z-index: 1;
 }

@@ -1,4 +1,5 @@
 @model VideoSettingForm
+@using Orbis.Stream.Core.Services
 <input type="hidden" asp-for="Id" />
 <input type="hidden" asp-for="IsActive" />
 
@@ -44,12 +45,15 @@
         </select>
     </label>
     @* A bitrate is kept in bits per second and read in Mbit/s: the box speaks the friendly unit,
-       the hidden input above it posts the exact count, and site.js keeps the two in step. *@
+       the hidden input above it posts the exact count, and site.js keeps the two in step. The
+       ceiling on the box is what says which unit a bare number is read in (site.js), so the two
+       fields have to carry theirs too: Mbit/s for the video, kbit/s for the audio. *@
     <label class="field">
         <span>@T["bitrate"]</span>
         <span class="bitrate" data-bitrate-box>
             <input type="hidden" asp-for="VideoBitrate" />
-            <input class="input" data-bitrate data-bitrate-invalid="@T["invalidParameter"]" type="text"
+            <input class="input" data-bitrate data-bitrate-max="@LivePreviewService.MaximumVideoBitrate"
+                   data-bitrate-invalid="@T["invalidParameter"]" type="text"
                    inputmode="decimal" autocomplete="off" placeholder="@T["exampleBitrate"]"
                    value="@VideoSettingForm.WriteBitrate(Model.VideoBitrate)" required />
             <span class="bitrate-unit" data-bitrate-unit aria-hidden="true"></span>
@@ -91,7 +95,8 @@
                 <span>@T["audioBitrate"]</span>
                 <span class="bitrate" data-bitrate-box>
                     <input type="hidden" asp-for="AudioBitrate" />
-                    <input class="input" data-bitrate data-bitrate-invalid="@T["invalidParameter"]" type="text"
+                    <input class="input" data-bitrate data-bitrate-max="@LivePreviewService.MaximumAudioBitrate"
+                           data-bitrate-invalid="@T["invalidParameter"]" type="text"
                            inputmode="decimal" autocomplete="off" placeholder="@T["exampleAudioBitrate"]"
                            value="@VideoSettingForm.WriteBitrate(Model.AudioBitrate)" required />
                     <span class="bitrate-unit" data-bitrate-unit aria-hidden="true"></span>

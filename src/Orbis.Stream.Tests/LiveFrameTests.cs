@@ -86,6 +86,18 @@ public sealed class LiveFrameTests
     }
 
     [Fact]
+    public void TwitchKeepsEveryFileAtItsOwnSizeAndSound()
+    {
+        // A mono short on a Twitch live: as it was before the connection kept one format for YouTube.
+        var command = string.Join(' ', FfmpegCommandBuilder.Build(new FfmpegStreamRequest(
+            "/videos/clip.mp4", "rtmp://live.twitch.tv/app/key", new MediaProbeResult(432, 208, 29.95, true, 1, 30d), Setting(),
+            Profile: StreamPlatformProfile.Twitch)));
+
+        Assert.DoesNotContain("-vf ", command, StringComparison.Ordinal);
+        Assert.Contains("-ac 1", command, StringComparison.Ordinal);
+    }
+
+    [Fact]
     public void TheFirstEncoderOnAConnectionFixesItsPicture()
     {
         var output = LiveOutput.For("rtmps://a.rtmps.youtube.com/live2/key", new FfmpegToolLocator("ffmpeg", "ffprobe"), NullLogger.Instance)!;
@@ -161,12 +173,35 @@ public sealed class ConstantBitrateTests
     }
 
     [Fact]
-    public void X264ParamsTypedByHandWin()
+    public void X264ParamsTypedByHandGetTheConstantRateMergedIn()
+    {
+        // The old YouTube defaults carried x264-params of their own, and the live went out capped.
+        var setting = Setting();
+        setting.VideoSettingsOptions.Add(new VideoSettingsOptionEntity { Key = "x264-params", Value = "rc_lookahead=20" });
+
+        var command = Command(StreamPlatformProfile.YouTube, setting);
+
+        Assert.Contains("-x264-params rc_lookahead=20:nal-hrd=cbr:force-cfr=1", command, StringComparison.Ordinal);
+    }
+
+    [Fact]
+    public void AKeyTheSettingNamesKeepsItsValue()
+    {
+        var setting = Setting();
+        setting.VideoSettingsOptions.Add(new VideoSettingsOptionEntity { Key = "x264-params", Value = "nal-hrd=vbr" });
+
+        var command = Command(StreamPlatformProfile.YouTube, setting);
+
+        Assert.Contains("-x264-params nal-hrd=vbr:force-cfr=1", command, StringComparison.Ordinal);
+    }
+
+    [Fact]
+    public void TwitchLeavesX264ParamsAsTyped()
     {
         var setting = Setting();
         setting.VideoSettingsOptions.Add(new VideoSettingsOptionEntity { Key = "x264-params", Value = "keyint=60" });
 
-        var command = Command(StreamPlatformProfile.YouTube, setting);
+        var command = Command(StreamPlatformProfile.Twitch, setting);
 
         Assert.DoesNotContain("nal-hrd", command, StringComparison.Ordinal);
         Assert.Contains("-x264-params keyint=60", command, StringComparison.Ordinal);

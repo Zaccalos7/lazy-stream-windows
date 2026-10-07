@@ -363,8 +363,9 @@ public sealed class FlvPacedRelay
         {
             using var waiter = HybridWaiter.Create();
             _logger.LogInformation(
-                "Relay to {Platform}: preroll {Preroll}s, lead {Lead}s, {Sleeper} wakes {Overshoot:0.###} ms late",
+                "Relay to {Platform}, paced by {Pacing}: preroll {Preroll}s, lead {Lead}s, {Sleeper} wakes {Overshoot:0.###} ms late",
                 _profile.Platform,
+                _profile.Pacing == RelayPacing.Relay ? "the relay" : "the ffmpeg sender",
                 _profile.Preroll.TotalSeconds,
                 _profile.MaxLead.TotalSeconds,
                 waiter.SleeperName,
@@ -394,12 +395,17 @@ public sealed class FlvPacedRelay
             var maxLead = HybridWaiter.Ticks(_profile.MaxLead);
             var lateEnough = HybridWaiter.Ticks(TimeSpan.FromSeconds(1));
 
+            // Paced by the sender, the relay hands every tag over as soon as the sender takes it:
+            // the pipe fills at the rate the sender reads, and that is the backpressure the jitter
+            // buffer is measured against. A second clock here would only fight the one there.
+            var paced = _profile.Pacing == RelayPacing.Relay;
+
             while (NextTag() is { } queued)
             {
                 var tag = queued.Tag;
                 try
                 {
-                    if (tag.Type != ScriptTag)
+                    if (paced && tag.Type != ScriptTag)
                     {
                         // The clock starts on the first frame, already Preroll in the past:
                         // everything stamped before Preroll is due at once and goes out in a burst.

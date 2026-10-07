@@ -419,6 +419,25 @@ public sealed class EndToEndApiTests : IClassFixture<ApplicationFixture>
     }
 
     [Fact]
+    public void FfmpegSenderSwitch_IsOnForANewYouTubeConfigurationAndNeverOnTwitch()
+    {
+        var settings = _fixture.Services.GetRequiredService<SettingService>();
+        var repository = _fixture.Services.GetRequiredService<SettingRepository>();
+        const string youtube = "rtmps://a.rtmps.youtube.com/live2";
+        const string twitch = "rtmp://live.twitch.tv/app";
+
+        // An API caller that says nothing gets the YouTube delivery.
+        settings.AddNewConfiguration(new Orbis.Stream.Core.Contracts.SettingRequest(
+            youtube, "ffmpeg-default-key", "youtube", "", null, true, "ffmpeg-default-channel", false, 0, 0));
+        Assert.True(repository.FindByStreamUrlAndStreamKey(youtube, "ffmpeg-default-key")!.FfmpegSender);
+
+        // The form posts the hidden card on Twitch too: it is stored off.
+        settings.AddNewConfiguration(new Orbis.Stream.Core.Contracts.SettingRequest(
+            twitch, "ffmpeg-twitch-key", "twitch", "", null, true, "ffmpeg-twitch-channel", false, 0, 0, FfmpegSender: true));
+        Assert.False(repository.FindByStreamUrlAndStreamKey(twitch, "ffmpeg-twitch-key")!.FfmpegSender);
+    }
+
+    [Fact]
     public async Task Root_RedirectsToTheClientRouter()
     {
         using var response = await _fixture.NoRedirectClient.GetAsync("/", HttpCompletionOption.ResponseHeadersRead);

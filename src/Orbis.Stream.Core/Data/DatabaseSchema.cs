@@ -302,6 +302,44 @@ public static class DatabaseSchema
         {
             logger?.LogInformation("{Count} rows moved to the YouTube RTMPS ingest", moved);
         }
+
+        // The moves of data that must happen once and only once, counted in user_version: a
+        // choice the user makes after them is never made again for them.
+        if (ReadUserVersion(connection) < 1)
+        {
+            if (PublishYouTubeWithFfmpeg(connection) is > 0 and var switched)
+            {
+                logger?.LogInformation("{Count} YouTube configurations moved to the ffmpeg delivery", switched);
+            }
+
+            Execute(connection, "PRAGMA user_version = 1");
+        }
+    }
+
+    /// <summary>
+    /// YouTube goes out through ffmpeg (see StreamPlatformProfile.YouTube), and the switch of its
+    /// configurations says so. It was a compatibility test off by default when it came, so every
+    /// YouTube configuration of that time is turned on once; one turned off after this is the
+    /// user's choice and stays off. Twitch has no such switch, and its rows are cleared.
+    /// </summary>
+    internal static int PublishYouTubeWithFfmpeg(SqliteConnection connection)
+    {
+        using var command = connection.CreateCommand();
+        command.CommandText = """
+            UPDATE setting SET ffmpeg_sender = CASE WHEN lower(stream_url) LIKE '%youtube.com%' THEN 1 ELSE 0 END;
+            """;
+        command.ExecuteNonQuery();
+
+        using var count = connection.CreateCommand();
+        count.CommandText = "SELECT count(*) FROM setting WHERE ffmpeg_sender = 1";
+        return Convert.ToInt32(count.ExecuteScalar(), System.Globalization.CultureInfo.InvariantCulture);
+    }
+
+    private static long ReadUserVersion(SqliteConnection connection)
+    {
+        using var command = connection.CreateCommand();
+        command.CommandText = "PRAGMA user_version";
+        return Convert.ToInt64(command.ExecuteScalar(), System.Globalization.CultureInfo.InvariantCulture);
     }
 
     /// <summary>

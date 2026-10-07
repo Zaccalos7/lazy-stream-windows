@@ -5,6 +5,7 @@ using Orbis.Stream.Core.Data;
 using Orbis.Stream.Core.Domain;
 using Orbis.Stream.Core.Http;
 using Orbis.Stream.Core.I18n;
+using Orbis.Stream.Core.Streaming;
 
 namespace Orbis.Stream.Core.Services;
 
@@ -136,10 +137,27 @@ public sealed class SettingService
         setting.VideoFolder = request.VideoFolder ?? setting.VideoFolder;
         setting.IsActive = request.IsActive ?? setting.IsActive;
         setting.ChannelName = request.ChannelName ?? setting.ChannelName;
-        setting.FfmpegSender = request.FfmpegSender ?? setting.FfmpegSender;
+        setting.FfmpegSender = ChoosesTransport(setting) && (request.FfmpegSender ?? setting.FfmpegSender);
     }
 
-    private static SettingEntity ToEntity(SettingRequest request) => new()
+    /// <summary>
+    /// Whether the switch that picks the publisher means anything for this configuration: on
+    /// YouTube only (<see cref="StreamPlatformProfile.ChoosableTransport"/>). Anywhere else it is
+    /// stored off, so a configuration moved from YouTube to Twitch does not carry it along.
+    /// </summary>
+    private static bool ChoosesTransport(SettingEntity setting) =>
+        StreamPlatformProfile.For(setting.StreamUrl).ChoosableTransport;
+
+    private static SettingEntity ToEntity(SettingRequest request)
+    {
+        var setting = NewEntity(request);
+
+        // A YouTube configuration publishes with ffmpeg unless it says otherwise.
+        setting.FfmpegSender = ChoosesTransport(setting) && (request.FfmpegSender ?? true);
+        return setting;
+    }
+
+    private static SettingEntity NewEntity(SettingRequest request) => new()
     {
         // Pasted from the dashboard of a platform: see FfmpegCommandBuilder.BuildStreamingUrl.
         StreamUrl = request.StreamUrl!.Trim(),
@@ -149,8 +167,7 @@ public sealed class SettingService
         // The column is NOT NULL for the rows written before the folder left the form.
         VideoFolder = request.VideoFolder ?? string.Empty,
         IsActive = request.IsActive,
-        ChannelName = request.ChannelName!,
-        FfmpegSender = request.FfmpegSender ?? false
+        ChannelName = request.ChannelName!
     };
 
     private void CheckUniqueConstraint(string streamKey, string streamUrl)

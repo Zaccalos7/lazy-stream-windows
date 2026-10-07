@@ -457,14 +457,22 @@ public sealed class StreamingService
     }
 
     /// <summary>
-    /// What publishes the live, as the configuration of its channel asks: ffmpeg when the switch
-    /// is on, otherwise the default of the platform. The history keeps the url and the key the
-    /// live started with, which are what a configuration is unique by.
+    /// What publishes the live, as the configuration of its channel asks, on the platforms that let
+    /// it choose (YouTube): ffmpeg with the switch on, the publisher of this application with it
+    /// off. Elsewhere, and for a live with no configuration, the platform decides (null). The
+    /// history keeps the url and the key the live started with, which are what a configuration is
+    /// unique by.
     /// </summary>
-    private RelayTransport? TransportOf(VideoLiveHistoryEntity history) =>
-        _settingRepository.FindByStreamUrlAndStreamKey(history.StreamUrl, history.StreamKey) is { FfmpegSender: true }
-            ? RelayTransport.FfmpegSender
-            : null;
+    private RelayTransport? TransportOf(VideoLiveHistoryEntity history)
+    {
+        if (!StreamPlatformProfile.For(history.StreamUrl).ChoosableTransport
+            || _settingRepository.FindByStreamUrlAndStreamKey(history.StreamUrl, history.StreamKey) is not { } setting)
+        {
+            return null;
+        }
+
+        return setting.FfmpegSender ? RelayTransport.FfmpegSender : RelayTransport.NativeRtmp;
+    }
 
     private async Task RunPlaylistAsync(
         IReadOnlyList<VideoEntity> videos, string streamingUrl, long videoLiveHistoryId, RelayTransport? transport)

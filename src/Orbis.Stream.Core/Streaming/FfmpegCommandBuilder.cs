@@ -217,7 +217,7 @@ public static class FfmpegCommandBuilder
             probe.HasAudio || silence,
             // One layout of sound for the whole connection too: a mono file after a stereo one is
             // the same change of format, for the audio.
-            silence || relay ? 2 : probe.AudioChannels,
+            silence || profile is { UniformFormat: true } ? 2 : probe.AudioChannels,
             scale,
             profile,
             request.Quality);
@@ -354,7 +354,7 @@ public static class FfmpegCommandBuilder
         // The composed picture is already the size the canvas is, so the encoder is not asked to
         // scale again: -vf here would resize the result of the composition, not its base.
         AppendEncoderArguments(
-            arguments, setting, frameRate, HasAudioMix(items) || silence, channels: silence || relay ? 2 : 0, scaleFilter: null, profile, request.Quality);
+            arguments, setting, frameRate, HasAudioMix(items) || silence, channels: silence || profile is { UniformFormat: true } ? 2 : 0, scaleFilter: null, profile, request.Quality);
 
         // A canvas of devices has no end and neither has the silent track: -shortest only matters
         // for a canvas of files, whose picture ends when its longest file does.
@@ -1025,6 +1025,15 @@ public static class FfmpegCommandBuilder
 
         // x264-specific low-CPU options (applied when user hasn't overridden via VideoSettingsOptions)
         var isLibX264 = codecName.Equals("libx264", StringComparison.OrdinalIgnoreCase);
+
+        // What the platform needs of x264 whatever the setting says, unlike the defaults above it:
+        // true CBR, the way OBS sends to YouTube - the HRD signalled as constant and the gaps
+        // filled, so a still picture still arrives at the bitrate of the setting. An x264-params
+        // of the setting gets these merged into it rather than replacing them: the YouTube defaults
+        // used to carry one, and with it the live went out capped instead of constant.
+        var required = isLibX264 && profile is { ConstantBitrate: true } && setting.VideoBitrate is > 0
+            ? new List<string> { "nal-hrd=cbr", "force-cfr=1" }
+            : [];
         var hasPreset = setting.VideoSettingsOptions.Any(o => o.Key?.Trim() == "preset");
         var hasTune = setting.VideoSettingsOptions.Any(o => o.Key?.Trim() == "tune");
         var hasProfile = setting.VideoSettingsOptions.Any(o => o.Key?.Trim() == "profile");
@@ -1068,17 +1077,10 @@ public static class FfmpegCommandBuilder
                 x264Params.Add("scenecut=0:rc_lookahead=0");
             }
 
-            // True CBR, the way OBS sends to YouTube: the HRD signalled as constant and the gaps
-            // filled, so a still picture still arrives at the bitrate of the setting.
-            if (profile is { ConstantBitrate: true } && setting.VideoBitrate is > 0)
-            {
-                x264Params.Add("nal-hrd=cbr:force-cfr=1");
-            }
-
-            if (!hasX264Params && x264Params.Count > 0)
+            if (!hasX264Params && (x264Params.Count > 0 || required.Count > 0))
             {
                 arguments.Add("-x264-params");
-                arguments.Add(string.Join(':', x264Params));
+                arguments.Add(string.Join(':', x264Params.Concat(required)));
             }
         }
 
@@ -1147,7 +1149,9 @@ public static class FfmpegCommandBuilder
             arguments.Add($"-{key}");
             if (option.Value is not null)
             {
-                arguments.Add(isLibX264 && key == "preset" ? CleanPreset(option.Value) : option.Value);
+                arguments.Add(isLibX264 && key == "preset" ? CleanPreset(option.Value)
+                    : key == "x264-params" && required.Count > 0 ? MergeX264Params(option.Value, required)
+                    : option.Value);
             }
         }
 
@@ -1239,6 +1243,21 @@ public static class FfmpegCommandBuilder
         return [];
     }
 
+    /// <summary>
+    /// The x264-params of a setting with the ones the platform requires added after it: a key the
+    /// setting names itself keeps the value the setting gave it.
+    /// </summary>
+    internal static string MergeX264Params(string value, IReadOnlyCollection<string> required)
+    {
+        var entries = value.Split(':', StringSplitOptions.RemoveEmptyEntries | StringSplitOptions.TrimEntries).ToList();
+        var named = entries.Select(KeyOf).ToHashSet(StringComparer.OrdinalIgnoreCase);
+        entries.AddRange(required.Where(entry => !named.Contains(KeyOf(entry))));
+        return string.Join(':', entries);
+
+        // x264 reads rc_lookahead and rc-lookahead as the same option.
+        static string KeyOf(string entry) => entry.Split('=', 2)[0].Trim().Replace('_', '-');
+    }
+
     /// <summary>A level that is still automatic once nothing measured it is the balanced one.</summary>
     private static EncoderQuality Concrete(EncoderQuality quality) =>
         quality == EncoderQuality.Auto ? EncoderQuality.Balanced : quality;
@@ -1309,7 +1328,7 @@ public static class FfmpegCommandBuilder
         ArgumentNullException.ThrowIfNull(outputUrl);
         ArgumentNullException.ThrowIfNull(profile);
 
-        return
+        List<string> arguments =
         [
             "-hide_banner",
             "-nostdin",
@@ -1327,7 +1346,23 @@ public static class FfmpegCommandBuilder
             "-probesize",
             "65536",
             "-analyzeduration",
-            "500000",
+            "500000"
+        ];
+
+        // A sender that keeps the time itself (YouTube) reads the relay at the rate the stream
+        // plays at, and the preroll at once: the ingest has that much in hand before the first
+        // frame is due, exactly the head start the relay gives when it is the one pacing.
+        if (profile.Pacing == RelayPacing.Sender)
+        {
+            arguments.AddRange(["-readrate", "1"]);
+            if (profile.Preroll > TimeSpan.Zero)
+            {
+                arguments.AddRange(["-readrate_initial_burst", Seconds(profile.Preroll)]);
+            }
+        }
+
+        arguments.AddRange(
+        [
             "-f",
             "flv",
             "-i",
@@ -1346,7 +1381,9 @@ public static class FfmpegCommandBuilder
             "-rw_timeout",
             ((long)profile.ConnectTimeout.TotalMilliseconds * 1000).ToString(CultureInfo.InvariantCulture),
             outputUrl
-        ];
+        ]);
+
+        return arguments;
     }
 
     /// <summary>Whether the platform needs a sound the source does not have.</summary>

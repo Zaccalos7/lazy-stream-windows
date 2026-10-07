@@ -53,9 +53,10 @@
             <div class="caption truncate">@configuration.StreamUrl</div>
         </div>
         <div class="actions">
-            @if (configuration.FfmpegSender)
+            @if (youtube && !configuration.FfmpegSender)
             {
-                <span class="badge" title="@T["ffmpegSender"]">ffmpeg</span>
+                @* ffmpeg is how YouTube goes out: only the exception is worth a badge. *@
+                <span class="badge" title="@T["ffmpegSenderHelp"]">RTMP Orbis</span>
             }
             <span class="badge @(active ? "ended" : "")">@(active ? T["active"] : T["deactive"])</span>
             <a class="btn subtle icon-only" asp-route-edit="@configuration.Id" asp-route-platform="@Model.Platform" asp-route-active="@Model.Active" title="@T["seeDetails"]" aria-label="@T["seeDetails"]"><i class="icon">&#xE70F;</i></a>
@@ -115,11 +116,12 @@
                     <span>@T["description"]</span>
                     <textarea class="input" name="description" rows="3">@editing.Description</textarea>
                 </label>
-                @* The way the live reaches the ingest: the RTMP of this application, or the one of
-                   ffmpeg. The second is what every other publisher uses, which makes it the test of
-                   the first when a platform takes the stream and does not air it. *@
-                <label class="option-card">
-                    <i class="icon option-card-mark" aria-hidden="true">&#xE756;</i>
+                @* YouTube only: how the live reaches the ingest. On, the YouTube delivery - ffmpeg keeps
+                   the time and publishes over its own RTMPS; off, the relay and the RTMP of this
+                   application, as Twitch goes out. The card shows while YouTube is the platform
+                   picked above; whatever it posts for another platform, the server stores off. *@
+                <label class="option-card youtube" data-youtube-only>
+                    <svg class="option-card-mark" viewBox="0 0 24 24" aria-hidden="true"><path d="@LiveLinkView.MarkupOf("youtube")" /></svg>
                     <span class="option-card-text">
                         <strong>@T["ffmpegSender"]</strong>
                         <small>@T["ffmpegSenderHelp"]</small>

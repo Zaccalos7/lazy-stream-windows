@@ -9,25 +9,75 @@ public sealed class RelayTransportTests
 
     private const string YouTube = "rtmps://a.rtmps.youtube.com/live2/key";
 
+    private const string Twitch = "rtmp://live.twitch.tv/app/key";
+
     [Fact]
-    public void ALiveGoesOutOnTheTransportOfItsPlatformByDefault()
+    public void YouTubeGoesOutThroughAnFfmpegSenderThatKeepsTheTime()
     {
         var output = LiveOutput.For(YouTube, Locator, NullLogger.Instance);
 
         Assert.NotNull(output);
-        Assert.Equal(RelayTransport.NativeRtmp, output!.Profile.Transport);
+        Assert.Equal(RelayTransport.FfmpegSender, output!.Profile.Transport);
+        Assert.Equal(RelayPacing.Sender, output.Profile.Pacing);
         Assert.Equal(StreamPlatform.YouTube, output.Profile.Platform);
     }
 
     [Fact]
-    public void AChannelThatAsksForFfmpegGetsItAndKeepsEverythingElseOfThePlatform()
+    public void AYouTubeChannelWithTheSwitchOffGoesOutOnTheNativePublisherPacedByTheRelay()
     {
-        var output = LiveOutput.For(YouTube, Locator, NullLogger.Instance, RelayTransport.FfmpegSender);
+        // Without the ffmpeg sender, the relay is the only clock there is.
+        var output = LiveOutput.For(YouTube, Locator, NullLogger.Instance, RelayTransport.NativeRtmp);
+
+        Assert.Equal(RelayTransport.NativeRtmp, output!.Profile.Transport);
+        Assert.Equal(RelayPacing.Relay, output.Profile.Pacing);
+        // Everything else stays YouTube's.
+        Assert.Equal(StreamPlatformProfile.YouTube.Preroll, output.Profile.Preroll);
+        Assert.True(output.Profile.RequiresAudio);
+        Assert.True(output.Profile.UniformFormat);
+    }
+
+    [Fact]
+    public void TwitchKeepsTheRelayClockAndTheNativeRtmp()
+    {
+        var output = LiveOutput.For(Twitch, Locator, NullLogger.Instance);
 
         Assert.NotNull(output);
-        Assert.Equal(RelayTransport.FfmpegSender, output!.Profile.Transport);
-        // Only the publisher changes: the pacing and the audio YouTube needs stay its own.
-        Assert.Equal(StreamPlatformProfile.YouTube with { Transport = RelayTransport.FfmpegSender }, output.Profile);
+        Assert.Equal(RelayTransport.NativeRtmp, output!.Profile.Transport);
+        Assert.Equal(RelayPacing.Relay, output.Profile.Pacing);
+    }
+
+    [Fact]
+    public void TwitchHasNoSwitch()
+    {
+        // The switch is YouTube's: Twitch goes out the way it did before it existed.
+        var output = LiveOutput.For(Twitch, Locator, NullLogger.Instance, RelayTransport.FfmpegSender);
+
+        Assert.Equal(StreamPlatformProfile.Twitch, output!.Profile);
+    }
+
+    [Fact]
+    public void OnlyYouTubeKeepsOneFormatForTheWholeConnection()
+    {
+        Assert.True(StreamPlatformProfile.YouTube.UniformFormat);
+        Assert.False(StreamPlatformProfile.Twitch.UniformFormat);
+        Assert.False(StreamPlatformProfile.Twitch.ConstantBitrate);
+        Assert.False(StreamPlatformProfile.Twitch.ChoosableTransport);
+    }
+
+    [Fact]
+    public void TheYouTubeSenderReadsAtRealTimeWithThePrerollAsItsBurst()
+    {
+        var arguments = string.Join(' ', FfmpegCommandBuilder.BuildSender(YouTube, StreamPlatformProfile.YouTube));
+
+        Assert.Contains("-readrate 1 -readrate_initial_burst 2 -f flv -i pipe:0", arguments, StringComparison.Ordinal);
+    }
+
+    [Fact]
+    public void ATwitchSenderOnlyCopiesWhatTheRelayPaced()
+    {
+        var arguments = FfmpegCommandBuilder.BuildSender(Twitch, StreamPlatformProfile.Twitch with { Transport = RelayTransport.FfmpegSender });
+
+        Assert.DoesNotContain("-readrate", arguments);
     }
 
     [Fact]

@@ -24,6 +24,25 @@ public enum RelayTransport
     FfmpegSender
 }
 
+/// <summary>Who holds the stream to real time on its way to the ingest.</summary>
+public enum RelayPacing
+{
+    /// <summary>
+    /// The relay itself: every tag is handed over at the moment its timestamp says, on the clock of
+    /// <see cref="HybridWaiter"/>, and a late live is won back at twice real time. What Twitch gets.
+    /// </summary>
+    Relay,
+
+    /// <summary>
+    /// The ffmpeg sender: the relay only joins the encoders on one timeline and keeps them no more
+    /// than <see cref="StreamPlatformProfile.MaxLead"/> ahead, and the sender reads that at real
+    /// time (<c>-readrate 1</c>) with the preroll as its initial burst, then publishes it over its
+    /// own RTMP(S). The pipeline OBS and every ffmpeg recipe use against YouTube, which is the
+    /// ingest that judges the rhythm of what arrives most strictly.
+    /// </summary>
+    Sender
+}
+
 /// <summary>
 /// How a live is delivered to one platform: the pacing of the relay that sits between the encoder
 /// and the ingest, and what the encoder has to produce for that ingest to accept the stream.
@@ -90,7 +109,24 @@ public sealed record StreamPlatformProfile(
     /// letterboxed picture: "YouTube is not receiving enough video", buffering for the viewers.
     /// Twitch takes the variable rate as it comes.
     /// </summary>
-    bool ConstantBitrate = false)
+    bool ConstantBitrate = false,
+
+    /// <summary>Who paces the stream: the relay (Twitch) or the ffmpeg sender (YouTube).</summary>
+    RelayPacing Pacing = RelayPacing.Relay,
+
+    /// <summary>
+    /// Whether every encoder of one connection produces the same format: the picture of the first
+    /// one (size and rate, the others fitted into it) and stereo sound. YouTube stops making its
+    /// renditions when the stream changes format halfway; Twitch follows the change, and keeps
+    /// every file at its own size.
+    /// </summary>
+    bool UniformFormat = false,
+
+    /// <summary>
+    /// Whether the configuration of the channel chooses what publishes the live (the ffmpeg switch
+    /// of the channel settings). YouTube only: Twitch always goes out the way it always did.
+    /// </summary>
+    bool ChoosableTransport = false)
 {
     /// <summary>
     /// Twitch: no head start, and a short jitter buffer so the preview stays next to what is on
@@ -111,9 +147,13 @@ public sealed record StreamPlatformProfile(
         KeyframeSeconds: 2);
 
     /// <summary>
-    /// YouTube: two seconds sent at once so the ingest has a buffer before the first frame is due,
-    /// a four second jitter buffer, a silent track for a source with no sound, 48 kHz audio and a
-    /// longer patience before a stall or a missing ingest is called.
+    /// YouTube: a delivery of its own. The paced stream leaves through an ffmpeg sender that keeps
+    /// the time itself (see <see cref="RelayPacing.Sender"/>) and speaks RTMPS with the stack every
+    /// YouTube encoder uses, rather than through the clock and the RTMP of this application that
+    /// Twitch keeps. Around it: two seconds sent at once so the ingest has a buffer before the
+    /// first frame is due, a four second jitter buffer, a constant bitrate, a silent track for a
+    /// source with no sound, 48 kHz audio and a longer patience before a stall or a missing ingest
+    /// is called.
     /// </summary>
     public static readonly StreamPlatformProfile YouTube = new(
         StreamPlatform.YouTube,
@@ -125,9 +165,12 @@ public sealed record StreamPlatformProfile(
         ReconnectAttempts: 5,
         RequiresAudio: true,
         AudioSampleRate: 48_000,
-        Transport: RelayTransport.NativeRtmp,
+        Transport: RelayTransport.FfmpegSender,
         KeyframeSeconds: 2,
-        ConstantBitrate: true);
+        ConstantBitrate: true,
+        Pacing: RelayPacing.Sender,
+        UniformFormat: true,
+        ChoosableTransport: true);
 
     /// <summary>A destination this application does not know: one ffmpeg, as before.</summary>
     public static readonly StreamPlatformProfile Generic = new(
@@ -150,6 +193,21 @@ public sealed record StreamPlatformProfile(
         StreamPlatform.YouTube => YouTube,
         _ => Generic
     };
+
+    /// <summary>
+    /// This profile carried by the transport the channel asks for, where the platform lets it
+    /// choose (<see cref="ChoosableTransport"/>); anywhere else the request is ignored. The pacing
+    /// goes with the transport: the ffmpeg sender keeps the time itself, and the native publisher
+    /// has only the relay to keep it.
+    /// </summary>
+    public StreamPlatformProfile WithTransport(RelayTransport? transport) =>
+        transport is { } chosen && ChoosableTransport && chosen != Transport
+            ? this with
+            {
+                Transport = chosen,
+                Pacing = chosen == RelayTransport.FfmpegSender ? RelayPacing.Sender : RelayPacing.Relay
+            }
+            : this;
 }
 
 public static class StreamPlatforms

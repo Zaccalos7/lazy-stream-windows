@@ -198,6 +198,20 @@ input[type="password"]::-ms-clear {
   transition: color 0.15s, background 0.15s;
 }
 .option-card:has(input:checked) .option-card-mark { color: var(--on-accent); background: var(--hue); }
+.option-card.youtube { --hue: var(--youtube); }
+svg.option-card-mark { box-sizing: border-box; padding: 8px; fill: currentColor; }
+
+/* A card that only belongs to YouTube: it shows while YouTube is the platform picked in its form. */
+.option-card[data-youtube-only] { display: none; }
+form:has(input[name="platformStreamName"][value="youtube"]:checked) .option-card[data-youtube-only] {
+  display: flex;
+  animation: option-card-in 0.18s ease-out;
+}
+@keyframes option-card-in { from { opacity: 0; transform: translateY(-4px); } }
+@media (prefers-reduced-motion: reduce) {
+  form:has(input[name="platformStreamName"][value="youtube"]:checked) .option-card[data-youtube-only] { animation: none; }
+}
+
 .option-card-text { flex: 1; min-width: 0; display: flex; flex-direction: column; gap: 3px; }
 .option-card-text strong { font-size: 13px; font-weight: 600; }
 .option-card-text small { font-size: 11px; line-height: 1.45; color: var(--text-2); }

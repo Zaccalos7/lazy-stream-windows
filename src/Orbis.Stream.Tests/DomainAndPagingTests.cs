@@ -178,6 +178,96 @@ public sealed class DatabaseBootstrapperTests
     }
 
     [Fact]
+    public void Schema_TurnsTheFfmpegDeliveryOnForYouTubeOnceAndOffForTwitch()
+    {
+        using var database = new TemporaryDatabase();
+        using var connection = database.ConnectionFactory.Open();
+        using (var insert = connection.CreateCommand())
+        {
+            insert.CommandText = """
+                INSERT INTO setting (stream_url, stream_key, platform_stream_name, description, video_folder, is_active, channel_name, ffmpeg_sender)
+                VALUES ('rtmps://a.rtmps.youtube.com/live2', 'yt', 'youtube', '', '', 1, 'yt', 0),
+                       ('rtmp://live.twitch.tv/app', 'tw', 'twitch', '', '', 1, 'tw', 1);
+                """;
+            insert.ExecuteNonQuery();
+        }
+
+        Assert.True(DatabaseSchema.PublishYouTubeWithFfmpeg(connection) >= 1);
+
+        var settings = database.Repository<SettingRepository>();
+        Assert.True(settings.FindByStreamUrlAndStreamKey("rtmps://a.rtmps.youtube.com/live2", "yt")!.FfmpegSender);
+        Assert.False(settings.FindByStreamUrlAndStreamKey("rtmp://live.twitch.tv/app", "tw")!.FfmpegSender);
+
+        // Once: the schema is already past it, so a YouTube channel turned off stays off.
+        using (var off = connection.CreateCommand())
+        {
+            off.CommandText = "UPDATE setting SET ffmpeg_sender = 0 WHERE stream_key = 'yt'";
+            off.ExecuteNonQuery();
+        }
+
+        DatabaseSchema.EnsureCreated(connection);
+        Assert.False(settings.FindByStreamUrlAndStreamKey("rtmps://a.rtmps.youtube.com/live2", "yt")!.FfmpegSender);
+    }
+
+    [Fact]
+    public void StartAsync_SeedsYouTubeAtAFixedPictureWithNothingThatReplacesTheConstantRate()
+    {
+        using var database = new TemporaryDatabase();
+        var settings = database.Repository<VideoSettingRepository>();
+
+        var youtube = Assert.Single(settings.FindByIsDefaultConfigurationTrueAndDefaultPlatformConfiguration("Youtube"));
+        Assert.Equal((1920, 1080, 30d), (youtube.VideoWidth, youtube.VideoHeight, youtube.FrameRate));
+        Assert.Equal(6_000_000, youtube.VideoBitrate);
+        Assert.Equal(128_000, youtube.AudioSetting!.AudioBitrate);
+        Assert.DoesNotContain(youtube.VideoSettingsOptions, option => option.Key is "tune" or "x264-params");
+
+        var low = settings.FindByTitleAndPlatform("Default Low Youtube", "Youtube")!;
+        Assert.Equal((1280, 720, 3_000_000), (low.VideoWidth, low.VideoHeight, low.VideoBitrate));
+    }
+
+    [Fact]
+    public async Task StartAsync_MovesTheLegacyYouTubeDefaultsButNotOnesTheUserEdited()
+    {
+        using var database = new TemporaryDatabase();
+        var settings = database.Repository<VideoSettingRepository>();
+
+        // The high default exactly as the earlier versions seeded it.
+        var high = Assert.Single(settings.FindByIsDefaultConfigurationTrueAndDefaultPlatformConfiguration("Youtube"));
+        high.VideoWidth = null;
+        high.VideoHeight = null;
+        high.FrameRate = null;
+        high.VideoBitrate = 8_000_000;
+        high.AudioSetting!.AudioBitrate = 192_000;
+        high.VideoSettingsOptions =
+        [
+            new VideoSettingsOptionEntity { Key = "preset", Value = "veryfast" },
+            new VideoSettingsOptionEntity { Key = "tune", Value = "zerolatency" },
+            new VideoSettingsOptionEntity { Key = "profile", Value = "high" },
+            new VideoSettingsOptionEntity { Key = "x264-params", Value = "rc_lookahead=20" }
+        ];
+        settings.Update(high);
+
+        // The low one, edited by the user: a bitrate of their own.
+        var low = settings.FindByTitleAndPlatform("Default Low Youtube", "Youtube")!;
+        low.VideoBitrate = 2_000_000;
+        settings.Update(low);
+
+        await new DatabaseBootstrapper(
+                database.ConnectionFactory,
+                settings,
+                database.Repository<VideoRepository>(),
+                NullLogger<DatabaseBootstrapper>.Instance)
+            .StartAsync(CancellationToken.None);
+
+        var moved = settings.FindById(high.Id!.Value)!;
+        Assert.Equal((1920, 1080, 6_000_000), (moved.VideoWidth, moved.VideoHeight, moved.VideoBitrate));
+        Assert.Equal(128_000, moved.AudioSetting!.AudioBitrate);
+        Assert.DoesNotContain(moved.VideoSettingsOptions, option => option.Key is "tune" or "x264-params");
+
+        Assert.Equal(2_000_000, settings.FindById(low.Id!.Value)!.VideoBitrate);
+    }
+
+    [Fact]
     public async Task StartAsync_RenamesThePlaceholderDefaultInsteadOfAddingAnother()
     {
         // An installation from the first versions: its default is called "test", and it is still the

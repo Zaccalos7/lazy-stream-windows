@@ -1123,13 +1123,16 @@ public sealed class FfmpegVideoPlaylistStreamer : IVideoPlaylistStreamer
     }
 
     /// <summary>
-    /// The picture a pass is encoded at: the one of the live on a shared connection - a short of
-    /// 432x208 on a 1080p live costs what a 1080p frame costs - or its own on a connection of its own.
+    /// The picture a pass is encoded at: the one of the live on a connection that keeps one format
+    /// (YouTube) - a short of 432x208 on a 1080p live costs what a 1080p frame costs - or its own
+    /// everywhere else.
     /// </summary>
     private static MediaOutput PictureOf(VideoSettingEntity setting, MediaProbeResult probe, LiveOutput? output)
     {
         var own = FfmpegCommandBuilder.ResolveOutput(setting, probe);
-        return output is null ? own : output.Frame ?? FfmpegCommandBuilder.FrameOfLive(setting, own);
+        return output is { Profile.UniformFormat: true }
+            ? output.Frame ?? FfmpegCommandBuilder.FrameOfLive(setting, own)
+            : own;
     }
 
     /// <summary>

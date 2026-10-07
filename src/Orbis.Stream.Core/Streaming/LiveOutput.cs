@@ -42,7 +42,8 @@ public sealed class LiveOutput : IAsyncDisposable
     /// </summary>
     /// <param name="transport">
     /// What carries the paced stream to the ingest when the configuration of the channel asks for
-    /// something other than the transport of the platform; null keeps the one of the platform.
+    /// something other than the transport of the platform; null keeps the one of the platform. A
+    /// platform paced by its sender (YouTube) keeps the sender whatever is asked.
     /// </param>
     public static LiveOutput? For(string outputUrl, FfmpegToolLocator locator, ILogger logger, RelayTransport? transport = null)
     {
@@ -53,7 +54,7 @@ public sealed class LiveOutput : IAsyncDisposable
             return null;
         }
 
-        return new LiveOutput(outputUrl, transport is { } chosen ? profile with { Transport = chosen } : profile, locator, logger);
+        return new LiveOutput(outputUrl, profile.WithTransport(transport), locator, logger);
     }
 
     public string OutputUrl { get; }
@@ -198,9 +199,10 @@ public sealed class LiveOutput : IAsyncDisposable
         var relay = new FlvPacedRelay(sink, Profile, _logger);
         relay.Start();
         _logger.LogInformation(
-            "Connection to {Platform} opened for the whole live, published by {Transport}: {OutputUrl}",
+            "Connection to {Platform} opened for the whole live, published by {Transport}, paced by {Pacing}: {OutputUrl}",
             Profile.Platform,
             Profile.Transport == RelayTransport.NativeRtmp ? "the native RTMP publisher" : "ffmpeg",
+            Profile.Pacing == RelayPacing.Sender ? "ffmpeg" : "the relay",
             FfmpegStreamingSession.RedactStreamKey(OutputUrl, OutputUrl));
         return relay;
     }
@@ -215,11 +217,31 @@ public sealed class LiveOutput : IAsyncDisposable
             throw new InvalidOperationException("Unable to start the ffmpeg sender");
         }
 
-        // Nobody reads the progress and the errors of the sender here, and a pipe nobody reads is a
-        // process that blocks on its next write.
+        // Nobody reads the progress of the sender here, and a pipe nobody reads is a process that
+        // blocks on its next write. Its errors are kept: the sender is the one that talks to the
+        // ingest, so when the connection breaks its last words are the only account of why.
         _ = process.StandardOutput.BaseStream.CopyToAsync(System.IO.Stream.Null);
-        _ = process.StandardError.BaseStream.CopyToAsync(System.IO.Stream.Null);
+        _ = ReportSenderErrorsAsync(process);
         return process;
+    }
+
+    private async Task ReportSenderErrorsAsync(Process process)
+    {
+        try
+        {
+            var errors = (await process.StandardError.ReadToEndAsync().ConfigureAwait(false)).Trim();
+            if (errors.Length > 0)
+            {
+                // The tail is what matters: ffmpeg says why it stopped last.
+                _logger.LogWarning(
+                    "The ffmpeg sender to {Platform} said: {Errors}",
+                    Profile.Platform,
+                    FfmpegStreamingSession.RedactStreamKey(errors.Length > 2000 ? errors[^2000..] : errors, OutputUrl));
+            }
+        }
+        catch (Exception exception) when (exception is IOException or ObjectDisposedException or InvalidOperationException)
+        {
+        }
     }
 
     /// <summary>Called under the lock.</summary>

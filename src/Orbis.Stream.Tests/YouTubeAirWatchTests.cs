@@ -6,6 +6,8 @@ namespace Orbis.Stream.Tests;
 
 public sealed class YouTubeAirWatchTests
 {
+    private const long Live = 7;
+
     private static Lookup OnAir(string videoId = "abcdefghijk") =>
         Lookup.Of(new LivePlatformEmbed("youtube", "channel", $"https://www.youtube.com/embed/{videoId}", videoId));
 
@@ -18,104 +20,142 @@ public sealed class YouTubeAirWatchTests
         var state = new YouTubeAirState();
 
         // One answer is a moment: the page of the streams can lag the broadcast by a few seconds.
-        Assert.False(state.Observe(7, OffAir));
-        Assert.False(state.IsOffAir(7));
+        Assert.False(state.Observe(Live, OffAir));
+        Assert.False(state.IsOffAir(Live));
 
-        Assert.True(state.Observe(7, OffAir));
-        Assert.True(state.IsOffAir(7));
+        Assert.True(state.Observe(Live, OffAir));
+        Assert.True(state.IsOffAir(Live));
 
         // Flagged once: the next miss changes nothing the pages have to redraw.
-        Assert.False(state.Observe(7, OffAir));
+        Assert.False(state.Observe(Live, OffAir));
     }
 
     [Fact]
     public void ALiveFoundOnAirClearsTheFlagAndStartsCountingAgain()
     {
         var state = new YouTubeAirState();
-        state.Observe(7, OffAir);
-        state.Observe(7, OffAir);
+        state.Observe(Live, OffAir);
+        state.Observe(Live, OffAir);
 
-        Assert.True(state.Observe(7, OnAir()));
-        Assert.False(state.IsOffAir(7));
+        Assert.True(state.Observe(Live, OnAir()));
+        Assert.False(state.IsOffAir(Live));
 
         // The misses before it are gone: one more is not enough to flag it again.
-        state.Observe(7, OffAir);
-        Assert.False(state.IsOffAir(7));
+        state.Observe(Live, OffAir);
+        Assert.False(state.IsOffAir(Live));
     }
 
     [Fact]
-    public void APlatformThatCouldNotBeAskedLeavesTheAnswerAsItWas()
+    public void APlatformThatCouldNotBeAskedLeavesTheMissesAsTheyWere()
     {
         var state = new YouTubeAirState();
+        state.Observe(Live, OffAir);
+        state.Observe(Live, OffAir);
 
-        // Not reachable is not off air: nothing is counted.
-        state.Observe(7, Unreachable);
-        state.Observe(7, Unreachable);
-        Assert.False(state.IsOffAir(7));
-
-        // And a flag already up stays up until the live is really found.
-        state.Observe(7, OffAir);
-        state.Observe(7, OffAir);
-        Assert.False(state.Observe(7, Unreachable));
-        Assert.True(state.IsOffAir(7));
+        // Not reachable is not off air, nor on air: the flag stays until the live is really found.
+        state.Observe(Live, Unreachable);
+        Assert.True(state.IsOffAir(Live));
     }
 
     [Fact]
-    public void ForgettingALiveDropsItsFlag()
+    public void AChannelYouTubeKeepsFailingToAnswerForIsSaidToBeUnverified()
     {
         var state = new YouTubeAirState();
-        state.Observe(7, OffAir);
-        state.Observe(7, OffAir);
 
-        Assert.True(state.Forget(7));
-        Assert.False(state.IsOffAir(7));
-        Assert.False(state.Forget(7));
+        Assert.False(state.Observe(Live, Unreachable));
+        Assert.True(state.Observe(Live, Unreachable));
+        Assert.True(state.IsUnverified(Live));
+        Assert.False(state.IsOffAir(Live));
+
+        // Any real answer, on air or off, means the channel can be checked after all.
+        state.Observe(Live, OffAir);
+        Assert.False(state.IsUnverified(Live));
+
+        state.Observe(8, Unreachable);
+        state.Observe(8, Unreachable);
+        state.Observe(8, OnAir());
+        Assert.False(state.IsUnverified(8));
     }
 
     [Fact]
-    public void LivesAreCountedApartAndARowSeesTheLivesOfItsHistory()
+    public void TheWarningStaysUntilTheUserClosesItAndComesBackOnlyAfterTheLiveWasFound()
     {
         var state = new YouTubeAirState();
-        state.BelongsTo(7, 100);
-        state.BelongsTo(8, 200);
-        state.Observe(7, OffAir);
-        state.Observe(8, OffAir);
-        state.Observe(7, OffAir);
+        state.Observe(Live, OffAir);
+        state.Observe(Live, OffAir);
 
-        Assert.True(state.IsOffAir(7));
-        Assert.False(state.IsOffAir(8));
+        Assert.True(state.Dismiss(Live));
+        Assert.False(state.IsOffAir(Live));
 
-        // A playlist row shows the video it got to, which may not be the one being sent.
-        Assert.True(state.IsOffAir(1, 100));
-        Assert.False(state.IsOffAir(1, 200));
+        // Closed is closed while nothing changes.
+        state.Observe(Live, OffAir);
+        Assert.False(state.IsOffAir(Live));
+
+        // Found on air, then gone again: that is a new problem, and it is shown.
+        state.Observe(Live, OnAir());
+        state.Observe(Live, OffAir);
+        state.Observe(Live, OffAir);
+        Assert.True(state.IsOffAir(Live));
+    }
+
+    [Fact]
+    public void TheWaitRunsOnceForTheWholeLiveNotForEveryVideoOfIt()
+    {
+        var state = new YouTubeAirState();
+        var start = new DateTimeOffset(2026, 10, 7, 21, 0, 0, TimeSpan.Zero);
+
+        Assert.Equal(start, state.OnAirSince(Live, start));
+        Assert.Equal(start, state.OnAirSince(Live, start.AddMinutes(3)));
+    }
+
+    [Fact]
+    public void ALiveIsForgottenOnlyAfterSomePassesWithNothingRunning()
+    {
+        var state = new YouTubeAirState();
+        var start = DateTimeOffset.UtcNow;
+        state.OnAirSince(Live, start);
+        state.Observe(Live, OffAir);
+        state.Observe(Live, OffAir);
+
+        // The moment between two videos of a playlist: the warning stays.
+        Assert.False(state.Missing(Live));
+        Assert.True(state.IsOffAir(Live));
+
+        // Back again: the absence is forgiven.
+        state.OnAirSince(Live, start.AddSeconds(30));
+        Assert.False(state.Missing(Live));
+
+        // Gone for good: forgotten, warning and all.
+        Assert.True(state.Missing(Live));
+        Assert.False(state.IsOffAir(Live));
     }
 
     [Fact]
     public void TheVideoOnAirIsRememberedAndFollowsABroadcastYouTubeReplaced()
     {
         var state = new YouTubeAirState();
-        Assert.Null(state.OnAirVideoOf(7));
+        Assert.Null(state.OnAirVideoOf(Live));
 
-        state.Observe(7, OnAir("firstLive01"));
-        Assert.Equal("firstLive01", state.OnAirVideoOf(7));
+        state.Observe(Live, OnAir("firstLive01"));
+        Assert.Equal("firstLive01", state.OnAirVideoOf(Live));
 
         // Off air does not forget it: it is the video asked about next.
-        state.Observe(7, OffAir);
-        Assert.Equal("firstLive01", state.OnAirVideoOf(7));
+        state.Observe(Live, OffAir);
+        Assert.Equal("firstLive01", state.OnAirVideoOf(Live));
 
         // Auto-start opened a new broadcast for the same stream: that is the live now.
-        state.Observe(7, OnAir("secondLive2"));
-        Assert.Equal("secondLive2", state.OnAirVideoOf(7));
+        state.Observe(Live, OnAir("secondLive2"));
+        Assert.Equal("secondLive2", state.OnAirVideoOf(Live));
     }
 
     [Fact]
     public void ALiveIsStoppedOnlyAfterEnoughAnswersInARowSayTheBroadcastEnded()
     {
         var state = new YouTubeAirState();
-        state.Observe(7, OnAir());
+        state.Observe(Live, OnAir());
 
-        Assert.False(state.ObserveEnding(7, true));
-        Assert.True(state.ObserveEnding(7, true));
+        Assert.False(state.ObserveEnding(Live, true));
+        Assert.True(state.ObserveEnding(Live, true));
     }
 
     [Theory]
@@ -124,23 +164,23 @@ public sealed class YouTubeAirWatchTests
     public void AnAnswerThatIsNotAnEndStartsTheCountAgain(bool? answer)
     {
         var state = new YouTubeAirState();
-        state.Observe(7, OnAir());
+        state.Observe(Live, OnAir());
 
-        state.ObserveEnding(7, true);
-        Assert.False(state.ObserveEnding(7, answer));
-        Assert.False(state.ObserveEnding(7, true));
+        state.ObserveEnding(Live, true);
+        Assert.False(state.ObserveEnding(Live, answer));
+        Assert.False(state.ObserveEnding(Live, true));
     }
 
     [Fact]
     public void ALiveFoundAgainForgetsTheEndingsCounted()
     {
         var state = new YouTubeAirState();
-        state.Observe(7, OnAir());
-        state.ObserveEnding(7, true);
+        state.Observe(Live, OnAir());
+        state.ObserveEnding(Live, true);
 
-        state.Observe(7, OnAir());
+        state.Observe(Live, OnAir());
 
-        Assert.False(state.ObserveEnding(7, true));
+        Assert.False(state.ObserveEnding(Live, true));
     }
 
     [Theory]

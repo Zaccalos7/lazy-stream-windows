@@ -40,10 +40,14 @@ else
                         <tr data-row>
                             <td>
                                 <span class="badge @LiveStatusView.Css(status)">@T[LiveStatusView.Key(status)]</span>
-                                @if (live && video.Pkid is { } rowPkid && Air.IsOffAir(rowPkid, historyPkid))
+                                @if (live && Air.IsOffAir(historyPkid))
                                 {
                                     @* Sent, and not shown: the row says it where the user looks first. *@
                                     <span class="badge offair" title="@T["youtubeOffAirHelp"]">@T["youtubeOffAir"]</span>
+                                }
+                                else if (live && Air.IsUnverified(historyPkid))
+                                {
+                                    <span class="badge offair" title="@T["youtubeUnverifiedHelp"]">@T["youtubeUnverified"]</span>
                                 }
                             </td>
                             <td class="path">

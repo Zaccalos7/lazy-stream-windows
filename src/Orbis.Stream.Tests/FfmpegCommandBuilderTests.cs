@@ -293,6 +293,27 @@ public sealed class FfmpegCompositionTests
     }
 
     [Fact]
+    public void AWebcamWithItsMicrophoneIsOneInputAndIsHeard()
+    {
+        // The camera and its microphone open together, so picture and sound come from one clock.
+        var webcam = new FfmpegCompositionItem(
+            SourceKind.Camera, "video=HD Pro Webcam C920:audio=Microphone (HD Pro Webcam C920)", 0, 0, 1920, 1080, AudioEnabled: true);
+
+        var command = FfmpegCommandBuilder.BuildComposition(Request([webcam]));
+        var text = string.Join(' ', command);
+
+        Assert.Contains(
+            "-f dshow -rtbufsize 256M -thread_queue_size 1024 -i video=HD Pro Webcam C920:audio=Microphone (HD Pro Webcam C920)",
+            text,
+            StringComparison.Ordinal);
+        Assert.Contains("[0:a]asetpts=PTS-STARTPTS", text, StringComparison.Ordinal);
+        Assert.True(FfmpegCommandBuilder.CarriesSound([webcam]));
+
+        // Without the microphone a camera is a picture and nothing else, whatever the switch says.
+        Assert.False(FfmpegCommandBuilder.CarriesSound([Camera(0, 0, 1920, 1080, audio: true)]));
+    }
+
+    [Fact]
     public void ACanvasOfFilesIsBoundedByItsLongestFile()
     {
         // The canvas ends with the longest of its files, the way a playlist ends with the last one:

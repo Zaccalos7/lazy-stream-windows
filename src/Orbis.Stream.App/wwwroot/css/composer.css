@@ -268,6 +268,8 @@
 .composer-layer-actions .btn.icon-only { width: 24px; height: 24px; min-height: 24px; }
 .composer-layer-actions .btn[aria-pressed="false"] { color: var(--text-3); }
 .composer-layer-actions .btn[aria-pressed="true"] { color: var(--success); }
+/* The microphone of a camera, under its name: the sound the picture goes on air with. */
+.composer-layer .composer-mic { margin-top: 4px; min-height: 26px; padding: 2px 6px; font-size: 11px; }
 
 @media (max-width: 1300px) {
   .composer { grid-template-columns: 240px minmax(0, 1fr); }

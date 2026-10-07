@@ -340,6 +340,19 @@ public static class OrbisEndpoints
             return Results.Ok(new { embed = found.Embed, reason = found.Reason });
         });
 
+        // The user closed the YouTube warning of a live: it stays closed until the live is found on
+        // air. The live is its history, so the warning is closed for every video of it at once.
+        group.MapPost("/live/{pkid:int}/air/dismiss", (int pkid, VideoRepository videos, YouTubeAirWatch air) =>
+        {
+            if (videos.FindByPkid(pkid)?.VideoLiveHistoryId is not { } history)
+            {
+                return Results.NotFound();
+            }
+
+            air.Dismiss(history);
+            return Results.NoContent();
+        });
+
         group.MapGet("/live/{pkid:int}/video", (int pkid, LivePreviewService service) =>
         {
             var file = service.FileOf(pkid);

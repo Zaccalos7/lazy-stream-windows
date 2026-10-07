@@ -196,12 +196,13 @@ public sealed class MainLiveModel(
 
     public IActionResult OnPostSpot(int videoKey, string spotPath)
     {
-        return Try(() =>
+        Try(() =>
         {
             streaming.EnqueueSpot(spotPath, videoKey);
             SetNotice(NoticeKind.Success, localizer.PrintMessage("live.yielded") ?? "Spot iniziato");
             return true;
-        }) ? new OkResult() : RedirectToPage();
+        });
+        return RedirectToPage(Filters);
     }
 
     /// <summary>Play of a card: streams again the videos of the same live history, from where the

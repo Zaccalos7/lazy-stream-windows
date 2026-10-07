@@ -59,11 +59,12 @@ public sealed class MainPreviewModel(
 
     public IActionResult OnPostSpot(int videoKey, string spotPath)
     {
-        return Try(() =>
+        Try(() =>
         {
             streaming.EnqueueSpot(spotPath, videoKey);
             SetNotice(NoticeKind.Success, localizer.PrintMessage("live.yielded") ?? "Spot iniziato");
             return true;
-        }) ? new OkResult() : RedirectToPage();
+        });
+        return RedirectToPage(new { live = videoKey > 0 ? (int?)videoKey : Live });
     }
 }

@@ -179,7 +179,7 @@
     <div class="dialog-head">
         <h2>@T["playSpot"]</h2>
     </div>
-    <form method="post" asp-page-handler="Spot">
+    <form method="post" asp-page-handler="Spot" asp-all-route-data="Model.FilterRoute">
         <div class="dialog-body">
             <input type="hidden" name="videoKey" data-spot-key value="" />
             <p>@T["playSpotHint"]</p>

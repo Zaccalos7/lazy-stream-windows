@@ -23,6 +23,7 @@ public sealed class MessageCatalogTests
     [InlineData("tlh", "tlh")]
     [InlineData("hod", "hod")]
     [InlineData("la", "la")]
+    [InlineData("ro-RO", "ro")]
     // Bengali and Hindi were dropped: their bundles were the English text behind a "[bn]" tag,
     // which is not a language. They resolve to English like anything else the catalogue lacks.
     [InlineData("hi-IN", "en")]
@@ -93,7 +94,7 @@ public sealed class MessageCatalogTests
         var catalog = CreateCatalog();
         var english = PropertiesBundle.Parse(File.ReadAllText(BundlePath("en")));
 
-        Assert.Equal(13, catalog.SupportedLanguages.Count);
+        Assert.Equal(14, catalog.SupportedLanguages.Count);
 
         foreach (var language in catalog.SupportedLanguages)
         {

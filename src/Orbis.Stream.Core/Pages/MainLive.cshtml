@@ -173,6 +173,7 @@
     <div class="dialog-footer">
         <button class="btn" commandfor="unlock-dialog" command="close">@T["back"]</button>
     </div>
+</dialog>
 
 <dialog class="dialog" id="spot-dialog">
     <div class="dialog-head">
@@ -186,17 +187,15 @@
                 <span>@T["spotFile"]</span>
                 <span class="composer-file-row">
                     <input class="input" name="spotPath" required data-drop-path placeholder="C:\Video\spot.mp4" />
-                    <button type="button" class="btn" data-playlist-browse-folder>@T["add"]</button>
+                    <button type="button" class="btn" data-browse-video>@T["add"]</button>
                 </span>
             </label>
         </div>
         <div class="dialog-footer">
             <button class="btn accent">@T["playSpot"]</button>
-            <button class="btn" type="button" commandfor="spot-dialog" command="close">@T["cancel"]</button>
+            <button class="btn" type="button" onclick="document.getElementById('spot-dialog').close();" commandfor="spot-dialog" command="close">@T["cancel"]</button>
         </div>
     </form>
-</dialog>
-
 </dialog>
 
 @if (Model.OpenedPlaylist is { } opened)

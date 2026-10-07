@@ -32,6 +32,12 @@
     @if (live.IsLive)
     {
         <div style="display: flex; gap: 0.5rem; align-items: center;">
+        <button class="btn" type="button" title="@T["playSpot"]" aria-label="@T["playSpot"]"
+                onclick="const pkid = document.querySelector('[data-preview]')?.dataset.pkid || '@live.VideoPkid'; document.querySelector('#spot-dialog input[name=videoKey]').value = pkid; document.getElementById('spot-dialog').showModal();"
+                commandfor="spot-dialog" command="show-modal">
+            <svg class="spot-icon" viewBox="0 0 24 24" fill-rule="evenodd" aria-hidden="true" style="margin-right: 6px;"><path d="@LiveLinkView.SpotMark" /></svg>
+            <span>@T["playSpot"]</span>
+        </button>
         <form method="post" asp-page-handler="Stop" asp-route-pkid="@live.VideoPkid" data-confirm="@T["stopLive"]">
             <button class="btn danger" title="@T["stopLiveIconLabel"]" aria-label="@T["stopLiveIconLabel"]">@T["stopLiveIconLabel"]</button>
         </form>
@@ -241,19 +247,19 @@ else
     </div>
     <form method="post" asp-page-handler="Spot">
         <div class="dialog-body">
-            <input type="hidden" name="videoKey" value="" />
+            <input type="hidden" name="videoKey" value="@live.VideoPkid" />
             <p>@T["playSpotHint"]</p>
             <label class="field dropzone">
                 <span>@T["spotFile"]</span>
                 <span class="composer-file-row">
                     <input class="input" name="spotPath" required data-drop-path placeholder="C:\Video\spot.mp4" />
-                    <button type="button" class="btn" data-playlist-browse-folder>@T["add"]</button>
+                    <button type="button" class="btn" data-browse-video>@T["add"]</button>
                 </span>
             </label>
         </div>
         <div class="dialog-footer">
             <button class="btn accent">@T["playSpot"]</button>
-            <button class="btn" type="button" commandfor="spot-dialog" command="close">@T["cancel"]</button>
+            <button class="btn" type="button" onclick="document.getElementById('spot-dialog').close();" commandfor="spot-dialog" command="close">@T["cancel"]</button>
         </div>
     </form>
 </dialog>

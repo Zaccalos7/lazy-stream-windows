@@ -116,10 +116,16 @@ else
                                     }
                                     @if (hasSetting && !row.IsPlaylist)
                                     {
+                                        @if (live)
+                                        {
+                                            <a class="btn subtle icon-only" href="/orbis/mainPreview?live=@video.Pkid" title="@T["preview"]" aria-label="@T["preview"]">
+                                                <i class="icon">&#xE7F4;</i>
+                                            </a>
+                                        }
                                         <button class="btn subtle icon-only" disabled="@(!live)" title="@T["playSpot"]" aria-label="@T["playSpot"]"
-                                                onclick="document.querySelector('#spot-dialog input[name=videoKey]').value = '@video.Pkid';"
+                                                onclick="document.querySelector('#spot-dialog input[name=videoKey]').value = '@video.Pkid'; document.getElementById('spot-dialog').showModal();"
                                                 commandfor="spot-dialog" command="show-modal">
-                                            <i class="icon">&#xE7B3;</i>
+                                            <svg class="spot-icon" viewBox="0 0 24 24" fill-rule="evenodd" aria-hidden="true"><path d="@LiveLinkView.SpotMark" /></svg>
                                         </button>
                                         <form method="post" asp-page="/MainLive" asp-page-handler="Stop" asp-all-route-data="Model.RowRoute(video.Pkid)" data-confirm="@T["stopLive"]">
                                             <button class="btn subtle icon-only danger" disabled="@(!live)" title="@T["stopLiveIconLabel"]" aria-label="@T["stopLiveIconLabel"]"><i class="icon">&#xE71A;</i></button>

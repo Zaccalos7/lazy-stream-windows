@@ -951,11 +951,21 @@ document.addEventListener("drop", event => {
 document.addEventListener("click", event => {
   const browseFolderBtn = event.target.closest?.("[data-playlist-browse-folder]");
   if (browseFolderBtn && window.chrome?.webview) {
-    const field = browseFolderBtn.parentElement?.querySelector("[data-drop-path]");
-    if (field && !field.value.trim()) {
+    const field = browseFolderBtn.parentElement?.querySelector("[data-drop-path]") || browseFolderBtn.closest(".field")?.querySelector("input");
+    if (field) {
       dropTarget = field;
       dropZone = field.closest(".dropzone");
       window.chrome.webview.postMessage("browseFolder");
+    }
+  }
+
+  const browseVideoBtn = event.target.closest?.("[data-browse-video]");
+  if (browseVideoBtn && window.chrome?.webview) {
+    const field = browseVideoBtn.parentElement?.querySelector("[data-drop-path]") || browseVideoBtn.closest(".field")?.querySelector("input");
+    if (field) {
+      dropTarget = field;
+      dropZone = field.closest(".dropzone");
+      window.chrome.webview.postMessage("browseVideo");
     }
   }
 });
@@ -966,7 +976,7 @@ window.chrome?.webview?.addEventListener("message", event => {
 
   try {
     const payload = JSON.parse(event.data);
-    if (payload.type === "browseFolder" && payload.path) {
+    if ((payload.type === "browseFolder" || payload.type === "browseVideo") && payload.path) {
       path = payload.path;
     } else {
       return; // Ignore other JSON messages we don't handle here

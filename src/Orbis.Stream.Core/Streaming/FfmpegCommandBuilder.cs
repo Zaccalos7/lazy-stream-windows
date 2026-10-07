@@ -17,7 +17,12 @@ public sealed record FfmpegStreamRequest(
     /// for the pacer instead of reaching the ingest itself (see <see cref="FlvPacedRelay"/>).
     /// Null is the single ffmpeg of before.
     /// </summary>
-    StreamPlatformProfile? Profile = null);
+    StreamPlatformProfile? Profile = null,
+    /// <summary>
+    /// The encoder quality the live goes out at, already decided for this machine when the setting
+    /// says automatic (see EncoderTuningService). Null reads it off the setting.
+    /// </summary>
+    EncoderQuality? Quality = null);
 
 /// <summary>One source on the canvas, as the command line needs it.</summary>
 public sealed record FfmpegCompositionItem(
@@ -29,7 +34,9 @@ public sealed record FfmpegCompositionItem(
     int Height,
     bool AudioEnabled,
     /// <summary>A file the GPU was measured to decode faster than the CPU (see MediaProxyService).</summary>
-    bool HardwareDecoding = false);
+    bool HardwareDecoding = false,
+    /// <summary>How loud the source is in the mix, in percent: 100 leaves its sound as it is.</summary>
+    int Volume = 100);
 
 /// <summary>
 /// What makes a light copy (see <see cref="FfmpegCommandBuilder.BuildProxy"/>): the GPU decoder or
@@ -68,7 +75,8 @@ public sealed record FfmpegCompositionRequest(
     /// </summary>
     TimeSpan? Duration = null,
     string? PreviewPath = null,
-    StreamPlatformProfile? Profile = null);
+    StreamPlatformProfile? Profile = null,
+    EncoderQuality? Quality = null);
 
 /// <summary>
 /// Translates the <c>FFmpegFrameRecorder</c> configuration of <c>StreamService</c> into the
@@ -189,7 +197,8 @@ public static class FfmpegCommandBuilder
             probe.HasAudio || silence,
             silence ? 2 : probe.AudioChannels,
             ScaleFilter(setting),
-            profile);
+            profile,
+            request.Quality);
 
         // The silent track never ends: the picture decides when the live does.
         if (silence)
@@ -315,7 +324,7 @@ public static class FfmpegCommandBuilder
         // The composed picture is already the size the canvas is, so the encoder is not asked to
         // scale again: -vf here would resize the result of the composition, not its base.
         AppendEncoderArguments(
-            arguments, setting, frameRate, HasAudioMix(items) || silence, channels: silence ? 2 : 0, scaleFilter: null, profile);
+            arguments, setting, frameRate, HasAudioMix(items) || silence, channels: silence ? 2 : 0, scaleFilter: null, profile, request.Quality);
 
         // A canvas of devices has no end and neither has the silent track: -shortest only matters
         // for a canvas of files, whose picture ends when its longest file does.
@@ -731,7 +740,13 @@ public static class FfmpegCommandBuilder
         var graph = new StringBuilder();
         foreach (var index in contributors)
         {
-            graph.Append(CultureInfo.InvariantCulture, $"[{index}:a]asetpts=PTS-STARTPTS[sound{index}];");
+            // The level of each source is set before the mix, so one loud video can be brought down
+            // to the others without touching them. 100 is the sound as it is and adds no filter.
+            var volume = Math.Max(0, items[index].Volume);
+            var level = volume == 100
+                ? string.Empty
+                : string.Create(CultureInfo.InvariantCulture, $",volume={Number(volume / 100d)}");
+            graph.Append(CultureInfo.InvariantCulture, $"[{index}:a]asetpts=PTS-STARTPTS{level}[sound{index}];");
         }
 
         if (contributors.Count == 1)
@@ -875,7 +890,8 @@ public static class FfmpegCommandBuilder
         bool hasAudio,
         int channels,
         string? scaleFilter,
-        StreamPlatformProfile? profile = null)
+        StreamPlatformProfile? profile = null,
+        EncoderQuality? quality = null)
     {
         // The relay reads FLV whatever the setting names: it is the container of RTMP, and the
         // only one whose tags carry the timestamp the pacer needs.
@@ -951,22 +967,27 @@ public static class FfmpegCommandBuilder
         // A canvas of two or more pictures turns it back on for itself (VideoSettingLatency).
         var fastEncoder = VideoSettingLatency.IsOn(setting);
         
+        // The level of the setting, spelled the way this encoder spells it. A preset typed into the
+        // options by hand is more specific than a level, so it wins.
+        var level = quality ?? Concrete(VideoSettingQuality.Of(setting));
+        if (!hasPreset)
+        {
+            arguments.AddRange(PresetArguments(codecName, level));
+        }
+
         if (isLibX264)
         {
-            if (!hasPreset)
-            {
-                arguments.Add("-preset");
-                arguments.Add("ultrafast");
-            }
             if (!hasTune && fastEncoder)
             {
                 arguments.Add("-tune");
                 arguments.Add("zerolatency");
             }
+            // High is what every platform takes, and its 8x8 transform is detail main cannot keep
+            // at the same bitrate.
             if (!hasProfile)
             {
                 arguments.Add("-profile:v");
-                arguments.Add("main");
+                arguments.Add("high");
             }
             // Reduce CPU further: disable scenecut and lookahead. The lookahead is what makes the
             // encoder able to see a forced keyframe coming, so without it the rate control buffer
@@ -991,11 +1012,6 @@ public static class FfmpegCommandBuilder
             var hasRc = setting.VideoSettingsOptions.Any(o => o.Key?.Trim() == "rc");
             var hasCq = setting.VideoSettingsOptions.Any(o => o.Key?.Trim() == "cq");
 
-            if (!hasPreset)
-            {
-                arguments.Add("-preset");
-                arguments.Add(isNvenc ? "p1" : "veryfast");  // NVENC: p1=fastest, QSV/AMF: veryfast
-            }
             if (!hasTune && isNvenc && fastEncoder)
             {
                 arguments.Add("-tune");
@@ -1030,10 +1046,19 @@ public static class FfmpegCommandBuilder
                 continue;
             }
 
-            arguments.Add($"-{option.Key!.Trim()}");
+            var key = option.Key!.Trim();
+
+            // A decision of this application, read above: ffmpeg has no such option and would stop
+            // on it before the first frame.
+            if (VideoSettingQuality.InternalKeys.Contains(key))
+            {
+                continue;
+            }
+
+            arguments.Add($"-{key}");
             if (option.Value is not null)
             {
-                arguments.Add(option.Value);
+                arguments.Add(isLibX264 && key == "preset" ? CleanPreset(option.Value) : option.Value);
             }
         }
 
@@ -1069,6 +1094,98 @@ public static class FfmpegCommandBuilder
             arguments.Add(channels.ToString(CultureInfo.InvariantCulture));
         }
     }
+
+    /// <summary>
+    /// The preset of every level for the encoders that have one, and nothing for the others.
+    /// <para>x264: superfast is the lightest preset that keeps the deblocking filter and adaptive
+    /// quantisation (ultrafast drops both, which is the mosaic on screen); veryfast is what the
+    /// streaming tools default to; faster is the step up for a CPU with room to spare.</para>
+    /// <para>NVENC, QSV and AMF encode on a block of the GPU made for it: a higher level costs that
+    /// block time per frame, not CPU, so it is only worth it on a GPU that still keeps up with it,
+    /// which is what <see cref="EncoderQuality.Auto"/> measures.</para>
+    /// </summary>
+    public static IReadOnlyList<string> PresetArguments(string codecName, EncoderQuality quality)
+    {
+        var level = Concrete(quality);
+        var name = codecName.Trim().ToLowerInvariant();
+        string? preset = name switch
+        {
+            "libx264" or "libx265" => level switch
+            {
+                EncoderQuality.Light => "superfast",
+                EncoderQuality.High => "faster",
+                _ => "veryfast"
+            },
+            _ when name.EndsWith("_nvenc", StringComparison.Ordinal) => level switch
+            {
+                EncoderQuality.Light => "p1",
+                EncoderQuality.High => "p6",
+                _ => "p4"
+            },
+            _ when name.EndsWith("_qsv", StringComparison.Ordinal) => level switch
+            {
+                EncoderQuality.Light => "veryfast",
+                EncoderQuality.High => "slower",
+                _ => "medium"
+            },
+            _ => null
+        };
+
+        if (preset is not null)
+        {
+            return ["-preset", preset];
+        }
+
+        // AMF names its levels quality, and calls them speed, balanced and quality.
+        if (name.EndsWith("_amf", StringComparison.Ordinal))
+        {
+            return ["-quality", level switch
+            {
+                EncoderQuality.Light => "speed",
+                EncoderQuality.High => "quality",
+                _ => "balanced"
+            }];
+        }
+
+        return [];
+    }
+
+    /// <summary>A level that is still automatic once nothing measured it is the balanced one.</summary>
+    private static EncoderQuality Concrete(EncoderQuality quality) =>
+        quality == EncoderQuality.Auto ? EncoderQuality.Balanced : quality;
+
+    /// <summary>
+    /// A few seconds of a synthetic picture at the size and rate of the live, encoded into nothing
+    /// with the encoder and the level being considered: how long it takes, against how long it
+    /// lasts, is how much headroom this machine has at that level. The picture moves and is full
+    /// of detail, so it costs the encoder what a real one does.
+    /// </summary>
+    public static IReadOnlyList<string> BuildEncoderTrial(
+        string codecName, EncoderQuality quality, int width, int height, double frameRate, int bitrate, TimeSpan duration)
+    {
+        List<string> arguments =
+        [
+            "-hide_banner", "-nostdin", "-loglevel", "error",
+            "-f", "lavfi",
+            "-i", string.Create(CultureInfo.InvariantCulture, $"testsrc2=size={Even(width)}x{Even(height)}:rate={Number(frameRate)}"),
+            "-t", Seconds(duration),
+            "-threads", Math.Max(1, Environment.ProcessorCount / 2).ToString(CultureInfo.InvariantCulture),
+            "-c:v", codecName,
+            "-pix_fmt", "yuv420p"
+        ];
+        arguments.AddRange(PresetArguments(codecName, quality));
+        arguments.AddRange(["-b:v", bitrate.ToString(CultureInfo.InvariantCulture), "-f", "null", "-"]);
+        return arguments;
+    }
+
+    /// <summary>
+    /// ultrafast is the one x264 preset that turns the deblocking filter and adaptive quantisation
+    /// off, and those two are what keep a frame from breaking into blocks: at a streaming bitrate
+    /// it is the mosaic a viewer sees on every movement. superfast keeps both for very little more
+    /// CPU, so a setting that asks for the lightest encode gets the lightest clean one.
+    /// </summary>
+    internal static string CleanPreset(string preset) =>
+        preset.Trim().Equals("ultrafast", StringComparison.OrdinalIgnoreCase) ? "superfast" : preset;
 
     /// <summary>
     /// Where the encoded stream goes: the ingest itself, or, with a relay, the standard output in

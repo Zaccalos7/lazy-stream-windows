@@ -50,6 +50,7 @@ public sealed class FfmpegVideoPlaylistStreamer : IVideoPlaylistStreamer
     private readonly LiveChangeNotifier _notifier;
     private readonly LivePreviewFrames _frames;
     private readonly MediaProxyService _proxies;
+    private readonly EncoderTuningService _tuning;
     private readonly ILogger<FfmpegVideoPlaylistStreamer> _logger;
 
     public FfmpegVideoPlaylistStreamer(
@@ -63,6 +64,7 @@ public sealed class FfmpegVideoPlaylistStreamer : IVideoPlaylistStreamer
         LiveChangeNotifier notifier,
         LivePreviewFrames frames,
         MediaProxyService proxies,
+        EncoderTuningService tuning,
         ILogger<FfmpegVideoPlaylistStreamer> logger)
     {
         _videoRepository = videoRepository;
@@ -75,6 +77,7 @@ public sealed class FfmpegVideoPlaylistStreamer : IVideoPlaylistStreamer
         _notifier = notifier;
         _frames = frames;
         _proxies = proxies;
+        _tuning = tuning;
         _logger = logger;
     }
 
@@ -86,6 +89,23 @@ public sealed class FfmpegVideoPlaylistStreamer : IVideoPlaylistStreamer
     {
         outputUrl = StreamPlatforms.NormalizeIngestUrl(outputUrl);
 
+        // One publish for the whole live: every video, spot and restarted pass below goes out on
+        // it, so the platform never sees the live end and start again in between.
+        await using var output = LiveOutput.For(outputUrl, _locator, _logger);
+        await StreamGroupsAsync(videos, outputUrl, output, videoLiveHistoryPkid, cancellationToken).ConfigureAwait(false);
+        if (output is not null)
+        {
+            await output.CompleteAsync(cancellationToken).ConfigureAwait(false);
+        }
+    }
+
+    private async Task StreamGroupsAsync(
+        IReadOnlyList<VideoEntity> videos,
+        string outputUrl,
+        LiveOutput? output,
+        long videoLiveHistoryPkid,
+        CancellationToken cancellationToken)
+    {
         // Rows that came from a canvas are not a playlist: they are one picture, so they are grouped
         // and streamed as a single ffmpeg instead of one after the other.
         var groups = GroupAsync(videos).ToList();
@@ -96,7 +116,7 @@ public sealed class FfmpegVideoPlaylistStreamer : IVideoPlaylistStreamer
             foreach (var scene in groups.Where(group => group.ScenePkid is not null))
             {
                 cancellationToken.ThrowIfCancellationRequested();
-                await StreamSceneAsync(scene.Videos, outputUrl, videoLiveHistoryPkid, cancellationToken)
+                await StreamSceneAsync(scene.Videos, outputUrl, output, videoLiveHistoryPkid, cancellationToken)
                     .ConfigureAwait(false);
             }
 
@@ -122,7 +142,7 @@ public sealed class FfmpegVideoPlaylistStreamer : IVideoPlaylistStreamer
             {
                 var videoSetting = FindSetting(queue[i].Video.Pkid);
                 var spotOutcome = await StreamSpotAsync(
-                    spotPath, outputUrl, videoLiveHistoryPkid, queue[i].Video.Pkid, videoSetting, cancellationToken)
+                    spotPath, outputUrl, output, videoLiveHistoryPkid, queue[i].Video.Pkid, videoSetting, cancellationToken)
                     .ConfigureAwait(false);
 
                 if (spotOutcome == StreamOutcome.Stopped)
@@ -137,7 +157,7 @@ public sealed class FfmpegVideoPlaylistStreamer : IVideoPlaylistStreamer
             // A stop is for the whole playlist, not for the video that happened to be on air: the
             // next one must not go live by itself. It stays where it is, so a play resumes here.
             var isLast = i == queue.Count - 1;
-            var outcome = await StreamVideoAsync(planned, outputUrl, videoLiveHistoryPkid, cancellationToken, markEndedOnFinish: isLast)
+            var outcome = await StreamVideoAsync(planned, outputUrl, output, videoLiveHistoryPkid, cancellationToken, markEndedOnFinish: isLast)
                 .ConfigureAwait(false);
             if (outcome == StreamOutcome.Stopped)
             {
@@ -150,7 +170,7 @@ public sealed class FfmpegVideoPlaylistStreamer : IVideoPlaylistStreamer
                 {
                     var videoSetting = FindSetting(planned.Video.Pkid);
                     var spotOutcome = await StreamSpotAsync(
-                        spotPath, outputUrl, videoLiveHistoryPkid, planned.Video.Pkid, videoSetting, cancellationToken)
+                        spotPath, outputUrl, output, videoLiveHistoryPkid, planned.Video.Pkid, videoSetting, cancellationToken)
                         .ConfigureAwait(false);
 
                     if (spotOutcome == StreamOutcome.Stopped)
@@ -161,8 +181,8 @@ public sealed class FfmpegVideoPlaylistStreamer : IVideoPlaylistStreamer
                     }
                 }
 
-                await Task.Delay(500, cancellationToken).ConfigureAwait(false);
-
+                // Back to the video at once: the relay is still sending the end of the spot, and that
+                // is the time the video has to start in, not a pause to add on top of it.
                 // Re-evaluate current video from its saved position
                 var reloaded = _videoRepository.FindByPkid(planned.Video.Pkid) ?? planned.Video;
                 var resumeFrom = TimeSpan.FromMilliseconds(reloaded.LastTimeStampBeforeStop > 0 ? reloaded.LastTimeStampBeforeStop : pausedPosition);
@@ -301,6 +321,7 @@ public sealed class FfmpegVideoPlaylistStreamer : IVideoPlaylistStreamer
     private async Task<StreamOutcome> StreamVideoAsync(
         PlannedVideo planned,
         string outputUrl,
+        LiveOutput? output,
         long videoLiveHistoryPkid,
         CancellationToken cancellationToken,
         bool markEndedOnFinish = true)
@@ -341,8 +362,11 @@ public sealed class FfmpegVideoPlaylistStreamer : IVideoPlaylistStreamer
                     _logger.LogInformation("{Message}", resumed);
                 }
 
+                var quality = await QualityOfAsync(videoSetting, FfmpegCommandBuilder.ResolveOutput(videoSetting, probe), cancellationToken)
+                    .ConfigureAwait(false);
                 var next = FfmpegStreamingSession.Start(
-                    _locator, videoKey, inputPath, outputUrl, videoSetting, probe, _logger, resumeFrom, _frames.PathOf(videoKey));
+                    _locator, videoKey, inputPath, outputUrl, videoSetting, probe, _logger, resumeFrom, _frames.PathOf(videoKey),
+                    output: output, quality: quality);
 
                 var previous = session;
                 session = next;
@@ -392,8 +416,14 @@ public sealed class FfmpegVideoPlaylistStreamer : IVideoPlaylistStreamer
                 if (outcome == StreamOutcome.Reconfigured)
                 {
                     // Where the transcode got to is where the new one carries on from: the live
-                    // skips nothing, it only pays for the second ffmpeg starting.
-                    resumeFrom = TimeSpan.FromMilliseconds(session.PositionMilliseconds);
+                    // skips nothing, it only pays for the second ffmpeg starting. On a shared
+                    // connection the old encoder goes first, so the point it got to stops moving.
+                    if (session.SharesOutput)
+                    {
+                        await session.HandOverAsync().ConfigureAwait(false);
+                    }
+
+                    resumeFrom = TimeSpan.FromMilliseconds(session.ContinuationMilliseconds);
                     var reconfigured = _localizer.PrintMessage("video.live.reconfigured", [inputPath]);
                     _logger.LogInformation("{Message}", reconfigured);
                     SaveMessageOnVideoLiveHistory(
@@ -403,7 +433,10 @@ public sealed class FfmpegVideoPlaylistStreamer : IVideoPlaylistStreamer
 
                 if (outcome == StreamOutcome.Yielded)
                 {
-                    var pausedPosition = session.PositionMilliseconds;
+                    // The video makes way for the spot without closing the connection: what the
+                    // relay already holds of it still goes on air, and the spot follows it.
+                    await session.HandOverAsync().ConfigureAwait(false);
+                    var pausedPosition = session.ContinuationMilliseconds;
                     var videoEntity = _videoRepository.FindByPkid(videoKey);
                     if (videoEntity is not null)
                     {
@@ -416,7 +449,7 @@ public sealed class FfmpegVideoPlaylistStreamer : IVideoPlaylistStreamer
                     }
 
                     _sessions.Remove(videoKey);
-                    await session.StopAsync().ConfigureAwait(false);
+                    await session.DisposeAsync().ConfigureAwait(false);
                     _frames.Forget(videoKey);
                     session = null;
                     return StreamOutcome.Yielded;
@@ -458,7 +491,7 @@ public sealed class FfmpegVideoPlaylistStreamer : IVideoPlaylistStreamer
                 }
 
                 // Video ended normally (exitCode == 0): save position and clean up immediately
-                var finalPosition = session.PositionMilliseconds;
+                var finalPosition = session.ContinuationMilliseconds;
 
                 // Clean up session immediately so preview sees live as ended
                 _sessions.Remove(videoKey);
@@ -664,6 +697,7 @@ public sealed class FfmpegVideoPlaylistStreamer : IVideoPlaylistStreamer
     private async Task StreamSceneAsync(
         IReadOnlyList<VideoEntity> rows,
         string outputUrl,
+        LiveOutput? output,
         long videoLiveHistoryPkid,
         CancellationToken cancellationToken)
     {
@@ -722,6 +756,13 @@ public sealed class FfmpegVideoPlaylistStreamer : IVideoPlaylistStreamer
                 cancellationToken.ThrowIfCancellationRequested();
                 var videoSetting = CanvasSetting(videoKey, rows);
 
+                // The volume of a source is changed from the preview while the live runs, and the
+                // change arrives as a new pass: each pass reads it again.
+                foreach (var row in rows)
+                {
+                    row.Volume = _videoRepository.FindByPkid(row.Pkid)?.Volume ?? row.Volume;
+                }
+
                 var items = rows
                     .Select(row => new FfmpegCompositionItem(
                         row.SourceKind,
@@ -731,9 +772,13 @@ public sealed class FfmpegVideoPlaylistStreamer : IVideoPlaylistStreamer
                         row.Width ?? 0,
                         row.Height ?? 0,
                         row.AudioEnabled && !silent.Contains(row),
-                        row.SourceKind == SourceKind.File && inputs[row].HardwareDecoding))
+                        row.SourceKind == SourceKind.File && inputs[row].HardwareDecoding,
+                        row.Volume))
                     .ToList();
 
+                var canvasRate = videoSetting.FrameRate is > 0 ? videoSetting.FrameRate.Value : DefaultCanvasFrameRate;
+                var quality = await QualityOfAsync(videoSetting, new MediaOutput(canvasWidth, canvasHeight, canvasRate), cancellationToken)
+                    .ConfigureAwait(false);
                 var next = FfmpegStreamingSession.StartComposition(
                     _locator,
                     videoKey,
@@ -746,7 +791,9 @@ public sealed class FfmpegVideoPlaylistStreamer : IVideoPlaylistStreamer
                     _logger,
                     resumeFrom,
                     duration,
-                    _frames.PathOf(videoKey));
+                    _frames.PathOf(videoKey),
+                    output: output,
+                    quality: quality);
 
                 var previous = session;
                 session = next;
@@ -800,7 +847,12 @@ public sealed class FfmpegVideoPlaylistStreamer : IVideoPlaylistStreamer
 
                 if (outcome == StreamOutcome.Reconfigured)
                 {
-                    resumeFrom = TimeSpan.FromMilliseconds(session.PositionMilliseconds);
+                    if (session.SharesOutput)
+                    {
+                        await session.HandOverAsync().ConfigureAwait(false);
+                    }
+
+                    resumeFrom = TimeSpan.FromMilliseconds(session.ContinuationMilliseconds);
                     var reconfigured = _localizer.PrintMessage("video.live.reconfigured", [description]);
                     _logger.LogInformation("{Message}", reconfigured);
                     SaveMessageOnVideoLiveHistory(
@@ -810,7 +862,8 @@ public sealed class FfmpegVideoPlaylistStreamer : IVideoPlaylistStreamer
 
                 if (outcome == StreamOutcome.Yielded)
                 {
-                    var pausedPosition = session?.PositionMilliseconds ?? 0;
+                    await session.HandOverAsync().ConfigureAwait(false);
+                    var pausedPosition = session.ContinuationMilliseconds;
                     if (pausedPosition <= 0 && resumeFrom > TimeSpan.Zero)
                     {
                         pausedPosition = (long)resumeFrom.TotalMilliseconds;
@@ -826,18 +879,15 @@ public sealed class FfmpegVideoPlaylistStreamer : IVideoPlaylistStreamer
                     }
                     _notifier.Raise();
 
-                    if (session is not null)
-                    {
-                        _sessions.Remove(videoKey);
-                        await session.StopAsync().ConfigureAwait(false);
-                        _frames.Forget(videoKey);
-                        session = null;
-                    }
+                    _sessions.Remove(videoKey);
+                    await session.DisposeAsync().ConfigureAwait(false);
+                    _frames.Forget(videoKey);
+                    session = null;
 
                     while (_spotsToPlay.TryDequeue(out var spotPath))
                     {
                         var spotOutcome = await StreamSpotAsync(
-                            spotPath, outputUrl, videoLiveHistoryPkid, videoKey, videoSetting, cancellationToken)
+                            spotPath, outputUrl, output, videoLiveHistoryPkid, videoKey, videoSetting, cancellationToken)
                             .ConfigureAwait(false);
 
                         if (spotOutcome == StreamOutcome.Stopped)
@@ -847,8 +897,6 @@ public sealed class FfmpegVideoPlaylistStreamer : IVideoPlaylistStreamer
                             return;
                         }
                     }
-
-                    await Task.Delay(500, cancellationToken).ConfigureAwait(false);
 
                     var currentBase = _videoRepository.FindByPkid(videoKey) ?? baseRow;
                     if (currentBase.LastTimeStampBeforeStop > 0)
@@ -900,7 +948,7 @@ public sealed class FfmpegVideoPlaylistStreamer : IVideoPlaylistStreamer
                 }
 
                 // Video ended normally (exitCode == 0): save position and clean up immediately
-                var finalPosition = session.PositionMilliseconds;
+                var finalPosition = session.ContinuationMilliseconds;
 
                 // Clean up session immediately so preview sees live as ended
                 _sessions.Remove(videoKey);
@@ -978,6 +1026,7 @@ public sealed class FfmpegVideoPlaylistStreamer : IVideoPlaylistStreamer
     private async Task<StreamOutcome> StreamSpotAsync(
         string spotPath,
         string outputUrl,
+        LiveOutput? output,
         long videoLiveHistoryPkid,
         int drivingVideoKey,
         VideoSettingEntity videoSetting,
@@ -1002,6 +1051,8 @@ public sealed class FfmpegVideoPlaylistStreamer : IVideoPlaylistStreamer
         FfmpegStreamingSession? session = null;
         try
         {
+            var quality = await QualityOfAsync(videoSetting, FfmpegCommandBuilder.ResolveOutput(videoSetting, probe), cancellationToken)
+                .ConfigureAwait(false);
             session = FfmpegStreamingSession.Start(
                 _locator,
                 drivingVideoKey,
@@ -1011,7 +1062,9 @@ public sealed class FfmpegVideoPlaylistStreamer : IVideoPlaylistStreamer
                 probe,
                 _logger,
                 TimeSpan.Zero,
-                _frames.PathOf(drivingVideoKey));
+                _frames.PathOf(drivingVideoKey),
+                output: output,
+                quality: quality);
 
             _sessions.Register(session);
 
@@ -1067,6 +1120,13 @@ public sealed class FfmpegVideoPlaylistStreamer : IVideoPlaylistStreamer
 
         _notifier.Raise();
     }
+
+    /// <summary>
+    /// The encoder level of a pass: the one of the setting, or the one this machine keeps up with
+    /// at this size when the setting leaves it to the machine. Measured once, then known.
+    /// </summary>
+    private Task<EncoderQuality> QualityOfAsync(VideoSettingEntity setting, MediaOutput output, CancellationToken cancellationToken) =>
+        _tuning.ResolveAsync(setting, output.Width, output.Height, output.FrameRate, cancellationToken);
 
     /// <summary>The configuration of the video, read again on every pass so a live change is seen.</summary>
     private VideoSettingEntity FindSetting(int videoKey)
@@ -1214,7 +1274,7 @@ public sealed class FfmpegVideoPlaylistStreamer : IVideoPlaylistStreamer
             }
 
             var durationMs = session.Probe.DurationSeconds > 0 ? (long)(session.Probe.DurationSeconds * 1000) : 0;
-            if (durationMs > 0 && session.PositionMilliseconds >= durationMs)
+            if (durationMs > 0 && session.ContinuationMilliseconds >= durationMs)
             {
                 await session.EndNaturallyAsync().ConfigureAwait(false);
                 return StreamOutcome.Finished;

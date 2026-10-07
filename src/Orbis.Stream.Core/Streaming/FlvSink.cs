@@ -27,7 +27,7 @@ public sealed class FlvTag
     public byte Type { get; }
 
     /// <summary>Milliseconds, the 24 bits of the header and the 8 of its extension.</summary>
-    public long Timestamp { get; }
+    public long Timestamp { get; private set; }
 
     public int Length { get; }
 
@@ -38,6 +38,21 @@ public sealed class FlvTag
     public ReadOnlySpan<byte> Payload => Buffer.AsSpan(HeaderSize, Length - HeaderSize - TrailerSize);
 
     private byte[] Buffer => _buffer ?? throw new ObjectDisposedException(nameof(FlvTag));
+
+    /// <summary>
+    /// Moves the tag to another moment of the stream, in the header as well as here: a sink that
+    /// writes the bytes as they are (an ffmpeg sender) has to see the same time as one that reads
+    /// the property (RTMP). This is how the encoders of one live are laid end to end on one timeline.
+    /// </summary>
+    internal void Restamp(long timestamp)
+    {
+        var header = Buffer.AsSpan(4, 4);
+        header[0] = (byte)(timestamp >> 16);
+        header[1] = (byte)(timestamp >> 8);
+        header[2] = (byte)timestamp;
+        header[3] = (byte)(timestamp >> 24);
+        Timestamp = timestamp;
+    }
 
     /// <summary>Gives the buffer back to the pool; the tag is unusable after.</summary>
     public void Release()

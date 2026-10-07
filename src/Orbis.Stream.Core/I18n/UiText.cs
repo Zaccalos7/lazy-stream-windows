@@ -32,12 +32,14 @@ public sealed class UiText
         new("ko", "한국어", "kr.svg"),
         new("ja", "日本語", "jp.svg"),
         new("hi", "हिन्दी", "in.svg"),
+        new("ro", "Română", "ro.svg"),
+        new("da", "Dansk", "dk.svg"),
+        new("fil", "Filipino", "ph.svg"),
         // No country answers to these three, so they carry no flag of their own either: the
         // banner is drawn here rather than taken from a nation it has nothing to do with.
         new("la", "Latina", "la.svg"),
         new("tlh", "tlhIngan Hol", "tlh.svg"),
-        new("hod", "Hodor", "hod.svg"),
-        new("ro", "Română", "ro.svg")
+        new("hod", "Hodor", "hod.svg")
     ];
 
     /// <summary>One row of the language selector: the bundle it picks, the name to show, the flag.</summary>

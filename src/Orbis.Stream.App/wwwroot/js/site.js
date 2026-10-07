@@ -891,7 +891,10 @@ for (const slider of preview?.querySelectorAll("[data-volume]") || []) {
 const paintTuning = box => {
   const form = box.closest("form");
   if (!form) return;
-  for (const select of form.querySelectorAll("[data-tuning]")) select.required = !box.checked;
+  for (const select of form.querySelectorAll("[data-tuning]")) {
+    select.required = !box.checked;
+    select.disabled = box.checked;
+  }
   for (const hint of form.querySelectorAll("[data-tuning-hint]")) hint.hidden = box.checked;
 };
 for (const box of document.querySelectorAll("[data-low-latency]")) {

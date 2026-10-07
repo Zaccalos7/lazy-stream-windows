@@ -58,6 +58,8 @@ label.field { display: flex; flex-direction: column; gap: 5px; }
 label.field > span { color: var(--text); font-weight: 500; font-size: 12px; }
 label.field > span.caption { color: var(--text-2); font-weight: 600; text-transform: uppercase; letter-spacing: 0.04em; font-size: 10px; }
 label.field > small { color: var(--text-3); font-size: 11px; }
+/* A field whose meaning needs more than its name: the mark carries the explanation as a tooltip. */
+label.field > span .field-help { cursor: help; margin-left: 4px; font-size: 11px; color: var(--text-3); vertical-align: middle; }
 
 .input, select.input, textarea.input {
   width: 100%;

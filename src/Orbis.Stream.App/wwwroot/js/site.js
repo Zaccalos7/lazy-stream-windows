@@ -562,6 +562,13 @@ const paintPreview = state => {
     if (Date.now() < (previewDirty.get("keepSource") || 0)) continue;
     box.checked = parameters.videoWidth === null || parameters.videoWidth === undefined;
   }
+  for (const source of state.sources || []) {
+    if (Date.now() < (previewDirty.get("volume" + source.pkid) || 0)) continue;
+    const slider = preview.querySelector(`[data-volume="${source.pkid}"]`);
+    const shown = preview.querySelector(`[data-volume-value="${source.pkid}"]`);
+    if (slider) slider.value = String(source.volume);
+    if (shown) shown.textContent = source.volume + "%";
+  }
 };
 
 if (watchLive && stream) {
@@ -659,6 +666,36 @@ if (previewForm) {
     } finally {
       delete previewForm.dataset.busy;
       previewBusy = false;
+    }
+  });
+}
+
+// The level of each source of a canvas. The number follows the slider while it moves, and the live
+// is asked once, when the slider is let go: every change starts the pass of the canvas again.
+for (const slider of previewForm?.querySelectorAll("[data-volume]") || []) {
+  const key = "volume" + slider.dataset.volume;
+  const shown = previewForm.querySelector(`[data-volume-value="${slider.dataset.volume}"]`);
+  slider.addEventListener("input", () => {
+    if (shown) shown.textContent = slider.value + "%";
+    previewDirty.set(key, Date.now() + previewSettle);
+  });
+  slider.addEventListener("change", async () => {
+    previewDirty.set(key, Date.now() + previewSettle);
+    try {
+      const response = await fetch(`/preview/live/${previewPkid}/volume`, {
+        method: "PUT",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ sourcePkid: Number(slider.dataset.volume), volume: Number(slider.value) })
+      });
+      const payload = await response.json().catch(() => ({}));
+      if (response.ok) {
+        say("success", previewMark("ok", ""), payload.message || previewMark("applied", ""), "");
+      } else {
+        previewDirty.delete(key);
+        say("error", previewMark("ko", ""), Object.values(payload)[0] || response.statusText, key);
+      }
+    } catch {
+      say("error", previewMark("ko", ""), previewMark("failed", ""), "");
     }
   });
 }

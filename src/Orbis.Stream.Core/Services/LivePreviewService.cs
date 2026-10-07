@@ -63,7 +63,8 @@ public sealed record LiveSnapshot(
     LiveMedia Output,
     LiveParameters Parameters,
     IReadOnlyList<LiveSource>? Sources = null,
-    bool PlatformOffAir = false)
+    bool PlatformOffAir = false,
+    bool PlatformUnverified = false)
 {
     public static LiveSnapshot Offline(IReadOnlyList<LiveOption> running) => new(
         false,
@@ -242,7 +243,8 @@ public sealed class LivePreviewService
             SourcesOf(video),
             // The ingest takes the stream and YouTube shows no live: the page says so, because
             // Studio rating the stream "excellent" is all the user would otherwise have to go by.
-            _air.IsOffAir(session.VideoPkid));
+            _air.IsOffAir(video.VideoLiveHistoryId),
+            _air.IsUnverified(video.VideoLiveHistoryId));
     }
 
     /// <summary>

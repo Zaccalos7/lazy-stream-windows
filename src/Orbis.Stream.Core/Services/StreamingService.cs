@@ -431,7 +431,10 @@ public sealed class StreamingService
     private static string DescribeSource(SceneItemEntity item) => item.SourceKind switch
     {
         SourceKind.Screen => item.SourceTarget,
-        SourceKind.Camera => item.SourceTarget.Replace("video=", string.Empty, StringComparison.Ordinal),
+        // A camera heard through its microphone is named after both: "Webcam · Microphone (Webcam)".
+        SourceKind.Camera => item.SourceTarget
+            .Replace(":audio=", " · ", StringComparison.Ordinal)
+            .Replace("video=", string.Empty, StringComparison.Ordinal),
         SourceKind.Microphone => item.SourceTarget.Replace("audio=", string.Empty, StringComparison.Ordinal),
         _ => Path.GetFileName(item.SourceTarget)
     };

@@ -363,7 +363,7 @@ public sealed class FfmpegVideoPlaylistStreamer : IVideoPlaylistStreamer
                     _logger.LogInformation("{Message}", resumed);
                 }
 
-                var quality = await QualityOfAsync(videoSetting, FfmpegCommandBuilder.ResolveOutput(videoSetting, probe), cancellationToken)
+                var quality = await QualityOfAsync(videoSetting, PictureOf(videoSetting, probe, output), cancellationToken)
                     .ConfigureAwait(false);
                 var next = FfmpegStreamingSession.Start(
                     _locator, videoKey, inputPath, outputUrl, videoSetting, probe, _logger, resumeFrom, _frames.PathOf(videoKey),
@@ -1052,7 +1052,7 @@ public sealed class FfmpegVideoPlaylistStreamer : IVideoPlaylistStreamer
         FfmpegStreamingSession? session = null;
         try
         {
-            var quality = await QualityOfAsync(videoSetting, FfmpegCommandBuilder.ResolveOutput(videoSetting, probe), cancellationToken)
+            var quality = await QualityOfAsync(videoSetting, PictureOf(videoSetting, probe, output), cancellationToken)
                 .ConfigureAwait(false);
             session = FfmpegStreamingSession.Start(
                 _locator,
@@ -1120,6 +1120,16 @@ public sealed class FfmpegVideoPlaylistStreamer : IVideoPlaylistStreamer
         }
 
         _notifier.Raise();
+    }
+
+    /// <summary>
+    /// The picture a pass is encoded at: the one of the live on a shared connection - a short of
+    /// 432x208 on a 1080p live costs what a 1080p frame costs - or its own on a connection of its own.
+    /// </summary>
+    private static MediaOutput PictureOf(VideoSettingEntity setting, MediaProbeResult probe, LiveOutput? output)
+    {
+        var own = FfmpegCommandBuilder.ResolveOutput(setting, probe);
+        return output is null ? own : output.Frame ?? FfmpegCommandBuilder.FrameOfLive(setting, own);
     }
 
     /// <summary>

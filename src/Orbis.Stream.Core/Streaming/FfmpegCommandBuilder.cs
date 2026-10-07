@@ -22,7 +22,13 @@ public sealed record FfmpegStreamRequest(
     /// The encoder quality the live goes out at, already decided for this machine when the setting
     /// says automatic (see EncoderTuningService). Null reads it off the setting.
     /// </summary>
-    EncoderQuality? Quality = null);
+    EncoderQuality? Quality = null,
+    /// <summary>
+    /// The picture every encoder of one connection has to produce: the size and the rate of the
+    /// first one on it. Null leaves the output to the setting and the source, as a live that has
+    /// the connection to itself always did.
+    /// </summary>
+    MediaOutput? Frame = null);
 
 /// <summary>One source on the canvas, as the command line needs it.</summary>
 public sealed record FfmpegCompositionItem(
@@ -76,7 +82,13 @@ public sealed record FfmpegCompositionRequest(
     TimeSpan? Duration = null,
     string? PreviewPath = null,
     StreamPlatformProfile? Profile = null,
-    EncoderQuality? Quality = null);
+    EncoderQuality? Quality = null,
+    /// <summary>
+    /// The picture every encoder of one connection has to produce: the size and the rate of the
+    /// first one on it. Null leaves the output to the setting and the source, as a live that has
+    /// the connection to itself always did.
+    /// </summary>
+    MediaOutput? Frame = null);
 
 /// <summary>
 /// Translates the <c>FFmpegFrameRecorder</c> configuration of <c>StreamService</c> into the
@@ -131,10 +143,18 @@ public static class FfmpegCommandBuilder
 
         // The rate the encoder is asked for: what the setting asks for, otherwise the rate ffprobe
         // read from the file (25 is the fallback of the probe, kept for a probe that knows nothing).
-        var output = ResolveOutput(setting, probe);
+        var output = request.Frame ?? ResolveOutput(setting, probe);
         var frameRate = output.FrameRate;
         var profile = request.Profile;
         var relay = profile is { UsesRelay: true };
+
+        // On a connection that is already open the picture keeps the size it went on air with:
+        // the file is fitted into it and the rest is black, the way a television shows a film.
+        // An ingest takes a change of size halfway through a live badly - YouTube stops making
+        // its renditions and the viewers are left on "preparing".
+        var scale = request.Frame is { } frame && (frame.Width != probe.Width || frame.Height != probe.Height || ScaleFilter(setting) is not null)
+            ? Letterbox(frame.Width, frame.Height)
+            : request.Frame is null ? ScaleFilter(setting) : null;
 
         var arguments = GlobalArguments(relay);
 
@@ -195,8 +215,10 @@ public static class FfmpegCommandBuilder
             setting,
             frameRate,
             probe.HasAudio || silence,
-            silence ? 2 : probe.AudioChannels,
-            ScaleFilter(setting),
+            // One layout of sound for the whole connection too: a mono file after a stereo one is
+            // the same change of format, for the audio.
+            silence || relay ? 2 : probe.AudioChannels,
+            scale,
             profile,
             request.Quality);
 
@@ -210,9 +232,8 @@ public static class FfmpegCommandBuilder
 
         if (request.PreviewPath is { } previewPath)
         {
-            // The scale of the setting applies to the output before it: the preview gets the same
-            // picture the live does, then shrinks it on its own.
-            var scale = ScaleFilter(setting);
+            // The scale of the output applies to the preview too: it gets the same picture the live
+            // does, then shrinks it on its own.
             AppendPreviewOutput(arguments, "0:v:0", (scale is null ? string.Empty : scale + ",") + PreviewFilter, previewPath);
         }
 
@@ -252,7 +273,7 @@ public static class FfmpegCommandBuilder
             throw new ArgumentException("The canvas has no usable size", nameof(request));
         }
 
-        var frameRate = setting.FrameRate is > 0 ? setting.FrameRate.Value : request.CanvasFrameRate;
+        var frameRate = request.Frame?.FrameRate ?? (setting.FrameRate is > 0 ? setting.FrameRate.Value : request.CanvasFrameRate);
         if (frameRate <= 0)
         {
             frameRate = 25d;
@@ -296,10 +317,19 @@ public static class FfmpegCommandBuilder
         // split in two, and the copy is shrunk inside the graph (-vf cannot act on a graph output).
         var graph = BuildFilterGraph(items, pictures, canvasWidth, canvasHeight, frameRate, pacedGraph);
         var videoLabel = VideoLabel;
+
+        // A canvas on a connection that went on air at another size is fitted into that size.
+        if (request.Frame is { } frame && (frame.Width != canvasWidth || frame.Height != canvasHeight))
+        {
+            graph += $";[{videoLabel}]{Letterbox(frame.Width, frame.Height)}[{VideoLabel}fit]";
+            videoLabel = VideoLabel + "fit";
+        }
+
         if (request.PreviewPath is not null)
         {
+            var whole = videoLabel;
             videoLabel = VideoLabel + "out";
-            graph += $";[{VideoLabel}]split=2[{videoLabel}][{PreviewLabel}0];[{PreviewLabel}0]{PreviewFilter}[{PreviewLabel}]";
+            graph += $";[{whole}]split=2[{videoLabel}][{PreviewLabel}0];[{PreviewLabel}0]{PreviewFilter}[{PreviewLabel}]";
         }
 
         arguments.Add("-filter_complex");
@@ -324,7 +354,7 @@ public static class FfmpegCommandBuilder
         // The composed picture is already the size the canvas is, so the encoder is not asked to
         // scale again: -vf here would resize the result of the composition, not its base.
         AppendEncoderArguments(
-            arguments, setting, frameRate, HasAudioMix(items) || silence, channels: silence ? 2 : 0, scaleFilter: null, profile, request.Quality);
+            arguments, setting, frameRate, HasAudioMix(items) || silence, channels: silence || relay ? 2 : 0, scaleFilter: null, profile, request.Quality);
 
         // A canvas of devices has no end and neither has the silent track: -shortest only matters
         // for a canvas of files, whose picture ends when its longest file does.
@@ -825,6 +855,37 @@ public static class FfmpegCommandBuilder
     }
 
     /// <summary>
+    /// A picture of any size, fitted whole into a frame of another one: scaled down or up until it
+    /// touches two sides, centred, and the rest of the frame black. Square pixels, so a player
+    /// does not stretch it back.
+    /// </summary>
+    public static string Letterbox(int width, int height)
+    {
+        var w = Even(width);
+        var h = Even(height);
+        return string.Create(
+            CultureInfo.InvariantCulture,
+            $"scale={w}:{h}:force_original_aspect_ratio=decrease:force_divisible_by=2,pad={w}:{h}:(ow-iw)/2:(oh-ih)/2:color=black,setsar=1");
+    }
+
+    /// <summary>
+    /// The picture a live on a shared connection keeps from its first file on: the resolution of
+    /// the setting when it names one, otherwise the file's own when it is a landscape picture of
+    /// at least 720p. A short in portrait or a small clip that happens to come first would
+    /// otherwise make every video after it that small, so those start the live at 1080p instead.
+    /// </summary>
+    public static MediaOutput FrameOfLive(VideoSettingEntity setting, MediaOutput first)
+    {
+        ArgumentNullException.ThrowIfNull(setting);
+        ArgumentNullException.ThrowIfNull(first);
+
+        var named = setting.VideoWidth is > 0 && setting.VideoHeight is > 0;
+        return named || (first.Width >= first.Height && first.Width >= 1280)
+            ? new MediaOutput(Even(first.Width), Even(first.Height), first.FrameRate)
+            : new MediaOutput(1920, 1080, first.FrameRate);
+    }
+
+    /// <summary>
     /// What the encoder will be asked to produce for a file: the resolution and the frame rate of
     /// the setting when it has one, the ones ffprobe read otherwise. This is the single place that
     /// decides it, so the command line and the numbers the preview shows can never disagree.
@@ -928,6 +989,13 @@ public static class FfmpegCommandBuilder
             // Constrain rate for CBR-like streaming: maxrate = bitrate, bufsize = 2x bitrate
             arguments.Add("-maxrate");
             arguments.Add(bitrate);
+            if (profile is { ConstantBitrate: true })
+            {
+                // The floor as well as the ceiling: with the filler below, the rate the ingest
+                // measures is the rate of the setting whatever the picture is.
+                arguments.Add("-minrate");
+                arguments.Add(bitrate);
+            }
             arguments.Add("-bufsize");
             arguments.Add((setting.VideoBitrate.Value * 2).ToString(CultureInfo.InvariantCulture));
         }
@@ -994,10 +1062,23 @@ public static class FfmpegCommandBuilder
             // fills on the keyframe and the frames after it have nothing left to spend: that is a
             // stall of the encoder, which the ingest reads as the live going quiet.
             var hasX264Params = setting.VideoSettingsOptions.Any(o => o.Key?.Trim() == "x264-params");
-            if (!hasX264Params && fastEncoder)
+            var x264Params = new List<string>();
+            if (fastEncoder)
+            {
+                x264Params.Add("scenecut=0:rc_lookahead=0");
+            }
+
+            // True CBR, the way OBS sends to YouTube: the HRD signalled as constant and the gaps
+            // filled, so a still picture still arrives at the bitrate of the setting.
+            if (profile is { ConstantBitrate: true } && setting.VideoBitrate is > 0)
+            {
+                x264Params.Add("nal-hrd=cbr:force-cfr=1");
+            }
+
+            if (!hasX264Params && x264Params.Count > 0)
             {
                 arguments.Add("-x264-params");
-                arguments.Add("scenecut=0:rc_lookahead=0");
+                arguments.Add(string.Join(':', x264Params));
             }
         }
 
@@ -1027,6 +1108,14 @@ public static class FfmpegCommandBuilder
                 arguments.Add("-cq");
                 arguments.Add("23");   // Quality level for CQP modes
             }
+            // AMF pads a constant rate only when it is asked to; NVENC and QSV already hold it.
+            if (isAmf && profile is { ConstantBitrate: true }
+                && !setting.VideoSettingsOptions.Any(o => o.Key?.Trim() == "filler_data"))
+            {
+                arguments.Add("-filler_data");
+                arguments.Add("1");
+            }
+
             // NVENC: zero latency mode
             if (isNvenc && fastEncoder)
             {
@@ -1278,7 +1367,7 @@ public static class FfmpegCommandBuilder
             CultureInfo.InvariantCulture, $"anullsrc=channel_layout=stereo:sample_rate={profile.AudioSampleRate}"));
     }
 
-    private static int Even(int value) => value - (value % 2);
+    internal static int Even(int value) => value - (value % 2);
 
     private static string Number(double value) => value.ToString("0.######", CultureInfo.InvariantCulture);
 

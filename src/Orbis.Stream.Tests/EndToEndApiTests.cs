@@ -217,6 +217,29 @@ public sealed class EndToEndApiTests : IClassFixture<ApplicationFixture>
             items = new object[] { scene.items[2], scene.items[2] }
         });
         Assert.False(duplicated.IsSuccessStatusCode);
+
+        // A camera heard through its microphone keeps both in one target, and that microphone
+        // cannot also be on the canvas on its own: it would be the same device opened twice.
+        var webcamWithMic = new { sourceKind = 2, sourceTarget = "video=Integrated Camera:audio=Microphone", label = "Webcam", x = 0, y = 0, width = 1920, height = 1080, audioEnabled = true };
+        using var heard = await _fixture.Client.PostAsJsonAsync("/scene/save", new
+        {
+            pkid = (long?)null,
+            name = "Webcam with its microphone",
+            width = 1920,
+            height = 1080,
+            items = new object[] { webcamWithMic }
+        });
+        Assert.Equal(HttpStatusCode.Created, heard.StatusCode);
+
+        using var micTwice = await _fixture.Client.PostAsJsonAsync("/scene/save", new
+        {
+            pkid = (long?)null,
+            name = "Microphone twice",
+            width = 1920,
+            height = 1080,
+            items = new object[] { webcamWithMic, scene.items[3] }
+        });
+        Assert.False(micTwice.IsSuccessStatusCode);
     }
 
     /// <summary>

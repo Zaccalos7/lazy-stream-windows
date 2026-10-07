@@ -81,7 +81,16 @@ public sealed record StreamPlatformProfile(
     /// The keyframe interval in seconds, forced on the encoder when the setting does not force
     /// one itself: both platforms drop a stream whose keyframes drift past it.
     /// </summary>
-    double KeyframeSeconds)
+    double KeyframeSeconds,
+
+    /// <summary>
+    /// Whether the video goes out at the bitrate of the setting all the time, padded with filler
+    /// when the picture needs less. YouTube measures what arrives against what the stream said it
+    /// would send, and an encoder that only caps its bitrate drops far under it on a still or
+    /// letterboxed picture: "YouTube is not receiving enough video", buffering for the viewers.
+    /// Twitch takes the variable rate as it comes.
+    /// </summary>
+    bool ConstantBitrate = false)
 {
     /// <summary>
     /// Twitch: no head start, and a short jitter buffer so the preview stays next to what is on
@@ -117,7 +126,8 @@ public sealed record StreamPlatformProfile(
         RequiresAudio: true,
         AudioSampleRate: 48_000,
         Transport: RelayTransport.NativeRtmp,
-        KeyframeSeconds: 2);
+        KeyframeSeconds: 2,
+        ConstantBitrate: true);
 
     /// <summary>A destination this application does not know: one ffmpeg, as before.</summary>
     public static readonly StreamPlatformProfile Generic = new(

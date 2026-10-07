@@ -26,6 +26,7 @@ public sealed class LiveOutput : IAsyncDisposable
     private readonly object _gate = new();
     private FlvPacedRelay? _relay;
     private Process? _sender;
+    private MediaOutput? _frame;
 
     private LiveOutput(string outputUrl, StreamPlatformProfile profile, FfmpegToolLocator locator, ILogger logger)
     {
@@ -56,6 +57,32 @@ public sealed class LiveOutput : IAsyncDisposable
     }
 
     public string OutputUrl { get; }
+
+    /// <summary>
+    /// The picture of the live, fixed by the first encoder that asks: every video, spot and pass
+    /// after it is fitted into the same size and rate, because an ingest is not told the stream
+    /// changed format halfway and YouTube stops processing one that does.
+    /// </summary>
+    public MediaOutput? Frame
+    {
+        get
+        {
+            lock (_gate)
+            {
+                return _frame;
+            }
+        }
+    }
+
+    /// <summary>The picture of the live: the one fixed already, or this one, which becomes it.</summary>
+    public MediaOutput Pin(MediaOutput wanted)
+    {
+        ArgumentNullException.ThrowIfNull(wanted);
+        lock (_gate)
+        {
+            return _frame ??= wanted;
+        }
+    }
 
     public StreamPlatformProfile Profile { get; }
 

@@ -227,9 +227,14 @@ public sealed class FfmpegStreamingSession : IAsyncDisposable
         // The platform is read off the ingest; a caller may name it, which is how a relay is
         // exercised against a file on disk.
         profile ??= output?.Profile ?? StreamPlatformProfile.For(outputUrl);
+
+        // On a shared connection the first encoder fixes the picture of the live and every one
+        // after it is fitted into it (see LiveOutput.Frame).
+        var own = FfmpegCommandBuilder.ResolveOutput(setting, probe);
+        var frame = output?.Pin(FfmpegCommandBuilder.FrameOfLive(setting, own));
         var arguments = FfmpegCommandBuilder.Build(
-            new FfmpegStreamRequest(inputPath, outputUrl, probe, setting, resumeFrom, previewPath, profile, quality));
-        return Launch(locator, videoPkid, inputPath, outputUrl, arguments, probe, FfmpegCommandBuilder.ResolveOutput(setting, probe), resumeFrom, profile, logger, output);
+            new FfmpegStreamRequest(inputPath, outputUrl, probe, setting, resumeFrom, previewPath, profile, quality, frame));
+        return Launch(locator, videoPkid, inputPath, outputUrl, arguments, probe, frame ?? own, resumeFrom, profile, logger, output);
     }
 
     /// <summary>
@@ -256,13 +261,16 @@ public sealed class FfmpegStreamingSession : IAsyncDisposable
         EncoderQuality? quality = null)
     {
         profile ??= output?.Profile ?? StreamPlatformProfile.For(outputUrl);
-        var arguments = FfmpegCommandBuilder.BuildComposition(new FfmpegCompositionRequest(
-            items, outputUrl, setting, canvasWidth, canvasHeight, canvasFrameRate, resumeFrom, duration, previewPath, profile, quality));
 
-        // The composition is always sent at the size of the canvas: the resolution of the setting
-        // is not applied on top of it (see BuildComposition), so it is not the one shown either.
+        // The composition is sent at the size of the canvas: the resolution of the setting is not
+        // applied on top of it (see BuildComposition). A canvas is a size the user chose, so the
+        // first one on a connection fixes the picture of the live as it is.
         var frameRate = setting.FrameRate is > 0 ? setting.FrameRate.Value : canvasFrameRate;
-        var mediaOutput = new MediaOutput(canvasWidth, canvasHeight, frameRate);
+        var frame = output?.Pin(new MediaOutput(FfmpegCommandBuilder.Even(canvasWidth), FfmpegCommandBuilder.Even(canvasHeight), frameRate));
+        var arguments = FfmpegCommandBuilder.BuildComposition(new FfmpegCompositionRequest(
+            items, outputUrl, setting, canvasWidth, canvasHeight, canvasFrameRate, resumeFrom, duration, previewPath, profile, quality, frame));
+
+        var mediaOutput = frame ?? new MediaOutput(canvasWidth, canvasHeight, frameRate);
         var sound = FfmpegCommandBuilder.CarriesSound(items);
 
         // The length of the canvas is kept in the probe because that is where the streaming loop

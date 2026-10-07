@@ -72,14 +72,20 @@ public sealed class YouTubeAirWatch : BackgroundService
         _logger = logger;
     }
 
-    /// <summary>Whether the live of a video is being sent to YouTube and YouTube is not showing it.</summary>
-    public bool IsOffAir(int videoPkid) => _state.IsOffAir(videoPkid);
+    /// <summary>Whether a live is being sent to YouTube and YouTube is not showing it.</summary>
+    public bool IsOffAir(long? historyPkid) => _state.IsOffAir(historyPkid);
 
-    /// <summary>
-    /// The same question for a row of the live page, which stands for a whole playlist or canvas:
-    /// the row is flagged when any of the videos of its history is.
-    /// </summary>
-    public bool IsOffAir(int videoPkid, long? historyPkid) => _state.IsOffAir(videoPkid, historyPkid);
+    /// <summary>Whether YouTube keeps failing to say anything about a live.</summary>
+    public bool IsUnverified(long? historyPkid) => _state.IsUnverified(historyPkid);
+
+    /// <summary>The user closed the warning of a live; the pages are told at once.</summary>
+    public void Dismiss(long historyPkid)
+    {
+        if (_state.Dismiss(historyPkid))
+        {
+            _notifier.Raise();
+        }
+    }
 
     protected override async Task ExecuteAsync(CancellationToken stoppingToken)
     {
@@ -104,65 +110,83 @@ public sealed class YouTubeAirWatch : BackgroundService
         }
     }
 
-    /// <summary>One pass over the running lives. The rows are redrawn when a flag changed.</summary>
+    /// <summary>One pass over the running lives. The rows are redrawn when a warning changed.</summary>
     internal async Task CheckAsync(CancellationToken cancellationToken)
     {
-        var running = _sessions.Running.Where(session => !session.HasExited).ToList();
         var changed = false;
+        var now = DateTimeOffset.UtcNow;
 
-        foreach (var pkid in _state.Known.Where(pkid => running.All(session => session.VideoPkid != pkid)).ToList())
+        // The lives going to YouTube, each with the session it is on now: a playlist or a canvas
+        // is one live whatever video or spot is playing.
+        var lives = new Dictionary<long, (FfmpegStreamingSession Session, Domain.VideoLiveHistoryEntity History, string Channel)>();
+        foreach (var session in _sessions.Running)
         {
-            changed |= _state.Forget(pkid);
-        }
-
-        foreach (var session in running)
-        {
-            if (session.Profile.Platform != StreamPlatform.YouTube)
+            if (session.HasExited || session.Profile.Platform != StreamPlatform.YouTube)
             {
-                continue;
-            }
-
-            // A live that is not on air yet, or has just come back after a reconnect, is given the
-            // time YouTube needs before it is looked for.
-            if (!session.IsOnAir || session.OnAirFor < Grace)
-            {
-                changed |= _state.Forget(session.VideoPkid);
                 continue;
             }
 
             var video = _videos.FindByPkid(session.VideoPkid);
-            var history = video?.VideoLiveHistoryId is { } historyId ? _histories.FindByPkid(historyId) : null;
-            if (video is null || history is null)
+            if (video?.VideoLiveHistoryId is not { } historyId || _histories.FindByPkid(historyId) is not { } history)
             {
                 continue;
             }
 
-            _state.BelongsTo(session.VideoPkid, history.Pkid);
+            // The most recent session is the one a stop has to reach.
+            if (!lives.TryGetValue(historyId, out var known) || session.StartedAt > known.Session.StartedAt)
+            {
+                lives[historyId] = (session, history, video.ChannelName);
+            }
+        }
+
+        foreach (var history in _state.Known.Where(history => !lives.ContainsKey(history)).ToList())
+        {
+            changed |= _state.Missing(history);
+        }
+
+        foreach (var (historyId, (session, history, channel)) in lives)
+        {
+            // Not on air yet: the publish is still being opened, and there is nothing to ask about.
+            if (!session.IsOnAir)
+            {
+                continue;
+            }
+
+            // The time YouTube needs to put a live on its page, once for the whole live.
+            if (now - _state.OnAirSince(historyId, now) < Grace)
+            {
+                continue;
+            }
+
             var found = await _embeds.ResolveAsync(
-                history.StreamUrl, video.ChannelName, history.PlatformStreamName, null, cancellationToken)
+                history.StreamUrl, channel, history.PlatformStreamName, null, cancellationToken)
                 .ConfigureAwait(false);
-            if (_state.Observe(session.VideoPkid, found))
+            if (_state.Observe(historyId, found))
             {
                 changed = true;
-                if (_state.IsOffAir(session.VideoPkid))
+                if (_state.IsOffAir(historyId))
                 {
                     _logger.LogWarning(
-                        "The live of the video {Video} is being sent to YouTube but the channel has no public live.", session.VideoPkid);
+                        "The live {Live} is being sent to YouTube but the channel has no public live.", historyId);
+                }
+                else if (_state.IsUnverified(historyId))
+                {
+                    _logger.LogWarning("The live {Live} cannot be checked on YouTube: {Reason}.", historyId, found.Reason);
                 }
                 else
                 {
-                    _logger.LogInformation("The live of the video {Video} is on air on YouTube.", session.VideoPkid);
+                    _logger.LogInformation("The live {Live} is on air on YouTube.", historyId);
                 }
             }
 
             // Not on the channel any more, after having been there: is the broadcast that was on
             // air over? Only that page answers it.
-            if (found is { Embed: null, Reason: null } && _state.OnAirVideoOf(session.VideoPkid) is { } videoId)
+            if (found is { Embed: null, Reason: null } && _state.OnAirVideoOf(historyId) is { } videoId)
             {
                 var ended = await _embeds.HasEndedAsync(videoId, cancellationToken).ConfigureAwait(false);
-                if (_state.ObserveEnding(session.VideoPkid, ended))
+                if (_state.ObserveEnding(historyId, ended))
                 {
-                    Stop(session.VideoPkid, videoId);
+                    Stop(historyId, session.VideoPkid, videoId);
                     changed = true;
                 }
             }
@@ -174,13 +198,13 @@ public sealed class YouTubeAirWatch : BackgroundService
         }
     }
 
-    private void Stop(int videoPkid, string videoId)
+    private void Stop(long historyId, int videoPkid, string videoId)
     {
         _logger.LogWarning(
-            "The broadcast {Broadcast} of the video {Video} was ended on YouTube: the live is stopped here too.",
+            "The broadcast {Broadcast} of the live {Live} was ended on YouTube: the live is stopped here too.",
             videoId,
-            videoPkid);
-        _state.Forget(videoPkid);
+            historyId);
+        _state.Forget(historyId);
         try
         {
             _streaming.StopBecause(videoPkid, _localizer.PrintMessage("live.stopped.youtube"));
@@ -188,7 +212,7 @@ public sealed class YouTubeAirWatch : BackgroundService
         catch (Exception problem)
         {
             // The live may have ended on its own in the meantime: there is nothing left to stop.
-            _logger.LogWarning(problem, "The live of the video {Video} could not be stopped.", videoPkid);
+            _logger.LogWarning(problem, "The live {Live} could not be stopped.", historyId);
         }
     }
 }

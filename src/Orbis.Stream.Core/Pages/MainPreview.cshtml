@@ -112,10 +112,19 @@ else
     var platformLabel = LiveLinkView.LabelOf(platform);
 
     @* RTMP accepted and nothing on the channel: the ingest rating the stream is not the broadcast
-       being on air (YouTubeAirWatch). The push channel shows and hides it as the check answers. *@
+       being on air (YouTubeAirWatch). It stays until the live is found on air, the live is over,
+       or the user closes it; the push channel shows and hides it as the check answers. *@
     <div class="infobar warning" role="alert" data-preview-offair hidden="@(!live.PlatformOffAir)">
         <i class="icon">&#xE7BA;</i>
         <p><strong>@T["youtubeOffAir"]</strong> @T["youtubeOffAirHelp"]</p>
+        <button class="btn subtle icon-only" type="button" data-air-dismiss title="@T["close"]" aria-label="@T["close"]"><i class="icon">&#xE711;</i></button>
+    </div>
+    @* YouTube could not be asked at all: without this the page would say nothing, which reads as
+       "all is well" exactly when nothing is known. *@
+    <div class="infobar warning" role="alert" data-preview-unverified hidden="@(!live.PlatformUnverified)">
+        <i class="icon">&#xE9CE;</i>
+        <p><strong>@T["youtubeUnverified"]</strong> @T["youtubeUnverifiedHelp"]</p>
+        <button class="btn subtle icon-only" type="button" data-air-dismiss title="@T["close"]" aria-label="@T["close"]"><i class="icon">&#xE711;</i></button>
     </div>
     <div class="preview">
         <div class="preview-main">

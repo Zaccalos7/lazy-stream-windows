@@ -18,9 +18,20 @@
   // A slot has no kind: it is a rectangle, so it takes room on the canvas like a picture does.
   const hasPicture = kind => kind !== Kind.Microphone;
   const isSlot = item => item.slot === true;
-  // A camera opened as video=… has no sound of its own and a screen never has any: the sound of a
-  // webcam is its microphone, which is a source of its own.
+  // A screen never has a sound. A camera opened as video=… has none of its own either: its sound
+  // is a microphone linked to it (item.mic), which goes on air in the same dshow input as the
+  // picture - video=…:audio=… - so the two stay in sync.
   const canCarrySound = kind => kind === Kind.File || kind === Kind.Microphone;
+  const carriesSound = item => canCarrySound(item.kind) || (item.kind === Kind.Camera && !!item.mic);
+
+  // The dshow target of a camera with its microphone, and back. The microphone is the part after
+  // ":audio=", which is how ffmpeg reads two devices of one input.
+  const MicSeparator = ":audio=";
+  const joinTarget = item => item.kind === Kind.Camera && item.mic ? item.target + ":" + item.mic : item.target;
+  const splitTarget = (kind, target) => {
+    const at = kind === Kind.Camera ? target.indexOf(MicSeparator) : -1;
+    return at < 0 ? { target, mic: null } : { target: target.slice(0, at), mic: target.slice(at + 1) };
+  };
 
   const glyphs = { [Kind.File]: "\uE714", [Kind.Screen]: "\uE7F4", [Kind.Camera]: "\uE960", [Kind.Microphone]: "\uE720" };
   const slotGlyph = "\uE80A";
@@ -74,6 +85,25 @@
   };
 
   const sameSource = (a, b) => a.kind === b.kind && a.target === b.target;
+
+  // Whether an item has a source of the catalog open: itself, or the microphone of a camera. A
+  // device cannot be opened twice, so a microphone linked to a camera is taken.
+  const usesSource = (item, option) =>
+    sameSource(item, option) || (option.kind === Kind.Microphone && item.mic === option.target);
+
+  // The microphone that goes with a camera, when the names say so: a webcam lists its microphone
+  // as "Microphone (HD Pro Webcam C920)" next to "HD Pro Webcam C920". Only a name contained in
+  // the other one counts - a laptop camera is not paired with whatever microphone the laptop has.
+  const simple = text => (text || "").toLowerCase().replace(/[^\p{L}\p{N}]+/gu, "");
+  const micFor = camera => {
+    const name = simple(camera.name || camera.label);
+    if (name.length < 4) return null;
+    const free = catalog.filter(option => option.kind === Kind.Microphone
+      && !scene.items.some(item => usesSource(item, option)));
+    return free.find(option => simple(option.name).includes(name))
+      || free.find(option => { const mic = simple(option.name); return mic.length >= 4 && name.includes(mic); })
+      || null;
+  };
   const clamp = (value, low, high) => Math.min(Math.max(value, low), Math.max(low, high));
   // Everything that takes room on the canvas, the empty slots included: what a tile snaps to.
   const pictures = () => scene.items.filter(item => hasPicture(item.kind));
@@ -183,14 +213,19 @@
       sourceWidth: option.width || 0,
       sourceHeight: option.height || 0,
       // A file brings its sound along by default: that is what playing a video means. A
-      // microphone is only there to be heard.
+      // microphone is only there to be heard, and a camera is heard through its own microphone.
       audio: option.kind === Kind.File || option.kind === Kind.Microphone,
+      mic: null,
       // Until the user sizes it, a tile may still take the aspect of its still when it arrives.
       autoSized: !(option.width > 0),
       x: 0, y: 0, w: 0, h: 0
     };
 
     if (hasPicture(item.kind)) Object.assign(item, boxFor(option, at, aspectOf(item)));
+    if (item.kind === Kind.Camera) {
+      const mic = micFor(option);
+      if (mic) Object.assign(item, { mic: mic.target, audio: true });
+    }
     return item;
   };
 
@@ -238,7 +273,7 @@
 
   // A source on bare canvas: a new layer where the pointer is.
   const addLayer = (option, at) => {
-    const existing = scene.items.find(item => sameSource(item, option));
+    const existing = scene.items.find(item => usesSource(item, option));
     if (existing) {
       // One device cannot be opened twice, and the same file twice is never what was meant.
       notify("warning", word("twice"));
@@ -528,6 +563,32 @@
     return button;
   };
 
+  // The microphone of a camera, picked in its row: the ones nobody else has open, and its own.
+  const micPicker = item => {
+    const picker = document.createElement("select");
+    picker.className = "input composer-mic";
+    picker.title = word("camera-mic");
+    picker.setAttribute("aria-label", word("camera-mic"));
+    const none = new Option(word("no-mic"), "");
+    picker.append(none);
+    for (const option of catalog.filter(entry => entry.kind === Kind.Microphone)) {
+      if (option.target !== item.mic && scene.items.some(other => usesSource(other, option))) continue;
+      picker.append(new Option(option.name, option.target, false, option.target === item.mic));
+    }
+    // A saved microphone that is not plugged in now is kept, and said as it was saved.
+    if (item.mic && ![...picker.options].some(entry => entry.value === item.mic)) {
+      picker.append(new Option(item.mic.replace(/^audio=/, ""), item.mic, false, true));
+    }
+    picker.addEventListener("click", event => event.stopPropagation());
+    picker.addEventListener("change", () => {
+      item.mic = picker.value || null;
+      item.audio = !!item.mic;
+      markDirty();
+      render();
+    });
+    return picker;
+  };
+
   const renderLayers = () => {
     layersBox.replaceChildren();
 
@@ -555,10 +616,11 @@
         : isSlot(item) && !layoutMode ? `${word("slot-empty")} · ${where}`
         : where;
       text.append(name, facts);
+      if (item.kind === Kind.Camera) text.append(micPicker(item));
 
       const actions = document.createElement("span");
       actions.className = "composer-layer-actions";
-      if (!isSlot(item) && canCarrySound(item.kind)) {
+      if (!isSlot(item) && carriesSound(item)) {
         actions.append(layerButton(item.audio ? "\uE767" : "\uE74F", word("sound"), () => {
           item.audio = !item.audio;
           markDirty();
@@ -588,7 +650,7 @@
     const availableOptions = [];
 
     for (const option of catalog) {
-      const isUsed = scene.items.some(item => sameSource(item, option));
+      const isUsed = scene.items.some(item => usesSource(item, option));
       if (isUsed) {
         usedOptions.push(option);
       } else {
@@ -1053,8 +1115,16 @@
       entry.addEventListener("click", () => place(option));
     } else {
       entry.addEventListener("click", () => {
-        const item = scene.items.find(i => sameSource(i, option));
-        if (item) removeItem(item.uid);
+        const item = scene.items.find(i => usesSource(i, option));
+        if (!item) return;
+        // A microphone linked to a camera is unlinked, not the camera taken off the canvas.
+        if (!sameSource(item, option)) {
+          Object.assign(item, { mic: null, audio: false });
+          markDirty();
+          render();
+          return;
+        }
+        removeItem(item.uid);
       });
     }
 
@@ -1203,12 +1273,14 @@
   });
 
   const sourceOf = entry => {
-    const option = catalog.find(candidate => candidate.kind === entry.sourceKind && candidate.target === entry.sourceTarget);
+    const { target, mic } = splitTarget(entry.sourceKind, entry.sourceTarget);
+    const option = catalog.find(candidate => candidate.kind === entry.sourceKind && candidate.target === target);
     return {
       uid: nextUid++,
       kind: entry.sourceKind,
-      target: entry.sourceTarget,
-      label: entry.label || option?.name || entry.sourceTarget,
+      target,
+      mic,
+      label: entry.label || option?.name || target,
       naturalWidth: option?.width || entry.width,
       naturalHeight: option?.height || entry.height,
       sourceWidth: option?.width || 0,
@@ -1295,13 +1367,13 @@
     isLayout: layoutMode,
     items: (layoutMode ? slots() : sources()).map(item => ({
       sourceKind: isSlot(item) ? Kind.File : item.kind,
-      sourceTarget: item.target,
+      sourceTarget: joinTarget(item),
       label: item.label,
       x: hasPicture(item.kind) ? item.x : 0,
       y: hasPicture(item.kind) ? item.y : 0,
       width: hasPicture(item.kind) ? item.w : 0,
       height: hasPicture(item.kind) ? item.h : 0,
-      audioEnabled: !isSlot(item) && canCarrySound(item.kind) && item.audio
+      audioEnabled: !isSlot(item) && carriesSound(item) && item.audio
     }))
   });
 

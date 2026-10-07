@@ -133,7 +133,134 @@
 .preview-facts strong { font-size: 13px; font-weight: 600; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
 
 .preview [data-source-off][hidden] { display: none; }
+
 .preview .field .toggle { align-items: center; gap: 8px; min-height: 34px; }
+
+/* The column of the picture: the stage, and under it the mix of what it sounds like. */
+.preview-main { display: flex; flex-direction: column; gap: 12px; min-width: 0; }
+
+/* The mixer. Every row takes its colour from the level the script writes on it (data-level) and
+   the position of the thumb from --p, 0 to 1 of the slider; --mark is where 100% sits on the
+   same scale. The thumb is 16px wide, so both are mapped onto the width the centre of the thumb
+   can travel, or the fill would run ahead of it at the right end and lag at the left. */
+.preview-mixer { display: flex; flex-direction: column; padding: 14px 16px; }
+.preview-mixer .section { margin-top: 0; }
+.preview-mixer > .caption { margin: 10px 0 0; }
+.mixer-rows { display: flex; flex-direction: column; gap: 4px; }
+
+.mixer-row {
+  --p: 0.5;
+  --mark: 0.5;
+  --level: var(--success);
+  --level-bg: var(--success-bg);
+  --thumb: 16px;
+  display: grid;
+  grid-template-columns: auto minmax(0, 1fr) auto;
+  align-items: center;
+  gap: 12px;
+  padding: 6px 8px 6px 4px;
+  border-radius: var(--radius);
+  transition: background-color 0.15s;
+}
+.mixer-row:hover { background: var(--tint); }
+.mixer-row[data-level="high"] { --level: var(--caution); --level-bg: var(--caution-bg); }
+.mixer-row[data-level="hot"] { --level: var(--critical); --level-bg: var(--critical-bg); }
+.mixer-row[data-level="mute"] { --level: var(--text-3); --level-bg: var(--tint-strong); }
+
+.mixer-mute .icon { font-size: 16px; transition: color 0.15s; }
+.mixer-row .mixer-mute { color: var(--level); }
+.mixer-row[data-level="mute"] .mixer-mute { color: var(--critical); }
+
+.mixer-main { display: flex; flex-direction: column; gap: 4px; min-width: 0; }
+.mixer-name { font-size: 12px; color: var(--text-2); }
+.mixer-row[data-level="mute"] .mixer-name { text-decoration: line-through; color: var(--text-3); }
+
+.mixer-track { position: relative; display: block; height: 20px; }
+/* The tick of 100%, the sound of the source: the line between green and yellow. It sits under the
+   slider and stands out of the track above and below it, so the thumb passes over it. */
+.mixer-track::after {
+  content: "";
+  position: absolute;
+  top: 3px;
+  bottom: 3px;
+  left: calc(var(--thumb) / 2 + (100% - var(--thumb)) * var(--mark));
+  width: 2px;
+  margin-left: -1px;
+  border-radius: 1px;
+  background: var(--stroke-strong);
+  pointer-events: none;
+}
+
+.mixer-track input[type="range"] {
+  --fill: calc(var(--thumb) / 2 + (100% - var(--thumb)) * var(--p));
+  position: relative;
+  z-index: 1;
+  -webkit-appearance: none;
+  appearance: none;
+  display: block;
+  width: 100%;
+  height: 20px;
+  margin: 0;
+  background: transparent;
+  cursor: pointer;
+}
+.mixer-track input[type="range"]:focus-visible { outline: none; }
+
+.mixer-track input[type="range"]::-webkit-slider-runnable-track {
+  height: 6px;
+  border-radius: 3px;
+  background: linear-gradient(to right, var(--level) 0 var(--fill), var(--tint-strong) var(--fill) 100%);
+}
+.mixer-track input[type="range"]::-moz-range-track {
+  height: 6px;
+  border-radius: 3px;
+  background: linear-gradient(to right, var(--level) 0 var(--fill), var(--tint-strong) var(--fill) 100%);
+}
+
+.mixer-track input[type="range"]::-webkit-slider-thumb {
+  -webkit-appearance: none;
+  appearance: none;
+  width: var(--thumb);
+  height: var(--thumb);
+  margin-top: -5px;
+  border-radius: 50%;
+  border: 2px solid var(--level);
+  background: var(--panel-solid);
+  box-shadow: var(--shadow-flyout);
+  transition: transform 0.12s, box-shadow 0.12s;
+}
+.mixer-track input[type="range"]::-moz-range-thumb {
+  width: var(--thumb);
+  height: var(--thumb);
+  box-sizing: border-box;
+  border-radius: 50%;
+  border: 2px solid var(--level);
+  background: var(--panel-solid);
+  box-shadow: var(--shadow-flyout);
+}
+.mixer-track input[type="range"]:hover::-webkit-slider-thumb,
+.mixer-track input[type="range"]:active::-webkit-slider-thumb { transform: scale(1.15); }
+.mixer-track input[type="range"]:focus-visible::-webkit-slider-thumb { box-shadow: 0 0 0 4px var(--level-bg), var(--shadow-flyout); }
+.mixer-track input[type="range"]:focus-visible::-moz-range-thumb { box-shadow: 0 0 0 4px var(--level-bg), var(--shadow-flyout); }
+
+/* The value is also the way back to 100%: a pill in the colour of the level. */
+.mixer-value {
+  min-width: 58px;
+  padding: 4px 10px;
+  border: 1px solid transparent;
+  border-radius: 999px;
+  background: var(--level-bg);
+  color: var(--level);
+  font: inherit;
+  font-size: 12px;
+  font-weight: 600;
+  font-variant-numeric: tabular-nums;
+  text-align: center;
+  cursor: pointer;
+  transition: border-color 0.15s, background-color 0.15s, color 0.15s;
+}
+.mixer-value:hover { border-color: var(--level); }
+.mixer-value:focus-visible { outline: none; box-shadow: var(--glow); }
 
 @media (max-width: 1100px) {
   .preview { grid-template-columns: minmax(0, 1fr); }

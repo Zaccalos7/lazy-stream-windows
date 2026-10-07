@@ -32,12 +32,17 @@ public sealed class UiText
         new("ko", "한국어", "kr.svg"),
         new("ja", "日本語", "jp.svg"),
         new("hi", "हिन्दी", "in.svg"),
+        // Arabic is a family of languages rather than one country, so it is given a banner of
+        // its own too, not the flag of whichever state answers for it first.
+        new("ar", "العربية", "ar.svg"),
+        new("ro", "Română", "ro.svg"),
+        new("da", "Dansk", "dk.svg"),
+        new("fil", "Filipino", "ph.svg"),
         // No country answers to these three, so they carry no flag of their own either: the
         // banner is drawn here rather than taken from a nation it has nothing to do with.
         new("la", "Latina", "la.svg"),
         new("tlh", "tlhIngan Hol", "tlh.svg"),
-        new("hod", "Hodor", "hod.svg"),
-        new("ro", "Română", "ro.svg")
+        new("hod", "Hodor", "hod.svg")
     ];
 
     /// <summary>One row of the language selector: the bundle it picks, the name to show, the flag.</summary>
@@ -45,6 +50,15 @@ public sealed class UiText
     /// <param name="Name">The language in its own language, never translated.</param>
     /// <param name="Flag">File name of the flag under <c>wwwroot/flags</c>.</param>
     public sealed record LanguageOption(string Code, string Name, string Flag);
+
+    /// <summary>
+    /// Languages written from right to left, so the pages hand the browser a <c>dir="rtl"</c>
+    /// and the shell mirrors itself instead of laying Arabic out left to right.
+    /// </summary>
+    private static readonly FrozenSet<string> RightToLeftLanguages = FrozenSet.Create("ar");
+
+    public static bool IsRightToLeft(string? language) =>
+        language is not null && RightToLeftLanguages.Contains(language);
 
     private static readonly FrozenDictionary<string, FrozenDictionary<string, string>> Bundles = Load();
 

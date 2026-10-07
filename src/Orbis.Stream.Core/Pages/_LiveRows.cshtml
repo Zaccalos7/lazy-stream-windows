@@ -1,4 +1,5 @@
 @model MainLiveModel
+@inject Orbis.Stream.Core.Services.YouTubeAirWatch Air
 @{
     var page = Model.Videos.Page;
     var pager = new PagerModel(page.Number, page.TotalPages, index => Url.Page("/MainLive", new { Model.LiveStatus, Model.ChannelName, p = index })!);
@@ -35,9 +36,20 @@ else
                         var platform = video.VideoLiveHistory?.PlatformStreamName;
 
                         var knownPlatform = LiveLinkView.PlatformOf(video.VideoLiveHistory?.StreamUrl);
-                        var liveUrl = live ? LiveLinkView.UrlOf(video.VideoLiveHistory?.StreamUrl, video.ChannelName, platform) : null;
+                        var liveUrl = live ? LiveLinkView.UrlOf(video.VideoLiveHistory?.StreamUrl, video.ChannelName, platform, Air.OnAirVideoOf(historyPkid)) : null;
                         <tr data-row>
-                            <td><span class="badge @LiveStatusView.Css(status)">@T[LiveStatusView.Key(status)]</span></td>
+                            <td>
+                                <span class="badge @LiveStatusView.Css(status)">@T[LiveStatusView.Key(status)]</span>
+                                @if (live && Air.IsOffAir(historyPkid))
+                                {
+                                    @* Sent, and not shown: the row says it where the user looks first. *@
+                                    <span class="badge offair" title="@T["youtubeOffAirHelp"]">@T["youtubeOffAir"]</span>
+                                }
+                                else if (live && Air.IsUnverified(historyPkid))
+                                {
+                                    <span class="badge offair" title="@T["youtubeUnverifiedHelp"]">@T["youtubeUnverified"]</span>
+                                }
+                            </td>
                             <td class="path">
                                 <div class="truncate">
                                     @if (row.IsPlaylist)
@@ -116,6 +128,17 @@ else
                                     }
                                     @if (hasSetting && !row.IsPlaylist)
                                     {
+                                        @if (live)
+                                        {
+                                            <a class="btn subtle icon-only" href="/orbis/mainPreview?live=@video.Pkid" title="@T["preview"]" aria-label="@T["preview"]">
+                                                <i class="icon">&#xE7F4;</i>
+                                            </a>
+                                        }
+                                        <button class="btn subtle icon-only" disabled="@(!live)" title="@T["playSpot"]" aria-label="@T["playSpot"]"
+                                                onclick="document.querySelector('#spot-dialog input[name=videoKey]').value = '@video.Pkid'; document.getElementById('spot-dialog').showModal();"
+                                                commandfor="spot-dialog" command="show-modal">
+                                            <partial name="_SpotIcon" />
+                                        </button>
                                         <form method="post" asp-page="/MainLive" asp-page-handler="Stop" asp-all-route-data="Model.RowRoute(video.Pkid)" data-confirm="@T["stopLive"]">
                                             <button class="btn subtle icon-only danger" disabled="@(!live)" title="@T["stopLiveIconLabel"]" aria-label="@T["stopLiveIconLabel"]"><i class="icon">&#xE71A;</i></button>
                                         </form>

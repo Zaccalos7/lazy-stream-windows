@@ -108,8 +108,8 @@ public static class LiveLinkView
             .FirstOrDefault(known => known.Value == platform).Label;
 
     /// <summary>
-    /// Page of a platform channel: on Twitch the channel, on YouTube the page of the channel, which
-    /// the address is built from.
+    /// Where the icon of a live leads: on Twitch the channel, on YouTube the live control room of
+    /// YouTube Studio (<see cref="YouTubeStudioUrl"/>), which is where a live there is managed.
     /// </summary>
     /// <param name="channelName">
     /// The channel of the configuration. The form of the configuration keeps the platform in the
@@ -119,7 +119,8 @@ public static class LiveLinkView
     /// <param name="platformStreamName">
     /// The same channel, for a live that came from the API, whose record names the channel there.
     /// </param>
-    public static string? UrlOf(string? streamUrl, string? channelName, string? platformStreamName)
+    /// <param name="videoId">The video YouTube broadcasts the live as, when it is known.</param>
+    public static string? UrlOf(string? streamUrl, string? channelName, string? platformStreamName, string? videoId = null)
     {
         var name = (channelName ?? platformStreamName)?.Trim();
         if (string.IsNullOrEmpty(name))
@@ -130,9 +131,34 @@ public static class LiveLinkView
         return PlatformOf(streamUrl) switch
         {
             "twitch" => "https://www.twitch.tv/" + Uri.EscapeDataString(name),
-            "youtube" => YouTubeChannelUrl(name),
+            "youtube" => YouTubeStudioUrl(name, videoId),
             _ => null
         };
+    }
+
+    /// <summary>
+    /// The live control room of YouTube Studio for a live, as precise as what is known of it:
+    /// <list type="bullet">
+    /// <item>the video it is broadcast as - <c>studio.youtube.com/video/{id}/livestreaming</c>, the
+    /// page of that broadcast, with its health, its chat and its end button;</item>
+    /// <item>otherwise the channel, when the configuration names it by id -
+    /// <c>studio.youtube.com/channel/{UC…}/livestreaming</c>;</item>
+    /// <item>otherwise <c>/channel/UC/</c>, which Studio reads as the channel of whoever is signed
+    /// in: a handle is not an address Studio takes, and the one signed in is the one streaming.</item>
+    /// </list>
+    /// Studio opens on the live in progress from the last two by itself.
+    /// </summary>
+    public static string YouTubeStudioUrl(string channelName, string? videoId)
+    {
+        if (!string.IsNullOrWhiteSpace(videoId))
+        {
+            return "https://studio.youtube.com/video/" + Uri.EscapeDataString(videoId.Trim()) + "/livestreaming";
+        }
+
+        var channel = channelName.Trim();
+        return "https://studio.youtube.com/channel/"
+            + (IsYouTubeChannelId(channel) ? Uri.EscapeDataString(channel) : "UC")
+            + "/livestreaming";
     }
 
     /// <summary>
@@ -141,9 +167,9 @@ public static class LiveLinkView
     /// <c>/channel/UC...</c>. <c>/channel/madajeeita207</c> is not the channel of the handle
     /// madajeeita207, it is a page that does not exist, so which address to build is decided by
     /// what the configuration holds rather than by picking one.
-    /// <para>This is the one place a YouTube channel address is built. The preview resolves the live
-    /// to watch out of it, and the live page links to it, so the two cannot end up disagreeing
-    /// about what the channel of a configuration is called.</para>
+    /// <para>This is the one place a YouTube channel address is built: the preview resolves the
+    /// live to watch out of it (the icon of a live leads to Studio instead, see
+    /// <see cref="YouTubeStudioUrl"/>).</para>
     /// </summary>
     public static string YouTubeChannelUrl(string name)
     {

@@ -388,6 +388,119 @@ const previewFps = value => value > 0
 
 const previewSize = media => media && media.width > 0 ? `${media.width}×${media.height}` : "–";
 
+// ---- Bitrate ---------------------------------------------------------------------
+// A bitrate is kept in bits per second, and 5000000 is not a number anybody reads at a glance.
+// The box speaks Mbit/s and kbit/s and spells out underneath the exact number the setting stores:
+// what is typed is only ever another way of writing that value, never another value. [data-bitrate]
+// marks the box, [data-bitrate-box] the line around it, and the hidden input inside that line is
+// what the forms post, while the preview panel reads the same number from data-bitrate-bps.
+
+const bitrateUnits = [
+  { suffix: "M", factor: 1e6, label: "Mbit/s" },
+  { suffix: "k", factor: 1e3, label: "kbit/s" },
+  { suffix: "", factor: 1, label: "bit/s" }
+];
+
+const bitrateGrouped = value => String(value).replace(/\B(?=(\d{3})+(?!\d))/g, " ");
+
+// "5", "5.5", "5M", "128k", "5 Mbit/s", "5 000 000", "5,000,000" and "6,5M" all end up as one
+// count of bits per second. A dot is a decimal point; a space or a comma between groups of three
+// is a thousands separator, which is how a value pasted from elsewhere arrives.
+const parseBitrate = (raw, fallback) => {
+  const typed = String(raw ?? "").trim().toLowerCase();
+  if (!typed) return null;
+  // A value already written out in full says so, and is not read through the unit in the box: a
+  // "128 000" pasted into a box sitting on Mbit/s is 128 000 bit/s, not 128 000 of them.
+  const grouped = /^\d{1,3}(?:[ ,]\d{3})+$/.test(typed);
+  const text = grouped ? typed.replace(/[ ,]/g, "") : typed.replace(/[\s_]/g, "");
+  const match = /^(\d+)(?:[.,](\d+))?(mbit\/s|kbit\/s|bit\/s|mbps|kbps|bps|m|k)?$/.exec(text);
+  if (!match) return null;
+  const named = match[3] && bitrateUnits.find(unit => unit.suffix && match[3].startsWith(unit.suffix.toLowerCase()));
+  const spelled = match[3] === "bps" || match[3] === "bit/s";
+  const unit = named || (spelled || grouped ? bitrateUnits[2] : fallback);
+  const fraction = match[2] ? Number(match[2]) / 10 ** match[2].length : 0;
+  return Math.round((Number(match[1]) + fraction) * unit.factor);
+};
+
+// The way the box writes a bitrate back: the largest unit it divides evenly, so 5000000 comes back
+// as "5M" and 128000 as "128k" rather than as a row of digits. Anything finer than that keeps them.
+const bitrateWritten = value => {
+  for (const unit of bitrateUnits) {
+    const scaled = value / unit.factor;
+    const rounded = Math.round(scaled * 100) / 100;
+    if (scaled >= 1 && Math.abs(scaled - rounded) < 1e-9) return { text: `${rounded}${unit.suffix}`, unit };
+  }
+  return { text: String(value), unit: bitrateUnits[2] };
+};
+
+// The unit a bare number in the box is read in: the one shown last, or the largest the field can
+// reasonably hold (an audio bitrate is read in kbit/s, a video one in Mbit/s).
+const bitrateUnitOf = field => {
+  const shown = field.dataset.bitrateUnit;
+  if (shown !== undefined) return bitrateUnits.find(unit => unit.suffix === shown) || bitrateUnits[1];
+  const maximum = Number(field.dataset.bitrateMax || 0);
+  return maximum >= 1e7 ? bitrateUnits[0] : maximum >= 1e3 ? bitrateUnits[1] : bitrateUnits[2];
+};
+
+const bitrateParts = field => {
+  const box = field.closest("[data-bitrate-box]");
+  return {
+    box,
+    unit: box?.querySelector("[data-bitrate-unit]"),
+    hint: box?.parentElement?.querySelector("[data-bitrate-hint]"),
+    sink: box?.querySelector('input[type="hidden"]')
+  };
+};
+
+const paintBitrate = (field, bps, canonical = false) => {
+  const { box, unit, hint, sink } = bitrateParts(field);
+  if (!box) return;
+  const maximum = Number(field.dataset.bitrateMax || 0);
+  const word = field.dataset.bitrateInvalid ?? "";
+  const written = bps > 0 ? bitrateWritten(bps) : null;
+
+  // An empty box is a form that has not been filled in, not a wrong number: the browser speaks of
+  // it through the required attribute and the line underneath stays quiet.
+  if (!String(field.value).trim()) {
+    box.dataset.bitrateState = "";
+    field.setCustomValidity("");
+    delete field.dataset.bitrateBps;
+    unit.textContent = bitrateUnitOf(field).label;
+    if (hint) hint.textContent = "";
+    if (sink) sink.value = "";
+    return;
+  }
+
+  if (!written || (maximum > 0 && bps > maximum)) {
+    box.dataset.bitrateState = "bad";
+    field.setCustomValidity(word);
+    unit.textContent = written ? written.unit.label : bitrateUnitOf(field).label;
+    if (hint) hint.textContent = written ? `${word} · 1–${bitrateGrouped(maximum)} bit/s` : word;
+    delete field.dataset.bitrateBps;
+    if (sink) sink.value = "";
+    return;
+  }
+
+  box.dataset.bitrateState = "";
+  field.setCustomValidity("");
+  field.dataset.bitrateBps = String(bps);
+  field.dataset.bitrateUnit = written.unit.suffix;
+  unit.textContent = written.unit.label;
+  if (hint) hint.textContent = `= ${bitrateGrouped(bps)} bit/s`;
+  if (sink) sink.value = String(bps);
+  if (canonical && field.value !== written.text) field.value = written.text;
+};
+
+const readBitrate = field => paintBitrate(field, parseBitrate(field.value, bitrateUnitOf(field)));
+
+for (const field of document.querySelectorAll("[data-bitrate]")) {
+  readBitrate(field);
+  field.addEventListener("input", () => readBitrate(field));
+  // Leaving the box is what settles the number: what was typed folds into the friendliest exact
+  // form, so what is saved is visible in the same line as what it means.
+  field.addEventListener("blur", () => paintBitrate(field, parseBitrate(field.value, bitrateUnitOf(field)), true));
+}
+
 const setPreviewText = (selector, value) => {
   for (const node of preview.querySelectorAll(selector)) node.textContent = value;
 };
@@ -396,6 +509,12 @@ const setPreviewField = (name, value) => {
   for (const field of previewForm.querySelectorAll("[data-param]")) {
     if (field.dataset.param !== name) continue;
     if (field === document.activeElement || (previewDirty.get(name) || 0) > Date.now()) continue;
+    // A bitrate is written in the unit it reads best in, so the number the snapshot carries is put
+    // through the same folding the user's own typing goes through.
+    if (field.dataset.bitrate !== undefined) {
+      paintBitrate(field, Number(value) || null, true);
+      continue;
+    }
     field.value = value ?? "";
   }
 };
@@ -517,6 +636,40 @@ if (previewIsLive) {
   }
 }
 
+// The colour of a level in the mix: green up to the sound of the source, yellow while it is pushed
+// past it, red once the boost is loud enough to clip. The one place the thresholds are written.
+const volumeLoud = 100;
+const volumeHot = 150;
+
+const volumeLevel = value =>
+  value === 0 ? "mute" : value <= volumeLoud ? "ok" : value <= volumeHot ? "high" : "hot";
+
+// A row is painted from its slider alone: the number, the fill of the track, the colour and the
+// state of the mute button all follow the value, whoever moved it.
+const paintVolume = slider => {
+  const value = Number(slider.value);
+  const max = Number(slider.max) || 200;
+  const row = slider.closest("[data-volume-row]");
+  const shown = preview?.querySelector(`[data-volume-value="${slider.dataset.volume}"]`);
+  if (shown) shown.textContent = value + "%";
+  if (!row) return;
+  row.style.setProperty("--p", String(value / max));
+  row.style.setProperty("--mark", String(volumeLoud / max));
+  row.dataset.level = volumeLevel(value);
+
+  const mute = row.querySelector("[data-volume-mute]");
+  if (!mute) return;
+  const words = row.closest("[data-mixer]")?.dataset || {};
+  const label = value === 0 ? words.unmute : words.mute;
+  if (label) {
+    mute.title = label;
+    mute.setAttribute("aria-label", label);
+  }
+  mute.setAttribute("aria-pressed", value === 0 ? "true" : "false");
+  const icon = mute.querySelector(".icon");
+  if (icon) icon.textContent = value === 0 ? "" : value <= volumeLoud / 2 ? "" : value <= volumeLoud ? "" : "";
+};
+
 const paintPreview = state => {
   if (!preview) return;
   const position = state.positionMilliseconds;
@@ -539,6 +692,8 @@ const paintPreview = state => {
   followEncoder(position);
   setPreviewText("[data-preview-position]", previewClock(position) + " / " + previewClock(state.durationMilliseconds));
   for (const spinner of preview.querySelectorAll("[data-preview-restart]")) spinner.hidden = !state.reconfiguring;
+  for (const bar of preview.querySelectorAll("[data-preview-offair]")) bar.hidden = !state.platformOffAir;
+  for (const bar of preview.querySelectorAll("[data-preview-unverified]")) bar.hidden = !state.platformUnverified;
 
   setPreviewText('[data-preview-fact="output.size"]', previewSize(state.output));
   setPreviewText('[data-preview-fact="output.fps"]', previewFps(state.output.frameRate));
@@ -561,6 +716,13 @@ const paintPreview = state => {
   for (const box of preview.querySelectorAll('[data-param="keepSource"]')) {
     if (Date.now() < (previewDirty.get("keepSource") || 0)) continue;
     box.checked = parameters.videoWidth === null || parameters.videoWidth === undefined;
+  }
+  for (const source of state.sources || []) {
+    if (Date.now() < (previewDirty.get("volume" + source.pkid) || 0)) continue;
+    const slider = preview.querySelector(`[data-volume="${source.pkid}"]`);
+    if (!slider) continue;
+    slider.value = String(source.volume);
+    paintVolume(slider);
   }
 };
 
@@ -617,6 +779,13 @@ if (previewForm) {
       const key = control.dataset.param;
       if (key === "keepSource" || key === "gopSize") continue;
       const value = control.value.trim();
+      if (control.dataset.bitrate !== undefined) {
+        // The box holds "5M", the request holds 5000000: what the setting stores never changes
+        // because of how it is written, and a half typed box sends nothing rather than a NaN.
+        const bps = Number(control.dataset.bitrateBps);
+        if (bps > 0) body[key] = bps;
+        continue;
+      }
       if (key === "videoWidth" || key === "videoHeight") {
         // Zero is how the request says "as the source": the two halves travel together, and both
         // travel only when the decision is to drop the resolution the setting carried.
@@ -659,6 +828,87 @@ if (previewForm) {
     } finally {
       delete previewForm.dataset.busy;
       previewBusy = false;
+    }
+  });
+}
+
+// The level of each source of a canvas. The row follows the slider while it moves, and the live
+// is asked once, when the slider is let go: every change starts the pass of the canvas again. The
+// mute button and the value (which puts the source back to its own sound) are the same request.
+const sendVolume = async slider => {
+  const key = "volume" + slider.dataset.volume;
+  previewDirty.set(key, Date.now() + previewSettle);
+  try {
+    const response = await fetch(`/preview/live/${previewPkid}/volume`, {
+      method: "PUT",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ sourcePkid: Number(slider.dataset.volume), volume: Number(slider.value) })
+    });
+    const payload = await response.json().catch(() => ({}));
+    if (response.ok) {
+      say("success", previewMark("ok", ""), payload.message || previewMark("applied", ""), "");
+    } else {
+      previewDirty.delete(key);
+      say("error", previewMark("ko", ""), Object.values(payload)[0] || response.statusText, key);
+    }
+  } catch {
+    say("error", previewMark("ko", ""), previewMark("failed", ""), "");
+  }
+};
+
+const setVolume = (slider, value) => {
+  if (Number(slider.value) === value) return;
+  slider.value = String(value);
+  paintVolume(slider);
+  sendVolume(slider);
+};
+
+for (const slider of preview?.querySelectorAll("[data-volume]") || []) {
+  const pkid = slider.dataset.volume;
+  paintVolume(slider);
+  slider.addEventListener("input", () => {
+    paintVolume(slider);
+    previewDirty.set("volume" + pkid, Date.now() + previewSettle);
+  });
+  slider.addEventListener("change", () => sendVolume(slider));
+
+  // Muting remembers the level it took away, so the second press gives back that level and not a
+  // generic one. A source that was already silent when the page opened comes back at 100%.
+  preview.querySelector(`[data-volume-mute="${pkid}"]`)?.addEventListener("click", () => {
+    const value = Number(slider.value);
+    if (value > 0) {
+      slider.dataset.before = String(value);
+      setVolume(slider, 0);
+    } else {
+      setVolume(slider, Number(slider.dataset.before) || volumeLoud);
+    }
+  });
+  preview.querySelector(`[data-volume-reset="${pkid}"]`)?.addEventListener("click", () => setVolume(slider, volumeLoud));
+}
+
+// A video setting without low latency is tuned by hand: its preset and tune become required, and
+// the browser stops the save until both are chosen. The server asks the same (IsTuningComplete).
+const paintTuning = box => {
+  const form = box.closest("form");
+  if (!form) return;
+  for (const select of form.querySelectorAll("[data-tuning]")) select.required = !box.checked;
+  for (const hint of form.querySelectorAll("[data-tuning-hint]")) hint.hidden = box.checked;
+};
+for (const box of document.querySelectorAll("[data-low-latency]")) {
+  paintTuning(box);
+  box.addEventListener("change", () => paintTuning(box));
+}
+
+// Closing a YouTube warning closes it for the whole live, on the server: it would otherwise come
+// back with the next sample of the push channel, a second later.
+for (const button of preview?.querySelectorAll("[data-air-dismiss]") || []) {
+  button.addEventListener("click", async () => {
+    const bar = button.closest(".infobar");
+    if (bar) bar.hidden = true;
+    try {
+      await fetch(`/preview/live/${previewPkid}/air/dismiss`, { method: "POST" });
+    } catch {
+      // The next sample says what the server holds, whichever way this went.
     }
   });
 }
@@ -951,11 +1201,21 @@ document.addEventListener("drop", event => {
 document.addEventListener("click", event => {
   const browseFolderBtn = event.target.closest?.("[data-playlist-browse-folder]");
   if (browseFolderBtn && window.chrome?.webview) {
-    const field = browseFolderBtn.parentElement?.querySelector("[data-drop-path]");
-    if (field && !field.value.trim()) {
+    const field = browseFolderBtn.parentElement?.querySelector("[data-drop-path]") || browseFolderBtn.closest(".field")?.querySelector("input");
+    if (field) {
       dropTarget = field;
       dropZone = field.closest(".dropzone");
       window.chrome.webview.postMessage("browseFolder");
+    }
+  }
+
+  const browseVideoBtn = event.target.closest?.("[data-browse-video]");
+  if (browseVideoBtn && window.chrome?.webview) {
+    const field = browseVideoBtn.parentElement?.querySelector("[data-drop-path]") || browseVideoBtn.closest(".field")?.querySelector("input");
+    if (field) {
+      dropTarget = field;
+      dropZone = field.closest(".dropzone");
+      window.chrome.webview.postMessage("browseVideo");
     }
   }
 });
@@ -966,7 +1226,7 @@ window.chrome?.webview?.addEventListener("message", event => {
 
   try {
     const payload = JSON.parse(event.data);
-    if (payload.type === "browseFolder" && payload.path) {
+    if ((payload.type === "browseFolder" || payload.type === "browseVideo") && payload.path) {
       path = payload.path;
     } else {
       return; // Ignore other JSON messages we don't handle here
@@ -1096,3 +1356,25 @@ document.addEventListener("DOMContentLoaded", async () => {
         }
     } catch (e) { /* silent fail */ }
 });
+
+// Locks an option to a given value while a given radio is chosen.
+for (const force of document.querySelectorAll("input[type=checkbox][data-force-true-when]")) {
+  const form = force.closest("form");
+  if (!form) continue;
+
+  const target = force.dataset.forceTrueWhen;
+  const update = () => {
+    const radio = form.querySelector(`input[type=radio][value="${target}"]`);
+    if (radio && radio.checked) {
+      force.checked = true;
+      force.disabled = true;
+    } else {
+      force.disabled = false;
+    }
+  };
+
+  form.addEventListener("change", event => {
+    if (event.target.type === "radio") update();
+  });
+  update();
+}

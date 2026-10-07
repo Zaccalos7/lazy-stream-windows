@@ -151,6 +151,19 @@ public sealed class FilterValueConverterTests
     }
 }
 
+public sealed class AutoCleanupServiceTests
+{
+    [Fact]
+    public async Task DelayAsync_TakesAnIntervalOfMonthsWithoutStoppingTheApplication()
+    {
+        // Two months: past what Task.Delay takes, which threw and stopped the host, live and all.
+        using var stop = new CancellationTokenSource(TimeSpan.FromMilliseconds(200));
+
+        await Assert.ThrowsAnyAsync<OperationCanceledException>(
+            () => AutoCleanupService.DelayAsync(TimeSpan.FromDays(60), stop.Token));
+    }
+}
+
 public sealed class DatabaseBootstrapperTests
 {
     [Fact]
@@ -175,6 +188,96 @@ public sealed class DatabaseBootstrapperTests
         var lowCpu = settings.FindByTitleAndPlatform("Default Low Twitch", "Twitch");
         Assert.NotNull(lowCpu);
         Assert.False(lowCpu.IsDefaultConfiguration);
+    }
+
+    [Fact]
+    public void Schema_TurnsTheFfmpegDeliveryOnForYouTubeOnceAndOffForTwitch()
+    {
+        using var database = new TemporaryDatabase();
+        using var connection = database.ConnectionFactory.Open();
+        using (var insert = connection.CreateCommand())
+        {
+            insert.CommandText = """
+                INSERT INTO setting (stream_url, stream_key, platform_stream_name, description, video_folder, is_active, channel_name, ffmpeg_sender)
+                VALUES ('rtmps://a.rtmps.youtube.com/live2', 'yt', 'youtube', '', '', 1, 'yt', 0),
+                       ('rtmp://live.twitch.tv/app', 'tw', 'twitch', '', '', 1, 'tw', 1);
+                """;
+            insert.ExecuteNonQuery();
+        }
+
+        Assert.True(DatabaseSchema.PublishYouTubeWithFfmpeg(connection) >= 1);
+
+        var settings = database.Repository<SettingRepository>();
+        Assert.True(settings.FindByStreamUrlAndStreamKey("rtmps://a.rtmps.youtube.com/live2", "yt")!.FfmpegSender);
+        Assert.False(settings.FindByStreamUrlAndStreamKey("rtmp://live.twitch.tv/app", "tw")!.FfmpegSender);
+
+        // Once: the schema is already past it, so a YouTube channel turned off stays off.
+        using (var off = connection.CreateCommand())
+        {
+            off.CommandText = "UPDATE setting SET ffmpeg_sender = 0 WHERE stream_key = 'yt'";
+            off.ExecuteNonQuery();
+        }
+
+        DatabaseSchema.EnsureCreated(connection);
+        Assert.False(settings.FindByStreamUrlAndStreamKey("rtmps://a.rtmps.youtube.com/live2", "yt")!.FfmpegSender);
+    }
+
+    [Fact]
+    public void StartAsync_SeedsYouTubeAtAFixedPictureWithNothingThatReplacesTheConstantRate()
+    {
+        using var database = new TemporaryDatabase();
+        var settings = database.Repository<VideoSettingRepository>();
+
+        var youtube = Assert.Single(settings.FindByIsDefaultConfigurationTrueAndDefaultPlatformConfiguration("Youtube"));
+        Assert.Equal((1920, 1080, 30d), (youtube.VideoWidth, youtube.VideoHeight, youtube.FrameRate));
+        Assert.Equal(6_000_000, youtube.VideoBitrate);
+        Assert.Equal(128_000, youtube.AudioSetting!.AudioBitrate);
+        Assert.DoesNotContain(youtube.VideoSettingsOptions, option => option.Key is "tune" or "x264-params");
+
+        var low = settings.FindByTitleAndPlatform("Default Low Youtube", "Youtube")!;
+        Assert.Equal((1280, 720, 3_000_000), (low.VideoWidth, low.VideoHeight, low.VideoBitrate));
+    }
+
+    [Fact]
+    public async Task StartAsync_MovesTheLegacyYouTubeDefaultsButNotOnesTheUserEdited()
+    {
+        using var database = new TemporaryDatabase();
+        var settings = database.Repository<VideoSettingRepository>();
+
+        // The high default exactly as the earlier versions seeded it.
+        var high = Assert.Single(settings.FindByIsDefaultConfigurationTrueAndDefaultPlatformConfiguration("Youtube"));
+        high.VideoWidth = null;
+        high.VideoHeight = null;
+        high.FrameRate = null;
+        high.VideoBitrate = 8_000_000;
+        high.AudioSetting!.AudioBitrate = 192_000;
+        high.VideoSettingsOptions =
+        [
+            new VideoSettingsOptionEntity { Key = "preset", Value = "veryfast" },
+            new VideoSettingsOptionEntity { Key = "tune", Value = "zerolatency" },
+            new VideoSettingsOptionEntity { Key = "profile", Value = "high" },
+            new VideoSettingsOptionEntity { Key = "x264-params", Value = "rc_lookahead=20" }
+        ];
+        settings.Update(high);
+
+        // The low one, edited by the user: a bitrate of their own.
+        var low = settings.FindByTitleAndPlatform("Default Low Youtube", "Youtube")!;
+        low.VideoBitrate = 2_000_000;
+        settings.Update(low);
+
+        await new DatabaseBootstrapper(
+                database.ConnectionFactory,
+                settings,
+                database.Repository<VideoRepository>(),
+                NullLogger<DatabaseBootstrapper>.Instance)
+            .StartAsync(CancellationToken.None);
+
+        var moved = settings.FindById(high.Id!.Value)!;
+        Assert.Equal((1920, 1080, 6_000_000), (moved.VideoWidth, moved.VideoHeight, moved.VideoBitrate));
+        Assert.Equal(128_000, moved.AudioSetting!.AudioBitrate);
+        Assert.DoesNotContain(moved.VideoSettingsOptions, option => option.Key is "tune" or "x264-params");
+
+        Assert.Equal(2_000_000, settings.FindById(low.Id!.Value)!.VideoBitrate);
     }
 
     [Fact]
@@ -300,24 +403,33 @@ public sealed class LiveLinkTests
     }
 
     [Fact]
-    public void UrlOf_YouTubeIsThePageOfTheHandle()
+    public void UrlOf_YouTubeIsTheLiveControlRoomOfTheBroadcastOnAir()
+    {
+        Assert.Equal(
+            "https://studio.youtube.com/video/VlzeeXA0sHI/livestreaming",
+            LiveLinkView.UrlOf(YouTube, "madajeeita207", null, "VlzeeXA0sHI"));
+    }
+
+    [Fact]
+    public void UrlOf_YouTubeBeforeTheBroadcastIsSeenIsTheControlRoomOfTheChannel()
+    {
+        // A channel id is an address Studio takes; a handle is not, so Studio is asked for the
+        // channel of whoever is signed in.
+        Assert.Equal(
+            "https://studio.youtube.com/channel/UCuAXFkgsw1L7xaCfnd5JJOw/livestreaming",
+            LiveLinkView.UrlOf(YouTube, "UCuAXFkgsw1L7xaCfnd5JJOw", null));
+        Assert.Equal("https://studio.youtube.com/channel/UC/livestreaming", LiveLinkView.UrlOf(YouTube, "@madajeeita207", null));
+    }
+
+    [Fact]
+    public void YouTubeChannelUrl_IsThePageOfTheHandleOrOfTheId()
     {
         // The page of a handle is /@handle. /channel/ takes a channel id and nothing else, so
         // youtube.com/channel/madajeeita207 is not the channel of that handle: it is a page that is
         // not there, which is a link that looks right and goes nowhere.
-        Assert.Equal("https://www.youtube.com/@reproChannel", LiveLinkView.UrlOf(YouTube, "reproChannel", null));
-        Assert.Equal("https://www.youtube.com/@madajeeita207", LiveLinkView.UrlOf(YouTube, "madajeeita207", null));
-        Assert.Equal("https://www.youtube.com/@madajeeita207", LiveLinkView.UrlOf(YouTube, "@madajeeita207", null));
-    }
-
-    [Fact]
-    public void UrlOf_YouTubeTakesAChannelIdWhereThePageOfOneIs()
-    {
-        // A configuration is filled in with whatever the studio hands over, and the studio hands
-        // over the channel id as readily as the handle. The id is the one that goes in /channel/.
-        Assert.Equal(
-            "https://www.youtube.com/channel/UCuAXFkgsw1L7xaCfnd5JJOw",
-            LiveLinkView.UrlOf(YouTube, "UCuAXFkgsw1L7xaCfnd5JJOw", null));
+        Assert.Equal("https://www.youtube.com/@madajeeita207", LiveLinkView.YouTubeChannelUrl("madajeeita207"));
+        Assert.Equal("https://www.youtube.com/@madajeeita207", LiveLinkView.YouTubeChannelUrl("@madajeeita207"));
+        Assert.Equal("https://www.youtube.com/channel/UCuAXFkgsw1L7xaCfnd5JJOw", LiveLinkView.YouTubeChannelUrl("UCuAXFkgsw1L7xaCfnd5JJOw"));
     }
 
     [Fact]
@@ -338,7 +450,7 @@ public sealed class LiveLinkTests
         // The form of the configuration stores the platform in the field named platform stream
         // name, and the channel in the channel name: following the wrong one gave twitch.tv/twitch.
         Assert.Equal("https://www.twitch.tv/ciclovisione", LiveLinkView.UrlOf(Twitch, "ciclovisione", "twitch"));
-        Assert.Equal("https://www.youtube.com/@ciclovisione", LiveLinkView.UrlOf(YouTube, "ciclovisione", "youtube"));
+        Assert.Equal("https://studio.youtube.com/channel/UC/livestreaming", LiveLinkView.UrlOf(YouTube, "ciclovisione", "youtube"));
     }
 
     [Fact]

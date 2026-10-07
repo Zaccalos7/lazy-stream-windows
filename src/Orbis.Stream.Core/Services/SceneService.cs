@@ -129,6 +129,23 @@ public sealed class SceneService
             throw new NotFoundCustomException("scene.duplicated.kind");
         }
 
+        // A microphone linked to a camera (video=…:audio=…) is the same device as that microphone
+        // on its own: dshow cannot open it for both.
+        var microphones = items
+            .Select(item => item.SourceKind switch
+            {
+                SourceKind.Microphone => item.SourceTarget,
+                SourceKind.Camera when item.SourceTarget.IndexOf(":audio=", StringComparison.Ordinal) is var at and >= 0
+                    => item.SourceTarget[(at + 1)..],
+                _ => null
+            })
+            .OfType<string>()
+            .ToList();
+        if (microphones.Count != microphones.Distinct(StringComparer.Ordinal).Count())
+        {
+            throw new NotFoundCustomException("scene.duplicated.kind");
+        }
+
         foreach (var item in items)
         {
             if (string.IsNullOrWhiteSpace(item.SourceTarget))

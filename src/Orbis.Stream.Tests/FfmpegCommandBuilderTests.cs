@@ -43,9 +43,24 @@ public sealed class FfmpegCommandBuilderTests
         Assert.Contains("-b:a 128000", command, StringComparison.Ordinal);
         Assert.Contains("-ar 44100", command, StringComparison.Ordinal);
         Assert.Contains("-ac 2", command, StringComparison.Ordinal);
-        Assert.Contains("-preset ultrafast", command, StringComparison.Ordinal);
+        // ultrafast turns off the deblocking filter, which is the mosaic on screen: the lightest
+        // clean preset goes out instead.
+        Assert.Contains("-preset superfast", command, StringComparison.Ordinal);
+        Assert.DoesNotContain("ultrafast", command, StringComparison.Ordinal);
         Assert.Contains("-tune zerolatency", command, StringComparison.Ordinal);
         Assert.EndsWith(" rtmp://ingest/live/key", command, StringComparison.Ordinal);
+    }
+
+    [Fact]
+    public void Build_WithoutAPresetEncodesClean()
+    {
+        var setting = Setting();
+        setting.VideoSettingsOptions = [];
+        var command = string.Join(' ', FfmpegCommandBuilder.Build(
+            new FfmpegStreamRequest("/videos/clip.mp4", "rtmp://ingest/live/key", Probe(), setting)));
+
+        Assert.Contains("-preset veryfast", command, StringComparison.Ordinal);
+        Assert.Contains("-profile:v high", command, StringComparison.Ordinal);
     }
 
     [Fact]
@@ -278,6 +293,27 @@ public sealed class FfmpegCompositionTests
     }
 
     [Fact]
+    public void AWebcamWithItsMicrophoneIsOneInputAndIsHeard()
+    {
+        // The camera and its microphone open together, so picture and sound come from one clock.
+        var webcam = new FfmpegCompositionItem(
+            SourceKind.Camera, "video=HD Pro Webcam C920:audio=Microphone (HD Pro Webcam C920)", 0, 0, 1920, 1080, AudioEnabled: true);
+
+        var command = FfmpegCommandBuilder.BuildComposition(Request([webcam]));
+        var text = string.Join(' ', command);
+
+        Assert.Contains(
+            "-f dshow -rtbufsize 256M -thread_queue_size 1024 -i video=HD Pro Webcam C920:audio=Microphone (HD Pro Webcam C920)",
+            text,
+            StringComparison.Ordinal);
+        Assert.Contains("[0:a]asetpts=PTS-STARTPTS", text, StringComparison.Ordinal);
+        Assert.True(FfmpegCommandBuilder.CarriesSound([webcam]));
+
+        // Without the microphone a camera is a picture and nothing else, whatever the switch says.
+        Assert.False(FfmpegCommandBuilder.CarriesSound([Camera(0, 0, 1920, 1080, audio: true)]));
+    }
+
+    [Fact]
     public void ACanvasOfFilesIsBoundedByItsLongestFile()
     {
         // The canvas ends with the longest of its files, the way a playlist ends with the last one:
@@ -433,6 +469,24 @@ public sealed class FfmpegCompositionTests
             "[sound0][sound2]amix=inputs=2:dropout_transition=0",
             string.Join(' ', command),
             StringComparison.Ordinal);
+    }
+
+    [Fact]
+    public void EverySourceIsMixedAtItsOwnVolume()
+    {
+        var graph = GraphOf(FfmpegCommandBuilder.BuildComposition(
+            Request(
+            [
+                new(SourceKind.File, "/videos/intro.mp4", 0, 0, 1920, 1080, true, Volume: 50),
+                new(SourceKind.File, "/videos/music.mp4", 0, 0, 640, 360, true, Volume: 150),
+                Microphone()
+            ])));
+
+        Assert.Contains("[0:a]asetpts=PTS-STARTPTS,volume=0.5[sound0]", graph, StringComparison.Ordinal);
+        Assert.Contains("[1:a]asetpts=PTS-STARTPTS,volume=1.5[sound1]", graph, StringComparison.Ordinal);
+
+        // A source left at 100 is its sound as it is: no filter at all.
+        Assert.Contains("[2:a]asetpts=PTS-STARTPTS[sound2]", graph, StringComparison.Ordinal);
     }
 
     [Fact]

@@ -17,6 +17,10 @@ dialog.dialog::before { content: ""; display: block; height: 3px; background: va
 dialog.dialog::backdrop { background: var(--smoke); backdrop-filter: blur(8px); -webkit-backdrop-filter: blur(8px); }
 dialog.dialog.wide { width: min(840px, calc(100vw - 32px)); }
 dialog.dialog.x-wide { width: min(1140px, calc(100vw - 32px)); }
+/* A video setting, in both the places it is edited (the settings page and the live management): wide
+   enough for five fields a row, and tall enough that the whole setting is read without a scroll. */
+dialog.dialog.settings { width: min(1280px, calc(100vw - 32px)); max-height: calc(100vh - 32px); }
+dialog.dialog.settings .dialog-body { max-height: calc(100vh - 32px - 3px - 70px); }
 /* The scene composer of the live wizard: nearly the whole window, because the canvas is the step. */
 dialog.dialog.compose { width: 100vw; height: 100vh; max-width: 100vw; max-height: 100vh; margin: 0; border-radius: 0; }
 dialog.dialog.compose[open] { display: flex; flex-direction: column; }

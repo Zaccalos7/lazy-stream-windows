@@ -37,17 +37,29 @@ public sealed class AutoCleanupService : BackgroundService
                 _logger.LogError(ex, "Auto cleanup failed");
             }
 
-            // Wait for the next interval
+            // Wait for the next interval; if disabled, check again in an hour.
             var interval = GetIntervalMinutes();
-            if (interval > 0)
-            {
-                await Task.Delay(TimeSpan.FromMinutes(interval), stoppingToken);
-            }
-            else
-            {
-                // If disabled, check again in an hour
-                await Task.Delay(TimeSpan.FromHours(1), stoppingToken);
-            }
+            await DelayAsync(interval > 0 ? TimeSpan.FromMinutes(interval) : TimeSpan.FromHours(1), stoppingToken);
+        }
+    }
+
+    /// <summary>
+    /// The longest wait <see cref="Task.Delay(TimeSpan, CancellationToken)"/> takes.
+    /// </summary>
+    internal static readonly TimeSpan LongestDelay = TimeSpan.FromDays(1);
+
+    /// <summary>
+    /// A wait of any length. Task.Delay refuses one past about 49 days, and an interval of two
+    /// months is past it: the exception left ExecuteAsync and stopped the whole application, live
+    /// included. The wait is cut into days instead.
+    /// </summary>
+    internal static async Task DelayAsync(TimeSpan duration, CancellationToken cancellationToken)
+    {
+        while (duration > TimeSpan.Zero)
+        {
+            var step = duration < LongestDelay ? duration : LongestDelay;
+            await Task.Delay(step, cancellationToken).ConfigureAwait(false);
+            duration -= step;
         }
     }
 

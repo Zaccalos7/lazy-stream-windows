@@ -28,9 +28,9 @@ else
                         <span class="badge">@setting.DefaultPlatformConfiguration</span>
                     }
                     <span class="caption" style="display: block;">
-                        @setting.VideoCodecName · @VideoSettingForm.FormatBitrate(setting.VideoBitrate, T["milion"]) ·
+                        @setting.VideoCodecName · @VideoSettingForm.FormatBitrate(setting.VideoBitrate) ·
                         @setting.VideoFormat?.ToUpperInvariant() · GOP @(setting.GopSize?.ToString() ?? "–") ·
-                        @T["audioBitrate"] @(setting.AudioSettingRecord?.AudioBitrate?.ToString() ?? "N/A")
+                        @T["audioBitrate"] @VideoSettingForm.FormatBitrate(setting.AudioSettingRecord?.AudioBitrate)
                     </span>
                 </span>
             </label>

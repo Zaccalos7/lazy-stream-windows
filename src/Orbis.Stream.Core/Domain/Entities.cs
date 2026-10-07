@@ -33,6 +33,13 @@ public sealed class SettingEntity
 
     /// <summary>Delete live history rows older than this many months.</summary>
     public int AutoCleanupOlderThanMonths { get; set; }
+
+    /// <summary>
+    /// Whether the live is handed to the ingest by a second ffmpeg instead of the RTMP this
+    /// application speaks itself (<see cref="Streaming.RelayTransport.FfmpegSender"/>). Off by
+    /// default; the switch for an ingest that takes the native publish and then does not air it.
+    /// </summary>
+    public bool FfmpegSender { get; set; }
 }
 
 /// <summary>Port of <c>com.orbis.stream.model.VideoLiveHistory</c>.</summary>
@@ -185,6 +192,12 @@ public sealed class VideoEntity
 
     /// <summary>Whether this source contributes audio to the mix.</summary>
     public bool AudioEnabled { get; set; }
+
+    /// <summary>
+    /// How loud this source is in the mix of its canvas, in percent: 100 is the sound as the source
+    /// has it, 0 silences it, 200 doubles it. Set from the preview while the live runs.
+    /// </summary>
+    public int Volume { get; set; } = 100;
 }
 
 /// <summary>

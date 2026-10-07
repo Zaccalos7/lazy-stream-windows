@@ -10,7 +10,8 @@ namespace Orbis.Stream.Core.Streaming;
 /// than as the encoder sees it: the platform it goes on, the channel of the configuration, and the
 /// address of the player that plays it.
 /// </summary>
-public sealed record LivePlatformEmbed(string Platform, string Channel, string Url);
+/// <param name="VideoId">The video on air, where the platform addresses a live by one (YouTube).</param>
+public sealed record LivePlatformEmbed(string Platform, string Channel, string Url, string? VideoId = null);
 
 /// <summary>
 /// Where a live can be watched when the live is not only the local picture: the Twitch and the
@@ -68,6 +69,15 @@ public sealed class LivePlatformEmbeds
     /// </summary>
     private static readonly Regex OnAirNow = new(
         "\"isLive(?:Now)?\":true",
+        RegexOptions.CultureInvariant);
+
+    /// <summary>
+    /// What the page of a video says about a broadcast once it is over: still a live content, no
+    /// longer live. It is the positive answer "ended" - a page that says neither is a page this
+    /// application did not understand, and that is not taken to mean anything.
+    /// </summary>
+    private static readonly Regex LiveContent = new(
+        "\"isLiveContent\":true",
         RegexOptions.CultureInvariant);
 
     private readonly HttpClient _http;
@@ -167,7 +177,8 @@ public sealed class LivePlatformEmbeds
             handle,
             // Muted and inline, so the browser lets it start on its own: a preview is opened
             // without a gesture on the player and autoplay of sound is not one it will allow.
-            $"https://www.youtube.com/embed/{videoId}?autoplay=1&mute=1&playsinline=1&rel=0&modestbranding=1"));
+            $"https://www.youtube.com/embed/{videoId}?autoplay=1&mute=1&playsinline=1&rel=0&modestbranding=1",
+            videoId));
     }
 
     /// <summary>
@@ -255,6 +266,24 @@ public sealed class LivePlatformEmbeds
 
         return OnAirNow.IsMatch(watch) ? (candidate, null) : (null, null);
     }
+
+    /// <summary>
+    /// Whether a YouTube broadcast that was on air has been ended: true when its page says it is a
+    /// live that is no longer live, false while it is live, null when the page could not be read
+    /// or said neither. Only true is an answer to act on.
+    /// </summary>
+    public async Task<bool?> HasEndedAsync(string videoId, CancellationToken cancellationToken)
+    {
+        var watch = await ReadAsync($"https://www.youtube.com/watch?v={Uri.EscapeDataString(videoId)}", cancellationToken);
+        return HasEnded(watch);
+    }
+
+    /// <summary>The reading of <see cref="HasEndedAsync"/>, on a page already read.</summary>
+    internal static bool? HasEnded(string? watch) =>
+        watch is null ? null
+        : OnAirNow.IsMatch(watch) ? false
+        : LiveContent.IsMatch(watch) ? true
+        : null;
 
     /// <summary>The id of the first entry of the grid of a page of a channel, or nothing.</summary>
     internal static string? CandidateOf(string html)

@@ -48,7 +48,9 @@ public sealed class MainChannelSettingModel(SettingService settings, RequestVali
         Configurations = settings.RetrieveSettings(filters);
 
         Editing = edit == "new"
-            ? new SettingResponse(null, null, null, null, null, null, null, null, true, null, false, 0, 0)
+            // A new configuration publishes with ffmpeg: what the switch means on YouTube, and
+            // nothing anywhere else (see SettingService).
+            ? new SettingResponse(null, null, null, null, null, null, null, null, true, null, false, 0, 0, FfmpegSender: true)
             : int.TryParse(edit, out var id) ? settings.RetrieveSettings(new Dictionary<string, string> { ["id"] = edit! }).FirstOrDefault(setting => setting.Id == id) : null;
     }
 
@@ -61,7 +63,8 @@ public sealed class MainChannelSettingModel(SettingService settings, RequestVali
         string? description,
         bool autoCleanupEnabled,
         int autoCleanupIntervalMonths,
-        int autoCleanupOlderThanMonths)
+        int autoCleanupOlderThanMonths,
+        bool ffmpegSender)
     {
         if (string.IsNullOrWhiteSpace(streamUrl))
         {
@@ -80,7 +83,8 @@ public sealed class MainChannelSettingModel(SettingService settings, RequestVali
             channelName?.Trim(),
             autoCleanupEnabled,
             autoCleanupIntervalMonths,
-            autoCleanupOlderThanMonths);
+            autoCleanupOlderThanMonths,
+            ffmpegSender);
 
         Try(() =>
         {

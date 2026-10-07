@@ -5,6 +5,7 @@ using Orbis.Stream.Core.Data;
 using Orbis.Stream.Core.Domain;
 using Orbis.Stream.Core.Http;
 using Orbis.Stream.Core.I18n;
+using Orbis.Stream.Core.Streaming;
 
 namespace Orbis.Stream.Core.Services;
 
@@ -136,9 +137,19 @@ public sealed class SettingService
         setting.VideoFolder = request.VideoFolder ?? setting.VideoFolder;
         setting.IsActive = request.IsActive ?? setting.IsActive;
         setting.ChannelName = request.ChannelName ?? setting.ChannelName;
+        setting.FfmpegSender = StreamPlatformProfile.For(setting.StreamUrl).Platform == StreamPlatform.YouTube || (request.FfmpegSender ?? setting.FfmpegSender);
     }
 
-    private static SettingEntity ToEntity(SettingRequest request) => new()
+    private static SettingEntity ToEntity(SettingRequest request)
+    {
+        var setting = NewEntity(request);
+
+        // YouTube always publishes with ffmpeg.
+        setting.FfmpegSender = StreamPlatformProfile.For(setting.StreamUrl).Platform == StreamPlatform.YouTube || (request.FfmpegSender ?? true);
+        return setting;
+    }
+
+    private static SettingEntity NewEntity(SettingRequest request) => new()
     {
         // Pasted from the dashboard of a platform: see FfmpegCommandBuilder.BuildStreamingUrl.
         StreamUrl = request.StreamUrl!.Trim(),

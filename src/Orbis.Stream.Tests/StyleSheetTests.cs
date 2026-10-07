@@ -17,7 +17,7 @@ public sealed partial class StyleSheetTests : IClassFixture<ApplicationFixture>
     private static readonly IReadOnlyDictionary<string, string[]> Owned =
         new Dictionary<string, string[]>(StringComparer.Ordinal)
         {
-            ["composer"] = ["/orbis/mainLive", "/orbis/mainLayout"],
+            ["composer"] = ["/orbis/mainLive", "/orbis/mainLayout", "/orbis/mainPreview"],
             ["preview"] = ["/orbis/mainPreview"],
             ["meters"] = ["/orbis/mainTaskManager"],
             ["cleanup"] = ["/orbis/mainLiveHistory"],

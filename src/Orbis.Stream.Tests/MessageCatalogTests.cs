@@ -19,7 +19,8 @@ public sealed class MessageCatalogTests
     [InlineData("en-US", "en")]
     [InlineData("pt-BR", "pt")]
     [InlineData("ko-KR", "ko")]
-    [InlineData("ar-EG", "en")]
+    [InlineData("ar-EG", "ar")]
+    [InlineData("ar", "ar")]
     [InlineData("tlh", "tlh")]
     [InlineData("hod", "hod")]
     [InlineData("la", "la")]
@@ -27,6 +28,9 @@ public sealed class MessageCatalogTests
     // Bengali was dropped: its bundle was the English text behind a "[bn]" tag,
     // which is not a language. It resolves to English like anything else the catalogue lacks.
     [InlineData("hi-IN", "hi")]
+    [InlineData("da-DK", "da")]
+    [InlineData("fil-PH", "fil")]
+    [InlineData("tl-PH", "fil")]
     [InlineData("bn-BD", "en")]
     [InlineData(null, "en")]
     public void ResolveLanguage_MapsToAnAvailableBundle(string? requested, string expected)
@@ -48,7 +52,7 @@ public sealed class MessageCatalogTests
     {
         var catalog = CreateCatalog();
 
-        Assert.Equal("Not valid field", catalog.GetMessage("ar-EG", "not.valid.input"));
+        Assert.Equal("Not valid field", catalog.GetMessage("he-IL", "not.valid.input"));
         Assert.Equal("Not valid field", catalog.GetMessage("bn-BD", "not.valid.input"));
     }
 
@@ -94,7 +98,7 @@ public sealed class MessageCatalogTests
         var catalog = CreateCatalog();
         var english = PropertiesBundle.Parse(File.ReadAllText(BundlePath("en")));
 
-        Assert.Equal(15, catalog.SupportedLanguages.Count);
+        Assert.Equal(18, catalog.SupportedLanguages.Count);
 
         foreach (var language in catalog.SupportedLanguages)
         {

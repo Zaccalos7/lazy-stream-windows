@@ -28,6 +28,7 @@ public sealed class StreamingService
     private readonly LiveChangeNotifier _notifier;
     private readonly ILogger<StreamingService> _logger;
     private readonly FfmpegProbe _probe;
+    private readonly SettingRepository _settingRepository;
 
     public StreamingService(
         VideoRepository videoRepository,
@@ -41,7 +42,8 @@ public sealed class StreamingService
         StreamingSessionRegistry sessions,
         LiveChangeNotifier notifier,
         ILogger<StreamingService> logger,
-        FfmpegProbe probe)
+        FfmpegProbe probe,
+        SettingRepository settingRepository)
     {
         _videoRepository = videoRepository;
         _videoSettingRepository = videoSettingRepository;
@@ -55,6 +57,7 @@ public sealed class StreamingService
         _notifier = notifier;
         _logger = logger;
         _probe = probe;
+        _settingRepository = settingRepository;
     }
 
     public MessageResponse StartLive(StartLiveRequest request)
@@ -141,6 +144,26 @@ public sealed class StreamingService
         return StreamingVideo(videoLiveHistory, streamingUrl);
     }
 
+    public void EnqueueSpot(string spotPath, int videoLivePkid)
+    {
+        var normalized = NormalizeUserPath(spotPath ?? string.Empty);
+        if (!File.Exists(normalized))
+        {
+            _logger.LogError("{Message} {Path}", _localizer.PrintMessage("file.not.found"), normalized);
+            throw new NotFoundCustomException("file.not.found", [normalized]);
+        }
+
+        var video = CheckIfExistsAndReturnEntity(videoLivePkid);
+        var drivingRow = DrivingRowOf(video);
+
+        _streamer.EnqueueSpot(normalized);
+
+        if (_sessions.TryGet(drivingRow.Pkid, out var session) && session is not null)
+        {
+            session.Yield();
+        }
+    }
+
     public void StopVideoStreamingByPkid(int videoLivePkid)
     {
         var video = CheckIfExistsAndReturnEntity(videoLivePkid);
@@ -164,6 +187,20 @@ public sealed class StreamingService
         {
             _ = session.StopAsync();
         }
+    }
+
+    /// <summary>
+    /// The same stop, asked by this application rather than by the user, with the reason the row
+    /// keeps instead of the plain "live stopped".
+    /// </summary>
+    public void StopBecause(int videoLivePkid, string reason)
+    {
+        if (_sessions.TryGet(videoLivePkid, out var session) && session is not null)
+        {
+            session.StopReason = reason;
+        }
+
+        StopVideoStreamingByPkid(videoLivePkid);
     }
 
     public void ResetFlag(int videoLivePkid)
@@ -394,7 +431,10 @@ public sealed class StreamingService
     private static string DescribeSource(SceneItemEntity item) => item.SourceKind switch
     {
         SourceKind.Screen => item.SourceTarget,
-        SourceKind.Camera => item.SourceTarget.Replace("video=", string.Empty, StringComparison.Ordinal),
+        // A camera heard through its microphone is named after both: "Webcam · Microphone (Webcam)".
+        SourceKind.Camera => item.SourceTarget
+            .Replace(":audio=", " · ", StringComparison.Ordinal)
+            .Replace("video=", string.Empty, StringComparison.Ordinal),
         SourceKind.Microphone => item.SourceTarget.Replace("audio=", string.Empty, StringComparison.Ordinal),
         _ => Path.GetFileName(item.SourceTarget)
     };
@@ -410,16 +450,36 @@ public sealed class StreamingService
             throw new NotFoundCustomException("video.streaming.not.found");
         }
 
-        _executor.Execute(() => _ = RunPlaylistAsync(videoList, streamingUrl, videoLiveHistoryId));
+        var transport = TransportOf(videoLiveHistory);
+        _executor.Execute(() => _ = RunPlaylistAsync(videoList, streamingUrl, videoLiveHistoryId, transport));
 
         return _responses.Build("live.started", StatusCodes.Status202Accepted);
     }
 
-    private async Task RunPlaylistAsync(IReadOnlyList<VideoEntity> videos, string streamingUrl, long videoLiveHistoryId)
+    /// <summary>
+    /// What publishes the live, as the configuration of its channel asks, on the platforms that let
+    /// it choose (YouTube): ffmpeg with the switch on, the publisher of this application with it
+    /// off. Elsewhere, and for a live with no configuration, the platform decides (null). The
+    /// history keeps the url and the key the live started with, which are what a configuration is
+    /// unique by.
+    /// </summary>
+    private RelayTransport? TransportOf(VideoLiveHistoryEntity history)
+    {
+        if (!StreamPlatformProfile.For(history.StreamUrl).ChoosableTransport
+            || _settingRepository.FindByStreamUrlAndStreamKey(history.StreamUrl, history.StreamKey) is not { } setting)
+        {
+            return null;
+        }
+
+        return setting.FfmpegSender ? RelayTransport.FfmpegSender : RelayTransport.NativeRtmp;
+    }
+
+    private async Task RunPlaylistAsync(
+        IReadOnlyList<VideoEntity> videos, string streamingUrl, long videoLiveHistoryId, RelayTransport? transport)
     {
         try
         {
-            await _streamer.StreamPlaylistAsync(videos, streamingUrl, videoLiveHistoryId, _shutdown.Token)
+            await _streamer.StreamPlaylistAsync(videos, streamingUrl, videoLiveHistoryId, transport, _shutdown.Token)
                 .ConfigureAwait(false);
         }
         catch (OperationCanceledException)

@@ -175,6 +175,29 @@
     </div>
 </dialog>
 
+<dialog class="dialog" id="spot-dialog">
+    <div class="dialog-head">
+        <h2>@T["playSpot"]</h2>
+    </div>
+    <form method="post" asp-page-handler="Spot" asp-all-route-data="Model.FilterRoute">
+        <div class="dialog-body">
+            <input type="hidden" name="videoKey" data-spot-key value="" />
+            <p>@T["playSpotHint"]</p>
+            <label class="field dropzone">
+                <span>@T["spotFile"]</span>
+                <span class="composer-file-row">
+                    <input class="input" name="spotPath" required data-drop-path placeholder="C:\Video\spot.mp4" />
+                    <button type="button" class="btn" data-browse-video>@T["add"]</button>
+                </span>
+            </label>
+        </div>
+        <div class="dialog-footer">
+            <button class="btn accent">@T["playSpot"]</button>
+            <button class="btn" type="button" onclick="document.getElementById('spot-dialog').close();" commandfor="spot-dialog" command="close">@T["cancel"]</button>
+        </div>
+    </form>
+</dialog>
+
 @if (Model.OpenedPlaylist is { } opened)
 {
     <dialog class="dialog x-wide" id="playlist-details" data-open>
@@ -205,7 +228,7 @@
 
 @if ((Model.LinkPkid is not null || Model.LinkHistory is not null) && Model.Form is not null)
 {
-    <dialog class="dialog x-wide" data-open>
+    <dialog class="dialog settings" data-open>
         <form method="post" asp-page-handler="Link" asp-all-route-data="Model.LinkHistory is { } history ? Model.PlaylistRoute(history) : Model.RowRoute(Model.LinkPkid)">
             <div class="dialog-body">
                 <h2>@T["connectVideoSetting"]</h2>

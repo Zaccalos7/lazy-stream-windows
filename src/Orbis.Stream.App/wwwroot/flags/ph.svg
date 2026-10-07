@@ -1,0 +1,20 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 60 40" width="60" height="40" role="img" aria-hidden="true" focusable="false">
+  <defs><clipPath id="c"><rect width="60" height="40" rx="3"/></clipPath></defs>
+  <g clip-path="url(#c)">
+    <rect width="60" height="20" fill="#0038A8"/>
+    <rect y="20" width="60" height="20" fill="#CE1126"/>
+    <polygon points="0,0 34.64,20 0,40" fill="#FFFFFF"/>
+    <circle cx="11.55" cy="20" r="3" fill="#FCD116"/>
+    <line x1="15.15" y1="20.00" x2="17.75" y2="20.00" stroke="#FCD116" stroke-width="1.2" stroke-linecap="round"/>
+    <line x1="14.09" y1="22.55" x2="15.93" y2="24.38" stroke="#FCD116" stroke-width="1.2" stroke-linecap="round"/>
+    <line x1="11.55" y1="23.60" x2="11.55" y2="26.20" stroke="#FCD116" stroke-width="1.2" stroke-linecap="round"/>
+    <line x1="9.00" y1="22.55" x2="7.16" y2="24.38" stroke="#FCD116" stroke-width="1.2" stroke-linecap="round"/>
+    <line x1="7.95" y1="20.00" x2="5.35" y2="20.00" stroke="#FCD116" stroke-width="1.2" stroke-linecap="round"/>
+    <line x1="9.00" y1="17.45" x2="7.16" y2="15.62" stroke="#FCD116" stroke-width="1.2" stroke-linecap="round"/>
+    <line x1="11.55" y1="16.40" x2="11.55" y2="13.80" stroke="#FCD116" stroke-width="1.2" stroke-linecap="round"/>
+    <line x1="14.09" y1="17.45" x2="15.93" y2="15.62" stroke="#FCD116" stroke-width="1.2" stroke-linecap="round"/>
+    <polygon points="3.60,2.20 4.07,3.55 5.50,3.58 4.36,4.45 4.78,5.82 3.60,5.00 2.42,5.82 2.84,4.45 1.70,3.58 3.13,3.55" fill="#FCD116"/>
+    <polygon points="3.60,33.80 4.07,35.15 5.50,35.18 4.36,36.05 4.78,37.42 3.60,36.60 2.42,37.42 2.84,36.05 1.70,35.18 3.13,35.15" fill="#FCD116"/>
+    <polygon points="29.44,18.00 29.91,19.35 31.34,19.38 30.20,20.25 30.62,21.62 29.44,20.80 28.27,21.62 28.68,20.25 27.54,19.38 28.97,19.35" fill="#FCD116"/>
+  </g>
+</svg>

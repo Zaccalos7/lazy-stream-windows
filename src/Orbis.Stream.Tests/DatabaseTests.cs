@@ -584,6 +584,26 @@ public sealed class VideoRepositoryTests
     }
 
     [Fact]
+    public void SetVolume_SurvivesTheStreamerWritingTheRowItHolds()
+    {
+        using var database = new TemporaryDatabase();
+        var videos = database.Repository<VideoRepository>();
+        videos.Insert(Video(1, LiveStatus.Live, "a", database.LiveHistoryId));
+
+        // The streaming loop holds the row from before the change and writes it back on every status.
+        var held = videos.FindByPkid(1)!;
+        Assert.Equal(100, held.Volume);
+
+        videos.SetVolume(1, 40);
+        held.Message = "on air";
+        videos.Update(held);
+
+        var loaded = videos.FindByPkid(1)!;
+        Assert.Equal(40, loaded.Volume);
+        Assert.Equal("on air", loaded.Message);
+    }
+
+    [Fact]
     public void SetVideoSetting_UpdatesOnlyTheConfigurationReference()
     {
         using var database = new TemporaryDatabase();

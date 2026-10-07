@@ -9,7 +9,7 @@ public sealed class SettingRepository
 {
     private const string BaseColumns =
         "t.id, t.stream_url, t.stream_key, t.platform_stream_name, t.description, t.video_folder, t.is_active, t.channel_name, "
-        + "t.scene_pkid, t.auto_cleanup_enabled, t.auto_cleanup_interval_months, t.auto_cleanup_older_than_months";
+        + "t.scene_pkid, t.auto_cleanup_enabled, t.auto_cleanup_interval_months, t.auto_cleanup_older_than_months, t.ffmpeg_sender";
 
     private readonly SqliteConnectionFactory _connectionFactory;
 
@@ -65,9 +65,9 @@ public sealed class SettingRepository
         command.CommandText =
             """
             INSERT INTO setting (stream_url, stream_key, platform_stream_name, description, video_folder, is_active, channel_name, scene_pkid,
-                                 auto_cleanup_enabled, auto_cleanup_interval_months, auto_cleanup_older_than_months)
+                                 auto_cleanup_enabled, auto_cleanup_interval_months, auto_cleanup_older_than_months, ffmpeg_sender)
             VALUES (@streamUrl, @streamKey, @platform, @description, @videoFolder, @isActive, @channelName, @scenePkid,
-                    @autoCleanupEnabled, @autoCleanupIntervalMonths, @autoCleanupOlderThanMonths);
+                    @autoCleanupEnabled, @autoCleanupIntervalMonths, @autoCleanupOlderThanMonths, @ffmpegSender);
             SELECT last_insert_rowid();
             """;
         command.Parameters.AddWithValue("@streamUrl", setting.StreamUrl);
@@ -81,6 +81,7 @@ public sealed class SettingRepository
         command.Parameters.AddWithValue("@autoCleanupEnabled", setting.AutoCleanupEnabled ? 1 : 0);
         command.Parameters.AddWithValue("@autoCleanupIntervalMonths", setting.AutoCleanupIntervalMonths);
         command.Parameters.AddWithValue("@autoCleanupOlderThanMonths", setting.AutoCleanupOlderThanMonths);
+        command.Parameters.AddWithValue("@ffmpegSender", setting.FfmpegSender ? 1 : 0);
         return Convert.ToInt32(command.ExecuteScalar(), CultureInfo.InvariantCulture);
     }
 
@@ -101,7 +102,8 @@ public sealed class SettingRepository
                 scene_pkid = COALESCE(@scenePkid, scene_pkid),
                 auto_cleanup_enabled = COALESCE(@autoCleanupEnabled, auto_cleanup_enabled),
                 auto_cleanup_interval_months = COALESCE(@autoCleanupIntervalMonths, auto_cleanup_interval_months),
-                auto_cleanup_older_than_months = COALESCE(@autoCleanupOlderThanMonths, auto_cleanup_older_than_months)
+                auto_cleanup_older_than_months = COALESCE(@autoCleanupOlderThanMonths, auto_cleanup_older_than_months),
+                ffmpeg_sender = @ffmpegSender
             WHERE id = @id;
             """;
         command.Parameters.AddWithValue("@streamUrl", (object?)setting.StreamUrl ?? DBNull.Value);
@@ -115,6 +117,7 @@ public sealed class SettingRepository
         command.Parameters.AddWithValue("@autoCleanupEnabled", setting.AutoCleanupEnabled ? 1 : 0);
         command.Parameters.AddWithValue("@autoCleanupIntervalMonths", setting.AutoCleanupIntervalMonths);
         command.Parameters.AddWithValue("@autoCleanupOlderThanMonths", setting.AutoCleanupOlderThanMonths);
+        command.Parameters.AddWithValue("@ffmpegSender", setting.FfmpegSender ? 1 : 0);
         command.Parameters.AddWithValue("@id", setting.Id);
         command.ExecuteNonQuery();
     }
@@ -147,7 +150,8 @@ public sealed class SettingRepository
                 ScenePkid = SqliteValue.ToNullableInt64(reader.GetValue(8)),
                 AutoCleanupEnabled = reader.IsDBNull(9) ? false : SqliteValue.ToBoolean(reader.GetValue(9)),
                 AutoCleanupIntervalMonths = reader.IsDBNull(10) ? 0 : reader.GetInt32(10),
-                AutoCleanupOlderThanMonths = reader.IsDBNull(11) ? 0 : reader.GetInt32(11)
+                AutoCleanupOlderThanMonths = reader.IsDBNull(11) ? 0 : reader.GetInt32(11),
+                FfmpegSender = !reader.IsDBNull(12) && SqliteValue.ToBoolean(reader.GetValue(12))
             });
         }
 

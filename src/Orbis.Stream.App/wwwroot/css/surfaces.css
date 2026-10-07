@@ -65,6 +65,8 @@ a.tile > .icon:first-child,
 }
 
 .row-card > .icon.lead { width: 36px; height: 36px; font-size: 16px; }
+/* A lead that is the mark of a platform rather than a glyph of the icon font. */
+.row-card > .icon.lead svg { width: 18px; height: 18px; fill: currentColor; }
 
 /* Inset row card */
 .row-card {

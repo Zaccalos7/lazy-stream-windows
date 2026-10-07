@@ -30,7 +30,8 @@ public sealed class FlvPacedRelay
 {
     private const int FlvHeaderMinimum = 9;
     private const int PreviousTagSizeSize = 4;
-    private const byte ScriptTag = 18;
+    private const byte VideoTag = 9;
+    internal const byte ScriptTag = 18;
 
     /// <summary>A bound on the queue in tags, for a stream whose timestamps stop moving.</summary>
     private const int MaxQueuedTags = 4096;
@@ -51,17 +52,34 @@ public sealed class FlvPacedRelay
     /// </summary>
     private const int CatchUpRate = 2;
 
-    private readonly System.IO.Stream _source;
+    /// <summary>
+    /// The step a segment is laid after the one before it at when nothing better is known: one
+    /// frame at 30 fps. The step the video of the stream really has replaces it at the first pair
+    /// of frames.
+    /// </summary>
+    private const long DefaultFrameStep = 33;
+
+    /// <summary>
+    /// How long past filling its cushion an encoder that cannot is waited for before the live
+    /// starts anyway, with what there is (see <see cref="WaitForCushion"/>).
+    /// </summary>
+    private static readonly TimeSpan CushionPatience = TimeSpan.FromSeconds(5);
+
+    private readonly Queue<RelaySegment> _segments = new();
     private readonly IFlvSink _sink;
     private readonly StreamPlatformProfile _profile;
     private readonly ILogger _logger;
-    private readonly Queue<FlvTag> _queue = new();
+    private readonly Queue<QueuedTag> _queue = new();
     private readonly object _gate = new();
     private readonly CancellationTokenSource _cancellation = new();
     private readonly TaskCompletionSource _completion = new(TaskCreationOptions.RunContinuationsAsynchronously);
 
     private byte[]? _header;
     private bool _sourceEnded;
+    private bool _closed;
+    private bool _anyTagQueued;
+    private long _lastVideoTimestamp = -1;
+    private long _frameStep = DefaultFrameStep;
     private long _lastQueuedTimestamp;
     private long _lastSentTimestamp;
     private long _sentTimestamp = -1;
@@ -69,13 +87,30 @@ public sealed class FlvPacedRelay
     private long _positionMilliseconds;
     private long _onAirSinceTicks;
     private long _lastAdvanceTicks = Environment.TickCount64;
+    private long _firstMediaQueued = -1;
+    private bool _readerWaiting;
+    private long _lowLeadSinceTicks;
     private int _rebases;
     private int _catchingUp;
     private long _worstLateMilliseconds;
 
     public FlvPacedRelay(System.IO.Stream source, IFlvSink sink, StreamPlatformProfile profile, ILogger logger)
+        : this(sink, profile, logger)
     {
-        _source = source;
+        // One encoder for the whole connection: it is the only segment there will ever be.
+        _segments.Enqueue(new RelaySegment(this, source));
+        _closed = true;
+    }
+
+    /// <summary>
+    /// A relay that outlives its encoders: one connection to the ingest for the whole live, fed by
+    /// one encoder after the other (<see cref="Attach"/>) until <see cref="Close"/>. The ingest sees
+    /// a single publish and a single timeline, so going from a video to a spot and back is not a
+    /// live that ends and starts again, which is what the platforms show as the stream going off
+    /// air.
+    /// </summary>
+    public FlvPacedRelay(IFlvSink sink, StreamPlatformProfile profile, ILogger logger)
+    {
         _sink = sink;
         _profile = profile;
         _logger = logger;
@@ -106,6 +141,15 @@ public sealed class FlvPacedRelay
     /// <summary>When the timestamp on air last moved forward (Environment.TickCount64).</summary>
     public long LastAdvanceTicks => Interlocked.Read(ref _lastAdvanceTicks);
 
+    /// <summary>
+    /// Since when the encoder has been less than a quarter of <see cref="StreamPlatformProfile.MaxLead"/>
+    /// ahead of what is on air (Environment.TickCount64); 0 while it keeps its lead. An encoder
+    /// that keeps up runs ahead until the jitter buffer is full: one that stays without a lead is
+    /// producing the live no faster than it goes out, and the first slow moment of the machine is a
+    /// moment the viewers wait for. That is what the streaming loop adapts the encoder to.
+    /// </summary>
+    public long LowLeadSinceTicks => Interlocked.Read(ref _lowLeadSinceTicks);
+
     /// <summary>How many times the clock was moved because the network fell too far behind.</summary>
     public int Rebases => Volatile.Read(ref _rebases);
 
@@ -115,6 +159,60 @@ public sealed class FlvPacedRelay
     /// jitter buffer holds, which is what a viewer sees as buffering.
     /// </summary>
     public int CatchingUp => Volatile.Read(ref _catchingUp);
+
+    /// <summary>
+    /// Queues the output of one more encoder behind the ones already attached. Its timestamps are
+    /// moved to carry on one frame after the last tag of the stream, its FLV header and its
+    /// metadata are dropped (the ingest has them already), and its sequence headers go through, so
+    /// a decoder on the other side reconfigures itself if the new encoder differs from the old one.
+    /// </summary>
+    public RelaySegment Attach(System.IO.Stream source)
+    {
+        lock (_gate)
+        {
+            if (_closed || _cancellation.IsCancellationRequested || _completion.Task.IsCompleted)
+            {
+                throw new InvalidOperationException("The relay is not taking encoders any more");
+            }
+
+            var segment = new RelaySegment(this, source);
+            _segments.Enqueue(segment);
+            Monitor.PulseAll(_gate);
+            return segment;
+        }
+    }
+
+    /// <summary>Whether a new encoder can still be attached: the connection is open and not closing.</summary>
+    public bool IsOpen
+    {
+        get
+        {
+            lock (_gate)
+            {
+                return !_closed && !_cancellation.IsCancellationRequested && !_completion.Task.IsCompleted;
+            }
+        }
+    }
+
+    /// <summary>No more encoders: what is queued is sent, then the connection is closed the way the ingest expects.</summary>
+    public void Close()
+    {
+        lock (_gate)
+        {
+            _closed = true;
+            Monitor.PulseAll(_gate);
+        }
+    }
+
+    /// <summary>Stops reading a segment at the next tag boundary; the caller kills its encoder.</summary>
+    internal void Detach(RelaySegment segment)
+    {
+        lock (_gate)
+        {
+            segment.Detached = true;
+            Monitor.PulseAll(_gate);
+        }
+    }
 
     public void Start()
     {
@@ -144,36 +242,135 @@ public sealed class FlvPacedRelay
     {
         try
         {
-            var header = ReadHeader();
+            while (NextSegment() is { } segment)
+            {
+                ReadSegment(segment);
+            }
+        }
+        finally
+        {
             lock (_gate)
             {
-                _header = header;
+                _sourceEnded = true;
+                foreach (var pending in _segments)
+                {
+                    pending.MarkReadEnded();
+                }
+
+                _segments.Clear();
                 Monitor.PulseAll(_gate);
             }
+        }
+    }
 
-            while (!_cancellation.IsCancellationRequested && ReadTag() is { } tag)
+    /// <summary>The next encoder to read, or null once the relay was closed with none left, or cancelled.</summary>
+    private RelaySegment? NextSegment()
+    {
+        lock (_gate)
+        {
+            while (_segments.Count == 0 && !_closed && !_cancellation.IsCancellationRequested)
             {
+                Monitor.Wait(_gate);
+            }
+
+            return _cancellation.IsCancellationRequested || _segments.Count == 0 ? null : _segments.Dequeue();
+        }
+    }
+
+    private void ReadSegment(RelaySegment segment)
+    {
+        try
+        {
+            var header = ReadHeader(segment.Source);
+            lock (_gate)
+            {
+                // The first encoder's header opens the stream; the ones after it are already inside it.
+                if (_header is null)
+                {
+                    _header = header;
+                    Monitor.PulseAll(_gate);
+                }
+            }
+
+            long? offset = null;
+            while (!_cancellation.IsCancellationRequested && !segment.Detached && ReadTag(segment.Source) is { } tag)
+            {
+                // The metadata of an encoder after the first describes a stream the ingest is not
+                // being sent: the publish has one, the one it opened with.
+                if (tag.Type == ScriptTag && _anyTagQueued)
+                {
+                    tag.Release();
+                    continue;
+                }
+
+                var original = tag.Timestamp;
+                if (tag.Type != ScriptTag)
+                {
+                    // The first frame of the segment lands one frame after the last tag of the
+                    // stream, and everything after it keeps its distance from that frame. The first
+                    // segment keeps its own timestamps, which is the relay of one encoder as it was.
+                    offset ??= _anyTagQueued ? _lastQueuedTimestamp + _frameStep - tag.Timestamp : 0;
+                    if (offset.Value != 0)
+                    {
+                        tag.Restamp(Math.Max(0, tag.Timestamp + offset.Value));
+                    }
+                }
+
                 lock (_gate)
                 {
                     // The bound of the jitter buffer: past it the reader waits for the sender, the
                     // pipe fills, and the encoder waits on its write. That is the backpressure that
                     // keeps it no more than MaxLead ahead of what is on air.
                     while (!_cancellation.IsCancellationRequested
+                        && !segment.Detached
                         && _queue.Count > 0
                         && (_lastQueuedTimestamp - _lastSentTimestamp > Milliseconds(_profile.MaxLead)
                             || _queue.Count >= MaxQueuedTags))
                     {
+                        // The buffer is as full as it gets: a start waiting for its cushion has it.
+                        if (!_readerWaiting)
+                        {
+                            _readerWaiting = true;
+                            Monitor.PulseAll(_gate);
+                        }
+
                         Monitor.Wait(_gate);
                     }
 
-                    if (_cancellation.IsCancellationRequested)
+                    _readerWaiting = false;
+
+                    if (_cancellation.IsCancellationRequested || segment.Detached)
                     {
+                        // What this segment read past the point it was let go at never goes on air,
+                        // so it is not part of where it got to either.
                         tag.Release();
                         break;
                     }
 
-                    _queue.Enqueue(tag);
+                    if (tag.Type == VideoTag)
+                    {
+                        if (_lastVideoTimestamp >= 0 && tag.Timestamp - _lastVideoTimestamp is > 0 and < 1000 and var step)
+                        {
+                            _frameStep = step;
+                        }
+
+                        _lastVideoTimestamp = tag.Timestamp;
+                    }
+
+                    if (tag.Type != ScriptTag)
+                    {
+                        segment.MarkRead(original);
+                    }
+
+                    if (tag.Type != ScriptTag && _firstMediaQueued < 0)
+                    {
+                        _firstMediaQueued = tag.Timestamp;
+                    }
+
+                    _queue.Enqueue(new QueuedTag(tag, segment));
+                    _anyTagQueued = true;
                     _lastQueuedTimestamp = Math.Max(_lastQueuedTimestamp, tag.Timestamp);
+                    segment.MarkQueued();
                     Monitor.PulseAll(_gate);
                 }
             }
@@ -186,11 +383,7 @@ public sealed class FlvPacedRelay
         }
         finally
         {
-            lock (_gate)
-            {
-                _sourceEnded = true;
-                Monitor.PulseAll(_gate);
-            }
+            segment.MarkReadEnded();
         }
     }
 
@@ -202,8 +395,9 @@ public sealed class FlvPacedRelay
         {
             using var waiter = HybridWaiter.Create();
             _logger.LogInformation(
-                "Relay to {Platform}: preroll {Preroll}s, lead {Lead}s, {Sleeper} wakes {Overshoot:0.###} ms late",
+                "Relay to {Platform}, paced by {Pacing}: preroll {Preroll}s, lead {Lead}s, {Sleeper} wakes {Overshoot:0.###} ms late",
                 _profile.Platform,
+                _profile.Pacing == RelayPacing.Relay ? "the relay" : "the ffmpeg sender",
                 _profile.Preroll.TotalSeconds,
                 _profile.MaxLead.TotalSeconds,
                 waiter.SleeperName,
@@ -221,6 +415,7 @@ public sealed class FlvPacedRelay
             }
 
             _sink.WriteHeader(header);
+            WaitForCushion();
 
             long? anchor = null;
             long baseTimestamp = 0;
@@ -233,11 +428,18 @@ public sealed class FlvPacedRelay
             var maxLead = HybridWaiter.Ticks(_profile.MaxLead);
             var lateEnough = HybridWaiter.Ticks(TimeSpan.FromSeconds(1));
 
-            while (NextTag() is { } tag)
+            // Paced by the sender, the relay hands every tag over as soon as the sender takes it:
+            // the pipe fills at the rate the sender reads, and that is the backpressure the jitter
+            // buffer is measured against. A second clock here would only fight the one there.
+            var paced = _profile.Pacing == RelayPacing.Relay;
+            var lowLead = Milliseconds(_profile.MaxLead) / 4;
+
+            while (NextTag() is { } queued)
             {
+                var tag = queued.Tag;
                 try
                 {
-                    if (tag.Type != ScriptTag)
+                    if (paced && tag.Type != ScriptTag)
                     {
                         // The clock starts on the first frame, already Preroll in the past:
                         // everything stamped before Preroll is due at once and goes out in a burst.
@@ -333,6 +535,11 @@ public sealed class FlvPacedRelay
 
                     _sink.WriteTag(tag);
                     MarkSent(tag);
+                    queued.Segment?.MarkSent(tag);
+                    if (tag.Type != ScriptTag)
+                    {
+                        MeasureLead(tag.Timestamp, lowLead);
+                    }
                 }
                 finally
                 {
@@ -380,6 +587,68 @@ public sealed class FlvPacedRelay
         }
     }
 
+    /// <summary>
+    /// The clock starts on a full jitter buffer, not on the first frame. Started on the first one,
+    /// the buffer is empty at the very moment the encoder is slowest - opening its inputs, filling
+    /// its lookahead - so the live fell behind in its first seconds ("fell 1.0s behind" on Twitch,
+    /// 4 on YouTube) and an encoder no faster than real time never won it back: every hiccup of the
+    /// machine after that was a stutter on air. Here the encoder fills the buffer first - until it
+    /// is <see cref="StreamPlatformProfile.MaxLead"/> ahead, or the reader is held back by the
+    /// bound, or the encoder is done - and the live starts with the margin the buffer was made for.
+    /// It costs that much delay once, at the start; an encoder that cannot fill it is waited for
+    /// <see cref="CushionPatience"/> more, then the live starts with what there is.
+    /// </summary>
+    private void WaitForCushion()
+    {
+        var cushion = Milliseconds(_profile.MaxLead);
+        if (cushion <= 0)
+        {
+            return;
+        }
+
+        var started = Environment.TickCount64;
+        var deadline = started + cushion + Milliseconds(CushionPatience);
+        long buffered;
+        lock (_gate)
+        {
+            while (!_cancellation.IsCancellationRequested
+                && !_sourceEnded
+                && !_readerWaiting
+                && (_firstMediaQueued < 0 || _lastQueuedTimestamp - _firstMediaQueued < cushion)
+                && Environment.TickCount64 < deadline)
+            {
+                Monitor.Wait(_gate, (int)Math.Max(1, deadline - Environment.TickCount64));
+            }
+
+            buffered = _firstMediaQueued < 0 ? 0 : _lastQueuedTimestamp - _firstMediaQueued;
+        }
+
+        _logger.LogInformation(
+            "The live to {Platform} starts with {Buffered:0.0}s buffered, after {Waited:0.0}s",
+            _profile.Platform,
+            buffered / 1000d,
+            (Environment.TickCount64 - started) / 1000d);
+    }
+
+    /// <summary>Only the sending thread calls this: whether the encoder keeps its lead on what is on air.</summary>
+    private void MeasureLead(long sentTimestamp, long lowLead)
+    {
+        long lead;
+        lock (_gate)
+        {
+            lead = _lastQueuedTimestamp - sentTimestamp;
+        }
+
+        if (lead >= lowLead)
+        {
+            Interlocked.Exchange(ref _lowLeadSinceTicks, 0);
+        }
+        else if (Interlocked.Read(ref _lowLeadSinceTicks) == 0)
+        {
+            Interlocked.Exchange(ref _lowLeadSinceTicks, Environment.TickCount64);
+        }
+    }
+
     /// <summary>Only the sending thread writes these; the session reads them from its monitor.</summary>
     private void MarkSent(FlvTag tag)
     {
@@ -411,9 +680,9 @@ public sealed class FlvPacedRelay
     {
         lock (_gate)
         {
-            while (_queue.TryDequeue(out var tag))
+            while (_queue.TryDequeue(out var queued))
             {
-                tag.Release();
+                queued.Tag.Release();
             }
         }
     }
@@ -432,7 +701,7 @@ public sealed class FlvPacedRelay
     }
 
     /// <summary>The next tag to send, or null when the encoder is done and the queue is empty.</summary>
-    private FlvTag? NextTag()
+    private QueuedTag? NextTag()
     {
         lock (_gate)
         {
@@ -447,18 +716,18 @@ public sealed class FlvPacedRelay
                 return null;
             }
 
-            var tag = _queue.Dequeue();
-            _lastSentTimestamp = Math.Max(_lastSentTimestamp, tag.Timestamp);
+            var queued = _queue.Dequeue();
+            _lastSentTimestamp = Math.Max(_lastSentTimestamp, queued.Tag.Timestamp);
             Monitor.PulseAll(_gate);
-            return tag;
+            return queued;
         }
     }
 
     /// <summary>The FLV header and the PreviousTagSize0 after it, forwarded as they were.</summary>
-    private byte[] ReadHeader()
+    private static byte[] ReadHeader(System.IO.Stream source)
     {
         var start = new byte[FlvHeaderMinimum];
-        if (!ReadExactly(start))
+        if (!ReadExactly(source, start))
         {
             throw new InvalidDataException("The encoder ended before writing an FLV header");
         }
@@ -476,7 +745,7 @@ public sealed class FlvPacedRelay
 
         var header = new byte[dataOffset + PreviousTagSizeSize];
         start.CopyTo(header, 0);
-        if (!ReadExactly(header.AsSpan(FlvHeaderMinimum)))
+        if (!ReadExactly(source, header.AsSpan(FlvHeaderMinimum)))
         {
             throw new InvalidDataException("The encoder ended inside the FLV header");
         }
@@ -485,10 +754,10 @@ public sealed class FlvPacedRelay
     }
 
     /// <summary>One whole tag with its trailing PreviousTagSize, or null at the end of the stream.</summary>
-    private FlvTag? ReadTag()
+    private static FlvTag? ReadTag(System.IO.Stream source)
     {
         Span<byte> head = stackalloc byte[FlvTag.HeaderSize];
-        if (!ReadExactly(head))
+        if (!ReadExactly(source, head))
         {
             return null;
         }
@@ -499,7 +768,7 @@ public sealed class FlvPacedRelay
 
         var buffer = ArrayPool<byte>.Shared.Rent(length);
         head.CopyTo(buffer);
-        if (!ReadExactly(buffer.AsSpan(FlvTag.HeaderSize, dataSize + FlvTag.TrailerSize)))
+        if (!ReadExactly(source, buffer.AsSpan(FlvTag.HeaderSize, dataSize + FlvTag.TrailerSize)))
         {
             // A tag cut in half is not sent: the ingest would choke on it.
             ArrayPool<byte>.Shared.Return(buffer);
@@ -509,12 +778,12 @@ public sealed class FlvPacedRelay
         return new FlvTag((byte)(head[0] & 0x1F), timestamp, buffer, length);
     }
 
-    private bool ReadExactly(Span<byte> buffer)
+    private static bool ReadExactly(System.IO.Stream source, Span<byte> buffer)
     {
         var read = 0;
         while (read < buffer.Length)
         {
-            var count = _source.Read(buffer[read..]);
+            var count = source.Read(buffer[read..]);
             if (count == 0)
             {
                 return false;
@@ -527,4 +796,108 @@ public sealed class FlvPacedRelay
     }
 
     private static long Milliseconds(TimeSpan duration) => (long)duration.TotalMilliseconds;
+
+    /// <summary>A tag waiting to be sent, with the encoder it came from.</summary>
+    private readonly record struct QueuedTag(FlvTag Tag, RelaySegment? Segment);
+}
+
+/// <summary>
+/// The output of one encoder inside a relay that outlives it (see
+/// <see cref="FlvPacedRelay.Attach"/>): how far it was read, how far it went on air, and whether it
+/// is over. A session that streams into a shared connection is measured by its segment, not by the
+/// connection, which carried other encoders before it and will carry others after.
+/// </summary>
+public sealed class RelaySegment
+{
+    private readonly FlvPacedRelay _relay;
+    private readonly TaskCompletionSource _read = new(TaskCreationOptions.RunContinuationsAsynchronously);
+    private long _firstReadTimestamp = -1;
+    private long _readPositionMilliseconds;
+    private long _firstSentTimestamp = -1;
+    private long _sentPositionMilliseconds;
+    private long _onAirSinceTicks;
+    private long _lastAdvanceTicks = Environment.TickCount64;
+    private int _queued;
+
+    internal RelaySegment(FlvPacedRelay relay, System.IO.Stream source)
+    {
+        _relay = relay;
+        Source = source;
+    }
+
+    internal System.IO.Stream Source { get; }
+
+    /// <summary>Set under the lock of the relay: the reader lets the segment go at the next tag.</summary>
+    internal bool Detached { get; set; }
+
+    /// <summary>The connection the segment goes out on.</summary>
+    public FlvPacedRelay Relay => _relay;
+
+    /// <summary>Completes once nothing more is read from the encoder: it ended, was let go, or the relay stopped.</summary>
+    public Task ReadCompletion => _read.Task;
+
+    /// <summary>The encoder is done with, or the connection it was going out on is gone.</summary>
+    public bool Ended => _read.Task.IsCompleted || _relay.Completion.IsCompleted;
+
+    /// <summary>
+    /// How much of the encoder was taken into the relay, in milliseconds: all of it goes on air
+    /// unless the connection breaks, so this is where the next encoder carries on from.
+    /// </summary>
+    public long ReadPositionMilliseconds => Interlocked.Read(ref _readPositionMilliseconds);
+
+    /// <summary>How much of this encoder went on air, in milliseconds.</summary>
+    public long SentPositionMilliseconds => Interlocked.Read(ref _sentPositionMilliseconds);
+
+    /// <summary>When the first frame of this encoder went on air (Environment.TickCount64); 0 before.</summary>
+    public long OnAirSinceTicks => Interlocked.Read(ref _onAirSinceTicks);
+
+    /// <summary>When the part of this encoder on air last moved forward (Environment.TickCount64).</summary>
+    public long LastAdvanceTicks => Interlocked.Read(ref _lastAdvanceTicks);
+
+    /// <summary>Whether any frame of this encoder made it into the relay.</summary>
+    public bool HasQueued => Volatile.Read(ref _queued) == 1;
+
+    /// <summary>Stops taking frames from the encoder: what was read goes on air, the rest never does.</summary>
+    public void Detach() => _relay.Detach(this);
+
+    internal void MarkRead(long timestamp)
+    {
+        if (_firstReadTimestamp < 0)
+        {
+            _firstReadTimestamp = timestamp;
+        }
+
+        var position = timestamp - _firstReadTimestamp;
+        if (position > Interlocked.Read(ref _readPositionMilliseconds))
+        {
+            Interlocked.Exchange(ref _readPositionMilliseconds, position);
+        }
+    }
+
+    internal void MarkQueued() => Volatile.Write(ref _queued, 1);
+
+    /// <summary>Only the sending thread of the relay calls this.</summary>
+    internal void MarkSent(FlvTag tag)
+    {
+        if (tag.Type == FlvPacedRelay.ScriptTag)
+        {
+            return;
+        }
+
+        var now = Environment.TickCount64;
+        Interlocked.CompareExchange(ref _onAirSinceTicks, now, 0);
+        if (_firstSentTimestamp < 0)
+        {
+            _firstSentTimestamp = tag.Timestamp;
+        }
+
+        var position = tag.Timestamp - _firstSentTimestamp;
+        if (position > Interlocked.Read(ref _sentPositionMilliseconds))
+        {
+            Interlocked.Exchange(ref _sentPositionMilliseconds, position);
+            Interlocked.Exchange(ref _lastAdvanceTicks, now);
+        }
+    }
+
+    internal void MarkReadEnded() => _read.TrySetResult();
 }

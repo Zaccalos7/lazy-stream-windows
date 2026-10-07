@@ -47,6 +47,8 @@
 
 .btn.icon-only { width: 30px; padding: 0; }
 .btn.icon-only .icon { font-size: 14px; }
+.spot-icon { display: inline-block; width: 16px; height: 16px; vertical-align: middle; fill: currentColor; }
+.btn.icon-only .spot-icon { display: block; margin: auto; }
 
 :focus-visible { outline: none; box-shadow: var(--glow); }
 

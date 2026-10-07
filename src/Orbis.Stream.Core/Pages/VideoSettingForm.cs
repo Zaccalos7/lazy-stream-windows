@@ -157,11 +157,42 @@ public sealed class VideoSettingForm
     public static IEnumerable<SelectListItem> TuneItems() =>
         FfmpegCodecCatalog.Tunes.Select(tune => new SelectListItem($"{tune.Label} ({tune.Value})", tune.Value));
 
-    /// <summary>Bitrate as the cards show it: millions above 999 999 bps.</summary>
-    public static string FormatBitrate(int? bitrate, string millionLabel) => bitrate switch
+    /// <summary>
+    /// The unit a bitrate reads best in: the largest one it divides evenly, which is also the one
+    /// nobody has to count zeros in. 5 000 000 is "5M", 128 000 is "128k", 1 234 567 stays digits.
+    /// </summary>
+    private static (double Scaled, string Suffix, string Label) BitrateUnit(int bitrate)
     {
-        null => "0",
-        > 999_999 => $"{bitrate.Value / 1_000_000d:0.##} {millionLabel}",
-        _ => bitrate.Value.ToString(System.Globalization.CultureInfo.InvariantCulture)
+        foreach (var unit in new[] { (1_000_000d, "M", "Mbit/s"), (1_000d, "k", "kbit/s"), (1d, "", "bit/s") })
+        {
+            var scaled = bitrate / unit.Item1;
+            if (scaled >= 1 && Math.Abs(scaled - Math.Round(scaled, 2)) < 1e-9)
+            {
+                return (Math.Round(scaled, 2), unit.Item2, unit.Item3);
+            }
+        }
+
+        return (bitrate, "", "bit/s");
+    }
+
+    /// <summary>
+    /// The bitrate as a person reads it: "5 Mbit/s", "128 kbit/s", never a row of digits. This is
+    /// what the cards and the read-only rows show.
+    /// </summary>
+    public static string FormatBitrate(int? bitrate) => bitrate switch
+    {
+        > 0 => Format(BitrateUnit(bitrate.Value).Scaled) + " " + BitrateUnit(bitrate.Value).Label,
+        _ => "0"
     };
+
+    /// <summary>
+    /// The same number as the boxes write it, unit suffix included: "5M", "128k". What the setting
+    /// stores stays the plain count of bits per second, hidden beside the box (site.js).
+    /// </summary>
+    public static string WriteBitrate(int? bitrate) => bitrate is > 0
+        ? Format(BitrateUnit(bitrate.Value).Scaled) + BitrateUnit(bitrate.Value).Suffix
+        : string.Empty;
+
+    private static string Format(double value) =>
+        value.ToString("0.##", System.Globalization.CultureInfo.InvariantCulture);
 }

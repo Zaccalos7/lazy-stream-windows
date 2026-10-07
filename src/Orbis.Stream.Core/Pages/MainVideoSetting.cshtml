@@ -30,8 +30,8 @@
             <h3 class="truncate">@displayTitle</h3>
             <div class="caption truncate">
                 @T["videoCodecName"]: @(setting.VideoCodecName ?? "N/A") ·
-                @T["bitrate"]: @VideoSettingForm.FormatBitrate(setting.VideoBitrate, T["milion"]) ·
-                @T["audioBitrate"]: @(setting.AudioSettingRecord?.AudioBitrate?.ToString() ?? "N/A")
+                @T["bitrate"]: @VideoSettingForm.FormatBitrate(setting.VideoBitrate) ·
+                @T["audioBitrate"]: @VideoSettingForm.FormatBitrate(setting.AudioSettingRecord?.AudioBitrate)
             </div>
         </div>
         <div class="actions">

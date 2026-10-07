@@ -388,6 +388,119 @@ const previewFps = value => value > 0
 
 const previewSize = media => media && media.width > 0 ? `${media.width}×${media.height}` : "–";
 
+// ---- Bitrate ---------------------------------------------------------------------
+// A bitrate is kept in bits per second, and 5000000 is not a number anybody reads at a glance.
+// The box speaks Mbit/s and kbit/s and spells out underneath the exact number the setting stores:
+// what is typed is only ever another way of writing that value, never another value. [data-bitrate]
+// marks the box, [data-bitrate-box] the line around it, and the hidden input inside that line is
+// what the forms post, while the preview panel reads the same number from data-bitrate-bps.
+
+const bitrateUnits = [
+  { suffix: "M", factor: 1e6, label: "Mbit/s" },
+  { suffix: "k", factor: 1e3, label: "kbit/s" },
+  { suffix: "", factor: 1, label: "bit/s" }
+];
+
+const bitrateGrouped = value => String(value).replace(/\B(?=(\d{3})+(?!\d))/g, " ");
+
+// "5", "5.5", "5M", "128k", "5 Mbit/s", "5 000 000", "5,000,000" and "6,5M" all end up as one
+// count of bits per second. A dot is a decimal point; a space or a comma between groups of three
+// is a thousands separator, which is how a value pasted from elsewhere arrives.
+const parseBitrate = (raw, fallback) => {
+  const typed = String(raw ?? "").trim().toLowerCase();
+  if (!typed) return null;
+  // A value already written out in full says so, and is not read through the unit in the box: a
+  // "128 000" pasted into a box sitting on Mbit/s is 128 000 bit/s, not 128 000 of them.
+  const grouped = /^\d{1,3}(?:[ ,]\d{3})+$/.test(typed);
+  const text = grouped ? typed.replace(/[ ,]/g, "") : typed.replace(/[\s_]/g, "");
+  const match = /^(\d+)(?:[.,](\d+))?(mbit\/s|kbit\/s|bit\/s|mbps|kbps|bps|m|k)?$/.exec(text);
+  if (!match) return null;
+  const named = match[3] && bitrateUnits.find(unit => unit.suffix && match[3].startsWith(unit.suffix.toLowerCase()));
+  const spelled = match[3] === "bps" || match[3] === "bit/s";
+  const unit = named || (spelled || grouped ? bitrateUnits[2] : fallback);
+  const fraction = match[2] ? Number(match[2]) / 10 ** match[2].length : 0;
+  return Math.round((Number(match[1]) + fraction) * unit.factor);
+};
+
+// The way the box writes a bitrate back: the largest unit it divides evenly, so 5000000 comes back
+// as "5M" and 128000 as "128k" rather than as a row of digits. Anything finer than that keeps them.
+const bitrateWritten = value => {
+  for (const unit of bitrateUnits) {
+    const scaled = value / unit.factor;
+    const rounded = Math.round(scaled * 100) / 100;
+    if (scaled >= 1 && Math.abs(scaled - rounded) < 1e-9) return { text: `${rounded}${unit.suffix}`, unit };
+  }
+  return { text: String(value), unit: bitrateUnits[2] };
+};
+
+// The unit a bare number in the box is read in: the one shown last, or the largest the field can
+// reasonably hold (an audio bitrate is read in kbit/s, a video one in Mbit/s).
+const bitrateUnitOf = field => {
+  const shown = field.dataset.bitrateUnit;
+  if (shown !== undefined) return bitrateUnits.find(unit => unit.suffix === shown) || bitrateUnits[1];
+  const maximum = Number(field.dataset.bitrateMax || 0);
+  return maximum >= 1e7 ? bitrateUnits[0] : maximum >= 1e3 ? bitrateUnits[1] : bitrateUnits[2];
+};
+
+const bitrateParts = field => {
+  const box = field.closest("[data-bitrate-box]");
+  return {
+    box,
+    unit: box?.querySelector("[data-bitrate-unit]"),
+    hint: box?.parentElement?.querySelector("[data-bitrate-hint]"),
+    sink: box?.querySelector('input[type="hidden"]')
+  };
+};
+
+const paintBitrate = (field, bps, canonical = false) => {
+  const { box, unit, hint, sink } = bitrateParts(field);
+  if (!box) return;
+  const maximum = Number(field.dataset.bitrateMax || 0);
+  const word = field.dataset.bitrateInvalid ?? "";
+  const written = bps > 0 ? bitrateWritten(bps) : null;
+
+  // An empty box is a form that has not been filled in, not a wrong number: the browser speaks of
+  // it through the required attribute and the line underneath stays quiet.
+  if (!String(field.value).trim()) {
+    box.dataset.bitrateState = "";
+    field.setCustomValidity("");
+    delete field.dataset.bitrateBps;
+    unit.textContent = bitrateUnitOf(field).label;
+    if (hint) hint.textContent = "";
+    if (sink) sink.value = "";
+    return;
+  }
+
+  if (!written || (maximum > 0 && bps > maximum)) {
+    box.dataset.bitrateState = "bad";
+    field.setCustomValidity(word);
+    unit.textContent = written ? written.unit.label : bitrateUnitOf(field).label;
+    if (hint) hint.textContent = written ? `${word} · 1–${bitrateGrouped(maximum)} bit/s` : word;
+    delete field.dataset.bitrateBps;
+    if (sink) sink.value = "";
+    return;
+  }
+
+  box.dataset.bitrateState = "";
+  field.setCustomValidity("");
+  field.dataset.bitrateBps = String(bps);
+  field.dataset.bitrateUnit = written.unit.suffix;
+  unit.textContent = written.unit.label;
+  if (hint) hint.textContent = `= ${bitrateGrouped(bps)} bit/s`;
+  if (sink) sink.value = String(bps);
+  if (canonical && field.value !== written.text) field.value = written.text;
+};
+
+const readBitrate = field => paintBitrate(field, parseBitrate(field.value, bitrateUnitOf(field)));
+
+for (const field of document.querySelectorAll("[data-bitrate]")) {
+  readBitrate(field);
+  field.addEventListener("input", () => readBitrate(field));
+  // Leaving the box is what settles the number: what was typed folds into the friendliest exact
+  // form, so what is saved is visible in the same line as what it means.
+  field.addEventListener("blur", () => paintBitrate(field, parseBitrate(field.value, bitrateUnitOf(field)), true));
+}
+
 const setPreviewText = (selector, value) => {
   for (const node of preview.querySelectorAll(selector)) node.textContent = value;
 };
@@ -396,6 +509,12 @@ const setPreviewField = (name, value) => {
   for (const field of previewForm.querySelectorAll("[data-param]")) {
     if (field.dataset.param !== name) continue;
     if (field === document.activeElement || (previewDirty.get(name) || 0) > Date.now()) continue;
+    // A bitrate is written in the unit it reads best in, so the number the snapshot carries is put
+    // through the same folding the user's own typing goes through.
+    if (field.dataset.bitrate !== undefined) {
+      paintBitrate(field, Number(value) || null, true);
+      continue;
+    }
     field.value = value ?? "";
   }
 };
@@ -660,6 +779,13 @@ if (previewForm) {
       const key = control.dataset.param;
       if (key === "keepSource" || key === "gopSize") continue;
       const value = control.value.trim();
+      if (control.dataset.bitrate !== undefined) {
+        // The box holds "5M", the request holds 5000000: what the setting stores never changes
+        // because of how it is written, and a half typed box sends nothing rather than a NaN.
+        const bps = Number(control.dataset.bitrateBps);
+        if (bps > 0) body[key] = bps;
+        continue;
+      }
       if (key === "videoWidth" || key === "videoHeight") {
         // Zero is how the request says "as the source": the two halves travel together, and both
         // travel only when the decision is to drop the resolution the setting carried.

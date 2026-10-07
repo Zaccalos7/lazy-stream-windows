@@ -100,11 +100,12 @@ public sealed record LiveSnapshot(
 /// </summary>
 public sealed class LivePreviewService
 {
-    /// <summary>What a bitrate has to stay between, in bits per second.</summary>
-    private const int MinimumBitrate = 1;
+/// <summary>What a bitrate has to stay between, in bits per second.</summary>
+    public const int MinimumBitrate = 1;
 
-    private const int MaximumVideoBitrate = 1_000_000_000;
-    private const int MaximumAudioBitrate = 1_000_000;
+    public const int MaximumVideoBitrate = 1_000_000_000;
+
+    public const int MaximumAudioBitrate = 1_000_000;
 
     /// <summary>A frame no platform would accept is refused before it reaches ffmpeg.</summary>
     private const int MaximumWidth = 7680;

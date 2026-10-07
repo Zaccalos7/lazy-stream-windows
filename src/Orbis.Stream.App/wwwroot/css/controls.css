@@ -113,6 +113,26 @@ textarea.input { resize: vertical; padding: 8px 10px; }
 .input-affix .reveal:hover { color: var(--text); background: var(--tint-strong); }
 .input-affix .reveal[aria-pressed="true"] { color: var(--accent-text); background: var(--tint-strong); }
 
+/* Bitrate. The number is read in the unit that fits it (5M, 128k), the unit rides inside the box,
+   and the count of bits per second the setting really stores is spelled out underneath it, so the
+   friendlier form costs nothing in what is saved. */
+.bitrate { position: relative; display: flex; }
+.bitrate .input { padding-inline-end: 62px; font-variant-numeric: tabular-nums; }
+.bitrate-unit {
+  position: absolute;
+  top: 50%;
+  inset-inline-end: 10px;
+  color: var(--text-3);
+  font-size: 11px;
+  pointer-events: none;
+  transform: translateY(-50%);
+}
+.bitrate-hint { min-height: 13px; font-variant-numeric: tabular-nums; }
+[data-bitrate-state="bad"] .input,
+[data-bitrate-state="bad"] .bitrate-unit,
+[data-bitrate-state="bad"] .bitrate-hint { color: var(--critical); }
+[data-bitrate-state="bad"] .input { border-color: var(--critical); }
+
 /* Hide native Edge/Chromium password reveal button since we use a custom one */
 input[type="password"]::-ms-reveal,
 input[type="password"]::-ms-clear {

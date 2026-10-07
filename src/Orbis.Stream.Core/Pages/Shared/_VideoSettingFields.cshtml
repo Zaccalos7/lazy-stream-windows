@@ -43,10 +43,18 @@
             <option value="">@T["selectFormat"]</option>
         </select>
     </label>
+    @* A bitrate is kept in bits per second and read in Mbit/s: the box speaks the friendly unit,
+       the hidden input above it posts the exact count, and site.js keeps the two in step. *@
     <label class="field">
         <span>@T["bitrate"]</span>
-        <input class="input" asp-for="VideoBitrate" type="number" min="1" step="1" placeholder="@T["exampleBitrate"]" required />
-        <small>bps</small>
+        <span class="bitrate" data-bitrate-box>
+            <input type="hidden" asp-for="VideoBitrate" />
+            <input class="input" data-bitrate data-bitrate-invalid="@T["invalidParameter"]" type="text"
+                   inputmode="decimal" autocomplete="off" placeholder="@T["exampleBitrate"]"
+                   value="@VideoSettingForm.WriteBitrate(Model.VideoBitrate)" required />
+            <span class="bitrate-unit" data-bitrate-unit aria-hidden="true"></span>
+        </span>
+        <small class="bitrate-hint" data-bitrate-hint></small>
     </label>
     <label class="field">
         <span>@T["gopSize"]</span>
@@ -81,8 +89,14 @@
             </label>
             <label class="field">
                 <span>@T["audioBitrate"]</span>
-                <input class="input" asp-for="AudioBitrate" type="number" min="1" step="1" placeholder="@T["exampleAudioBitrate"]" required />
-                <small>bps</small>
+                <span class="bitrate" data-bitrate-box>
+                    <input type="hidden" asp-for="AudioBitrate" />
+                    <input class="input" data-bitrate data-bitrate-invalid="@T["invalidParameter"]" type="text"
+                           inputmode="decimal" autocomplete="off" placeholder="@T["exampleAudioBitrate"]"
+                           value="@VideoSettingForm.WriteBitrate(Model.AudioBitrate)" required />
+                    <span class="bitrate-unit" data-bitrate-unit aria-hidden="true"></span>
+                </span>
+                <small class="bitrate-hint" data-bitrate-hint></small>
             </label>
         </div>
     </div>

@@ -239,9 +239,15 @@ else
                 </label>
                 <label class="field">
                     <span>@T["bitrate"]</span>
-                    <input class="input" data-param="videoBitrate" type="number" min="1" step="1"
-                           value="@parameters.VideoBitrate" placeholder="@T["exampleBitrate"]" required />
-                    <small>bps</small>
+                    <span class="bitrate" data-bitrate-box>
+                        <input class="input" data-param="videoBitrate" data-bitrate
+                               data-bitrate-max="@LivePreviewService.MaximumVideoBitrate"
+                               data-bitrate-invalid="@T["invalidParameter"]" type="text"
+                               inputmode="decimal" autocomplete="off" placeholder="@T["exampleBitrate"]"
+                               value="@VideoSettingForm.WriteBitrate(parameters.VideoBitrate)" required />
+                        <span class="bitrate-unit" data-bitrate-unit aria-hidden="true"></span>
+                    </span>
+                    <small class="bitrate-hint" data-bitrate-hint></small>
                 </label>
                 <label class="field">
                     <span>@T["gopSize"]</span>
@@ -279,9 +285,16 @@ else
             <div class="form-grid">
                 <label class="field">
                     <span>@T["audioBitrate"]</span>
-                    <input class="input" data-param="audioBitrate" type="number" min="1" step="1"
-                           value="@parameters.AudioBitrate" disabled="@(!live.Source.HasAudio)" required />
-                    <small>bps</small>
+                    <span class="bitrate" data-bitrate-box>
+                        <input class="input" data-param="audioBitrate" data-bitrate
+                               data-bitrate-max="@LivePreviewService.MaximumAudioBitrate"
+                               data-bitrate-invalid="@T["invalidParameter"]" type="text"
+                               inputmode="decimal" autocomplete="off" placeholder="@T["exampleAudioBitrate"]"
+                               value="@VideoSettingForm.WriteBitrate(parameters.AudioBitrate)"
+                               disabled="@(!live.Source.HasAudio)" required />
+                        <span class="bitrate-unit" data-bitrate-unit aria-hidden="true"></span>
+                    </span>
+                    <small class="bitrate-hint" data-bitrate-hint></small>
                 </label>
             </div>
 

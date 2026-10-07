@@ -322,5 +322,14 @@
   "lowLatencyHelp": "Hodor Hodor Hodor. Hodor Hodor Hodor Hodor Hodor. Hodor Hodor.",
   "playSpot": "Hodor hodor",
   "playSpotHint": "Hodor hodor hodor. Hodor hodor hodor hodor hodor.",
-  "spotFile": "Hodor hodor hodor"
+  "spotFile": "Hodor hodor hodor",
+  "sourceVolumes": "Hodor",
+  "sourceVolumesHint": "Hodor hodor hodor. 100% hodor.",
+  "encoderQuality": "Hodor",
+  "encoderQualityAuto": "Hodor (hodor)",
+  "encoderQualityLight": "Hodor · hodor",
+  "encoderQualityBalanced": "Hodor",
+  "encoderQualityHigh": "Hodor · hodor",
+  "encoderQualityHelp": "Hodor hodor hodor. Hodor hodor hodor hodor (NVENC p4) hodor hodor, hodor hodor (p1).",
+  "encoderQualityHint": "Hodor hodor hodor."
 }

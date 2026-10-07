@@ -322,5 +322,14 @@
   "lowLatencyHelp": "Asks the encoder for the smallest delay it can manage: no lookahead, no scenecut. Turn it off for a re-stream, where the pacing is already done downstream.",
   "playSpot": "Play Ad Spot",
   "playSpotHint": "Select the ad video to broadcast. The current stream will pause and automatically resume after the spot.",
-  "spotFile": "Ad video file"
+  "spotFile": "Ad video file",
+  "sourceVolumes": "Source volume",
+  "sourceVolumesHint": "How loud each video of the scene is in the live mix. 100% is its original sound.",
+  "encoderQuality": "Encoder quality",
+  "encoderQualityAuto": "Automatic (recommended)",
+  "encoderQualityLight": "Light · uses less",
+  "encoderQualityBalanced": "Balanced",
+  "encoderQualityHigh": "High · more detail",
+  "encoderQualityHelp": "How much work the encoder puts into every frame. Automatic: when the live starts Orbis tests this PC for a few seconds and uses Balanced (NVENC p4) only if the GPU or CPU keeps up with room to spare, Light (p1) otherwise. Light uses less but shows less detail at the same bitrate; High needs a powerful GPU or CPU. A preset chosen in the additional options takes precedence.",
+  "encoderQualityHint": "Automatic tests this PC and decides by itself: keep it if you are not sure."
 }

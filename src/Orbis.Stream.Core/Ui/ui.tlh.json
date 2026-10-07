@@ -322,5 +322,14 @@
   "lowLatencyHelp": "encoderyoq vumrghach qap. look-ahead vumrghach Hogh, scenecut vumrghach Hogh. qaSpa'DIch DIch'I' poHDaq taH relIHS. Hagh taH.",
   "playSpot": "cha' much",
   "playSpotHint": "much mIw wIv. choS vIjatlh 'ej much pIQchu' nach.",
-  "spotFile": "much mIw"
+  "spotFile": "much mIw",
+  "sourceVolumes": "Qoy' HoS",
+  "sourceVolumesHint": "Qoy' HoS. 100% Qoy' wa'DIch.",
+  "encoderQuality": "QIn chenmoH Qu'",
+  "encoderQualityAuto": "ra'Hom (qaq)",
+  "encoderQualityLight": "tIS · puS lo'",
+  "encoderQualityBalanced": "ruv",
+  "encoderQualityHigh": "jen · puS Hagh",
+  "encoderQualityHelp": "QIn chenmoH Qu' Qapla' QaD. ra'Hom: Orbis De'wI' tlhob; GPU pagh CPU HoS law' 'e' vIlegh (NVENC p4), ghobe'chugh tIS (p1).",
+  "encoderQualityHint": "ra'Hom De'wI' tlhob 'ej wIv."
 }

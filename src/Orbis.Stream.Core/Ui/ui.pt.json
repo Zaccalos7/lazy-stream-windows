@@ -322,5 +322,14 @@
   "lowLatencyHelp": "Pede ao codificador o menor atraso possível: sem lookahead e sem scenecut. Desligue numa retransmissão, onde o relay já impõe o ritmo.",
   "playSpot": "Reproduzir anúncio",
   "playSpotHint": "Selecione o vídeo do anúncio para transmitir. A transmissão atual será pausada e retomada automaticamente após o anúncio.",
-  "spotFile": "Arquivo de vídeo do anúncio"
+  "spotFile": "Arquivo de vídeo do anúncio",
+  "sourceVolumes": "Volume das fontes",
+  "sourceVolumesHint": "O volume de cada vídeo da cena na mistura da live. 100% é o som original.",
+  "encoderQuality": "Qualidade do codificador",
+  "encoderQualityAuto": "Automática (recomendada)",
+  "encoderQualityLight": "Leve · consome menos",
+  "encoderQualityBalanced": "Equilibrada",
+  "encoderQualityHigh": "Alta · mais detalhe",
+  "encoderQualityHelp": "Quanto o codificador trabalha em cada quadro. Automática: ao iniciar a live, o Orbis testa o PC por alguns segundos e usa Equilibrada (NVENC p4) só se a GPU ou a CPU aguentarem com folga; caso contrário, Leve (p1). Leve consome menos, mas mostra menos detalhe com o mesmo bitrate; Alta exige uma GPU ou CPU potente. Um preset escolhido nas opções adicionais tem prioridade.",
+  "encoderQualityHint": "Automática testa o PC e decide sozinha: mantenha se não tiver certeza."
 }

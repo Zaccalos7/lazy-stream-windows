@@ -322,5 +322,14 @@
   "lowLatencyHelp": "要求编码器尽量低的延迟（无前瞻、无 scenecut）。转播时请关闭，因为下游的 relay 已经在控制节奏。",
   "playSpot": "播放广告",
   "playSpotHint": "选择要播放的广告视频。当前流将暂停，并在广告结束后自动恢复。",
-  "spotFile": "广告视频文件"
+  "spotFile": "广告视频文件",
+  "sourceVolumes": "来源音量",
+  "sourceVolumesHint": "场景中每个视频在直播混音中的音量。100% 为原始声音。",
+  "encoderQuality": "编码器质量",
+  "encoderQualityAuto": "自动（推荐）",
+  "encoderQualityLight": "轻量 · 占用更少",
+  "encoderQualityBalanced": "均衡",
+  "encoderQualityHigh": "高 · 更多细节",
+  "encoderQualityHelp": "编码器在每一帧上投入的工作量。自动：直播开始时 Orbis 会测试电脑几秒钟，只有当 GPU 或 CPU 有充足余量时才使用均衡（NVENC p4），否则使用轻量（p1）。轻量占用更少，但在相同码率下细节更少；高需要强大的 GPU 或 CPU。在附加选项中选择的预设优先。",
+  "encoderQualityHint": "自动会测试电脑并自行选择：不确定时保持不变即可。"
 }

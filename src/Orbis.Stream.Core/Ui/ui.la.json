@@ -322,5 +322,14 @@
   "lowLatencyHelp": "Exigit ab incodificatori minimam moram: sine look-ahead, sine scenecut. Exstingue pro interceptione, quia ibi iam relais tempus definit.",
   "playSpot": "Lude praeconium",
   "playSpotHint": "Elige visificum praeconii ad emittendum. Flumen praesens intermittetur et post praeconium sponte resumetur.",
-  "spotFile": "Fasciculus visificus praeconii"
+  "spotFile": "Fasciculus visificus praeconii",
+  "sourceVolumes": "Volumen fontium",
+  "sourceVolumesHint": "Quam magna sit vox cuiusque video scaenae in mixtura. 100% est sonus originalis.",
+  "encoderQuality": "Qualitas encoderis",
+  "encoderQualityAuto": "Automatica (commendata)",
+  "encoderQualityLight": "Levis · minus consumit",
+  "encoderQualityBalanced": "Aequata",
+  "encoderQualityHigh": "Alta · plus subtilitatis",
+  "encoderQualityHelp": "Quantum laboris encoder in singulas imagines impendat. Automatica: cum directum incipit, Orbis computatrum paucis secundis probat et Aequatam (NVENC p4) adhibet solum si GPU aut CPU cum spatio sufficit, aliter Levem (p1). Levis minus consumit sed eodem bitrate minus subtilitatis ostendit; Alta GPU aut CPU validam postulat. Praeselectio in optionibus additis electa praevalet.",
+  "encoderQualityHint": "Automatica computatrum probat et ipsa eligit: si dubitas, relinque."
 }

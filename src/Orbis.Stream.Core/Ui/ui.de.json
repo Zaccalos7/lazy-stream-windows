@@ -322,5 +322,14 @@
   "lowLatencyHelp": "Verlangt vom Encoder die kleinste mögliche Verzögerung: kein Lookahead, kein Scenecut. Ausschalten bei einer Weiterübertragung, dort setzt der Relay den Takt ohnehin.",
   "playSpot": "Werbespot abspielen",
   "playSpotHint": "Wählen Sie das Werbevideo aus. Der aktuelle Stream wird angehalten und danach automatisch fortgesetzt.",
-  "spotFile": "Werbevideo-Datei"
+  "spotFile": "Werbevideo-Datei",
+  "sourceVolumes": "Lautstärke der Quellen",
+  "sourceVolumesHint": "Wie laut jedes Video der Szene im Live-Mix ist. 100 % ist der Originalton.",
+  "encoderQuality": "Encoder-Qualität",
+  "encoderQualityAuto": "Automatisch (empfohlen)",
+  "encoderQualityLight": "Leicht · spart Leistung",
+  "encoderQualityBalanced": "Ausgewogen",
+  "encoderQualityHigh": "Hoch · mehr Details",
+  "encoderQualityHelp": "Wie viel Arbeit der Encoder in jedes Bild steckt. Automatisch: Beim Start des Livestreams testet Orbis den PC einige Sekunden lang und nutzt Ausgewogen (NVENC p4) nur, wenn GPU oder CPU mit Reserve mithalten, sonst Leicht (p1). Leicht spart Leistung, zeigt bei gleicher Bitrate aber weniger Details; Hoch braucht eine starke GPU oder CPU. Ein in den zusätzlichen Optionen gewähltes Preset hat Vorrang.",
+  "encoderQualityHint": "Automatisch testet den PC und entscheidet selbst: im Zweifel so lassen."
 }

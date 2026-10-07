@@ -322,5 +322,14 @@
   "lowLatencyHelp": "エンコーダーに最小の遅延を求ます（ロークアヘロッドなし、scenecut なし）。再配信ではリレイがリートを治めるのでオフにしてください。",
   "playSpot": "広告を再生する",
   "playSpotHint": "放送する広告動画を選択してください。現在のストリームは一時停止し、広告の後に自動的に再開されます。",
-  "spotFile": "広告動画ファイル"
+  "spotFile": "広告動画ファイル",
+  "sourceVolumes": "ソースの音量",
+  "sourceVolumesHint": "シーンの各動画がライブのミックスでどれだけ聞こえるか。100%は元の音です。",
+  "encoderQuality": "エンコーダー品質",
+  "encoderQualityAuto": "自動（推奨）",
+  "encoderQualityLight": "軽量 · 負荷が少ない",
+  "encoderQualityBalanced": "バランス",
+  "encoderQualityHigh": "高品質 · より精細",
+  "encoderQualityHelp": "エンコーダーが各フレームにかける処理量です。自動：ライブ開始時に Orbis が数秒間 PC をテストし、GPU または CPU に余裕がある場合のみバランス（NVENC p4）を使い、そうでなければ軽量（p1）を使います。軽量は負荷が少ない代わりに同じビットレートでは精細さが下がり、高品質には高性能な GPU または CPU が必要です。追加オプションで選んだプリセットが優先されます。",
+  "encoderQualityHint": "自動は PC をテストして自分で選びます。迷ったらそのままにしてください。"
 }

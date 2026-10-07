@@ -322,5 +322,14 @@
   "lowLatencyHelp": "Chiede all'encoder il minimo ritardo possibile: niente lookahead, niente scenecut. Spegnilo per una ritrasmissione, dove il ritmo lo imposi già il relay.",
   "playSpot": "Manda in onda spot",
   "playSpotHint": "Seleziona il video dello spot da mandare in onda. La trasmissione attuale verrà messa in pausa e riprenderà automaticamente alla fine dello spot.",
-  "spotFile": "File video dello spot"
+  "spotFile": "File video dello spot",
+  "sourceVolumes": "Volume sorgenti",
+  "sourceVolumesHint": "Quanto si sente ogni video della scena nel mix della live. 100% è l'audio originale.",
+  "encoderQuality": "Qualità encoder",
+  "encoderQualityAuto": "Automatica (consigliata)",
+  "encoderQualityLight": "Leggera · consuma meno",
+  "encoderQualityBalanced": "Bilanciata",
+  "encoderQualityHigh": "Alta · più dettaglio",
+  "encoderQualityHelp": "Quanto lavora l'encoder su ogni fotogramma. Automatica: all'avvio della live Orbis prova il PC per qualche secondo e usa Bilanciata (NVENC p4) solo se la GPU o la CPU regge con margine, altrimenti Leggera (p1). Leggera consuma meno ma, a parità di bitrate, mostra meno dettaglio; Alta serve a una GPU o CPU potente. Un preset scelto nelle opzioni aggiuntive ha la precedenza.",
+  "encoderQualityHint": "Automatica prova il PC e sceglie da sola: lasciala se non sai cosa scegliere."
 }

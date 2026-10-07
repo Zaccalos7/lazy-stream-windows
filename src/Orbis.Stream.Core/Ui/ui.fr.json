@@ -322,5 +322,14 @@
   "lowLatencyHelp": "Demande à l'encodeur le plus petit délai possible : sans look-ahead ni scenecut. Désactivez-le pour une rediffusion, où le relais impose déjà le rythme.",
   "playSpot": "Diffuser une publicité",
   "playSpotHint": "Sélectionnez la vidéo publicitaire à diffuser. Le flux actuel sera mis en pause et reprendra automatiquement à la fin de la pub.",
-  "spotFile": "Fichier vidéo de la pub"
+  "spotFile": "Fichier vidéo de la pub",
+  "sourceVolumes": "Volume des sources",
+  "sourceVolumesHint": "Le niveau de chaque vidéo de la scène dans le mixage du direct. 100 % est le son d'origine.",
+  "encoderQuality": "Qualité de l'encodeur",
+  "encoderQualityAuto": "Automatique (recommandée)",
+  "encoderQualityLight": "Légère · consomme moins",
+  "encoderQualityBalanced": "Équilibrée",
+  "encoderQualityHigh": "Haute · plus de détails",
+  "encoderQualityHelp": "La quantité de travail de l'encodeur sur chaque image. Automatique : au lancement du direct, Orbis teste le PC quelques secondes et utilise Équilibrée (NVENC p4) seulement si le GPU ou le CPU suit avec de la marge, sinon Légère (p1). Légère consomme moins mais montre moins de détails au même débit ; Haute demande un GPU ou CPU puissant. Un preset choisi dans les options supplémentaires est prioritaire.",
+  "encoderQualityHint": "Automatique teste le PC et choisit seule : gardez-la en cas de doute."
 }

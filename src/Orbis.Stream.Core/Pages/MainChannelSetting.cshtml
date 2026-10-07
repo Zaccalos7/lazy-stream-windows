@@ -43,7 +43,7 @@
     var active = configuration.IsActive ?? false;
     var youtube = configuration.PlatformStreamName?.Contains("youtube", StringComparison.OrdinalIgnoreCase) ?? false;
     <div class="row-card @(youtube ? "youtube" : "twitch")">
-        <i class="icon lead" title="@configuration.PlatformStreamName">@(youtube ? "\uE714" : "\uE93E")</i>
+        <span class="icon lead" title="@configuration.PlatformStreamName"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="@LiveLinkView.MarkupOf(youtube ? "youtube" : "twitch")" /></svg></span>
         <div class="grow">
             <h3 class="truncate">@configuration.ChannelName · @(youtube ? "YouTube" : "Twitch")</h3>
             @if (!string.IsNullOrWhiteSpace(configuration.Description))
@@ -81,7 +81,7 @@
                         <label class="choice @platform.Value">
                             <input type="radio" name="platformStreamName" value="@platform.Value" data-stream-url="@platform.StreamUrl" required
                                    checked="@(string.Equals(editing.PlatformStreamName, platform.Value, StringComparison.OrdinalIgnoreCase))" />
-                            <i class="icon">@(platform.Value == "youtube" ? "\uE714" : "\uE93E")</i>
+                            <svg class="choice-mark" viewBox="0 0 24 24" aria-hidden="true"><path d="@LiveLinkView.MarkupOf(platform.Value)" /></svg>
                             <span class="grow">@platform.Label</span>
                             <span class="caption">@platform.StreamUrl</span>
                         </label>

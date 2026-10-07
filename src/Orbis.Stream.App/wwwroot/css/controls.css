@@ -238,3 +238,6 @@ input[type="password"]::-ms-clear {
 .choice:has(input:checked) > .icon { color: var(--hue); }
 .choice input { accent-color: var(--hue); margin: 0; width: 15px; height: 15px; }
 .choice .badge { margin-left: 6px; }
+/* The mark of the platform a choice stands for: always in the colour of its brand, so it can be
+   told apart before it is picked. */
+.choice > .choice-mark { flex: none; width: 18px; height: 18px; fill: var(--hue); }

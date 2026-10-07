@@ -235,6 +235,27 @@ else
                 </label>
             </div>
 
+            @* The level of every video of the canvas in the mix. The slider is not a [data-param]: a
+               volume is its own request, for one source, and leaves the encoder setting alone. *@
+            @if (live.Sources is { Count: > 0 } sources)
+            {
+                <h3 class="section">@T["sourceVolumes"]</h3>
+                <div class="preview-volumes">
+                    @foreach (var source in sources)
+                    {
+                        <label class="field">
+                            <span class="truncate" title="@source.Name">@source.Name</span>
+                            <span class="preview-volume">
+                                <input type="range" min="0" max="@LivePreviewService.MaximumVolume" step="5"
+                                       value="@source.Volume" data-volume="@source.Pkid" aria-label="@source.Name" />
+                                <output data-volume-value="@source.Pkid">@source.Volume%</output>
+                            </span>
+                        </label>
+                    }
+                </div>
+                <p class="caption">@T["sourceVolumesHint"]</p>
+            }
+
             <p class="caption preview-note"><i class="icon">&#xE946;</i>@T["applyNote"]</p>
         </form>
     </div>

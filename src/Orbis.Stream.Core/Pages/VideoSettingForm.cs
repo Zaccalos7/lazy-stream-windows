@@ -52,6 +52,12 @@ public sealed class VideoSettingForm
     /// </summary>
     public bool LowLatency { get; set; }
 
+    /// <summary>
+    /// How much work the encoder puts into every frame (see <see cref="EncoderQuality"/>). A new
+    /// setting starts automatic: measured on this machine when the live starts.
+    /// </summary>
+    public EncoderQuality Quality { get; set; } = EncoderQuality.Auto;
+
     public bool IsActive { get; set; }
 
     /// <summary>Everything but the extra options is required (the React form let the GOP size empty, but the column is NOT NULL).</summary>
@@ -89,6 +95,7 @@ public sealed class VideoSettingForm
         Preset = Option(setting, "preset"),
         Tune = Option(setting, "tune"),
         LowLatency = VideoSettingLatency.IsOn(Option(setting, VideoSettingLatency.OptionKey)),
+        Quality = VideoSettingQuality.Parse(Option(setting, VideoSettingQuality.OptionKey)),
         IsActive = setting.IsVideoAndAudioSettingActive ?? false
     };
 
@@ -103,7 +110,13 @@ public sealed class VideoSettingForm
         null,
         IsActive,
         GopSize,
-        [.. new[] { ("preset", Preset), ("tune", Tune), (VideoSettingLatency.OptionKey, LowLatency ? "1" : "0") }
+        [.. new[]
+            {
+                ("preset", Preset),
+                ("tune", Tune),
+                (VideoSettingLatency.OptionKey, LowLatency ? "1" : "0"),
+                (VideoSettingQuality.OptionKey, Quality.ToString())
+            }
             .Where(option => !string.IsNullOrEmpty(option.Item2))
             .Select(option => new VideoOptionRequest(option.Item1, option.Item2))],
         VideoFormat,

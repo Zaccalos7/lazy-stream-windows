@@ -159,6 +159,9 @@ public sealed record LiveParameterRequest(
     int? VideoHeight,
     double? FrameRate);
 
+/// <summary>How loud one source of a canvas is in the mix of a running live, in percent.</summary>
+public sealed record LiveVolumeRequest(int SourcePkid, int Volume);
+
 /// <summary>Port of <c>com.orbis.stream.record.VideoLiveHistoryRecord</c>.</summary>
 public sealed record VideoLiveHistoryRequest(
     long? Pkid,

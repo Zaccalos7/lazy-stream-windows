@@ -22,6 +22,16 @@
         </select>
     </label>
     <label class="field">
+        <span>@T["encoderQuality"]<i class="icon field-help" title="@T["encoderQualityHelp"]" aria-label="@T["encoderQualityHelp"]">&#xE946;</i></span>
+        <select class="input" asp-for="Quality" title="@T["encoderQualityHelp"]">
+            <option value="Auto">@T["encoderQualityAuto"]</option>
+            <option value="Light">@T["encoderQualityLight"]</option>
+            <option value="Balanced">@T["encoderQualityBalanced"]</option>
+            <option value="High">@T["encoderQualityHigh"]</option>
+        </select>
+        <small>@T["encoderQualityHint"]</small>
+    </label>
+    <label class="field">
         <span>@T["pixelFormat"]</span>
         <select class="input" asp-for="PixelFormat" asp-items="VideoSettingForm.Items(FfmpegCodecCatalog.PixelFormats)" required>
             <option value="">@T["selectAPixelFormat"]</option>

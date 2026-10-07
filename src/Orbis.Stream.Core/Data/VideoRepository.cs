@@ -12,7 +12,7 @@ public sealed class VideoRepository
         "t.pkid, t.name, t.video_path, t.extension, t.live_status, t.last_time_stamp_before_stop, " +
         "t.message, t.should_be_stop, t.start_date_live, t.channel_name, t.video_live_history_pkid, t.video_setting_id, " +
         "t.source_kind, t.source_target, t.scene_pkid, t.x, t.y, t.width, t.height, t.audio_enabled, t.duration_milliseconds, " +
-        "t.source_width, t.source_height";
+        "t.source_width, t.source_height, t.volume";
 
     private readonly SqliteConnectionFactory _connectionFactory;
 
@@ -156,13 +156,14 @@ public sealed class VideoRepository
             INSERT INTO video (name, video_path, extension, live_status, last_time_stamp_before_stop, message,
                                should_be_stop, start_date_live, channel_name, video_live_history_pkid, video_setting_id,
                                source_kind, source_target, scene_pkid, x, y, width, height, audio_enabled, duration_milliseconds,
-                               source_width, source_height)
+                               source_width, source_height, volume)
             VALUES (@name, @path, @extension, @liveStatus, @lastTimeStamp, @message, @shouldBeStop, @startDateLive, @channelName, @history, @setting,
                     @sourceKind, @sourceTarget, @scenePkid, @x, @y, @width, @height, @audioEnabled, @duration,
-                    @sourceWidth, @sourceHeight);
+                    @sourceWidth, @sourceHeight, @volume);
             SELECT last_insert_rowid();
             """;
         Bind(command, video);
+        command.Parameters.AddWithValue("@volume", video.Volume);
         return Convert.ToInt32(command.ExecuteScalar(), CultureInfo.InvariantCulture);
     }
 
@@ -199,6 +200,21 @@ public sealed class VideoRepository
             """;
         Bind(command, video);
         command.Parameters.AddWithValue("@pkid", video.Pkid);
+        command.ExecuteNonQuery();
+    }
+
+    /// <summary>
+    /// The volume has a writer of its own and <see cref="Update"/> leaves it alone: the streaming
+    /// loop writes the rows of a live it holds in memory every time their status changes, and a
+    /// volume set from the preview in between would be written back to what it was.
+    /// </summary>
+    public void SetVolume(int pkid, int volume)
+    {
+        using var connection = _connectionFactory.Open();
+        using var command = connection.CreateCommand();
+        command.CommandText = "UPDATE video SET volume = @volume WHERE pkid = @pkid;";
+        command.Parameters.AddWithValue("@volume", volume);
+        command.Parameters.AddWithValue("@pkid", pkid);
         command.ExecuteNonQuery();
     }
 
@@ -410,7 +426,8 @@ private static VideoEntity Map(SqliteDataReader reader, int offset = 0) => new()
         AudioEnabled = SqliteValue.ToBoolean(reader.GetValue(offset + 19)),
         DurationMilliseconds = SqliteValue.ToNullableInt64(reader.GetValue(offset + 20)),
         SourceWidth = SqliteValue.ToNullableInt32(reader.GetValue(offset + 21)),
-        SourceHeight = SqliteValue.ToNullableInt32(reader.GetValue(offset + 22))
+        SourceHeight = SqliteValue.ToNullableInt32(reader.GetValue(offset + 22)),
+        Volume = SqliteValue.ToNullableInt32(reader.GetValue(offset + 23)) ?? 100
     };
 }
 

@@ -403,6 +403,17 @@ public static class OrbisEndpoints
             validator.RequireLiveParameters(request);
             return AsResult(service.ApplyParameters(pkid, request!));
         });
+
+        // The level of one source of a canvas in the mix of the live.
+        group.MapPut("/live/{pkid:int}/volume", (
+            int pkid,
+            LiveVolumeRequest? request,
+            LivePreviewService service,
+            RequestValidator validator) =>
+        {
+            validator.RequireLiveVolume(request);
+            return AsResult(service.ApplyVolume(pkid, request!));
+        });
     }
 
     /// <summary>The live a preview page is following, when it asked for one that is still running.</summary>

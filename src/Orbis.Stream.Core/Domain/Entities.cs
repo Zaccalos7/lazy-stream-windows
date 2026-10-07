@@ -185,6 +185,12 @@ public sealed class VideoEntity
 
     /// <summary>Whether this source contributes audio to the mix.</summary>
     public bool AudioEnabled { get; set; }
+
+    /// <summary>
+    /// How loud this source is in the mix of its canvas, in percent: 100 is the sound as the source
+    /// has it, 0 silences it, 200 doubles it. Set from the preview while the live runs.
+    /// </summary>
+    public int Volume { get; set; } = 100;
 }
 
 /// <summary>

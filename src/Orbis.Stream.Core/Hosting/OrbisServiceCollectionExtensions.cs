@@ -58,6 +58,7 @@ public static class OrbisServiceCollectionExtensions
             provider.GetRequiredService<FfmpegToolLocator>(),
             provider.GetRequiredService<FfmpegProbe>(),
             provider.GetRequiredService<Microsoft.Extensions.Logging.ILogger<MediaProxyService>>()));
+        services.AddSingleton<EncoderTuningService>();
         services.AddSingleton<FfmpegVideoPlaylistStreamer>();
         services.AddSingleton<IVideoPlaylistStreamer>(provider => (IVideoPlaylistStreamer)provider.GetRequiredService<FfmpegVideoPlaylistStreamer>());
 
@@ -99,6 +100,8 @@ public static class OrbisServiceCollectionExtensions
         services.AddSingleton<DatabaseBootstrapper>();
         services.AddHostedService(provider => provider.GetRequiredService<DatabaseBootstrapper>());
         services.AddHostedService<AutoCleanupService>();
+        // After the bootstrapper, which is the one that makes sure the settings are there.
+        services.AddHostedService<EncoderTuningStartup>();
 
         return services;
     }

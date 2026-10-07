@@ -141,6 +141,17 @@ public sealed class RequestValidator
         }
     }
 
+    public void RequireLiveVolume(LiveVolumeRequest? request)
+    {
+        if (request is null)
+        {
+            throw new RequestValidationException(new Dictionary<string, string>
+            {
+                ["volume"] = Message("live.parameters.empty")
+            });
+        }
+    }
+
     public void RequireImage(IFormFile? image)
     {
         if (image is null)

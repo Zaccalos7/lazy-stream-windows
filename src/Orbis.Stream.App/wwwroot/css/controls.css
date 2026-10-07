@@ -45,6 +45,13 @@
 .btn.caution:not(:disabled) { color: var(--caution); }
 .btn.caution:not(:disabled):hover { background: var(--caution-bg); border-color: transparent; }
 
+/* A button that stands for a platform: filled with the colour of the brand, its mark beside the name. */
+.btn.brand { --hue: var(--accent); color: #ffffff; background: var(--hue); border-color: transparent; font-weight: 600; }
+.btn.brand:hover { background: color-mix(in srgb, var(--hue) 86%, #000000); border-color: transparent; }
+.btn.brand svg { width: 15px; height: 15px; flex: none; fill: currentColor; }
+.btn.brand.twitch { --hue: var(--twitch); }
+.btn.brand.youtube { --hue: var(--youtube); }
+
 .btn.icon-only { width: 30px; padding: 0; }
 .btn.icon-only .icon { font-size: 14px; }
 .spot-icon { display: inline-block; width: 16px; height: 16px; vertical-align: middle; fill: currentColor; }
@@ -153,6 +160,56 @@ input[type="password"]::-ms-clear {
 }
 .toggle input:checked { background: var(--success); }
 .toggle input:checked::after { transform: translateX(16px); }
+
+/* Two sections on one row, each with its own heading: they stack again once the row is too narrow. */
+.settings-split { display: grid; gap: 0 24px; grid-template-columns: repeat(auto-fit, minmax(340px, 1fr)); }
+
+/* ---------- An option card: one on/off decision that matters, with its explanation beside it ---------- */
+
+.option-card {
+  --hue: var(--accent);
+  display: flex;
+  align-items: center;
+  gap: 14px;
+  margin-top: 16px;
+  padding: 14px 16px;
+  background: var(--control);
+  border: 1px solid var(--stroke-strong);
+  border-radius: var(--radius-lg);
+  cursor: pointer;
+  transition: border-color 0.15s, background 0.15s, box-shadow 0.15s;
+}
+.option-card:hover { border-color: var(--text-3); }
+.option-card:has(input:checked) {
+  border-color: var(--hue);
+  background: color-mix(in srgb, var(--hue) 8%, var(--control));
+  box-shadow: 0 0 0 1px var(--hue);
+}
+.option-card-mark {
+  flex: none;
+  display: grid;
+  place-items: center;
+  width: 36px;
+  height: 36px;
+  border-radius: var(--radius);
+  font-size: 18px;
+  color: var(--text-2);
+  background: var(--tint-strong);
+  transition: color 0.15s, background 0.15s;
+}
+.option-card:has(input:checked) .option-card-mark { color: var(--on-accent); background: var(--hue); }
+.option-card-text { flex: 1; min-width: 0; display: flex; flex-direction: column; gap: 3px; }
+.option-card-text strong { font-size: 13px; font-weight: 600; }
+.option-card-text small { font-size: 11px; line-height: 1.45; color: var(--text-2); }
+.option-card .toggle input:checked { background: var(--hue); }
+.option-card .toggle input:focus-visible { box-shadow: var(--glow); }
+
+/* Said under the preset and the tune while low latency is off, when both are required. */
+.tuning-hint { display: flex; align-items: center; gap: 6px; margin-top: 6px; font-size: 11px; color: var(--caution); }
+.tuning-hint[hidden] { display: none; }
+.tuning-hint .icon { font-size: 12px; }
+
+.toolbar.preset-bar { align-items: center; }
 
 /* ---------- Choices: a list of radios that look like cards ---------- */
 

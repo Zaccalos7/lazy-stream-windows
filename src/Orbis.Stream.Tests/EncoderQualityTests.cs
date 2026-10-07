@@ -78,6 +78,34 @@ public sealed class EncoderQualityTests
         Assert.DoesNotContain("-encoderquality", command, StringComparison.Ordinal);
     }
 
+    [Theory]
+    [InlineData(true, null, null, true)]
+    [InlineData(false, null, null, false)]
+    [InlineData(false, "veryfast", null, false)]
+    [InlineData(false, null, "film", false)]
+    [InlineData(false, "veryfast", " ", false)]
+    [InlineData(false, "veryfast", "film", true)]
+    public void WithoutLowLatencyThePresetAndTheTuneAreRequired(bool lowLatency, string? preset, string? tune, bool complete)
+    {
+        var form = new VideoSettingForm
+        {
+            Title = "mine",
+            VideoCodec = 27,
+            VideoCodecName = "libx264",
+            PixelFormat = 0,
+            VideoBitrate = 6_000_000,
+            GopSize = 2,
+            VideoFormat = "flv",
+            AudioCodec = 86018,
+            AudioBitrate = 128_000,
+            LowLatency = lowLatency,
+            Preset = preset,
+            Tune = tune
+        };
+
+        Assert.Equal(complete, form.IsComplete);
+    }
+
     [Fact]
     public void TheFormKeepsTheLevel()
     {

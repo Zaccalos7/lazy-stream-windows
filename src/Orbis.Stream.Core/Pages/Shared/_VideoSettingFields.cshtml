@@ -67,38 +67,54 @@
     </label>
 </div>
 
-<h3 class="section">@T["audio"]</h3>
-<div class="form-grid">
-    <label class="field">
-        <span>@T["audioCodec"]</span>
-        <select class="input" asp-for="AudioCodec" asp-items="VideoSettingForm.Items(FfmpegCodecCatalog.AudioCodecs)" required>
-            <option value="">@T["selectACodec"]</option>
-        </select>
-    </label>
-    <label class="field">
-        <span>@T["audioBitrate"]</span>
-        <input class="input" asp-for="AudioBitrate" type="number" min="1" step="1" placeholder="@T["exampleAudioBitrate"]" required />
-        <small>bps</small>
-    </label>
+@* Audio and the options of the encoder share one row: each is two fields, and side by side they
+   let the whole setting fit in the dialog without a scroll. *@
+<div class="settings-split">
+    <div>
+        <h3 class="section">@T["audio"]</h3>
+        <div class="form-grid pair">
+            <label class="field">
+                <span>@T["audioCodec"]</span>
+                <select class="input" asp-for="AudioCodec" asp-items="VideoSettingForm.Items(FfmpegCodecCatalog.AudioCodecs)" required>
+                    <option value="">@T["selectACodec"]</option>
+                </select>
+            </label>
+            <label class="field">
+                <span>@T["audioBitrate"]</span>
+                <input class="input" asp-for="AudioBitrate" type="number" min="1" step="1" placeholder="@T["exampleAudioBitrate"]" required />
+                <small>bps</small>
+            </label>
+        </div>
+    </div>
+
+    <div>
+        <h3 class="section">@T["additionalVideoOptions"]</h3>
+        <div class="form-grid pair">
+            <label class="field">
+                <span>preset</span>
+                <select class="input" asp-for="Preset" asp-items="VideoSettingForm.PresetItems()" data-tuning required="@(!Model.LowLatency)">
+                    <option value="">–</option>
+                </select>
+            </label>
+            <label class="field">
+                <span>tune</span>
+                <select class="input" asp-for="Tune" asp-items="VideoSettingForm.TuneItems()" data-tuning required="@(!Model.LowLatency)">
+                    <option value="">–</option>
+                </select>
+            </label>
+        </div>
+        <small class="tuning-hint" data-tuning-hint hidden="@Model.LowLatency"><i class="icon" aria-hidden="true">&#xE7BA;</i>@T["tuningRequired"]</small>
+    </div>
 </div>
 
-<h3 class="section">@T["additionalVideoOptions"]</h3>
-<div class="form-grid">
-    <label class="field">
-        <span>preset</span>
-        <select class="input" asp-for="Preset" asp-items="VideoSettingForm.PresetItems()">
-            <option value="">–</option>
-        </select>
-    </label>
-    <label class="field">
-        <span>tune</span>
-        <select class="input" asp-for="Tune" asp-items="VideoSettingForm.TuneItems()">
-            <option value="">–</option>
-        </select>
-    </label>
-    <label class="field">
-        <span>@T["lowLatency"]</span>
-        <input class="checkbox" asp-for="LowLatency" />
-    </label>
-</div>
-<small>@T["lowLatencyHelp"]</small>
+@* Low latency is a decision about the whole live, not one more value: it gets a card of its own,
+   with what it does said next to the switch instead of under the grid. Turned off, the preset and
+   the tune above become required (VideoSettingForm.IsTuningComplete, and site.js on the page). *@
+<label class="option-card">
+    <i class="icon option-card-mark" aria-hidden="true">&#xE945;</i>
+    <span class="option-card-text">
+        <strong>@T["lowLatency"]</strong>
+        <small>@T["lowLatencyHelp"]</small>
+    </span>
+    <span class="toggle"><input asp-for="LowLatency" data-low-latency /></span>
+</label>

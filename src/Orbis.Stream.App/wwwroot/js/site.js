@@ -517,6 +517,40 @@ if (previewIsLive) {
   }
 }
 
+// The colour of a level in the mix: green up to the sound of the source, yellow while it is pushed
+// past it, red once the boost is loud enough to clip. The one place the thresholds are written.
+const volumeLoud = 100;
+const volumeHot = 150;
+
+const volumeLevel = value =>
+  value === 0 ? "mute" : value <= volumeLoud ? "ok" : value <= volumeHot ? "high" : "hot";
+
+// A row is painted from its slider alone: the number, the fill of the track, the colour and the
+// state of the mute button all follow the value, whoever moved it.
+const paintVolume = slider => {
+  const value = Number(slider.value);
+  const max = Number(slider.max) || 200;
+  const row = slider.closest("[data-volume-row]");
+  const shown = preview?.querySelector(`[data-volume-value="${slider.dataset.volume}"]`);
+  if (shown) shown.textContent = value + "%";
+  if (!row) return;
+  row.style.setProperty("--p", String(value / max));
+  row.style.setProperty("--mark", String(volumeLoud / max));
+  row.dataset.level = volumeLevel(value);
+
+  const mute = row.querySelector("[data-volume-mute]");
+  if (!mute) return;
+  const words = row.closest("[data-mixer]")?.dataset || {};
+  const label = value === 0 ? words.unmute : words.mute;
+  if (label) {
+    mute.title = label;
+    mute.setAttribute("aria-label", label);
+  }
+  mute.setAttribute("aria-pressed", value === 0 ? "true" : "false");
+  const icon = mute.querySelector(".icon");
+  if (icon) icon.textContent = value === 0 ? "" : value <= volumeLoud / 2 ? "" : value <= volumeLoud ? "" : "";
+};
+
 const paintPreview = state => {
   if (!preview) return;
   const position = state.positionMilliseconds;
@@ -565,9 +599,9 @@ const paintPreview = state => {
   for (const source of state.sources || []) {
     if (Date.now() < (previewDirty.get("volume" + source.pkid) || 0)) continue;
     const slider = preview.querySelector(`[data-volume="${source.pkid}"]`);
-    const shown = preview.querySelector(`[data-volume-value="${source.pkid}"]`);
-    if (slider) slider.value = String(source.volume);
-    if (shown) shown.textContent = source.volume + "%";
+    if (!slider) continue;
+    slider.value = String(source.volume);
+    paintVolume(slider);
   }
 };
 
@@ -670,34 +704,71 @@ if (previewForm) {
   });
 }
 
-// The level of each source of a canvas. The number follows the slider while it moves, and the live
-// is asked once, when the slider is let go: every change starts the pass of the canvas again.
-for (const slider of previewForm?.querySelectorAll("[data-volume]") || []) {
+// The level of each source of a canvas. The row follows the slider while it moves, and the live
+// is asked once, when the slider is let go: every change starts the pass of the canvas again. The
+// mute button and the value (which puts the source back to its own sound) are the same request.
+const sendVolume = async slider => {
   const key = "volume" + slider.dataset.volume;
-  const shown = previewForm.querySelector(`[data-volume-value="${slider.dataset.volume}"]`);
+  previewDirty.set(key, Date.now() + previewSettle);
+  try {
+    const response = await fetch(`/preview/live/${previewPkid}/volume`, {
+      method: "PUT",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ sourcePkid: Number(slider.dataset.volume), volume: Number(slider.value) })
+    });
+    const payload = await response.json().catch(() => ({}));
+    if (response.ok) {
+      say("success", previewMark("ok", ""), payload.message || previewMark("applied", ""), "");
+    } else {
+      previewDirty.delete(key);
+      say("error", previewMark("ko", ""), Object.values(payload)[0] || response.statusText, key);
+    }
+  } catch {
+    say("error", previewMark("ko", ""), previewMark("failed", ""), "");
+  }
+};
+
+const setVolume = (slider, value) => {
+  if (Number(slider.value) === value) return;
+  slider.value = String(value);
+  paintVolume(slider);
+  sendVolume(slider);
+};
+
+for (const slider of preview?.querySelectorAll("[data-volume]") || []) {
+  const pkid = slider.dataset.volume;
+  paintVolume(slider);
   slider.addEventListener("input", () => {
-    if (shown) shown.textContent = slider.value + "%";
-    previewDirty.set(key, Date.now() + previewSettle);
+    paintVolume(slider);
+    previewDirty.set("volume" + pkid, Date.now() + previewSettle);
   });
-  slider.addEventListener("change", async () => {
-    previewDirty.set(key, Date.now() + previewSettle);
-    try {
-      const response = await fetch(`/preview/live/${previewPkid}/volume`, {
-        method: "PUT",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ sourcePkid: Number(slider.dataset.volume), volume: Number(slider.value) })
-      });
-      const payload = await response.json().catch(() => ({}));
-      if (response.ok) {
-        say("success", previewMark("ok", ""), payload.message || previewMark("applied", ""), "");
-      } else {
-        previewDirty.delete(key);
-        say("error", previewMark("ko", ""), Object.values(payload)[0] || response.statusText, key);
-      }
-    } catch {
-      say("error", previewMark("ko", ""), previewMark("failed", ""), "");
+  slider.addEventListener("change", () => sendVolume(slider));
+
+  // Muting remembers the level it took away, so the second press gives back that level and not a
+  // generic one. A source that was already silent when the page opened comes back at 100%.
+  preview.querySelector(`[data-volume-mute="${pkid}"]`)?.addEventListener("click", () => {
+    const value = Number(slider.value);
+    if (value > 0) {
+      slider.dataset.before = String(value);
+      setVolume(slider, 0);
+    } else {
+      setVolume(slider, Number(slider.dataset.before) || volumeLoud);
     }
   });
+  preview.querySelector(`[data-volume-reset="${pkid}"]`)?.addEventListener("click", () => setVolume(slider, volumeLoud));
+}
+
+// A video setting without low latency is tuned by hand: its preset and tune become required, and
+// the browser stops the save until both are chosen. The server asks the same (IsTuningComplete).
+const paintTuning = box => {
+  const form = box.closest("form");
+  if (!form) return;
+  for (const select of form.querySelectorAll("[data-tuning]")) select.required = !box.checked;
+  for (const hint of form.querySelectorAll("[data-tuning-hint]")) hint.hidden = box.checked;
+};
+for (const box of document.querySelectorAll("[data-low-latency]")) {
+  paintTuning(box);
+  box.addEventListener("change", () => paintTuning(box));
 }
 
 // The one infobar of a page that answers with a fetch: it goes above the header, where the server

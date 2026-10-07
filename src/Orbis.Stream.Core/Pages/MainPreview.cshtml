@@ -36,7 +36,7 @@
         <button class="btn" type="button" title="@T["playSpot"]" aria-label="@T["playSpot"]"
                 onclick="const pkid = document.querySelector('[data-preview]')?.dataset.pkid || '@live.VideoPkid'; document.querySelector('#spot-dialog input[name=videoKey]').value = pkid; document.getElementById('spot-dialog').showModal();"
                 commandfor="spot-dialog" command="show-modal">
-            <svg class="spot-icon" viewBox="0 0 24 24" fill-rule="evenodd" aria-hidden="true" style="margin-right: 6px;"><path d="@LiveLinkView.SpotMark" /></svg>
+            <partial name="_SpotIcon" />
             <span>@T["playSpot"]</span>
         </button>
         <form method="post" asp-page-handler="Stop" asp-route-pkid="@live.VideoPkid" data-confirm="@T["stopLive"]">

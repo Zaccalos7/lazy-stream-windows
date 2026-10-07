@@ -1,0 +1,18 @@
+@* The mark of a spot: the "Ad" tag a viewer knows from every platform, with the play sign in front
+   of it, because the button starts an ad on the live. It is a badge in the colour of the text with
+   the sign and the letters cut out of it, so it reads at 16px where outlined letters would not;
+   the cut is a mask, and every icon gets its own id so two on a page never borrow each other's. *@
+@{
+    var mask = "spot-" + Guid.NewGuid().ToString("N")[..12];
+}
+<svg class="spot-icon" viewBox="0 0 24 24" aria-hidden="true" focusable="false">
+    <mask id="@mask">
+        <rect width="24" height="24" fill="#fff" />
+        <g fill="#000" stroke="#000" stroke-width="1.7" stroke-linecap="round" stroke-linejoin="round">
+            <path d="M5.2 9.6v4.8c0 .5.55.8.95.5l3.3-2.4a.6.6 0 0 0 0-1L6.15 9.1c-.4-.3-.95 0-.95.5z" stroke="none" />
+            <path d="M10.9 15.3l1.9-6.6 1.9 6.6M11.5 13.2h2.6" fill="none" />
+            <path d="M16.4 8.7v6.6h1a2.9 3.3 0 0 0 0-6.6z" fill="none" />
+        </g>
+    </mask>
+    <rect x="1" y="4.5" width="22" height="15" rx="4.5" fill="currentColor" mask="url(#@mask)" />
+</svg>

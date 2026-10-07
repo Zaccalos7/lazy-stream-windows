@@ -127,9 +127,9 @@ else
                             scrolling="no"
                             hidden></iframe>
                     <canvas data-preview-frame role="img" aria-label="@live.VideoName" hidden></canvas>
-                    @if (platform == "youtube")
+                    @if (platform == "youtube" || platform == "twitch")
                     {
-                        <div class="preview-badge-live" title="@T["liveNow"]"><span class="live-dot"></span><span>LIVE · @(platformLabel ?? "YouTube")</span></div>
+                        <div class="preview-badge-live" title="@T["liveNow"]"><span class="live-dot"></span><span>LIVE · @(platformLabel ?? (platform == "youtube" ? "YouTube" : "Twitch"))</span></div>
                     }
                     <div class="preview-embed-status" hidden>
                         <span class="spinner"></span>

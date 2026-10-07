@@ -31,6 +31,7 @@ public sealed class UiText
         new("zh", "中文", "cn.svg"),
         new("ko", "한국어", "kr.svg"),
         new("ja", "日本語", "jp.svg"),
+        new("hi", "हिन्दी", "in.svg"),
         // No country answers to these three, so they carry no flag of their own either: the
         // banner is drawn here rather than taken from a nation it has nothing to do with.
         new("la", "Latina", "la.svg"),

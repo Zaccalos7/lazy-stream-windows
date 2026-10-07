@@ -257,16 +257,21 @@ public sealed class LivePreviewService
     /// </summary>
     private IReadOnlyList<LiveSource> SourcesOf(VideoEntity video)
     {
-        if (video.ScenePkid is not { } scenePkid || video.VideoLiveHistoryId is not { } historyId)
+        if (video.VideoLiveHistoryId is not { } historyId)
         {
             return [];
         }
 
-        return _videoRepository.FindByLiveHistoryId(historyId)
-            .Where(row => row.ScenePkid == scenePkid && row.AudioEnabled)
-            .OrderBy(row => row.Pkid)
-            .Select(row => new LiveSource(row.Pkid, row.Name, row.SourceKind.ToString(), row.Volume))
-            .ToList();
+        if (video.ScenePkid is { } scenePkid)
+        {
+            return _videoRepository.FindByLiveHistoryId(historyId)
+                .Where(row => row.ScenePkid == scenePkid && row.AudioEnabled)
+                .OrderBy(row => row.Pkid)
+                .Select(row => new LiveSource(row.Pkid, row.Name, row.SourceKind.ToString(), row.Volume))
+                .ToList();
+        }
+
+        return video.AudioEnabled ? [new LiveSource(video.Pkid, video.Name, video.SourceKind.ToString(), video.Volume)] : [];
     }
 
     /// <summary>

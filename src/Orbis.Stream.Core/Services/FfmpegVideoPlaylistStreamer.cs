@@ -145,6 +145,7 @@ public sealed class FfmpegVideoPlaylistStreamer : IVideoPlaylistStreamer
             }
             if (outcome == StreamOutcome.Yielded)
             {
+                var pausedPosition = planned.Video.LastTimeStampBeforeStop;
                 while (_spotsToPlay.TryDequeue(out var spotPath))
                 {
                     var videoSetting = FindSetting(planned.Video.Pkid);
@@ -154,13 +155,20 @@ public sealed class FfmpegVideoPlaylistStreamer : IVideoPlaylistStreamer
 
                     if (spotOutcome == StreamOutcome.Stopped)
                     {
+                        var stopped = _localizer.PrintMessage("live.stopped");
+                        SaveMessageOnVideoLiveHistory(stopped, videoLiveHistoryPkid, planned.Video.VideoPath, LiveStatus.Stopped, null, pausedPosition);
                         return;
                     }
                 }
 
+                await Task.Delay(500, cancellationToken).ConfigureAwait(false);
+
                 // Re-evaluate current video from its saved position
                 var reloaded = _videoRepository.FindByPkid(planned.Video.Pkid) ?? planned.Video;
-                var resumeFrom = TimeSpan.FromMilliseconds(reloaded.LastTimeStampBeforeStop);
+                var resumeFrom = TimeSpan.FromMilliseconds(reloaded.LastTimeStampBeforeStop > 0 ? reloaded.LastTimeStampBeforeStop : pausedPosition);
+                reloaded.LastTimeStampBeforeStop = (long)resumeFrom.TotalMilliseconds;
+                _videoRepository.Update(reloaded);
+
                 queue[i] = new PlannedVideo(reloaded, planned.Probe, resumeFrom);
 
                 i--;
@@ -459,24 +467,41 @@ public sealed class FfmpegVideoPlaylistStreamer : IVideoPlaylistStreamer
                 var endedNaturally = session.EndedNaturally;
                 session = null;
 
-                if (exitCode == 0 || endedNaturally)
+                var durationMs = probe.DurationSeconds > 0 ? (long)(probe.DurationSeconds * 1000) : 0;
+                var reachedEnd = endedNaturally || (durationMs > 0 && finalPosition >= durationMs - FinishedToleranceMilliseconds);
+
+                if (exitCode == 0 || reachedEnd)
                 {
-                    if (markEndedOnFinish)
+                    if (reachedEnd)
                     {
-                        var endedMessage = _localizer.PrintMessage("video.live.ended");
-                        _logger.LogInformation("{Message}", endedMessage);
-                        SaveMessageOnVideoLiveHistory(
-                            endedMessage, videoLiveHistoryPkid, inputPath, LiveStatus.Ended, null, finalPosition);
+                        if (markEndedOnFinish)
+                        {
+                            var endedMessage = _localizer.PrintMessage("video.live.ended");
+                            _logger.LogInformation("{Message}", endedMessage);
+                            SaveMessageOnVideoLiveHistory(
+                                endedMessage, videoLiveHistoryPkid, inputPath, LiveStatus.Ended, null, finalPosition);
+                        }
+                        else
+                        {
+                            // Don't mark as ended if this is an intermediate video in a playlist
+                            // The next video will take over
+                            _logger.LogInformation("Video ended, continuing to next in playlist");
+                            SaveMessageOnVideoLiveHistory(
+                                string.Empty, videoLiveHistoryPkid, inputPath, LiveStatus.Offline, null, finalPosition);
+                        }
+                        return StreamOutcome.Finished;
                     }
                     else
                     {
-                        // Don't mark as ended if this is an intermediate video in a playlist
-                        // The next video will take over
-                        _logger.LogInformation("Video ended, continuing to next in playlist");
-                        SaveMessageOnVideoLiveHistory(
-                            string.Empty, videoLiveHistoryPkid, inputPath, LiveStatus.Offline, null, finalPosition);
+                        resumeFrom = TimeSpan.FromMilliseconds(finalPosition);
+                        var videoEntity = _videoRepository.FindByPkid(videoKey);
+                        if (videoEntity is not null)
+                        {
+                            videoEntity.LastTimeStampBeforeStop = finalPosition;
+                            _videoRepository.Update(videoEntity);
+                        }
+                        continue;
                     }
-                    return StreamOutcome.Finished;
                 }
 
                 var streamingError = _localizer.PrintMessage(
@@ -673,7 +698,8 @@ public sealed class FfmpegVideoPlaylistStreamer : IVideoPlaylistStreamer
 
         try
         {
-            var resumeFrom = TimeSpan.Zero;
+            var initialPosition = baseRow.LastTimeStampBeforeStop;
+            var resumeFrom = initialPosition > 0 ? TimeSpan.FromMilliseconds(initialPosition) : TimeSpan.Zero;
             var probes = await ProbedFilesAsync(rows, cancellationToken).ConfigureAwait(false);
             var silent = SilentFilesOf(rows, probes);
             var duration = onlyFiles ? LongestFileDuration(rows, probes) : null;
@@ -683,6 +709,12 @@ public sealed class FfmpegVideoPlaylistStreamer : IVideoPlaylistStreamer
                 _logger.LogInformation(
                     "The canvas streams for {Seconds:0.##} seconds, the length of its longest file",
                     canvasLength.TotalSeconds);
+            }
+
+            if (resumeFrom > TimeSpan.Zero)
+            {
+                var resumed = _localizer.PrintMessage("video.live.resumed", [description, Seconds(resumeFrom)]);
+                _logger.LogInformation("{Message}", resumed);
             }
 
             while (true)
@@ -744,6 +776,15 @@ public sealed class FfmpegVideoPlaylistStreamer : IVideoPlaylistStreamer
 
                 if (outcome == StreamOutcome.Stopped)
                 {
+                    var pausedPosition = session?.PositionMilliseconds ?? 0;
+                    if (pausedPosition <= 0 && resumeFrom > TimeSpan.Zero)
+                    {
+                        pausedPosition = (long)resumeFrom.TotalMilliseconds;
+                    }
+                    foreach (var row in rows)
+                    {
+                        row.LastTimeStampBeforeStop = Math.Max(0, pausedPosition);
+                    }
                     var stopped = _localizer.PrintMessage("live.stopped");
                     MarkRows(rows, LiveStatus.Stopped, stopped);
                     return;
@@ -770,7 +811,21 @@ public sealed class FfmpegVideoPlaylistStreamer : IVideoPlaylistStreamer
                 if (outcome == StreamOutcome.Yielded)
                 {
                     var pausedPosition = session?.PositionMilliseconds ?? 0;
+                    if (pausedPosition <= 0 && resumeFrom > TimeSpan.Zero)
+                    {
+                        pausedPosition = (long)resumeFrom.TotalMilliseconds;
+                    }
                     resumeFrom = TimeSpan.FromMilliseconds(pausedPosition);
+                    foreach (var row in rows)
+                    {
+                        row.LastTimeStampBeforeStop = Math.Max(0, pausedPosition);
+                        row.LiveStatus = LiveStatus.Live;
+                        var spotYieldMsg = _localizer.PrintMessage("live.yielded") ?? "Spot in corso...";
+                        row.Message = spotYieldMsg;
+                        _videoRepository.Update(row);
+                    }
+                    _notifier.Raise();
+
                     if (session is not null)
                     {
                         _sessions.Remove(videoKey);
@@ -790,6 +845,23 @@ public sealed class FfmpegVideoPlaylistStreamer : IVideoPlaylistStreamer
                             var stopped = _localizer.PrintMessage("live.stopped");
                             MarkRows(rows, LiveStatus.Stopped, stopped);
                             return;
+                        }
+                    }
+
+                    await Task.Delay(500, cancellationToken).ConfigureAwait(false);
+
+                    var currentBase = _videoRepository.FindByPkid(videoKey) ?? baseRow;
+                    if (currentBase.LastTimeStampBeforeStop > 0)
+                    {
+                        resumeFrom = TimeSpan.FromMilliseconds(currentBase.LastTimeStampBeforeStop);
+                    }
+                    else if (pausedPosition > 0)
+                    {
+                        resumeFrom = TimeSpan.FromMilliseconds(pausedPosition);
+                        foreach (var row in rows)
+                        {
+                            row.LastTimeStampBeforeStop = pausedPosition;
+                            _videoRepository.Update(row);
                         }
                     }
 
@@ -837,14 +909,34 @@ public sealed class FfmpegVideoPlaylistStreamer : IVideoPlaylistStreamer
                 var endedNaturally = session.EndedNaturally;
                 session = null;
 
+                var durationMs = duration is { } d ? (long)(d.TotalSeconds * 1000) : 0;
+                var reachedEnd = endedNaturally || (durationMs > 0 && finalPosition >= durationMs - FinishedToleranceMilliseconds);
+
                 // If the scene has only file sources and ffmpeg exited cleanly, the video ended.
                 // End the live instead of restarting the loop.
-                if (onlyFiles && (exitCode == 0 || endedNaturally))
+                if (onlyFiles && (exitCode == 0 || reachedEnd))
                 {
-                    var endedMessage = _localizer.PrintMessage("video.live.ended");
-                    _logger.LogInformation("{Message}", endedMessage);
-                    MarkRows(rows, LiveStatus.Ended, endedMessage);
-                    return;
+                    if (reachedEnd)
+                    {
+                        var endedMessage = _localizer.PrintMessage("video.live.ended");
+                        _logger.LogInformation("{Message}", endedMessage);
+                        foreach (var row in rows)
+                        {
+                            row.LastTimeStampBeforeStop = finalPosition;
+                        }
+                        MarkRows(rows, LiveStatus.Ended, endedMessage);
+                        return;
+                    }
+                    else
+                    {
+                        resumeFrom = TimeSpan.FromMilliseconds(finalPosition);
+                        foreach (var row in rows)
+                        {
+                            row.LastTimeStampBeforeStop = finalPosition;
+                            _videoRepository.Update(row);
+                        }
+                        continue;
+                    }
                 }
 
                 var failure = _localizer.PrintMessage("error.during.streaming.video", [description, videoLiveHistoryPkid])
@@ -970,7 +1062,6 @@ public sealed class FfmpegVideoPlaylistStreamer : IVideoPlaylistStreamer
         {
             row.LiveStatus = status;
             row.Message = message;
-            row.LastTimeStampBeforeStop = status == LiveStatus.Stopped ? row.LastTimeStampBeforeStop : 0;
             _videoRepository.Update(row);
         }
 

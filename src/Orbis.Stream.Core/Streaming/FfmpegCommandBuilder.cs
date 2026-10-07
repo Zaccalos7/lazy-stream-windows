@@ -1376,6 +1376,12 @@ public static class FfmpegCommandBuilder
             "-flvflags",
             "no_duration_filesize",
 
+            // Every tag leaves the moment it is read, as the relay hands them over. Left to its
+            // buffer, ffmpeg sends a 32 KB block at a time: the audio of a live goes out in lumps
+            // tens of milliseconds apart however evenly -readrate reads it.
+            "-flush_packets",
+            "1",
+
             // A connection that hangs - an ingest that never answers, a network that stopped
             // taking data - fails after this long instead of looking like a live for ever.
             "-rw_timeout",

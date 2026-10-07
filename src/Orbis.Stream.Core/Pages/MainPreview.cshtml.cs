@@ -29,9 +29,12 @@ public sealed class MainPreviewModel(
 
     public LiveSnapshot Snapshot => _snapshot ??= preview.Snapshot(Live);
 
-    /// <summary>The page of the live on its platform, when the platform is one we know.</summary>
+    /// <summary>
+    /// Where the platform icon of the live leads, when the platform is one we know: the channel on
+    /// Twitch, the live control room of YouTube Studio on YouTube.
+    /// </summary>
     public string? LiveUrl =>
-        LiveLinkView.UrlOf(Snapshot.StreamUrl, Snapshot.ChannelName, Snapshot.PlatformStreamName);
+        LiveLinkView.UrlOf(Snapshot.StreamUrl, Snapshot.ChannelName, Snapshot.PlatformStreamName, Snapshot.PlatformVideoId);
 
     public string LivePlatform => LiveLinkView.LabelOf(LiveLinkView.PlatformOf(Snapshot.StreamUrl)) ?? string.Empty;
 

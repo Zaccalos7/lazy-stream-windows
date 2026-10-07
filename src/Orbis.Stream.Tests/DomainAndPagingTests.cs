@@ -151,6 +151,19 @@ public sealed class FilterValueConverterTests
     }
 }
 
+public sealed class AutoCleanupServiceTests
+{
+    [Fact]
+    public async Task DelayAsync_TakesAnIntervalOfMonthsWithoutStoppingTheApplication()
+    {
+        // Two months: past what Task.Delay takes, which threw and stopped the host, live and all.
+        using var stop = new CancellationTokenSource(TimeSpan.FromMilliseconds(200));
+
+        await Assert.ThrowsAnyAsync<OperationCanceledException>(
+            () => AutoCleanupService.DelayAsync(TimeSpan.FromDays(60), stop.Token));
+    }
+}
+
 public sealed class DatabaseBootstrapperTests
 {
     [Fact]
@@ -390,24 +403,33 @@ public sealed class LiveLinkTests
     }
 
     [Fact]
-    public void UrlOf_YouTubeIsThePageOfTheHandle()
+    public void UrlOf_YouTubeIsTheLiveControlRoomOfTheBroadcastOnAir()
+    {
+        Assert.Equal(
+            "https://studio.youtube.com/video/VlzeeXA0sHI/livestreaming",
+            LiveLinkView.UrlOf(YouTube, "madajeeita207", null, "VlzeeXA0sHI"));
+    }
+
+    [Fact]
+    public void UrlOf_YouTubeBeforeTheBroadcastIsSeenIsTheControlRoomOfTheChannel()
+    {
+        // A channel id is an address Studio takes; a handle is not, so Studio is asked for the
+        // channel of whoever is signed in.
+        Assert.Equal(
+            "https://studio.youtube.com/channel/UCuAXFkgsw1L7xaCfnd5JJOw/livestreaming",
+            LiveLinkView.UrlOf(YouTube, "UCuAXFkgsw1L7xaCfnd5JJOw", null));
+        Assert.Equal("https://studio.youtube.com/channel/UC/livestreaming", LiveLinkView.UrlOf(YouTube, "@madajeeita207", null));
+    }
+
+    [Fact]
+    public void YouTubeChannelUrl_IsThePageOfTheHandleOrOfTheId()
     {
         // The page of a handle is /@handle. /channel/ takes a channel id and nothing else, so
         // youtube.com/channel/madajeeita207 is not the channel of that handle: it is a page that is
         // not there, which is a link that looks right and goes nowhere.
-        Assert.Equal("https://www.youtube.com/@reproChannel", LiveLinkView.UrlOf(YouTube, "reproChannel", null));
-        Assert.Equal("https://www.youtube.com/@madajeeita207", LiveLinkView.UrlOf(YouTube, "madajeeita207", null));
-        Assert.Equal("https://www.youtube.com/@madajeeita207", LiveLinkView.UrlOf(YouTube, "@madajeeita207", null));
-    }
-
-    [Fact]
-    public void UrlOf_YouTubeTakesAChannelIdWhereThePageOfOneIs()
-    {
-        // A configuration is filled in with whatever the studio hands over, and the studio hands
-        // over the channel id as readily as the handle. The id is the one that goes in /channel/.
-        Assert.Equal(
-            "https://www.youtube.com/channel/UCuAXFkgsw1L7xaCfnd5JJOw",
-            LiveLinkView.UrlOf(YouTube, "UCuAXFkgsw1L7xaCfnd5JJOw", null));
+        Assert.Equal("https://www.youtube.com/@madajeeita207", LiveLinkView.YouTubeChannelUrl("madajeeita207"));
+        Assert.Equal("https://www.youtube.com/@madajeeita207", LiveLinkView.YouTubeChannelUrl("@madajeeita207"));
+        Assert.Equal("https://www.youtube.com/channel/UCuAXFkgsw1L7xaCfnd5JJOw", LiveLinkView.YouTubeChannelUrl("UCuAXFkgsw1L7xaCfnd5JJOw"));
     }
 
     [Fact]
@@ -428,7 +450,7 @@ public sealed class LiveLinkTests
         // The form of the configuration stores the platform in the field named platform stream
         // name, and the channel in the channel name: following the wrong one gave twitch.tv/twitch.
         Assert.Equal("https://www.twitch.tv/ciclovisione", LiveLinkView.UrlOf(Twitch, "ciclovisione", "twitch"));
-        Assert.Equal("https://www.youtube.com/@ciclovisione", LiveLinkView.UrlOf(YouTube, "ciclovisione", "youtube"));
+        Assert.Equal("https://studio.youtube.com/channel/UC/livestreaming", LiveLinkView.UrlOf(YouTube, "ciclovisione", "youtube"));
     }
 
     [Fact]

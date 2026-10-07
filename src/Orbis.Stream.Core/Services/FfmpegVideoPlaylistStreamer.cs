@@ -25,6 +25,16 @@ public sealed class FfmpegVideoPlaylistStreamer : IVideoPlaylistStreamer
 
     private static readonly TimeSpan StopFlagPollInterval = TimeSpan.FromMilliseconds(500);
 
+    /// <summary>
+    /// How long an encoder may go without a lead on what is on air before the live is carried on
+    /// one level lighter (see FfmpegStreamingSession.BehindFor). Long enough for a busy moment of
+    /// the machine to pass on its own, short enough that the viewers do not sit through it.
+    /// </summary>
+    private static readonly TimeSpan AdaptAfter = TimeSpan.FromSeconds(10);
+
+    /// <summary>What the timestamps of the last frame of a canvas round to, on top of a frame.</summary>
+    private const long LastFrameSlackMilliseconds = 20;
+
     /// <summary>How close to the end a video has to be to count as streamed through.</summary>
     private const int FinishedToleranceMilliseconds = 250;
 
@@ -363,11 +373,12 @@ public sealed class FfmpegVideoPlaylistStreamer : IVideoPlaylistStreamer
                     _logger.LogInformation("{Message}", resumed);
                 }
 
-                var quality = await QualityOfAsync(videoSetting, PictureOf(videoSetting, probe, output), cancellationToken)
+                var quality = await QualityOfAsync(videoSetting, PictureOf(videoSetting, probe, output), output, cancellationToken)
                     .ConfigureAwait(false);
                 var next = FfmpegStreamingSession.Start(
                     _locator, videoKey, inputPath, outputUrl, videoSetting, probe, _logger, resumeFrom, _frames.PathOf(videoKey),
                     output: output, quality: quality);
+                next.AdaptiveQuality = AdaptiveOf(videoSetting, quality);
 
                 var previous = session;
                 session = next;
@@ -778,7 +789,7 @@ public sealed class FfmpegVideoPlaylistStreamer : IVideoPlaylistStreamer
                     .ToList();
 
                 var canvasRate = videoSetting.FrameRate is > 0 ? videoSetting.FrameRate.Value : DefaultCanvasFrameRate;
-                var quality = await QualityOfAsync(videoSetting, new MediaOutput(canvasWidth, canvasHeight, canvasRate), cancellationToken)
+                var quality = await QualityOfAsync(videoSetting, new MediaOutput(canvasWidth, canvasHeight, canvasRate), output, cancellationToken)
                     .ConfigureAwait(false);
                 var next = FfmpegStreamingSession.StartComposition(
                     _locator,
@@ -795,6 +806,7 @@ public sealed class FfmpegVideoPlaylistStreamer : IVideoPlaylistStreamer
                     _frames.PathOf(videoKey),
                     output: output,
                     quality: quality);
+                next.AdaptiveQuality = AdaptiveOf(videoSetting, quality);
 
                 var previous = session;
                 session = next;
@@ -1052,7 +1064,7 @@ public sealed class FfmpegVideoPlaylistStreamer : IVideoPlaylistStreamer
         FfmpegStreamingSession? session = null;
         try
         {
-            var quality = await QualityOfAsync(videoSetting, PictureOf(videoSetting, probe, output), cancellationToken)
+            var quality = await QualityOfAsync(videoSetting, PictureOf(videoSetting, probe, output), output, cancellationToken)
                 .ConfigureAwait(false);
             session = FfmpegStreamingSession.Start(
                 _locator,
@@ -1139,8 +1151,19 @@ public sealed class FfmpegVideoPlaylistStreamer : IVideoPlaylistStreamer
     /// The encoder level of a pass: the one of the setting, or the one this machine keeps up with
     /// at this size when the setting leaves it to the machine. Measured once, then known.
     /// </summary>
-    private Task<EncoderQuality> QualityOfAsync(VideoSettingEntity setting, MediaOutput output, CancellationToken cancellationToken) =>
-        _tuning.ResolveAsync(setting, output.Width, output.Height, output.FrameRate, cancellationToken);
+    private async Task<EncoderQuality> QualityOfAsync(
+        VideoSettingEntity setting, MediaOutput output, LiveOutput? live, CancellationToken cancellationToken)
+    {
+        var quality = await _tuning.ResolveAsync(setting, output.Width, output.Height, output.FrameRate, cancellationToken)
+            .ConfigureAwait(false);
+
+        // Under the cap of a live whose encoder was found not to keep up, when the machine decides.
+        return live is not null && VideoSettingQuality.Of(setting) == EncoderQuality.Auto ? live.Cap(quality) : quality;
+    }
+
+    /// <summary>The level a pass may be adapted from: the machine's choice, never the user's.</summary>
+    private static EncoderQuality? AdaptiveOf(VideoSettingEntity setting, EncoderQuality quality) =>
+        VideoSettingQuality.Of(setting) == EncoderQuality.Auto ? quality : null;
 
     /// <summary>The configuration of the video, read again on every pass so a live change is seen.</summary>
     private VideoSettingEntity FindSetting(int videoKey)
@@ -1255,6 +1278,7 @@ public sealed class FfmpegVideoPlaylistStreamer : IVideoPlaylistStreamer
         CancellationToken cancellationToken)
     {
         var announced = false;
+        var warnedSlow = false;
         while (true)
         {
             if (session.StopRequested)
@@ -1287,8 +1311,13 @@ public sealed class FfmpegVideoPlaylistStreamer : IVideoPlaylistStreamer
                 return StreamOutcome.Yielded;
             }
 
+            // The end of a canvas: its last frame starts one frame before it, so a position that
+            // waited for the duration itself never got there - the canvas has no end of its own
+            // (the blank frame under it runs for ever), and the live sat still until the stall
+            // timeout called it broken and reconnected it for nothing.
             var durationMs = session.Probe.DurationSeconds > 0 ? (long)(session.Probe.DurationSeconds * 1000) : 0;
-            if (durationMs > 0 && session.ContinuationMilliseconds >= durationMs)
+            var lastFrameMs = (long)Math.Ceiling(1000d / Math.Max(1d, session.Output.FrameRate)) + LastFrameSlackMilliseconds;
+            if (durationMs > 0 && session.ContinuationMilliseconds >= durationMs - lastFrameMs)
             {
                 await session.EndNaturallyAsync().ConfigureAwait(false);
                 return StreamOutcome.Finished;
@@ -1318,6 +1347,31 @@ public sealed class FfmpegVideoPlaylistStreamer : IVideoPlaylistStreamer
                 {
                     announced = true;
                     onAir();
+                }
+
+                // An encoder that produces the live no faster than it goes out has no margin left
+                // for a slow moment of the machine: the live is carried on one level lighter, from
+                // where it is, rather than stuttering at the level it cannot hold.
+                if (session.BehindFor > AdaptAfter
+                    && session.AdaptiveQuality is { } level
+                    && session.Connection?.TryLower(level, out var lighter) == true)
+                {
+                    _logger.LogWarning(
+                        "The encoder of the live to {Platform} does not keep ahead at {Level}: carrying on at {Lighter}",
+                        profile.Platform,
+                        level,
+                        lighter);
+                    return StreamOutcome.Reconfigured;
+                }
+
+                if (!warnedSlow && session.BehindFor > AdaptAfter)
+                {
+                    // Nothing lighter to go to, or a level the user chose: said once, so the log
+                    // explains the stutters instead of the live going quiet about them.
+                    warnedSlow = true;
+                    _logger.LogWarning(
+                        "The encoder of the live to {Platform} does not keep ahead of it: this machine is at its limit for this live (lighter sources, a lower resolution or a GPU encoder would help)",
+                        profile.Platform);
                 }
 
                 if (session.SinceLastAdvance > profile.StallTimeout)

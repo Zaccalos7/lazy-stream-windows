@@ -36,7 +36,7 @@ else
                         var platform = video.VideoLiveHistory?.PlatformStreamName;
 
                         var knownPlatform = LiveLinkView.PlatformOf(video.VideoLiveHistory?.StreamUrl);
-                        var liveUrl = live ? LiveLinkView.UrlOf(video.VideoLiveHistory?.StreamUrl, video.ChannelName, platform) : null;
+                        var liveUrl = live ? LiveLinkView.UrlOf(video.VideoLiveHistory?.StreamUrl, video.ChannelName, platform, Air.OnAirVideoOf(historyPkid)) : null;
                         <tr data-row>
                             <td>
                                 <span class="badge @LiveStatusView.Css(status)">@T[LiveStatusView.Key(status)]</span>

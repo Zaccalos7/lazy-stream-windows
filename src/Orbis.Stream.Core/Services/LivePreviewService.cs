@@ -64,7 +64,9 @@ public sealed record LiveSnapshot(
     LiveParameters Parameters,
     IReadOnlyList<LiveSource>? Sources = null,
     bool PlatformOffAir = false,
-    bool PlatformUnverified = false)
+    bool PlatformUnverified = false,
+    /// <summary>The video YouTube broadcasts the live as, once it was seen on air (YouTubeAirWatch).</summary>
+    string? PlatformVideoId = null)
 {
     public static LiveSnapshot Offline(IReadOnlyList<LiveOption> running) => new(
         false,
@@ -245,7 +247,8 @@ public sealed class LivePreviewService
             // The ingest takes the stream and YouTube shows no live: the page says so, because
             // Studio rating the stream "excellent" is all the user would otherwise have to go by.
             _air.IsOffAir(video.VideoLiveHistoryId),
-            _air.IsUnverified(video.VideoLiveHistoryId));
+            _air.IsUnverified(video.VideoLiveHistoryId),
+            _air.OnAirVideoOf(video.VideoLiveHistoryId));
     }
 
     /// <summary>

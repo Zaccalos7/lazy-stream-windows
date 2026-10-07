@@ -160,6 +160,56 @@ public sealed class FlvPacedRelayTests
     }
 
     [Fact]
+    public async Task Relay_StartsTheClockOnAFullJitterBuffer()
+    {
+        // An encoder that produces the live at real time from the first frame: started on that
+        // frame, the relay had nothing in hand and every hiccup after it was a frame late on air.
+        var bytes = Flv(Enumerable.Range(0, 20).Select(index => index * 100).ToList());
+        var pipe = new System.IO.Pipelines.Pipe();
+        var destination = new TimedStream();
+        var relay = new FlvPacedRelay(pipe.Reader.AsStream(), destination, Paced, NullLogger.Instance);
+        var start = Stopwatch.GetTimestamp();
+        relay.Start();
+
+        // The header and the first tag at once, then one tag every 100 ms.
+        const int header = 13;
+        const int tag = 11 + 32 + 4;
+        await pipe.Writer.WriteAsync(bytes.AsMemory(0, header + tag));
+        for (var at = header + tag; at < bytes.Length; at += tag)
+        {
+            await Task.Delay(100);
+            await pipe.Writer.WriteAsync(bytes.AsMemory(at, tag));
+        }
+
+        await pipe.Writer.CompleteAsync();
+        await relay.Completion.WaitAsync(TimeSpan.FromSeconds(10));
+
+        // The first frame goes out once a second of the live (MaxLead of Twitch) is in hand.
+        var firstFrame = Stopwatch.GetElapsedTime(start, destination.Writes[1]).TotalMilliseconds;
+        Assert.InRange(firstFrame, 900, 1600);
+        Assert.Equal(20, destination.Writes.Count - 1);
+    }
+
+    [Fact]
+    public void LiveOutput_LowersTheLevelOneStepAtATimeDownToTheLightest()
+    {
+        var output = LiveOutput.For("rtmp://live.twitch.tv/app/key", new FfmpegToolLocator("ffmpeg", "ffprobe"), NullLogger.Instance)!;
+
+        Assert.Null(output.QualityCap);
+        Assert.Equal(EncoderQuality.High, output.Cap(EncoderQuality.High));
+
+        Assert.True(output.TryLower(EncoderQuality.High, out var first));
+        Assert.Equal(EncoderQuality.Balanced, first);
+        Assert.True(output.TryLower(EncoderQuality.Balanced, out var second));
+        Assert.Equal(EncoderQuality.Light, second);
+        Assert.False(output.TryLower(EncoderQuality.Light, out _));
+
+        // Every pass after it goes out under the cap.
+        Assert.Equal(EncoderQuality.Light, output.Cap(EncoderQuality.High));
+        Assert.Equal(EncoderQuality.Light, output.Cap(EncoderQuality.Balanced));
+    }
+
+    [Fact]
     public async Task Relay_WinsTheGapBackInsteadOfWritingItOff()
     {
         // A jitter buffer of one second and a stall nearly twice that long: the old code gave up

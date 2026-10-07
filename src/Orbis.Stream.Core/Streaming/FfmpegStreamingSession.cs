@@ -17,6 +17,14 @@ public sealed class FfmpegStreamingSession : IAsyncDisposable
     /// <summary>How long the encoder may take to end on its own once the sender is gone.</summary>
     private static readonly TimeSpan EncoderGrace = TimeSpan.FromSeconds(2);
 
+    /// <summary>
+    /// How long a new encoder has to take its lead before being without one counts against it:
+    /// opening the inputs and filling the lookahead is slow for everyone.
+    /// </summary>
+    private static readonly TimeSpan WarmUp = TimeSpan.FromSeconds(10);
+
+    private readonly long _startedTicks = Environment.TickCount64;
+
     private readonly Process _process;
     private readonly Process? _sender;
     private readonly FlvPacedRelay? _relay;
@@ -108,6 +116,37 @@ public sealed class FfmpegStreamingSession : IAsyncDisposable
         {
             var since = OnAirSinceTicks;
             return since == 0 ? TimeSpan.Zero : TimeSpan.FromMilliseconds(Environment.TickCount64 - since);
+        }
+    }
+
+    /// <summary>
+    /// The level this pass was encoded at when the machine chose it (the setting says automatic);
+    /// null when the setting names its own, which is the user's to keep. Only such a pass is
+    /// adapted to the machine.
+    /// </summary>
+    public EncoderQuality? AdaptiveQuality { get; set; }
+
+    /// <summary>The connection of the live this pass writes into, when it shares one.</summary>
+    public LiveOutput? Connection => _output;
+
+    /// <summary>
+    /// How long, past its warm up, this encoder has produced the live no faster than it goes out
+    /// (<see cref="FlvPacedRelay.LowLeadSinceTicks"/>); zero while it keeps ahead, and on a live
+    /// that has the connection to itself.
+    /// </summary>
+    public TimeSpan BehindFor
+    {
+        get
+        {
+            var since = SharesOutput ? _segment!.Relay.LowLeadSinceTicks : 0;
+            if (since == 0)
+            {
+                return TimeSpan.Zero;
+            }
+
+            var from = Math.Max(since, _startedTicks + (long)WarmUp.TotalMilliseconds);
+            var now = Environment.TickCount64;
+            return now > from ? TimeSpan.FromMilliseconds(now - from) : TimeSpan.Zero;
         }
     }
 

@@ -59,6 +59,12 @@ public sealed class FlvPacedRelay
     /// </summary>
     private const long DefaultFrameStep = 33;
 
+    /// <summary>
+    /// How long past filling its cushion an encoder that cannot is waited for before the live
+    /// starts anyway, with what there is (see <see cref="WaitForCushion"/>).
+    /// </summary>
+    private static readonly TimeSpan CushionPatience = TimeSpan.FromSeconds(5);
+
     private readonly Queue<RelaySegment> _segments = new();
     private readonly IFlvSink _sink;
     private readonly StreamPlatformProfile _profile;
@@ -81,6 +87,9 @@ public sealed class FlvPacedRelay
     private long _positionMilliseconds;
     private long _onAirSinceTicks;
     private long _lastAdvanceTicks = Environment.TickCount64;
+    private long _firstMediaQueued = -1;
+    private bool _readerWaiting;
+    private long _lowLeadSinceTicks;
     private int _rebases;
     private int _catchingUp;
     private long _worstLateMilliseconds;
@@ -131,6 +140,15 @@ public sealed class FlvPacedRelay
 
     /// <summary>When the timestamp on air last moved forward (Environment.TickCount64).</summary>
     public long LastAdvanceTicks => Interlocked.Read(ref _lastAdvanceTicks);
+
+    /// <summary>
+    /// Since when the encoder has been less than a quarter of <see cref="StreamPlatformProfile.MaxLead"/>
+    /// ahead of what is on air (Environment.TickCount64); 0 while it keeps its lead. An encoder
+    /// that keeps up runs ahead until the jitter buffer is full: one that stays without a lead is
+    /// producing the live no faster than it goes out, and the first slow moment of the machine is a
+    /// moment the viewers wait for. That is what the streaming loop adapts the encoder to.
+    /// </summary>
+    public long LowLeadSinceTicks => Interlocked.Read(ref _lowLeadSinceTicks);
 
     /// <summary>How many times the clock was moved because the network fell too far behind.</summary>
     public int Rebases => Volatile.Read(ref _rebases);
@@ -309,8 +327,17 @@ public sealed class FlvPacedRelay
                         && (_lastQueuedTimestamp - _lastSentTimestamp > Milliseconds(_profile.MaxLead)
                             || _queue.Count >= MaxQueuedTags))
                     {
+                        // The buffer is as full as it gets: a start waiting for its cushion has it.
+                        if (!_readerWaiting)
+                        {
+                            _readerWaiting = true;
+                            Monitor.PulseAll(_gate);
+                        }
+
                         Monitor.Wait(_gate);
                     }
+
+                    _readerWaiting = false;
 
                     if (_cancellation.IsCancellationRequested || segment.Detached)
                     {
@@ -333,6 +360,11 @@ public sealed class FlvPacedRelay
                     if (tag.Type != ScriptTag)
                     {
                         segment.MarkRead(original);
+                    }
+
+                    if (tag.Type != ScriptTag && _firstMediaQueued < 0)
+                    {
+                        _firstMediaQueued = tag.Timestamp;
                     }
 
                     _queue.Enqueue(new QueuedTag(tag, segment));
@@ -383,6 +415,7 @@ public sealed class FlvPacedRelay
             }
 
             _sink.WriteHeader(header);
+            WaitForCushion();
 
             long? anchor = null;
             long baseTimestamp = 0;
@@ -399,6 +432,7 @@ public sealed class FlvPacedRelay
             // the pipe fills at the rate the sender reads, and that is the backpressure the jitter
             // buffer is measured against. A second clock here would only fight the one there.
             var paced = _profile.Pacing == RelayPacing.Relay;
+            var lowLead = Milliseconds(_profile.MaxLead) / 4;
 
             while (NextTag() is { } queued)
             {
@@ -502,6 +536,10 @@ public sealed class FlvPacedRelay
                     _sink.WriteTag(tag);
                     MarkSent(tag);
                     queued.Segment?.MarkSent(tag);
+                    if (tag.Type != ScriptTag)
+                    {
+                        MeasureLead(tag.Timestamp, lowLead);
+                    }
                 }
                 finally
                 {
@@ -546,6 +584,68 @@ public sealed class FlvPacedRelay
             _completion.TrySetCanceled();
             Cancel();
             DrainQueue();
+        }
+    }
+
+    /// <summary>
+    /// The clock starts on a full jitter buffer, not on the first frame. Started on the first one,
+    /// the buffer is empty at the very moment the encoder is slowest - opening its inputs, filling
+    /// its lookahead - so the live fell behind in its first seconds ("fell 1.0s behind" on Twitch,
+    /// 4 on YouTube) and an encoder no faster than real time never won it back: every hiccup of the
+    /// machine after that was a stutter on air. Here the encoder fills the buffer first - until it
+    /// is <see cref="StreamPlatformProfile.MaxLead"/> ahead, or the reader is held back by the
+    /// bound, or the encoder is done - and the live starts with the margin the buffer was made for.
+    /// It costs that much delay once, at the start; an encoder that cannot fill it is waited for
+    /// <see cref="CushionPatience"/> more, then the live starts with what there is.
+    /// </summary>
+    private void WaitForCushion()
+    {
+        var cushion = Milliseconds(_profile.MaxLead);
+        if (cushion <= 0)
+        {
+            return;
+        }
+
+        var started = Environment.TickCount64;
+        var deadline = started + cushion + Milliseconds(CushionPatience);
+        long buffered;
+        lock (_gate)
+        {
+            while (!_cancellation.IsCancellationRequested
+                && !_sourceEnded
+                && !_readerWaiting
+                && (_firstMediaQueued < 0 || _lastQueuedTimestamp - _firstMediaQueued < cushion)
+                && Environment.TickCount64 < deadline)
+            {
+                Monitor.Wait(_gate, (int)Math.Max(1, deadline - Environment.TickCount64));
+            }
+
+            buffered = _firstMediaQueued < 0 ? 0 : _lastQueuedTimestamp - _firstMediaQueued;
+        }
+
+        _logger.LogInformation(
+            "The live to {Platform} starts with {Buffered:0.0}s buffered, after {Waited:0.0}s",
+            _profile.Platform,
+            buffered / 1000d,
+            (Environment.TickCount64 - started) / 1000d);
+    }
+
+    /// <summary>Only the sending thread calls this: whether the encoder keeps its lead on what is on air.</summary>
+    private void MeasureLead(long sentTimestamp, long lowLead)
+    {
+        long lead;
+        lock (_gate)
+        {
+            lead = _lastQueuedTimestamp - sentTimestamp;
+        }
+
+        if (lead >= lowLead)
+        {
+            Interlocked.Exchange(ref _lowLeadSinceTicks, 0);
+        }
+        else if (Interlocked.Read(ref _lowLeadSinceTicks) == 0)
+        {
+            Interlocked.Exchange(ref _lowLeadSinceTicks, Environment.TickCount64);
         }
     }
 

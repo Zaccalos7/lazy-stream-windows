@@ -1,5 +1,6 @@
 using System.Diagnostics;
 using Microsoft.Extensions.Logging;
+using Orbis.Stream.Core.Domain;
 using Orbis.Stream.Core.Streaming.Rtmp;
 
 namespace Orbis.Stream.Core.Streaming;
@@ -27,6 +28,7 @@ public sealed class LiveOutput : IAsyncDisposable
     private FlvPacedRelay? _relay;
     private Process? _sender;
     private MediaOutput? _frame;
+    private EncoderQuality? _qualityCap;
 
     private LiveOutput(string outputUrl, StreamPlatformProfile profile, FfmpegToolLocator locator, ILogger logger)
     {
@@ -86,6 +88,53 @@ public sealed class LiveOutput : IAsyncDisposable
     }
 
     public StreamPlatformProfile Profile { get; }
+
+    /// <summary>
+    /// The highest encoder level the rest of this live may use, once its encoder was found not to
+    /// keep up (<see cref="TryLower"/>); null while it does. It lasts as long as the live: a pass
+    /// that starts again at the level that could not keep up falls behind again.
+    /// </summary>
+    public EncoderQuality? QualityCap
+    {
+        get
+        {
+            lock (_gate)
+            {
+                return _qualityCap;
+            }
+        }
+    }
+
+    /// <summary>
+    /// Lowers the level of the live one step below <paramref name="current"/>: false when it is
+    /// the lightest already, and there is nothing left to lower.
+    /// </summary>
+    public bool TryLower(EncoderQuality current, out EncoderQuality lower)
+    {
+        lower = current switch
+        {
+            EncoderQuality.High => EncoderQuality.Balanced,
+            EncoderQuality.Balanced => EncoderQuality.Light,
+            _ => current
+        };
+
+        if (lower == current)
+        {
+            return false;
+        }
+
+        lock (_gate)
+        {
+            _qualityCap = _qualityCap is { } cap && cap < lower ? cap : lower;
+            lower = _qualityCap.Value;
+        }
+
+        return true;
+    }
+
+    /// <summary>The level a pass of this live goes out at: the one asked for, under the cap.</summary>
+    public EncoderQuality Cap(EncoderQuality wanted) =>
+        QualityCap is { } cap && wanted != EncoderQuality.Auto && wanted > cap ? cap : wanted;
 
     /// <summary>
     /// Hands the FLV an encoder writes to the connection, opening it first when there is none or

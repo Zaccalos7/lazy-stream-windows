@@ -78,6 +78,9 @@ public sealed class YouTubeAirWatch : BackgroundService
     /// <summary>Whether YouTube keeps failing to say anything about a live.</summary>
     public bool IsUnverified(long? historyPkid) => _state.IsUnverified(historyPkid);
 
+    /// <summary>The video YouTube is broadcasting a live as, once it was seen on air; null before.</summary>
+    public string? OnAirVideoOf(long? historyPkid) => historyPkid is { } history ? _state.OnAirVideoOf(history) : null;
+
     /// <summary>The user closed the warning of a live; the pages are told at once.</summary>
     public void Dismiss(long historyPkid)
     {

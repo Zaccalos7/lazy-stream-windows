@@ -39,11 +39,20 @@ public sealed class LiveOutput : IAsyncDisposable
     /// The shared connection of a live, for the platforms that go through the relay. A custom
     /// ingest has no relay: every ffmpeg talks to it on its own, as it always did, and null says so.
     /// </summary>
-    public static LiveOutput? For(string outputUrl, FfmpegToolLocator locator, ILogger logger)
+    /// <param name="transport">
+    /// What carries the paced stream to the ingest when the configuration of the channel asks for
+    /// something other than the transport of the platform; null keeps the one of the platform.
+    /// </param>
+    public static LiveOutput? For(string outputUrl, FfmpegToolLocator locator, ILogger logger, RelayTransport? transport = null)
     {
         ArgumentNullException.ThrowIfNull(outputUrl);
         var profile = StreamPlatformProfile.For(outputUrl);
-        return profile.UsesRelay ? new LiveOutput(outputUrl, profile, locator, logger) : null;
+        if (!profile.UsesRelay)
+        {
+            return null;
+        }
+
+        return new LiveOutput(outputUrl, transport is { } chosen ? profile with { Transport = chosen } : profile, locator, logger);
     }
 
     public string OutputUrl { get; }
@@ -162,8 +171,9 @@ public sealed class LiveOutput : IAsyncDisposable
         var relay = new FlvPacedRelay(sink, Profile, _logger);
         relay.Start();
         _logger.LogInformation(
-            "Connection to {Platform} opened for the whole live: {OutputUrl}",
+            "Connection to {Platform} opened for the whole live, published by {Transport}: {OutputUrl}",
             Profile.Platform,
+            Profile.Transport == RelayTransport.NativeRtmp ? "the native RTMP publisher" : "ffmpeg",
             FfmpegStreamingSession.RedactStreamKey(OutputUrl, OutputUrl));
         return relay;
     }

@@ -373,6 +373,29 @@ public sealed class EndToEndApiTests : IClassFixture<ApplicationFixture>
     }
 
     [Fact]
+    public void FfmpegSenderSwitch_IsSavedAndSurvivesTheActiveToggle()
+    {
+        var settings = _fixture.Services.GetRequiredService<SettingService>();
+        var repository = _fixture.Services.GetRequiredService<SettingRepository>();
+        const string url = "rtmps://a.rtmps.youtube.com/live2";
+        const string key = "ffmpeg-sender-switch-key";
+
+        settings.AddNewConfiguration(new Orbis.Stream.Core.Contracts.SettingRequest(
+            url, key, "youtube", "", null, true, "ffmpeg-sender-channel", false, 0, 0, FfmpegSender: true));
+        var saved = repository.FindByStreamUrlAndStreamKey(url, key)!;
+        Assert.True(saved.FfmpegSender);
+
+        // The switch of the list only sends IsActive: the transport is left as it was.
+        settings.ModifySetting(saved.Id, new Orbis.Stream.Core.Contracts.SettingRequest(null, null, null, null, null, false, null, false, 0, 0));
+        Assert.True(repository.FindById(saved.Id)!.FfmpegSender);
+
+        // The form sends it every time, and off is off.
+        settings.ModifySetting(saved.Id, new Orbis.Stream.Core.Contracts.SettingRequest(
+            url, key, "youtube", "", null, null, "ffmpeg-sender-channel", false, 0, 0, FfmpegSender: false));
+        Assert.False(repository.FindById(saved.Id)!.FfmpegSender);
+    }
+
+    [Fact]
     public async Task Root_RedirectsToTheClientRouter()
     {
         using var response = await _fixture.NoRedirectClient.GetAsync("/", HttpCompletionOption.ResponseHeadersRead);

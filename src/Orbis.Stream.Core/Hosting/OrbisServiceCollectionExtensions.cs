@@ -86,6 +86,9 @@ public static class OrbisServiceCollectionExtensions
         services.AddSingleton(provider => new LivePlatformEmbeds(
             provider.GetRequiredService<IHttpClientFactory>().CreateClient(PlatformPlayerClient),
             provider.GetRequiredService<Microsoft.Extensions.Logging.ILogger<LivePlatformEmbeds>>()));
+        // Whether YouTube shows the lives it is sent: a publish the ingest took is not a broadcast on air.
+        services.AddSingleton<YouTubeAirWatch>();
+        services.AddHostedService(provider => provider.GetRequiredService<YouTubeAirWatch>());
         services.AddSingleton<LivePreviewService>();
         // What the canvas can be built from. The folders are read on every listing, so a folder
         // added in the channel settings shows its files without restarting the application.

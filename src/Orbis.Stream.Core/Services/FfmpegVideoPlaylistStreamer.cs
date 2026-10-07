@@ -85,13 +85,14 @@ public sealed class FfmpegVideoPlaylistStreamer : IVideoPlaylistStreamer
         IReadOnlyList<VideoEntity> videos,
         string outputUrl,
         long videoLiveHistoryPkid,
+        RelayTransport? transport,
         CancellationToken cancellationToken)
     {
         outputUrl = StreamPlatforms.NormalizeIngestUrl(outputUrl);
 
         // One publish for the whole live: every video, spot and restarted pass below goes out on
         // it, so the platform never sees the live end and start again in between.
-        await using var output = LiveOutput.For(outputUrl, _locator, _logger);
+        await using var output = LiveOutput.For(outputUrl, _locator, _logger, transport);
         await StreamGroupsAsync(videos, outputUrl, output, videoLiveHistoryPkid, cancellationToken).ConfigureAwait(false);
         if (output is not null)
         {
@@ -1470,9 +1471,11 @@ public interface IVideoPlaylistStreamer
 {
     void EnqueueSpot(string spotPath);
 
+    /// <param name="transport">What publishes to the ingest, when the channel asks for it; null is the platform default.</param>
     Task StreamPlaylistAsync(
         IReadOnlyList<VideoEntity> videos,
         string outputUrl,
         long videoLiveHistoryPkid,
+        RelayTransport? transport,
         CancellationToken cancellationToken);
 }

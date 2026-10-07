@@ -136,6 +136,7 @@ public sealed class SettingService
         setting.VideoFolder = request.VideoFolder ?? setting.VideoFolder;
         setting.IsActive = request.IsActive ?? setting.IsActive;
         setting.ChannelName = request.ChannelName ?? setting.ChannelName;
+        setting.FfmpegSender = request.FfmpegSender ?? setting.FfmpegSender;
     }
 
     private static SettingEntity ToEntity(SettingRequest request) => new()
@@ -148,7 +149,8 @@ public sealed class SettingService
         // The column is NOT NULL for the rows written before the folder left the form.
         VideoFolder = request.VideoFolder ?? string.Empty,
         IsActive = request.IsActive,
-        ChannelName = request.ChannelName!
+        ChannelName = request.ChannelName!,
+        FfmpegSender = request.FfmpegSender ?? false
     };
 
     private void CheckUniqueConstraint(string streamKey, string streamUrl)

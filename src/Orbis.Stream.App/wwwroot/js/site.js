@@ -573,6 +573,7 @@ const paintPreview = state => {
   followEncoder(position);
   setPreviewText("[data-preview-position]", previewClock(position) + " / " + previewClock(state.durationMilliseconds));
   for (const spinner of preview.querySelectorAll("[data-preview-restart]")) spinner.hidden = !state.reconfiguring;
+  for (const bar of preview.querySelectorAll("[data-preview-offair]")) bar.hidden = !state.platformOffAir;
 
   setPreviewText('[data-preview-fact="output.size"]', previewSize(state.output));
   setPreviewText('[data-preview-fact="output.fps"]', previewFps(state.output.frameRate));

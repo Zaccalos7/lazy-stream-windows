@@ -110,6 +110,13 @@ else
     // drawn. The page asks for it once it is open and keeps the picture below until it answers.
     var platform = LiveLinkView.PlatformOf(live.StreamUrl);
     var platformLabel = LiveLinkView.LabelOf(platform);
+
+    @* RTMP accepted and nothing on the channel: the ingest rating the stream is not the broadcast
+       being on air (YouTubeAirWatch). The push channel shows and hides it as the check answers. *@
+    <div class="infobar warning" role="alert" data-preview-offair hidden="@(!live.PlatformOffAir)">
+        <i class="icon">&#xE7BA;</i>
+        <p><strong>@T["youtubeOffAir"]</strong> @T["youtubeOffAirHelp"]</p>
+    </div>
     <div class="preview">
         <div class="preview-main">
             <div class="preview-stage card">

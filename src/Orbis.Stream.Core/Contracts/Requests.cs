@@ -13,7 +13,9 @@ public sealed record SettingRequest(
     string? ChannelName,
     bool AutoCleanupEnabled,
     int AutoCleanupIntervalMonths,
-    int AutoCleanupOlderThanMonths);
+    int AutoCleanupOlderThanMonths,
+    // Null leaves the stored value alone, the way every other field of an edit does.
+    bool? FfmpegSender = null);
 
 /// <summary>Port of <c>com.orbis.stream.dto.SettingDto</c>.</summary>
 public sealed record SettingResponse(
@@ -29,7 +31,8 @@ public sealed record SettingResponse(
     string? ChannelName,
     bool AutoCleanupEnabled,
     int AutoCleanupIntervalMonths,
-    int AutoCleanupOlderThanMonths)
+    int AutoCleanupOlderThanMonths,
+    bool FfmpegSender = false)
 {
     public static SettingResponse FromEntity(SettingEntity entity) => new(
         entity.Id,
@@ -44,7 +47,8 @@ public sealed record SettingResponse(
         entity.ChannelName,
         entity.AutoCleanupEnabled,
         entity.AutoCleanupIntervalMonths,
-        entity.AutoCleanupOlderThanMonths);
+        entity.AutoCleanupOlderThanMonths,
+        entity.FfmpegSender);
 }
 
 /// <summary>Port of <c>com.orbis.stream.record.output.VideoPathRecord</c>.</summary>

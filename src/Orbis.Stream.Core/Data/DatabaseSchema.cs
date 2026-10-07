@@ -67,7 +67,8 @@ public static class DatabaseSchema
                 Column("scene_pkid", "BIGINT", "BIGINT", nullable: true),
                 Column("auto_cleanup_enabled", "BOOLEAN", "BOOLEAN DEFAULT 'false' NOT NULL", nullable: false),
                 Column("auto_cleanup_interval_months", "INTEGER", "INTEGER DEFAULT '0'", nullable: false),
-                Column("auto_cleanup_older_than_months", "INTEGER", "INTEGER DEFAULT '0'", nullable: false)
+                Column("auto_cleanup_older_than_months", "INTEGER", "INTEGER DEFAULT '0'", nullable: false),
+                Column("ffmpeg_sender", "BOOLEAN", "BOOLEAN DEFAULT 'false' NOT NULL", nullable: false)
             ],
             ["video"] =
             [

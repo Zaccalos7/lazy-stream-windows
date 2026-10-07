@@ -1,4 +1,5 @@
 @model MainLiveModel
+@inject Orbis.Stream.Core.Services.YouTubeAirWatch Air
 @{
     var page = Model.Videos.Page;
     var pager = new PagerModel(page.Number, page.TotalPages, index => Url.Page("/MainLive", new { Model.LiveStatus, Model.ChannelName, p = index })!);
@@ -37,7 +38,14 @@ else
                         var knownPlatform = LiveLinkView.PlatformOf(video.VideoLiveHistory?.StreamUrl);
                         var liveUrl = live ? LiveLinkView.UrlOf(video.VideoLiveHistory?.StreamUrl, video.ChannelName, platform) : null;
                         <tr data-row>
-                            <td><span class="badge @LiveStatusView.Css(status)">@T[LiveStatusView.Key(status)]</span></td>
+                            <td>
+                                <span class="badge @LiveStatusView.Css(status)">@T[LiveStatusView.Key(status)]</span>
+                                @if (live && video.Pkid is { } rowPkid && Air.IsOffAir(rowPkid, historyPkid))
+                                {
+                                    @* Sent, and not shown: the row says it where the user looks first. *@
+                                    <span class="badge offair" title="@T["youtubeOffAirHelp"]">@T["youtubeOffAir"]</span>
+                                }
+                            </td>
                             <td class="path">
                                 <div class="truncate">
                                     @if (row.IsPlaylist)

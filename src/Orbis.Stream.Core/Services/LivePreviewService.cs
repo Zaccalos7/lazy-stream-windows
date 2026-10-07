@@ -62,7 +62,8 @@ public sealed record LiveSnapshot(
     LiveMedia Source,
     LiveMedia Output,
     LiveParameters Parameters,
-    IReadOnlyList<LiveSource>? Sources = null)
+    IReadOnlyList<LiveSource>? Sources = null,
+    bool PlatformOffAir = false)
 {
     public static LiveSnapshot Offline(IReadOnlyList<LiveOption> running) => new(
         false,
@@ -118,6 +119,7 @@ public sealed class LivePreviewService
     private readonly VideoSettingRepository _videoSettingRepository;
     private readonly VideoLiveHistoryRepository _historyRepository;
     private readonly LivePlatformEmbeds _embeds;
+    private readonly YouTubeAirWatch _air;
     private readonly ResponseFactory _responses;
     private readonly Localizer _localizer;
     private readonly LiveChangeNotifier _notifier;
@@ -129,6 +131,7 @@ public sealed class LivePreviewService
         VideoSettingRepository videoSettingRepository,
         VideoLiveHistoryRepository historyRepository,
         LivePlatformEmbeds embeds,
+        YouTubeAirWatch air,
         ResponseFactory responses,
         Localizer localizer,
         LiveChangeNotifier notifier,
@@ -139,6 +142,7 @@ public sealed class LivePreviewService
         _videoSettingRepository = videoSettingRepository;
         _historyRepository = historyRepository;
         _embeds = embeds;
+        _air = air;
         _responses = responses;
         _localizer = localizer;
         _notifier = notifier;
@@ -235,7 +239,10 @@ public sealed class LivePreviewService
             new LiveMedia(probe.Width, probe.Height, probe.FrameRate, probe.HasAudio, probe.AudioChannels),
             new LiveMedia(session.Output.Width, session.Output.Height, session.Output.FrameRate, probe.HasAudio, probe.AudioChannels),
             ParametersOf(setting, probe),
-            SourcesOf(video));
+            SourcesOf(video),
+            // The ingest takes the stream and YouTube shows no live: the page says so, because
+            // Studio rating the stream "excellent" is all the user would otherwise have to go by.
+            _air.IsOffAir(session.VideoPkid));
     }
 
     /// <summary>

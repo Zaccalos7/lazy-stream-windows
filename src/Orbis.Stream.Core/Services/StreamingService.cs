@@ -28,6 +28,7 @@ public sealed class StreamingService
     private readonly LiveChangeNotifier _notifier;
     private readonly ILogger<StreamingService> _logger;
     private readonly FfmpegProbe _probe;
+    private readonly SettingRepository _settingRepository;
 
     public StreamingService(
         VideoRepository videoRepository,
@@ -41,7 +42,8 @@ public sealed class StreamingService
         StreamingSessionRegistry sessions,
         LiveChangeNotifier notifier,
         ILogger<StreamingService> logger,
-        FfmpegProbe probe)
+        FfmpegProbe probe,
+        SettingRepository settingRepository)
     {
         _videoRepository = videoRepository;
         _videoSettingRepository = videoSettingRepository;
@@ -55,6 +57,7 @@ public sealed class StreamingService
         _notifier = notifier;
         _logger = logger;
         _probe = probe;
+        _settingRepository = settingRepository;
     }
 
     public MessageResponse StartLive(StartLiveRequest request)
@@ -430,16 +433,28 @@ public sealed class StreamingService
             throw new NotFoundCustomException("video.streaming.not.found");
         }
 
-        _executor.Execute(() => _ = RunPlaylistAsync(videoList, streamingUrl, videoLiveHistoryId));
+        var transport = TransportOf(videoLiveHistory);
+        _executor.Execute(() => _ = RunPlaylistAsync(videoList, streamingUrl, videoLiveHistoryId, transport));
 
         return _responses.Build("live.started", StatusCodes.Status202Accepted);
     }
 
-    private async Task RunPlaylistAsync(IReadOnlyList<VideoEntity> videos, string streamingUrl, long videoLiveHistoryId)
+    /// <summary>
+    /// What publishes the live, as the configuration of its channel asks: ffmpeg when the switch
+    /// is on, otherwise the default of the platform. The history keeps the url and the key the
+    /// live started with, which are what a configuration is unique by.
+    /// </summary>
+    private RelayTransport? TransportOf(VideoLiveHistoryEntity history) =>
+        _settingRepository.FindByStreamUrlAndStreamKey(history.StreamUrl, history.StreamKey) is { FfmpegSender: true }
+            ? RelayTransport.FfmpegSender
+            : null;
+
+    private async Task RunPlaylistAsync(
+        IReadOnlyList<VideoEntity> videos, string streamingUrl, long videoLiveHistoryId, RelayTransport? transport)
     {
         try
         {
-            await _streamer.StreamPlaylistAsync(videos, streamingUrl, videoLiveHistoryId, _shutdown.Token)
+            await _streamer.StreamPlaylistAsync(videos, streamingUrl, videoLiveHistoryId, transport, _shutdown.Token)
                 .ConfigureAwait(false);
         }
         catch (OperationCanceledException)

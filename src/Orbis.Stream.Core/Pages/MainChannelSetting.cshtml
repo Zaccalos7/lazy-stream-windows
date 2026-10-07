@@ -53,6 +53,10 @@
             <div class="caption truncate">@configuration.StreamUrl</div>
         </div>
         <div class="actions">
+            @if (configuration.FfmpegSender)
+            {
+                <span class="badge" title="@T["ffmpegSender"]">ffmpeg</span>
+            }
             <span class="badge @(active ? "ended" : "")">@(active ? T["active"] : T["deactive"])</span>
             <a class="btn subtle icon-only" asp-route-edit="@configuration.Id" asp-route-platform="@Model.Platform" asp-route-active="@Model.Active" title="@T["seeDetails"]" aria-label="@T["seeDetails"]"><i class="icon">&#xE70F;</i></a>
             <form method="post" asp-page-handler="Toggle" asp-route-id="@configuration.Id" asp-route-platform="@Model.Platform" asp-route-active="@Model.Active" data-confirm="@(active ? T["deactivateConfiguration"] : T["activateConfigurations"])">
@@ -110,6 +114,17 @@
                 <label class="field section">
                     <span>@T["description"]</span>
                     <textarea class="input" name="description" rows="3">@editing.Description</textarea>
+                </label>
+                @* The way the live reaches the ingest: the RTMP of this application, or the one of
+                   ffmpeg. The second is what every other publisher uses, which makes it the test of
+                   the first when a platform takes the stream and does not air it. *@
+                <label class="option-card">
+                    <i class="icon option-card-mark" aria-hidden="true">&#xE756;</i>
+                    <span class="option-card-text">
+                        <strong>@T["ffmpegSender"]</strong>
+                        <small>@T["ffmpegSenderHelp"]</small>
+                    </span>
+                    <span class="toggle"><input type="checkbox" name="ffmpegSender" value="true" checked="@editing.FfmpegSender" /></span>
                 </label>
             </div>
             <div class="dialog-footer">

@@ -61,7 +61,8 @@ public sealed class MainChannelSettingModel(SettingService settings, RequestVali
         string? description,
         bool autoCleanupEnabled,
         int autoCleanupIntervalMonths,
-        int autoCleanupOlderThanMonths)
+        int autoCleanupOlderThanMonths,
+        bool ffmpegSender)
     {
         if (string.IsNullOrWhiteSpace(streamUrl))
         {
@@ -80,7 +81,8 @@ public sealed class MainChannelSettingModel(SettingService settings, RequestVali
             channelName?.Trim(),
             autoCleanupEnabled,
             autoCleanupIntervalMonths,
-            autoCleanupOlderThanMonths);
+            autoCleanupOlderThanMonths,
+            ffmpegSender);
 
         Try(() =>
         {

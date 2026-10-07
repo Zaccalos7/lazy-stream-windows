@@ -143,10 +143,17 @@ public sealed class StreamingService
 
     public void EnqueueSpot(string spotPath, int videoLivePkid)
     {
-        _streamer.EnqueueSpot(spotPath);
+        var normalized = NormalizeUserPath(spotPath ?? string.Empty);
+        if (!File.Exists(normalized))
+        {
+            _logger.LogError("{Message} {Path}", _localizer.PrintMessage("file.not.found"), normalized);
+            throw new NotFoundCustomException("file.not.found", [normalized]);
+        }
 
         var video = CheckIfExistsAndReturnEntity(videoLivePkid);
         var drivingRow = DrivingRowOf(video);
+
+        _streamer.EnqueueSpot(normalized);
 
         if (_sessions.TryGet(drivingRow.Pkid, out var session) && session is not null)
         {

@@ -155,6 +155,91 @@ public sealed class PlaylistTests : IAsyncLifetime
         Assert.Equal((rows[0].Pkid, LiveStatus.Offline), (PlaylistRow().Video.Pkid, PlaylistRow().Status));
     }
 
+    [Fact]
+    public async Task EnqueueSpot_PausesCurrentVideo_PlaysSpot_AndResumesWhileRemainingLive()
+    {
+        var ffmpeg = Tool("ffmpeg");
+        if (ffmpeg is null || Tool("ffprobe") is null)
+        {
+            return;
+        }
+
+        var folder = Path.Combine(_host.DataDirectory, "spot-test");
+        Directory.CreateDirectory(folder);
+        Directory.CreateDirectory(Path.Combine(_host.DataDirectory, "output-spot"));
+
+        var mainVideo = Path.Combine(folder, "main.mp4");
+        var spotVideo = Path.Combine(folder, "spot.mp4");
+
+        await RunAsync(ffmpeg, $"-y -f lavfi -i testsrc=size=160x120:rate=15 -t 8 -pix_fmt yuv420p \"{mainVideo}\"");
+        await RunAsync(ffmpeg, $"-y -f lavfi -i testsrc=size=160x120:rate=15 -t 2 -pix_fmt yuv420p \"{spotVideo}\"");
+
+        var streaming = _host.Services.GetRequiredService<StreamingService>();
+        var repository = _host.Services.GetRequiredService<VideoRepository>();
+
+        streaming.StartLive(RequestFor(mainVideo));
+
+        var page = repository.FindLivePage(null, null, 0, 10);
+        var mainRow = page.Items.First(r => r.Video.VideoPath == mainVideo).Video;
+
+        Assert.True(await WaitForAsync(() => repository.FindByPkid(mainRow.Pkid)?.LiveStatus == LiveStatus.Live));
+
+        // Enqueue the spot
+        streaming.EnqueueSpot(spotVideo, mainRow.Pkid);
+
+        // Verify status remains Live
+        var current = repository.FindByPkid(mainRow.Pkid);
+        Assert.NotNull(current);
+        Assert.Equal(LiveStatus.Live, current.LiveStatus);
+
+        // Stop cleanly
+        streaming.StopVideoStreamingByPkid(mainRow.Pkid);
+        Assert.True(await WaitForAsync(() => repository.FindByPkid(mainRow.Pkid)?.LiveStatus == LiveStatus.Stopped));
+    }
+
+    [Fact]
+    public async Task EnqueueSpot_StreamsSpotThroughAndResumesMainVideo()
+    {
+        var ffmpeg = Tool("ffmpeg");
+        if (ffmpeg is null || Tool("ffprobe") is null)
+        {
+            return;
+        }
+
+        var folder = Path.Combine(_host.DataDirectory, "spot-full-test");
+        Directory.CreateDirectory(folder);
+        Directory.CreateDirectory(Path.Combine(_host.DataDirectory, "output"));
+
+        var mainVideo = Path.Combine(folder, "main.mp4");
+        var spotVideo = Path.Combine(folder, "spot.mp4");
+
+        // Main video: 15 seconds, Spot: 4 seconds
+        await RunAsync(ffmpeg, $"-y -f lavfi -i testsrc=size=160x120:rate=15 -t 15 -pix_fmt yuv420p \"{mainVideo}\"");
+        await RunAsync(ffmpeg, $"-y -f lavfi -i testsrc=size=160x120:rate=15 -t 4 -pix_fmt yuv420p \"{spotVideo}\"");
+
+        var streaming = _host.Services.GetRequiredService<StreamingService>();
+        var repository = _host.Services.GetRequiredService<VideoRepository>();
+
+        streaming.StartLive(RequestFor(mainVideo));
+
+        var page = repository.FindLivePage(null, null, 0, 10);
+        var mainRow = page.Items.First(r => r.Video.VideoPath == mainVideo).Video;
+
+        Assert.True(await WaitForAsync(() => repository.FindByPkid(mainRow.Pkid)?.LiveStatus == LiveStatus.Live));
+
+        // Enqueue the spot
+        streaming.EnqueueSpot(spotVideo, mainRow.Pkid);
+
+        // While spot is streaming, status must stay Live
+        await Task.Delay(1500);
+        var duringSpot = repository.FindByPkid(mainRow.Pkid);
+        Assert.NotNull(duringSpot);
+        Assert.Equal(LiveStatus.Live, duringSpot.LiveStatus);
+
+        // Eventually after spot finishes and main video resumes and reaches end, status becomes Ended
+        Assert.True(await WaitForAsync(() => repository.FindByPkid(mainRow.Pkid)?.LiveStatus == LiveStatus.Ended));
+    }
+
     private StartLiveRequest RequestFor(string folder) => new(
         new Uri(Path.Combine(_host.DataDirectory, "output")).AbsoluteUri,
         "stream.flv",

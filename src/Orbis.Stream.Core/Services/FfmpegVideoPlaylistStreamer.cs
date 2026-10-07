@@ -103,7 +103,7 @@ public sealed class FfmpegVideoPlaylistStreamer : IVideoPlaylistStreamer
             return;
         }
 
-        var queue = await PlanAsync(files, cancellationToken).ConfigureAwait(false);
+        var queue = (await PlanAsync(files, cancellationToken).ConfigureAwait(false)).ToList();
 
         if (queue.Count == 0)
         {
@@ -118,22 +118,17 @@ public sealed class FfmpegVideoPlaylistStreamer : IVideoPlaylistStreamer
 
         for (var i = 0; i < queue.Count; i++)
         {
-            if (_spotsToPlay.TryDequeue(out var spotPath))
+            while (_spotsToPlay.TryDequeue(out var spotPath))
             {
-                // Prepare a planned video for the spot (it's not part of the db playlist, so we mock it)
-                var spotVideo = new VideoEntity { VideoPath = spotPath, Name = "Spot", SourceKind = SourceKind.File, LiveStatus = LiveStatus.Offline };
-                var spotPlanned = new PlannedVideo(spotVideo, null, TimeSpan.Zero);
-                var spotOutcome = await StreamVideoAsync(spotPlanned, outputUrl, videoLiveHistoryPkid, cancellationToken, markEndedOnFinish: false)
+                var videoSetting = FindSetting(queue[i].Video.Pkid);
+                var spotOutcome = await StreamSpotAsync(
+                    spotPath, outputUrl, videoLiveHistoryPkid, queue[i].Video.Pkid, videoSetting, cancellationToken)
                     .ConfigureAwait(false);
 
                 if (spotOutcome == StreamOutcome.Stopped)
                 {
                     return;
                 }
-
-                // Re-evaluate current video from its saved position
-                i--;
-                continue;
             }
 
             var planned = queue[i];
@@ -150,7 +145,24 @@ public sealed class FfmpegVideoPlaylistStreamer : IVideoPlaylistStreamer
             }
             if (outcome == StreamOutcome.Yielded)
             {
-                // A yield means we should pause the playlist (and we likely have a spot enqueued). Re-evaluate this item on the next iteration.
+                while (_spotsToPlay.TryDequeue(out var spotPath))
+                {
+                    var videoSetting = FindSetting(planned.Video.Pkid);
+                    var spotOutcome = await StreamSpotAsync(
+                        spotPath, outputUrl, videoLiveHistoryPkid, planned.Video.Pkid, videoSetting, cancellationToken)
+                        .ConfigureAwait(false);
+
+                    if (spotOutcome == StreamOutcome.Stopped)
+                    {
+                        return;
+                    }
+                }
+
+                // Re-evaluate current video from its saved position
+                var reloaded = _videoRepository.FindByPkid(planned.Video.Pkid) ?? planned.Video;
+                var resumeFrom = TimeSpan.FromMilliseconds(reloaded.LastTimeStampBeforeStop);
+                queue[i] = new PlannedVideo(reloaded, planned.Probe, resumeFrom);
+
                 i--;
                 continue;
             }
@@ -379,6 +391,27 @@ public sealed class FfmpegVideoPlaylistStreamer : IVideoPlaylistStreamer
                     SaveMessageOnVideoLiveHistory(
                         reconfigured, videoLiveHistoryPkid, inputPath, LiveStatus.Live, null);
                     continue;
+                }
+
+                if (outcome == StreamOutcome.Yielded)
+                {
+                    var pausedPosition = session.PositionMilliseconds;
+                    var videoEntity = _videoRepository.FindByPkid(videoKey);
+                    if (videoEntity is not null)
+                    {
+                        videoEntity.LastTimeStampBeforeStop = Math.Max(0, pausedPosition);
+                        videoEntity.LiveStatus = LiveStatus.Live;
+                        var spotYieldMsg = _localizer.PrintMessage("live.yielded") ?? "Spot in corso...";
+                        videoEntity.Message = spotYieldMsg;
+                        _videoRepository.Update(videoEntity);
+                        _notifier.Raise();
+                    }
+
+                    _sessions.Remove(videoKey);
+                    await session.StopAsync().ConfigureAwait(false);
+                    _frames.Forget(videoKey);
+                    session = null;
+                    return StreamOutcome.Yielded;
                 }
 
                 var exitCode = await session.WaitForExitAsync(cancellationToken).ConfigureAwait(false);
@@ -734,6 +767,35 @@ public sealed class FfmpegVideoPlaylistStreamer : IVideoPlaylistStreamer
                     continue;
                 }
 
+                if (outcome == StreamOutcome.Yielded)
+                {
+                    var pausedPosition = session?.PositionMilliseconds ?? 0;
+                    resumeFrom = TimeSpan.FromMilliseconds(pausedPosition);
+                    if (session is not null)
+                    {
+                        _sessions.Remove(videoKey);
+                        await session.StopAsync().ConfigureAwait(false);
+                        _frames.Forget(videoKey);
+                        session = null;
+                    }
+
+                    while (_spotsToPlay.TryDequeue(out var spotPath))
+                    {
+                        var spotOutcome = await StreamSpotAsync(
+                            spotPath, outputUrl, videoLiveHistoryPkid, videoKey, videoSetting, cancellationToken)
+                            .ConfigureAwait(false);
+
+                        if (spotOutcome == StreamOutcome.Stopped)
+                        {
+                            var stopped = _localizer.PrintMessage("live.stopped");
+                            MarkRows(rows, LiveStatus.Stopped, stopped);
+                            return;
+                        }
+                    }
+
+                    continue;
+                }
+
                 var exitCode = await session.WaitForExitAsync(cancellationToken).ConfigureAwait(false);
                 var errorOutput = await session.ReadErrorAsync().ConfigureAwait(false);
 
@@ -813,6 +875,88 @@ public sealed class FfmpegVideoPlaylistStreamer : IVideoPlaylistStreamer
             }
 
             _frames.Forget(videoKey);
+        }
+    }
+
+    /// <summary>
+    /// Streams an ad/intermission spot to the current live output URL without ending the live stream.
+    /// The spot is registered under the driving row's key so the preview page continues to display frames,
+    /// and the database rows remain in Live status throughout.
+    /// </summary>
+    private async Task<StreamOutcome> StreamSpotAsync(
+        string spotPath,
+        string outputUrl,
+        long videoLiveHistoryPkid,
+        int drivingVideoKey,
+        VideoSettingEntity videoSetting,
+        CancellationToken cancellationToken)
+    {
+        cancellationToken.ThrowIfCancellationRequested();
+
+        var probe = await _probe.ProbeAsync(spotPath, cancellationToken).ConfigureAwait(false);
+        var spotName = Path.GetFileName(spotPath);
+        var spotMessage = _localizer.PrintMessage("video.live.spot.playing", [spotName]) ?? $"Spot: {spotName}";
+        _logger.LogInformation("Streaming spot {SpotPath} to {OutputUrl}", spotPath, outputUrl);
+
+        var drivingVideo = _videoRepository.FindByPkid(drivingVideoKey);
+        if (drivingVideo is not null)
+        {
+            drivingVideo.LiveStatus = LiveStatus.Live;
+            drivingVideo.Message = spotMessage;
+            _videoRepository.Update(drivingVideo);
+            _notifier.Raise();
+        }
+
+        FfmpegStreamingSession? session = null;
+        try
+        {
+            session = FfmpegStreamingSession.Start(
+                _locator,
+                drivingVideoKey,
+                spotPath,
+                outputUrl,
+                videoSetting,
+                probe,
+                _logger,
+                TimeSpan.Zero,
+                _frames.PathOf(drivingVideoKey));
+
+            _sessions.Register(session);
+
+            var outcome = await MonitorAsync(
+                session,
+                drivingVideoKey,
+                videoLiveHistoryPkid,
+                spotPath,
+                () => { },
+                cancellationToken).ConfigureAwait(false);
+
+            if (outcome == StreamOutcome.Stopped)
+            {
+                return StreamOutcome.Stopped;
+            }
+
+            var exitCode = await session.WaitForExitAsync(cancellationToken).ConfigureAwait(false);
+            return exitCode == 0 || session.EndedNaturally ? StreamOutcome.Finished : StreamOutcome.Finished;
+        }
+        catch (OperationCanceledException)
+        {
+            throw;
+        }
+        catch (Exception exception)
+        {
+            _logger.LogError(exception, "Failed streaming spot {SpotPath}", spotPath);
+            return StreamOutcome.Finished;
+        }
+        finally
+        {
+            _sessions.Remove(drivingVideoKey);
+            if (session is not null)
+            {
+                await session.DisposeAsync().ConfigureAwait(false);
+            }
+
+            _frames.Forget(drivingVideoKey);
         }
     }
 
@@ -975,7 +1119,6 @@ public sealed class FfmpegVideoPlaylistStreamer : IVideoPlaylistStreamer
 
             if (session.YieldRequested)
             {
-                await StopAndRecordAsync(session, videoKey, videoLiveHistoryPkid, inputPath, isYield: true).ConfigureAwait(false);
                 return StreamOutcome.Yielded;
             }
 

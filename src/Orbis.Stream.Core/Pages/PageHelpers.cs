@@ -102,6 +102,10 @@ public static class LiveLinkView
     /// <summary>The play mark of a platform this application does not know.</summary>
     private const string PlayMark = "M8 5v14l11-7z";
 
+    /// <summary>The spot / intermission mark.</summary>
+    public const string SpotMark =
+        "M2 4a2 2 0 0 1 2-2h16a2 2 0 0 1 2 2v11a2 2 0 0 1-2 2h-6v2h2.5a1 1 0 1 1 0 2h-9a1 1 0 1 1 0-2H10v-2H4a2 2 0 0 1-2-2V4zm2 0v11h16V4H4zm2.2 9.5L8.7 7.5h1.6l2.5 6h-1.6l-.55-1.4H8.15l-.55 1.4H6.2zm2.6-2.8h1.4l-.7-1.8-.7 1.8zm4.6-3.2h2.8c1.6 0 2.8 1.1 2.8 3s-1.2 3-2.8 3h-2.8V7.5zm1.5 1.4v3.2h1.2c.8 0 1.4-.6 1.4-1.6s-.6-1.6-1.4-1.6h-1.2z";
+
     /// <summary>Name the platform shows in its own interface (Twitch, YouTube).</summary>
     public static string? LabelOf(string? platform) =>
         MainChannelSettingModel.Platforms

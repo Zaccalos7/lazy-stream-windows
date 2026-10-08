@@ -223,10 +223,11 @@ public sealed class StreamingService
 
     /// <summary>
     /// The row the ffmpeg of a live is keyed on, the one whose flag the streaming loop polls. For a
-    /// canvas it is the first source with a picture, exactly as the composer put the live together.
+    /// canvas it is its base source (see <see cref="SceneRows.BaseOf"/>), exactly as the streamer
+    /// put the live together.
     /// </summary>
     private VideoEntity DrivingRowOf(VideoEntity video) =>
-        RowsOfComposition(video).FirstOrDefault(row => row.SourceKind.HasPicture()) ?? video;
+        SceneRows.BaseOf(RowsOfComposition(video)) ?? video;
 
     /// <summary>
     /// Forgets where every video of a live history was stopped, so the next play starts the
@@ -387,7 +388,10 @@ public sealed class StreamingService
     {
         foreach (var item in items)
         {
-            var videoPath = item.SourceKind == SourceKind.File
+            // An overlay is a file on disk too, and its row shows where it is. It is not probed: it
+            // has no length for the live to be measured with, and no sound to be mixed.
+            var onDisk = item.SourceKind is SourceKind.File or SourceKind.Overlay;
+            var videoPath = onDisk
                 ? Path.GetFullPath(StreamingService.NormalizeUserPath(item.SourceTarget))
                 : SceneReference.ItemPath(item.SourceKind, item.SourceTarget);
             var media = item.SourceKind == SourceKind.File ? ProbeFile(videoPath) : null;
@@ -399,7 +403,7 @@ public sealed class StreamingService
                 // has no path, so the tile carries the name the pages show and the target the
                 // command line opens.
                 VideoPath = videoPath,
-                Extension = item.SourceKind == SourceKind.File
+                Extension = onDisk
                     ? ExtractExtensionFile(Path.GetFileName(item.SourceTarget))
                     : item.SourceKind.ToWireValue().ToLowerInvariant(),
                 LastTimeStampBeforeStop = 0L,
@@ -416,7 +420,7 @@ public sealed class StreamingService
                 Y = item.Y,
                 Width = item.Width,
                 Height = item.Height,
-                AudioEnabled = item.AudioEnabled,
+                AudioEnabled = item.AudioEnabled && !item.SourceKind.IsOverlay(),
                 DurationMilliseconds = media?.DurationMilliseconds,
                 SourceWidth = media?.Width,
                 SourceHeight = media?.Height

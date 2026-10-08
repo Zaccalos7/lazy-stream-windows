@@ -175,6 +175,7 @@ src/Orbis.Stream.Core     backend: API, Razor pages, data, services, FFmpeg, i18
 src/Orbis.Stream.App      WPF/WebView2 shell, app icon, stylesheets and script in wwwroot
 src/Orbis.Stream.Tests    xUnit suite: API end-to-end, database, paging, i18n, FFmpeg
 Installer                 NSIS setup (installer.nsi) and the optional WiX MSI
+samples/overlays          test overlays for the layouts page (PNG, animated WebM with alpha, logo)
 ```
 
 ### Stylesheets

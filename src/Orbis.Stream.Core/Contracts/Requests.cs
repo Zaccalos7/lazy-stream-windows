@@ -301,7 +301,8 @@ public sealed record SceneItemRequest(
 
 /// <summary>
 /// A canvas, with the sources on it in stacking order. A layout (<see cref="IsLayout"/>) carries
-/// slots instead: the rectangles are kept and whatever source came with them is dropped.
+/// slots instead: the rectangles are kept and whatever source came with them is dropped. Its
+/// overlays are the exception: they are what the layout is dressed with, so they are kept whole.
 /// </summary>
 public sealed record SceneRequest(
     long? Pkid,
@@ -345,8 +346,17 @@ public sealed record SceneRequest(
             Height = Height,
             LastModified = DateTime.Now,
             IsLayout = IsLayout,
-            Items = [.. (Items ?? []).Select(item => IsLayout ? AsSlot(item.ToEntity(scenePkid)) : item.ToEntity(scenePkid))]
+            Items = [.. (Items ?? []).Select(item => item.SourceKind.IsOverlay()
+                ? AsOverlay(item.ToEntity(scenePkid))
+                : IsLayout ? AsSlot(item.ToEntity(scenePkid)) : item.ToEntity(scenePkid))]
         };
+    }
+
+    /// <summary>An overlay is a picture of the layout: it is laid over the canvas and never heard.</summary>
+    private static SceneItemEntity AsOverlay(SceneItemEntity item)
+    {
+        item.AudioEnabled = false;
+        return item;
     }
 
     /// <summary>A slot is a rectangle and nothing else: no source to open, nothing to hear.</summary>

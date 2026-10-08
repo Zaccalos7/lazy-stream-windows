@@ -231,8 +231,9 @@ public sealed class VideoRepository
     /// <summary>
     /// The live page: one row per live. A folder playlist shows the video it got to (the one on air,
     /// else the last one that was played, else the first one), with where it stands in the playlist.
-    /// A canvas shows its base source, the first one with a picture: that is the row its ffmpeg is
-    /// registered under, so it is the row a stop has to be addressed to.
+    /// A canvas shows its base source, the first one with a picture that is not an overlay (an
+    /// overlay only when there is nothing else): that is the row its ffmpeg is registered under
+    /// (SceneRows.BaseOf), so it is the row a stop has to be addressed to.
     /// <para>The status of a playlist is its own, not the one of the video shown: LIVE while any video
     /// is on air, ENDED once the last one was streamed through, else the one of the video it got to.
     /// The status filter reads the same value.</para>
@@ -248,7 +249,7 @@ public sealed class VideoRepository
                    ROW_NUMBER() OVER (PARTITION BY v.grp ORDER BY v.pkid) AS position,
                    COUNT(*) OVER (PARTITION BY v.grp) AS total,
                    ROW_NUMBER() OVER (PARTITION BY v.grp ORDER BY
-                       CASE WHEN v.scene_pkid IS NOT NULL THEN (CASE WHEN v.source_kind = @microphone THEN 1 ELSE 0 END)
+                       CASE WHEN v.scene_pkid IS NOT NULL THEN (CASE WHEN v.source_kind = @microphone THEN 2 WHEN v.source_kind = @overlay THEN 1 ELSE 0 END)
                             WHEN v.live_status = @live THEN 0 WHEN v.live_status = @offline THEN 2 ELSE 1 END,
                        CASE WHEN v.scene_pkid IS NOT NULL OR v.live_status = @offline THEN NULL ELSE v.start_date_live END DESC,
                        CASE WHEN v.scene_pkid IS NOT NULL OR v.live_status = @offline THEN v.pkid ELSE -v.pkid END) AS pick,
@@ -276,6 +277,7 @@ public sealed class VideoRepository
             command.Parameters.AddWithValue("@offline", LiveStatus.Offline.ToStorageValue());
             command.Parameters.AddWithValue("@ended", LiveStatus.Ended.ToStorageValue());
             command.Parameters.AddWithValue("@microphone", (int)SourceKind.Microphone);
+            command.Parameters.AddWithValue("@overlay", (int)SourceKind.Overlay);
             if (liveStatus is { } status)
             {
                 command.Parameters.AddWithValue("@status", status.ToStorageValue());

@@ -17,6 +17,9 @@ public sealed class SourceSnapshotService
 
     private const int SnapshotWidth = 480;
 
+    /// <summary>An overlay is usually the whole frame: it is drawn over the full width of the stage.</summary>
+    private const int OverlayWidth = 960;
+
     private readonly FfmpegToolLocator _locator;
     private readonly ILogger<SourceSnapshotService> _logger;
 
@@ -27,18 +30,30 @@ public sealed class SourceSnapshotService
     }
 
     /// <summary>The JPEG of one frame, or null when the source cannot give one.</summary>
-    public async Task<byte[]?> GrabAsync(SourceKind kind, string? target, CancellationToken cancellationToken)
+    public Task<byte[]?> GrabAsync(SourceKind kind, string? target, CancellationToken cancellationToken)
     {
         if (!IsSnapshottable(kind, target))
         {
-            return null;
+            return Task.FromResult<byte[]?>(null);
         }
 
+        var input = kind == SourceKind.File ? StreamingService.NormalizeUserPath(target!) : target!;
+        return RunAsync(FfmpegCommandBuilder.BuildSnapshot(kind, input, SnapshotWidth), target!, cancellationToken);
+    }
+
+    /// <summary>
+    /// The first frame of an overlay of the library, as a PNG with its alpha: what the layout page
+    /// draws for a file the browser cannot play. Not reachable from the snapshot route, which takes
+    /// a path from the query string: the library has checked the file is one of its own.
+    /// </summary>
+    internal Task<byte[]?> GrabOverlayAsync(string path, OverlayMedia media, CancellationToken cancellationToken) =>
+        RunAsync(FfmpegCommandBuilder.BuildSnapshot(SourceKind.Overlay, path, OverlayWidth, media), path, cancellationToken);
+
+    private async Task<byte[]?> RunAsync(IReadOnlyList<string> arguments, string target, CancellationToken cancellationToken)
+    {
         using var timeout = CancellationTokenSource.CreateLinkedTokenSource(cancellationToken);
         timeout.CancelAfter(Timeout);
 
-        var input = kind == SourceKind.File ? StreamingService.NormalizeUserPath(target!) : target!;
-        var arguments = FfmpegCommandBuilder.BuildSnapshot(kind, input, SnapshotWidth);
         using var process = new Process { StartInfo = _locator.CreateStartInfo(_locator.FfmpegPath, arguments) };
 
         try
@@ -79,6 +94,7 @@ public sealed class SourceSnapshotService
     /// <summary>
     /// Only what the catalog offers: this runs ffmpeg on a value that comes from a query string,
     /// so a target that is not a desktop, a monitor, a camera or a video file on disk is refused.
+    /// An overlay is refused too: any picture on the disk would otherwise be one query away.
     /// </summary>
     internal static bool IsSnapshottable(SourceKind kind, string? target)
     {

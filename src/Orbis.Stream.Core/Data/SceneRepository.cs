@@ -43,6 +43,24 @@ public sealed class SceneRepository
         return Convert.ToInt64(command.ExecuteScalar(), CultureInfo.InvariantCulture) != 0;
     }
 
+    /// <summary>
+    /// Whether a layout, a scene or the row of a live still names this overlay: the file is what
+    /// they open, so it stays for as long as one of them does.
+    /// </summary>
+    public bool UsesOverlay(string path)
+    {
+        using var connection = _connectionFactory.Open();
+        using var command = connection.CreateCommand();
+        command.CommandText =
+            """
+            SELECT EXISTS (SELECT 1 FROM stream_scene_item t WHERE t.source_kind = @kind AND t.source_target = @path)
+                OR EXISTS (SELECT 1 FROM video v WHERE v.source_kind = @kind AND (v.source_target = @path OR v.video_path = @path));
+            """;
+        command.Parameters.AddWithValue("@kind", (int)SourceKind.Overlay);
+        command.Parameters.AddWithValue("@path", path);
+        return Convert.ToInt64(command.ExecuteScalar(), CultureInfo.InvariantCulture) != 0;
+    }
+
     private List<SceneEntity> FindWhere(string? where)
     {
         using var connection = _connectionFactory.Open();

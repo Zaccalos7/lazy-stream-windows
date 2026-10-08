@@ -17,7 +17,18 @@ public sealed record MediaProbeResult(
     /// <summary>The pixel format of the video stream (yuv420p10le, ...); null when unknown.</summary>
     string? PixelFormat = null,
     /// <summary>The transfer characteristic of the video stream (smpte2084 is HDR10); null when untagged.</summary>
-    string? ColorTransfer = null);
+    string? ColorTransfer = null,
+    /// <summary>What ffprobe read the file as (png_pipe, gif, matroska,webm, ...); null when unknown.</summary>
+    string? Format = null,
+    /// <summary>The codec of the video stream (vp9, h264, png, ...); null when unknown.</summary>
+    string? VideoCodec = null,
+    /// <summary>How many pictures the video stream has, when the container says it (a GIF does); 0 when unknown.</summary>
+    int Frames = 0,
+    /// <summary>
+    /// Whether a WebM says its pictures carry an alpha channel. It is a tag of the container: the
+    /// native vp8 and vp9 decoders read past it, which is why the decoder has to be chosen for it.
+    /// </summary>
+    bool AlphaMode = false);
 
 /// <summary>
 /// What an encoder is asked to produce: the source as it is, unless the setting overrides the
@@ -62,6 +73,9 @@ public sealed class FfmpegProbe
         var duration = 0d;
         string? pixelFormat = null;
         string? colorTransfer = null;
+        string? videoCodec = null;
+        var frames = 0;
+        var alphaMode = false;
 
         if (root.TryGetProperty("streams", out var streams) && streams.ValueKind == JsonValueKind.Array)
         {
@@ -86,6 +100,9 @@ public sealed class FfmpegProbe
                     frameRate = average > 0 ? average : nominal;
                     pixelFormat = stream.TryGetProperty("pix_fmt", out var pixelFormatValue) ? pixelFormatValue.GetString() : pixelFormat;
                     colorTransfer = stream.TryGetProperty("color_transfer", out var transferValue) ? transferValue.GetString() : colorTransfer;
+                    videoCodec = stream.TryGetProperty("codec_name", out var codecValue) ? codecValue.GetString() : videoCodec;
+                    frames = stream.TryGetProperty("nb_frames", out var framesValue) ? CountOf(framesValue) : frames;
+                    alphaMode |= HasAlphaTag(stream);
                 }
                 else if (string.Equals(codecType, "audio", StringComparison.OrdinalIgnoreCase))
                 {
@@ -95,11 +112,15 @@ public sealed class FfmpegProbe
             }
         }
 
-        if (root.TryGetProperty("format", out var format)
-            && format.TryGetProperty("duration", out var durationValue)
-            && double.TryParse(durationValue.GetString(), NumberStyles.Float, CultureInfo.InvariantCulture, out var parsedDuration))
+        string? formatName = null;
+        if (root.TryGetProperty("format", out var format))
         {
-            duration = parsedDuration;
+            formatName = format.TryGetProperty("format_name", out var formatNameValue) ? formatNameValue.GetString() : null;
+            if (format.TryGetProperty("duration", out var durationValue)
+                && double.TryParse(durationValue.GetString(), NumberStyles.Float, CultureInfo.InvariantCulture, out var parsedDuration))
+            {
+                duration = parsedDuration;
+            }
         }
 
         if (width <= 0 || height <= 0)
@@ -109,7 +130,35 @@ public sealed class FfmpegProbe
         }
 
         return new MediaProbeResult(
-            width, height, frameRate <= 0 ? 25 : frameRate, hasAudio, audioChannels, duration, pixelFormat, colorTransfer);
+            width, height, frameRate <= 0 ? 25 : frameRate, hasAudio, audioChannels, duration, pixelFormat, colorTransfer,
+            formatName, videoCodec, frames, alphaMode);
+    }
+
+    /// <summary>ffprobe writes its counts as strings; a number is read just the same.</summary>
+    private static int CountOf(JsonElement value) => value.ValueKind switch
+    {
+        JsonValueKind.Number when value.TryGetInt32(out var number) => number,
+        JsonValueKind.String when int.TryParse(value.GetString(), NumberStyles.Integer, CultureInfo.InvariantCulture, out var number) => number,
+        _ => 0
+    };
+
+    /// <summary>The <c>alpha_mode</c> tag of a Matroska video track, in whatever case the muxer wrote it.</summary>
+    private static bool HasAlphaTag(JsonElement stream)
+    {
+        if (!stream.TryGetProperty("tags", out var tags) || tags.ValueKind != JsonValueKind.Object)
+        {
+            return false;
+        }
+
+        foreach (var tag in tags.EnumerateObject())
+        {
+            if (string.Equals(tag.Name, "alpha_mode", StringComparison.OrdinalIgnoreCase))
+            {
+                return tag.Value.ValueKind == JsonValueKind.String && tag.Value.GetString() == "1";
+            }
+        }
+
+        return false;
     }
 
     private static double ParseRatio(string? value)

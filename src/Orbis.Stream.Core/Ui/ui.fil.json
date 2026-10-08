@@ -407,5 +407,8 @@
   "encoderQualityBalanced": "Balanse",
   "encoderQualityHigh": "Mataas · mas detalyado",
   "encoderQualityHelp": "Gaano karaming trabaho ang ginagawa ng encoder sa bawat frame. Awtomatiko: pagsimula ng live, sinusubok ng Orbis ang PC nang ilang segundo at ginagamit lang ang Balanse (NVENC p4) kung kaya ito ng GPU o CPU nang may sobra pang kakayahan, kung hindi ay Magaan (p1). Mas kaunti ang ginagamit ng Magaan pero mas kaunti ang detalye sa parehong bitrate; kailangan ng Mataas ang malakas na GPU o CPU. Mas inuuna ang preset na pinili sa mga karagdagang opsyon.",
-  "encoderQualityHint": "Sinusubok ng Awtomatiko ang PC at kusa itong pumipili: hayaan ito kung hindi ka sigurado."
+  "encoderQualityHint": "Sinusubok ng Awtomatiko ang PC at kusa itong pumipili: hayaan ito kung hindi ka sigurado.",
+  "searchByTitle": "Maghanap ayon sa pamagat",
+  "search": "Maghanap",
+  "clearFilters": "I-clear ang mga filter"
 }

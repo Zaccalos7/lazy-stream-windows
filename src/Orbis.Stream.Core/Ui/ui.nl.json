@@ -407,5 +407,8 @@
   "encoderQualityBalanced": "Gebalanceerd",
   "encoderQualityHigh": "Hoog · meer detail",
   "encoderQualityHelp": "Hoeveel werk de encoder in elk frame steekt. Automatisch: bij de start van de livestream test Orbis deze pc een paar seconden en gebruikt alleen Gebalanceerd (NVENC p4) als de GPU of CPU het ruim aankan, anders Licht (p1). Licht verbruikt minder maar toont bij dezelfde bitrate minder detail; Hoog vereist een krachtige GPU of CPU. Een preset die in de extra opties is gekozen, heeft voorrang.",
-  "encoderQualityHint": "Automatisch test deze pc en beslist zelf: laat het zo staan als je twijfelt."
+  "encoderQualityHint": "Automatisch test deze pc en beslist zelf: laat het zo staan als je twijfelt.",
+  "searchByTitle": "Zoeken op titel",
+  "search": "Zoeken",
+  "clearFilters": "Filters wissen"
 }

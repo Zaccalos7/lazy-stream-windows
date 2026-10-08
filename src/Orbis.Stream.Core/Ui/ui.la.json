@@ -407,5 +407,8 @@
   "encoderQualityBalanced": "Aequata",
   "encoderQualityHigh": "Alta · plus subtilitatis",
   "encoderQualityHelp": "Quantum laboris encoder in singulas imagines impendat. Automatica: cum directum incipit, Orbis computatrum paucis secundis probat et Aequatam (NVENC p4) adhibet solum si GPU aut CPU cum spatio sufficit, aliter Levem (p1). Levis minus consumit sed eodem bitrate minus subtilitatis ostendit; Alta GPU aut CPU validam postulat. Praeselectio in optionibus additis electa praevalet.",
-  "encoderQualityHint": "Automatica computatrum probat et ipsa eligit: si dubitas, relinque."
+  "encoderQualityHint": "Automatica computatrum probat et ipsa eligit: si dubitas, relinque.",
+  "searchByTitle": "Quaere titulum",
+  "search": "Quaere",
+  "clearFilters": "Purgare selectiones"
 }

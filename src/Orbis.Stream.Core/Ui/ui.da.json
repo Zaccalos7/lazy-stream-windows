@@ -407,5 +407,8 @@
   "encoderQualityBalanced": "Balanceret",
   "encoderQualityHigh": "Høj · flere detaljer",
   "encoderQualityHelp": "Hvor meget arbejde encoderen lægger i hvert billede. Automatisk: når livestreamen starter, tester Orbis pc'en i nogle sekunder og bruger kun Balanceret (NVENC p4), hvis GPU'en eller CPU'en kan følge med med god margin, ellers Let (p1). Let bruger mindre, men viser færre detaljer ved samme bitrate; Høj kræver en kraftig GPU eller CPU. Et preset valgt under ekstra indstillinger har forrang.",
-  "encoderQualityHint": "Automatisk tester pc'en og vælger selv: lad den stå, hvis du er i tvivl."
+  "encoderQualityHint": "Automatisk tester pc'en og vælger selv: lad den stå, hvis du er i tvivl.",
+  "searchByTitle": "Søg efter titel",
+  "search": "Søg",
+  "clearFilters": "Ryd filtre"
 }

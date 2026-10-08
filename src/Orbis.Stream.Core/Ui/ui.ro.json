@@ -407,5 +407,8 @@
   "encoderQualityBalanced": "Echilibrată",
   "encoderQualityHigh": "Ridicată · mai multe detalii",
   "encoderQualityHelp": "Câtă muncă depune encoderul pentru fiecare cadru. Automată: la pornirea live-ului, Orbis testează PC-ul câteva secunde și folosește Echilibrată (NVENC p4) doar dacă placa video sau procesorul fac față cu rezervă, altfel Ușoară (p1). Ușoară consumă mai puțin, dar la același bitrate arată mai puține detalii; Ridicată are nevoie de o placă video sau un procesor puternic. Un preset ales în opțiunile suplimentare are prioritate.",
-  "encoderQualityHint": "Automată testează PC-ul și alege singură: lăsați-o așa dacă nu sunteți sigur."
+  "encoderQualityHint": "Automată testează PC-ul și alege singură: lăsați-o așa dacă nu sunteți sigur.",
+  "searchByTitle": "Caută după titlu",
+  "search": "Caută",
+  "clearFilters": "Șterge filtrele"
 }

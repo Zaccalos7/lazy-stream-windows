@@ -14,11 +14,36 @@ public sealed class VideoRepository
         "t.source_kind, t.source_target, t.scene_pkid, t.x, t.y, t.width, t.height, t.audio_enabled, t.duration_milliseconds, " +
         "t.source_width, t.source_height, t.volume";
 
+    /// <summary>
+    /// The filter that searches the title instead of matching it: the live history asks for it to
+    /// look a live up by a word of its name, which is the one thing its rows have that a pkid does
+    /// not. Not a column of the entity, so it is named apart from the JPA attributes the compiled
+    /// React build sends.
+    /// </summary>
+    public const string TitleSearchFilter = "titleSearch";
+
+    private const string LikeEscape = "\\";
+
     private readonly SqliteConnectionFactory _connectionFactory;
 
     public VideoRepository(SqliteConnectionFactory connectionFactory)
     {
         _connectionFactory = connectionFactory;
+    }
+
+    /// <summary>
+    /// The value of a LIKE that matches the rows holding the word somewhere: the wildcards in the
+    /// word are escaped so they are looked for as themselves, and <c>%</c> around it is what turns
+    /// the match into a search.
+    /// </summary>
+    private static string LikeContains(string value)
+    {
+        var escaped = value
+            .Replace(LikeEscape, LikeEscape + LikeEscape, StringComparison.Ordinal)
+            .Replace("%", LikeEscape + "%", StringComparison.Ordinal)
+            .Replace("_", LikeEscape + "_", StringComparison.Ordinal);
+
+        return "%" + escaped + "%";
     }
 
     public PagedResult<VideoEntity> FindPaged(IReadOnlyDictionary<string, string> filters, PageRequest page)
@@ -37,6 +62,17 @@ public sealed class VideoRepository
                 builder.Join = "LEFT JOIN video_live_history h ON h.pkid = t.video_live_history_pkid";
                 builder.WhereEquals("h.platform_stream_name", value);
                 needsHistoryJoin = true;
+                continue;
+            }
+
+            if (property.Equals(TitleSearchFilter, StringComparison.Ordinal))
+            {
+                // Every other filter of this endpoint is an equality, because that is what the
+                // request parameters of the compiled React build mean. A search is not one: it is
+                // the word the user typed, which is a part of a title rather than all of it. The
+                // wildcards of LIKE are escaped, or a title holding a % or a _ would match rows it
+                // has nothing to do with, and a search for "_" would match every row there is.
+                builder.WhereRaw($"{builder.Qualified("name")} LIKE {{value}} ESCAPE '\\'", LikeContains(value));
                 continue;
             }
 
@@ -82,6 +118,28 @@ public sealed class VideoRepository
         }
 
         return new PagedResult<VideoEntity>(items, page.Page, page.Size, total);
+    }
+
+    /// <summary>
+    /// The channel names the history carries, each one once and in alphabetical order: the filter
+    /// of the page offers the channels that have actually streamed, not the ones the settings
+    /// happen to list, because a channel deleted from the settings leaves its past lives behind
+    /// and those rows are the ones the filter has to be able to reach.
+    /// </summary>
+    public List<string> FindChannelNames()
+    {
+        using var connection = _connectionFactory.Open();
+        using var command = connection.CreateCommand();
+        command.CommandText = "SELECT DISTINCT channel_name FROM video WHERE channel_name <> '' ORDER BY channel_name;";
+
+        var names = new List<string>();
+        using var reader = command.ExecuteReader();
+        while (reader.Read())
+        {
+            names.Add(reader.GetString(0));
+        }
+
+        return names;
     }
 
     public List<VideoEntity> FindByLiveHistoryId(long videoLiveHistoryPkid)

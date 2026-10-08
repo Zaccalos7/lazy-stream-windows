@@ -407,5 +407,8 @@
   "encoderQualityBalanced": "ruv",
   "encoderQualityHigh": "jen · puS Hagh",
   "encoderQualityHelp": "QIn chenmoH Qu' Qapla' QaD. ra'Hom: Orbis De'wI' tlhob; GPU pagh CPU HoS law' 'e' vIlegh (NVENC p4), ghobe'chugh tIS (p1).",
-  "encoderQualityHint": "ra'Hom De'wI' tlhob 'ej wIv."
+  "encoderQualityHint": "ra'Hom De'wI' tlhob 'ej wIv.",
+  "searchByTitle": "titlh lunob",
+  "search": "lunob",
+  "clearFilters": "cha' lunobmeH 'oH purghach"
 }

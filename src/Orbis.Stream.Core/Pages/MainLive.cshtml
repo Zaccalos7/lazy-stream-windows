@@ -68,17 +68,27 @@
     <partial name="_LiveRows" model="Model" />
 </div>
 
-@* Start a new live, step one: an active video/audio setting and an active destination. What goes
+@* Start a new live: the video/audio setting first, then where it goes, a step at a time. What goes
    on air is chosen next, on the canvas: this form is never sent, its two picks travel on. *@
-<dialog class="dialog wide" id="start-dialog" data-open="@(Model.OpenStart ? "" : "0")">
+<dialog class="dialog wide" id="start-dialog" data-open="@(Model.OpenStart ? "" : "0")" data-wizard-step="1">
     <form>
         <div class="dialog-body">
             <h2>@T["startNewLiveTitle"]</h2>
 
-            <partial name="_StartWizardSteps" model="Model" />
+            <div data-wizard-panel="1">
+                <partial name="_StartWizardSetting" model="Model" />
+            </div>
+            <div data-wizard-panel="2" hidden>
+                <partial name="_StartWizardConfiguration" model="Model" />
+            </div>
         </div>
         <div class="dialog-footer">
-            <button class="btn accent" type="button" disabled="@(!canStart)"
+            <button class="btn" type="button" data-wizard-show="2" data-wizard-go="1" hidden><i class="icon" style="margin: 0 6px 0 0;">&#xE72B;</i>@T["back"]</button>
+            <button class="btn accent" type="button" data-wizard-show="1" data-wizard-go="2"
+                    disabled="@(Model.ActiveSettings.Count == 0)">
+                @T["next"]<i class="icon" style="margin: 0 0 0 6px;">&#xE72A;</i>
+            </button>
+            <button class="btn accent" type="button" data-wizard-show="2" hidden disabled="@(Model.ActiveConfigurations.Count == 0)"
                     data-wizard-next="compose-dialog" data-wizard-fields="settingId configurationId">
                 @T["composeNext"]<i class="icon" style="margin: 0 0 0 6px;">&#xE72A;</i>
             </button>
@@ -129,7 +139,8 @@
                     <p>@Model.NoticeText</p>
                 </div>
             }
-            <partial name="_StartWizardSteps" model="Model" />
+            <partial name="_StartWizardSetting" model="Model" />
+            <partial name="_StartWizardConfiguration" model="Model" />
 
             <h3 class="section">@T["wizardStep3PlaylistTitle"]</h3>
             <label class="field dropzone" style="margin-top: 8px;">

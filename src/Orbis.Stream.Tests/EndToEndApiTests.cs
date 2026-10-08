@@ -968,6 +968,13 @@ Assert.Equal(HttpStatusCode.Redirect, chosen.StatusCode);
         Assert.Contains("id=\"compose-dialog\" data-busy-host data-open=\"0\"", plainBody, StringComparison.Ordinal);
         Assert.Contains("data-composer-start-form", plainBody, StringComparison.Ordinal);
 
+        // The setting is chosen on a step of its own, and the channel on the next one: only the first
+        // is on screen, and the button on the footer is the one that goes with the step on screen.
+        Assert.Contains("data-wizard-panel=\"1\"", plainBody, StringComparison.Ordinal);
+        Assert.Contains("data-wizard-panel=\"2\" hidden", plainBody, StringComparison.Ordinal);
+        Assert.Contains("data-wizard-show=\"1\" data-wizard-go=\"2\"", plainBody, StringComparison.Ordinal);
+        Assert.Contains("data-wizard-show=\"2\" data-wizard-go=\"1\" hidden", plainBody, StringComparison.Ordinal);
+
         // A refused start comes back on the canvas, with the scene and the two picks it was sent with.
         using var refused = await _fixture.Client.GetAsync("/orbis/mainLive?compose=7&settingId=3&configurationId=4");
         var refusedBody = await refused.Content.ReadAsStringAsync();

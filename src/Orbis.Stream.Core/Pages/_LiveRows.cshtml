@@ -38,6 +38,8 @@ else
 
                         var knownPlatform = LiveLinkView.PlatformOf(video.VideoLiveHistory?.StreamUrl);
                         var liveUrl = live ? LiveLinkView.UrlOf(video.VideoLiveHistory?.StreamUrl, video.ChannelName, platform, Air.OnAirVideoOf(historyPkid)) : null;
+                        // A live to TikTok is started again with the key of the new live (LiveStreamKeys).
+                        var askKey = Orbis.Stream.Core.Streaming.LiveStreamKeys.IsAskedFor(platform, video.VideoLiveHistory?.StreamUrl);
                         // A picture of the scene deck standing in for the live: it stays until it is taken off.
                         var standIn = live ? Takeovers.CurrentOf(historyPkid) : null;
                         var liveTitle = (row.SceneName ?? video.Name) + (string.IsNullOrEmpty(video.ChannelName) ? "" : " · " + video.ChannelName);
@@ -159,10 +161,14 @@ else
                                         <form method="post" asp-page="/MainLive" asp-page-handler="Stop" asp-all-route-data="Model.RowRoute(video.Pkid)" data-confirm="@T["stopLive"]">
                                             <button class="btn subtle icon-only danger" disabled="@(!live)" title="@T["stopLiveIconLabel"]" aria-label="@T["stopLiveIconLabel"]"><i class="icon">&#xE71A;</i></button>
                                         </form>
-                                        <form method="post" asp-page="/MainLive" asp-page-handler="Replay" asp-all-route-data="Model.RowRoute(video.Pkid)" data-confirm="@T["startLiveAlert"]">
+                                        <form method="post" asp-page="/MainLive" asp-page-handler="Replay" asp-all-route-data="Model.RowRoute(video.Pkid)"
+                                              data-confirm="@(askKey ? null : T["startLiveAlert"])" data-ask-key="@(askKey ? T["startLiveAlert"] : null)">
+                                            <input type="hidden" name="streamKey" />
                                             <button class="btn subtle icon-only success" disabled="@live" title="@T["startLiveIconLabel"]" aria-label="@T["startLiveIconLabel"]"><i class="icon">&#xE768;</i></button>
                                         </form>
-                                        <form method="post" asp-page="/MainLive" asp-page-handler="Restart" asp-all-route-data="Model.RowRoute(video.Pkid)" data-confirm="@T["restartLiveAlert"]">
+                                        <form method="post" asp-page="/MainLive" asp-page-handler="Restart" asp-all-route-data="Model.RowRoute(video.Pkid)"
+                                              data-confirm="@(askKey ? null : T["restartLiveAlert"])" data-ask-key="@(askKey ? T["restartLiveAlert"] : null)">
+                                            <input type="hidden" name="streamKey" />
                                             <button class="btn subtle icon-only caution" title="@T["restartLiveIconLabel"]" aria-label="@T["restartLiveIconLabel"]"><i class="icon">&#xE72C;</i></button>
                                         </form>
                                     }

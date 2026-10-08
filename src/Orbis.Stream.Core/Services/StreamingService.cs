@@ -76,6 +76,7 @@ public sealed class StreamingService
         var streamKey = request.StreamKey!;
         var streamUrl = request.StreamUrl!;
 
+        RequireRealKey(streamKey);
         CheckIfALiveAlreadyStreamingForAChannel(channelName, platformStreamName);
 
         // Checked before any row is saved: ffprobe's own error on a missing file is unreadable.
@@ -125,14 +126,23 @@ public sealed class StreamingService
     /// Port of <c>startVideo</c>: replays or restarts a single video whose details and settings
     /// are already stored, so no video row is created here.
     /// </summary>
-    public MessageResponse StartVideo(VideoRequest videoRecord)
+    /// <param name="freshKey">
+    /// The key to go on air with in place of the one the live was started with: what a platform
+    /// that hands out a key for every live needs (TikTok, see LiveStreamKeys). Null keeps the old one.
+    /// </param>
+    public MessageResponse StartVideo(VideoRequest videoRecord, string? freshKey = null)
     {
         ArgumentNullException.ThrowIfNull(videoRecord);
 
         var startLiveRecord = MapToStartLiveRecord(videoRecord);
+        if (!string.IsNullOrWhiteSpace(freshKey))
+        {
+            startLiveRecord = startLiveRecord with { StreamKey = freshKey.Trim() };
+        }
 
         var channelName = startLiveRecord.ChannelName!;
         var platformStreamName = startLiveRecord.PlatformStreamName!;
+        RequireRealKey(startLiveRecord.StreamKey);
         CheckIfALiveAlreadyStreamingForAChannel(channelName, platformStreamName);
 
         var videoPathFolder = startLiveRecord.VideoPath!;
@@ -393,6 +403,21 @@ public sealed class StreamingService
         throw new LiveException("channel.has.already.a.live.active", [channelName]);
     }
 
+    /// <summary>
+    /// A live of a platform whose key is asked for at every live is only started with the key of
+    /// that live: the stand-in its configuration keeps (LiveStreamKeys) would be refused by the
+    /// ingest after a connection that reads as a live for a while, and the user would see nothing.
+    /// An empty key is left alone: a custom ingest may well carry everything in its address.
+    /// </summary>
+    private void RequireRealKey(string? streamKey)
+    {
+        if (LiveStreamKeys.IsStandIn(streamKey))
+        {
+            _logger.LogWarning("{Message}", _localizer.PrintMessage("stream.key.required"));
+            throw new LiveException("stream.key.required");
+        }
+    }
+
     private string GetPlatformStreamName(long videoLiveHistoryPkid) =>
         _videoLiveHistoryRepository.FindByPkid(videoLiveHistoryPkid)?.PlatformStreamName ?? string.Empty;
 
@@ -411,6 +436,7 @@ public sealed class StreamingService
         var streamKey = request.StreamKey!;
         var streamUrl = request.StreamUrl!;
 
+        RequireRealKey(streamKey);
         CheckIfALiveAlreadyStreamingForAChannel(channelName, platformStreamName);
 
         // A layout is only slots: what goes on air is the scene filled from it, saved on its own.

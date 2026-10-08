@@ -1344,9 +1344,10 @@ public sealed class FfmpegVideoPlaylistStreamer : IVideoPlaylistStreamer
                 picture.FrameRate > 0 ? picture.FrameRate : rate);
         }
 
-        return setting.VideoWidth is > 0 && setting.VideoHeight is > 0
+        var named = setting.VideoWidth is > 0 && setting.VideoHeight is > 0
             ? new MediaOutput(FfmpegCommandBuilder.Even(setting.VideoWidth.Value), FfmpegCommandBuilder.Even(setting.VideoHeight.Value), rate)
             : new MediaOutput(1920, 1080, rate);
+        return program.Output?.Profile.Orient(named) ?? named;
     }
 
     /// <summary>What the row of the program says while something else is on air in its place.</summary>
@@ -1384,7 +1385,7 @@ public sealed class FfmpegVideoPlaylistStreamer : IVideoPlaylistStreamer
     {
         var own = FfmpegCommandBuilder.ResolveOutput(setting, probe);
         return output is { Profile.UniformFormat: true }
-            ? output.Frame ?? FfmpegCommandBuilder.FrameOfLive(setting, own)
+            ? output.Frame ?? output.Profile.Orient(FfmpegCommandBuilder.FrameOfLive(setting, own))
             : own;
     }
 
@@ -1731,6 +1732,7 @@ public sealed class FfmpegVideoPlaylistStreamer : IVideoPlaylistStreamer
         StreamPlatform.YouTube => "YouTube",
         StreamPlatform.Kick => "Kick",
         StreamPlatform.Facebook => "Facebook Gaming",
+        StreamPlatform.TikTok => "TikTok",
         _ => "RTMP"
     };
 

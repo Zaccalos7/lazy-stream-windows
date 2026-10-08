@@ -33,6 +33,7 @@ public sealed class SettingService
     {
         ArgumentNullException.ThrowIfNull(request);
 
+        request = WithStandInKey(request);
         CheckUniqueConstraint(request.StreamKey!.Trim(), request.StreamUrl!.Trim());
         _settingRepository.Insert(ToEntity(request));
 
@@ -51,6 +52,14 @@ public sealed class SettingService
         }
 
         ApplyNonNullValues(request, setting);
+
+        // A configuration turned into a TikTok one forgets the key it had, and one that stays
+        // TikTok follows the name of its channel: see LiveStreamKeys.
+        if (LiveStreamKeys.IsAskedFor(setting.PlatformStreamName, setting.StreamUrl))
+        {
+            setting.StreamKey = LiveStreamKeys.StandInFor(setting.ChannelName);
+        }
+
         _settingRepository.Update(setting);
 
         return _responses.Build("setting.update", StatusCodes.Status202Accepted);
@@ -161,6 +170,15 @@ public sealed class SettingService
         IsActive = request.IsActive,
         ChannelName = request.ChannelName!
     };
+
+    /// <summary>
+    /// The request of a configuration of TikTok, with the stand-in of its channel in place of a key:
+    /// a key typed in anyway is not kept either, it would be stale by the next live.
+    /// </summary>
+    private static SettingRequest WithStandInKey(SettingRequest request) =>
+        LiveStreamKeys.IsAskedFor(request.PlatformStreamName, request.StreamUrl)
+            ? request with { StreamKey = LiveStreamKeys.StandInFor(request.ChannelName) }
+            : request;
 
     private void CheckUniqueConstraint(string streamKey, string streamUrl)
     {

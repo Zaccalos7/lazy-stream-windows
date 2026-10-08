@@ -85,7 +85,7 @@ public static class SettingTitleView
 /// </summary>
 public static class LiveLinkView
 {
-    /// <summary>Platform of an ingest URL (<c>twitch</c>, <c>youtube</c>, <c>kick</c>, <c>facebook</c>), or null if unknown.</summary>
+    /// <summary>Platform of an ingest URL (<c>twitch</c>, <c>youtube</c>, <c>kick</c>, <c>facebook</c>, <c>tiktok</c>), or null if unknown.</summary>
     public static string? PlatformOf(string? streamUrl)
     {
         if (string.IsNullOrWhiteSpace(streamUrl))
@@ -105,7 +105,8 @@ public static class LiveLinkView
         }
 
         // An ingest of the account or of the live is not always the preset (a Kick endpoint of its
-        // own, a Facebook host of the broadcast): those platforms are recognised by their domain.
+        // own, a Facebook host of the broadcast, a TikTok server of another region): those
+        // platforms are recognised by their domain.
         var detected = StreamPlatforms.Detect(normalized);
         return MainChannelSettingModel.Platforms
             .FirstOrDefault(known => known.PersonalIngest && known.Platform == detected)?.Value;
@@ -122,6 +123,7 @@ public static class LiveLinkView
         "youtube" => YoutubeMark,
         "kick" => KickMark,
         "facebook" => FacebookGamingMark,
+        "tiktok" => TikTokMark,
         _ => PlayMark
     };
 
@@ -132,6 +134,7 @@ public static class LiveLinkView
         "youtube" => "platform-youtube",
         "kick" => "platform-kick",
         "facebook" => "platform-facebook",
+        "tiktok" => "platform-tiktok",
         _ => "platform-generic"
     };
 
@@ -147,21 +150,34 @@ public static class LiveLinkView
     private const string KickMark =
         "M1.333 0h8v5.333H12V2.667h2.667V0h8v8H20v2.667h-2.667v2.666H20V16h2.667v8h-8v-2.667H12v-2.666H9.333V24h-8Z";
 
-    /// <summary>The Facebook Gaming mark.</summary>
-    private const string FacebookGamingMark = "M0 0v24h15.67v-7.35H7.35v-9.3H24V0zm8.33 15.68h8.32V24H24V8.32H8.33Z";
+    /// <summary>
+    /// The Facebook Gaming logo as Meta draws it: the blue square with the two pieces of the mark
+    /// cut out of it, on the proportions of the official artwork. The pieces are holes (they wind
+    /// the other way round from the square), so the mark is one path in one colour like the
+    /// others, and whatever is behind it shows through them - white, where the page draws the logo.
+    /// </summary>
+    private const string FacebookGamingMark = "M0 0h24v24H0zM3.75 3.75v16.5h10.8v-5.03H8.83V8.82h11.48V3.75zM9.5 9.49v5.03h5.73v5.73h5.08V9.49z";
+
+    /// <summary>
+    /// The note of TikTok. The logo is that note in the colour of the text with a cyan and a red
+    /// copy of it just off its edges: the copies are drawn by the page (surfaces.css), so the
+    /// mark stays one path like the others.
+    /// </summary>
+    private const string TikTokMark =
+        "M12.525.02c1.31-.02 2.61-.01 3.91-.02.08 1.53.63 3.09 1.75 4.17 1.12 1.11 2.7 1.62 4.24 1.79v4.03c-1.44-.05-2.89-.35-4.2-.97-.57-.26-1.1-.59-1.62-.93-.01 2.92.01 5.84-.02 8.75-.08 1.4-.54 2.79-1.35 3.94-1.31 1.92-3.58 3.17-5.91 3.21-1.43.08-2.86-.31-4.08-1.03-2.02-1.19-3.44-3.37-3.65-5.71-.02-.5-.03-1-.01-1.49.18-1.9 1.12-3.72 2.58-4.96 1.66-1.44 3.98-2.13 6.15-1.72.02 1.48-.04 2.96-.04 4.44-.99-.32-2.15-.23-3.02.37-.63.41-1.11 1.04-1.36 1.75-.21.51-.15 1.07-.14 1.61.24 1.64 1.82 3.02 3.5 2.87 1.12-.01 2.19-.66 2.77-1.61.19-.33.4-.67.41-1.06.1-1.79.06-3.57.07-5.36.01-4.03-.01-8.05.02-12.07z";
 
     /// <summary>The play mark of a platform this application does not know.</summary>
     private const string PlayMark = "M8 5v14l11-7z";
 
-    /// <summary>Name the platform shows in its own interface (Twitch, YouTube, Kick, Facebook Gaming).</summary>
+    /// <summary>Name the platform shows in its own interface (Twitch, YouTube, Kick, Facebook Gaming, TikTok).</summary>
     public static string? LabelOf(string? platform) =>
         MainChannelSettingModel.Platforms
             .FirstOrDefault(known => known.Value == platform)?.Label;
 
     /// <summary>
     /// Where the icon of a live leads: on Twitch and Kick the channel, on Facebook Gaming the page,
-    /// on YouTube the live control room of YouTube Studio (<see cref="YouTubeStudioUrl"/>), which
-    /// is where a live there is managed.
+    /// on TikTok the live of the account, on YouTube the live control room of YouTube Studio
+    /// (<see cref="YouTubeStudioUrl"/>), which is where a live there is managed.
     /// </summary>
     /// <param name="channelName">
     /// The channel of the configuration. The form of the configuration keeps the platform in the
@@ -188,6 +204,8 @@ public static class LiveLinkView
             "kick" => "https://kick.com/" + Uri.EscapeDataString(name.ToLowerInvariant()),
             // A gaming creator streams from a page, addressed by its user name.
             "facebook" => "https://www.facebook.com/" + Uri.EscapeDataString(name.TrimStart('@')),
+            // A TikTok account is addressed by its handle, and its live has a page of its own.
+            "tiktok" => "https://www.tiktok.com/@" + Uri.EscapeDataString(name.TrimStart('@')) + "/live",
             _ => null
         };
     }

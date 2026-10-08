@@ -69,6 +69,9 @@
                     <a class="btn brand facebook" href="?edit=@(Model.Form.Id?.ToString() ?? "new")&preset=@Uri.EscapeDataString("Facebook Gaming")">
                         <svg viewBox="0 0 24 24" aria-hidden="true"><path d="@LiveLinkView.MarkupOf("facebook")" /></svg>Facebook Gaming
                     </a>
+                    <a class="btn brand tiktok" href="?edit=@(Model.Form.Id?.ToString() ?? "new")&preset=TikTok">
+                        <svg viewBox="0 0 24 24" aria-hidden="true"><path d="@LiveLinkView.MarkupOf("tiktok")" /></svg>TikTok
+                    </a>
                 </div>
                 <partial name="_VideoSettingFields" for="Form" />
             </div>

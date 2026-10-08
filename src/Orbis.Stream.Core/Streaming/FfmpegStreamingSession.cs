@@ -292,9 +292,10 @@ public sealed class FfmpegStreamingSession : IAsyncDisposable
 
         // On a shared connection of a platform that wants one format (YouTube) the first encoder
         // fixes the picture of the live and every one after it is fitted into it (see
-        // LiveOutput.Frame). Elsewhere every file keeps its own.
+        // LiveOutput.Frame). Elsewhere every file keeps its own. A platform watched upright
+        // (TikTok) has that picture stood up, whatever the first file was.
         var own = FfmpegCommandBuilder.ResolveOutput(setting, probe);
-        var frame = profile.UniformFormat ? output?.Pin(FfmpegCommandBuilder.FrameOfLive(setting, own)) : null;
+        var frame = profile.UniformFormat ? output?.Pin(profile.Orient(FfmpegCommandBuilder.FrameOfLive(setting, own))) : null;
         var arguments = FfmpegCommandBuilder.Build(
             new FfmpegStreamRequest(
                 inputPath, outputUrl, probe, setting, resumeFrom, previewPath, profile, quality, frame, BitrateOf(setting, output), alwaysSound));
@@ -331,10 +332,11 @@ public sealed class FfmpegStreamingSession : IAsyncDisposable
 
         // The composition is sent at the size of the canvas: the resolution of the setting is not
         // applied on top of it (see BuildComposition). A canvas is a size the user chose, so where
-        // the platform wants one format the first one on a connection fixes the picture as it is.
+        // the platform wants one format the first one on a connection fixes the picture as it is -
+        // stood up where the platform is watched upright, with the canvas fitted into it.
         var frameRate = setting.FrameRate is > 0 ? setting.FrameRate.Value : canvasFrameRate;
         var frame = profile.UniformFormat
-            ? output?.Pin(new MediaOutput(FfmpegCommandBuilder.Even(canvasWidth), FfmpegCommandBuilder.Even(canvasHeight), frameRate))
+            ? output?.Pin(profile.Orient(new MediaOutput(FfmpegCommandBuilder.Even(canvasWidth), FfmpegCommandBuilder.Even(canvasHeight), frameRate)))
             : null;
         var arguments = FfmpegCommandBuilder.BuildComposition(new FfmpegCompositionRequest(
             items, outputUrl, setting, canvasWidth, canvasHeight, canvasFrameRate, resumeFrom, duration, previewPath, profile, quality, frame,

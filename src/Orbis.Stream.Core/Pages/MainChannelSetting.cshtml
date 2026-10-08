@@ -105,16 +105,22 @@
                            the one their dashboard shows: said where the address is typed. *@
                         <small data-show-when="@MainChannelSettingModel.PersonalIngests">@T["ingestFromDashboard"]</small>
                     </label>
-                    <label class="field">
+                    @* TikTok hands out a key for every live, which goes stale by the next one: its
+                       configuration keeps none, and the key is asked for when a live starts. *@
+                    <label class="field" data-hide-when="@MainChannelSettingModel.KeyEachLive">
                         <span>@T["key"]</span>
                         <div class="input-affix">
-                            <input class="input" name="streamKey" type="password" value="@editing.StreamKey" autocomplete="off" required
+                            <input class="input" name="streamKey" type="password" value="@(Orbis.Stream.Core.Streaming.LiveStreamKeys.IsStandIn(editing.StreamKey) ? "" : editing.StreamKey)" autocomplete="off" required
                                    data-reveal-label-show="@T["showStreamKey"]" data-reveal-label-hide="@T["hideStreamKey"]" />
                             <button class="reveal" type="button" data-reveal aria-pressed="false" title="@T["showStreamKey"]" aria-label="@T["showStreamKey"]">
                                 <i class="icon">&#xE7B3;</i>
                             </button>
                         </div>
                     </label>
+                    <div class="field" data-show-when="@MainChannelSettingModel.KeyEachLive">
+                        <span>@T["key"]</span>
+                        <p class="caption key-each-live"><i class="icon">&#xE72E;</i><span>@T["keyEachLiveHint"]</span></p>
+                    </div>
                 </div>
                 <label class="field section">
                     <span>@T["description"]</span>

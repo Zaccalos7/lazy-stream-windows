@@ -115,7 +115,11 @@ else
     // A picture that stands up gets a stage that stands up: a live going out in portrait (a
     // setting of 1080x1920, a phone video kept at its own size) is drawn at the height of the
     // window instead of twice as tall as the screen.
-    var portrait = live.Output.Height > live.Output.Width;
+    // A live to TikTok whose first frame is not known yet stands up too: TikTok is always sent
+    // upright (see StreamPlatformProfile.Portrait), so its stage is the shape the picture is about to be.
+    var portrait = live.Output.Width > 0 && live.Output.Height > 0
+        ? live.Output.Height > live.Output.Width
+        : platform == "tiktok";
 
     @* RTMP accepted and nothing on the channel: the ingest rating the stream is not the broadcast
        being on air (YouTubeAirWatch). It stays until the live is found on air, the live is over,

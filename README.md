@@ -1,7 +1,7 @@
 # Orbis Stream
 
-Desktop application that streams local video files to Twitch, YouTube, Kick, Facebook Gaming
-and any other RTMP-compatible platform.
+Desktop application that streams local video files to Twitch, YouTube, Kick, Facebook Gaming,
+TikTok and any other RTMP-compatible platform.
 
 The application is a native rewrite of the original Java Spring Boot + JCEF project:
 
@@ -100,7 +100,7 @@ working directory when writable, then `~/.orbis-stream`.
 | `<data>/logs/twitch.log`  | application log                                |
 | `<data>/webview2`         | WebView2 user data folder                      |
 | `<cwd>/images`            | images uploaded through `/image/upload`        |
-| `<data>/overlays`         | overlay library of the layouts                 |
+| `<data>/overlays`         | overlay library of the layouts and the live wizard |
 | `<data>/scene-media`      | files of the scene deck buttons                |
 
 ## Configuration
@@ -144,6 +144,23 @@ Responses keep the conventions the frontend expects:
 React router and call the services in-process; the language chosen in the sidebar is stored in
 the `orbis-lang` cookie and also localizes the backend messages.
 
+### Languages
+
+The interface ships in 19 languages: Italian, English, German, Spanish, French, Portuguese,
+Russian, Chinese, Korean, Japanese, Hindi, Arabic, Romanian, Danish, Dutch, Filipino, Latin,
+Klingon and Hodor. Each one is a pair of bundles:
+
+- `src/Orbis.Stream.Core/Ui/ui.<lang>.json`, the strings of the pages, with the keys in the order
+  of the English bundle;
+- `src/Orbis.Stream.Core/Messages/messages_<lang>.properties`, the messages of the backend.
+
+A new language is registered in `UiText.Languages` (name and flag in `wwwroot/flags`) and in
+`MessageCatalog.KnownLanguages`. In the `.properties` bundles every apostrophe is written twice
+(`l''avvio`): the formatter reads every pattern with an apostrophe in it the way `MessageFormat`
+does, and a lone one opens a quoted literal that is never printed. `UiTextTests` and
+`MessageCatalogTests` fail on a missing or reordered key, a text left in English, a placeholder
+lost, a language without its flag or its messages, and a lone apostrophe.
+
 ### Temperature sensors
 
 The two temperature meters are the only counters that depend on the hardware of the machine, and
@@ -186,6 +203,30 @@ panel has been opened for that live; every press asks for confirmation.
   image.
 - The files are uploaded into `<data>/scene-media` and served only as frames, by name, never by
   path, for the reason the overlay library is (the server listens on every interface).
+
+### TikTok
+
+TikTok LIVE hands out a new stream key for every live, and it expires. A TikTok configuration
+therefore keeps no key: the channel form has no key field, and the configuration stores a stand-in
+(`asked-at-every-live:<channel>`, see `LiveStreamKeys`) only to satisfy the unique key of the
+table. The real key is typed in at every start - in the wizard after the configuration is picked,
+in the playlist dialog, and in a dialog of its own when a live is started again from its row - and
+travels with that start only: the history of the live keeps it, the configuration never does. A
+start that would go out with the stand-in is refused (`stream.key.required`).
+
+The live stands up: the wizard opens the canvas at 1080 × 1920 when a TikTok configuration is
+picked, the `Default TikTok` and `Default Low TikTok` presets are 1080 × 1920 and 720 × 1280, and
+the platform profile turns the frame of a live that would lie down (`StreamPlatformProfile.Orient`),
+so a landscape file or canvas is fitted into 9:16 with bands instead of being stretched. Delivery
+is the one of YouTube: ffmpeg publishes at real time with a short head start, with AAC at 48 kHz.
+
+### Scenes and overlays
+
+The layouts page draws the skeleton of a live: slots, and the overlays that dress it (PNG, GIF,
+WebP or WebM with transparency) taken from the overlay library. The live wizard opens a layout as
+its empty slots and its overlays; the sources are dropped into the slots, and more overlays can be
+laid over them from the same library or by dropping a picture on the canvas. What is on the canvas
+when the live starts is saved as the scene of that live alone and never joins the layouts.
 
 ## Repository layout
 

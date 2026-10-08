@@ -54,6 +54,12 @@
 /* Kick is black on its green, as Kick draws it: white on that green cannot be read in either theme. */
 .btn.brand.kick { --hue: var(--kick); color: #000000; }
 .btn.brand.facebook { --hue: var(--facebook); }
+/* Its logo as it is, a blue square with the mark cut out: the white behind it shows through the
+   cut, where the white of the other buttons would draw it in negative. */
+.btn.brand.facebook svg { fill: var(--facebook-logo); background: #ffffff; }
+/* TikTok is its note on black, with the cyan and the red copies of it off its edges. */
+.btn.brand.tiktok { --hue: #000000; border-color: var(--stroke-strong); }
+.btn.brand.tiktok svg { filter: drop-shadow(-0.8px -0.8px 0 var(--tiktok-cyan)) drop-shadow(0.8px 0.8px 0 var(--tiktok)); }
 
 .btn.icon-only { width: 30px; padding: 0; }
 .btn.icon-only .icon { font-size: 14px; }
@@ -267,6 +273,7 @@ form:has(input[name="platformStreamName"][value="youtube"]:checked) .option-card
 .choice.youtube { --hue: var(--youtube); }
 .choice.kick { --hue: var(--kick); }
 .choice.facebook { --hue: var(--facebook); }
+.choice.tiktok { --hue: var(--tiktok); }
 .choice > .icon { color: var(--text); font-size: 16px; }
 .choice:hover { border-color: var(--text-3); }
 .choice:has(input:checked) {
@@ -280,3 +287,5 @@ form:has(input[name="platformStreamName"][value="youtube"]:checked) .option-card
 /* The mark of the platform a choice stands for: always in the colour of its brand, so it can be
    told apart before it is picked. */
 .choice > .choice-mark { flex: none; width: 18px; height: 18px; fill: var(--hue); }
+.choice.facebook > .choice-mark { fill: var(--facebook-logo); background: #ffffff; }
+.choice.tiktok > .choice-mark { fill: var(--text); filter: drop-shadow(-0.8px -0.8px 0 var(--tiktok-cyan)) drop-shadow(0.8px 0.8px 0 var(--tiktok)); }

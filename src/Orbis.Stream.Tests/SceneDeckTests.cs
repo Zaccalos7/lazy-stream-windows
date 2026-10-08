@@ -125,6 +125,67 @@ public sealed class LiveTakeoversTests
         Assert.Equal(("VIDEO", false, 5L), (clip.Kind, clip.Holds, clip.ButtonPkid!.Value));
         Assert.Null(LiveScene.Of(null));
     }
+
+    [Fact]
+    public void An_overlay_can_be_placed_in_scene_and_stopped()
+    {
+        var takeovers = Open(out _);
+        var overlay = takeovers.RequestOverlay(
+            History,
+            buttonPkid: 42,
+            path: "/media/test.gif",
+            label: "Dancing Cat",
+            kind: SceneButtonKind.Image,
+            placement: "bottom-right",
+            x: null,
+            y: null,
+            width: null,
+            height: null,
+            durationSeconds: 10);
+
+        Assert.NotNull(overlay);
+        Assert.Equal(42, overlay.ButtonPkid);
+        Assert.True(takeovers.Uses("/media/test.gif"));
+
+        var active = takeovers.ActiveOverlayOf(History);
+        Assert.NotNull(active);
+        Assert.Equal("Dancing Cat", active.Label);
+
+        var scene = takeovers.LiveSceneOf(History);
+        Assert.NotNull(scene);
+        Assert.Equal("in_scene", scene.Mode);
+        Assert.Equal("bottom-right", scene.Placement);
+        Assert.Equal(10, scene.DurationSeconds);
+        Assert.False(scene.Holds);
+
+        var stopped = takeovers.StopOverlay(History, 42);
+        Assert.True(stopped);
+        Assert.Null(takeovers.ActiveOverlayOf(History));
+        Assert.False(takeovers.Uses("/media/test.gif"));
+    }
+
+    [Fact]
+    public void An_overlay_without_duration_holds_indefinitely()
+    {
+        var takeovers = Open(out _);
+        takeovers.RequestOverlay(
+            History,
+            buttonPkid: 43,
+            path: "/media/badge.png",
+            label: "Watermark",
+            kind: SceneButtonKind.Image,
+            placement: "top-left",
+            x: null,
+            y: null,
+            width: null,
+            height: null,
+            durationSeconds: null);
+
+        var scene = takeovers.LiveSceneOf(History);
+        Assert.NotNull(scene);
+        Assert.True(scene.Holds);
+        Assert.Equal("top-left", scene.Placement);
+    }
 }
 
 /// <summary>The keys a scene button can be given (SceneHotkey), and what a file does on air.</summary>
@@ -234,5 +295,43 @@ public sealed class SceneSwitchCommandTests
         Assert.Contains("anullsrc", Line(silent), StringComparison.Ordinal);
         Assert.Contains("-shortest", Line(silent), StringComparison.Ordinal);
         Assert.DoesNotContain("anullsrc", Line(sounding), StringComparison.Ordinal);
+    }
+
+    [Theory]
+    [InlineData("bottom-right", 1920, 1080, 400, 300, 1488, 756, 400, 300)]
+    [InlineData("bottom-left", 1920, 1080, 400, 300, 32, 756, 400, 300)]
+    [InlineData("top-right", 1920, 1080, 400, 300, 1488, 24, 400, 300)]
+    [InlineData("top-left", 1920, 1080, 400, 300, 32, 24, 400, 300)]
+    [InlineData("center", 1920, 1080, 400, 300, 760, 390, 400, 300)]
+    [InlineData("custom", 1920, 1080, 400, 300, 100, 200, 500, 400)]
+    public void Overlay_placement_calculation_computes_correct_coordinates(
+        string placement, int canvasW, int canvasH, int mediaW, int mediaH,
+        int expectedX, int expectedY, int expectedW, int expectedH)
+    {
+        int? customX = placement == "custom" ? 100 : null;
+        int? customY = placement == "custom" ? 200 : null;
+        int? customW = placement == "custom" ? 500 : null;
+        int? customH = placement == "custom" ? 400 : null;
+
+        var (x, y, w, h) = FfmpegCommandBuilder.CalculateOverlayPlacement(
+            placement, customX, customY, customW, customH, canvasW, canvasH, mediaW, mediaH);
+
+        Assert.Equal(expectedX, x);
+        Assert.Equal(expectedY, y);
+        Assert.Equal(expectedW, w);
+        Assert.Equal(expectedH, h);
+    }
+
+    [Fact]
+    public void Overlay_timeline_enable_is_included_in_filter_graph()
+    {
+        var composition = new List<FfmpegCompositionItem>
+        {
+            new(SourceKind.Direct, "/tmp/base.mp4", 0, 0, 1920, 1080, 1, 0),
+            new(SourceKind.Overlay, "/tmp/overlay.png", 100, 100, 400, 300, 1, 1, TimelineEnable: "between(t,0,10)")
+        };
+
+        var filter = FfmpegCommandBuilder.BuildFilterGraph(1920, 1080, composition, hasAudio: false, audioNormalized: false);
+        Assert.Contains(":enable='between(t,0,10)'", filter);
     }
 }

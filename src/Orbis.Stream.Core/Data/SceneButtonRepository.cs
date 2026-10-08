@@ -7,7 +7,7 @@ namespace Orbis.Stream.Core.Data;
 /// <summary>The buttons of the scene deck (see <see cref="SceneButtonEntity"/>), in the order the deck shows them.</summary>
 public sealed class SceneButtonRepository
 {
-    private const string Columns = "t.pkid, t.position, t.label, t.media_name, t.hotkey, t.last_modified";
+    private const string Columns = "t.pkid, t.position, t.label, t.media_name, t.hotkey, t.display_mode, t.placement, t.duration_seconds, t.x, t.y, t.width, t.height, t.last_modified";
 
     private readonly SqliteConnectionFactory _connectionFactory;
 
@@ -60,13 +60,20 @@ public sealed class SceneButtonRepository
         using var command = connection.CreateCommand();
         command.CommandText =
             """
-            INSERT INTO scene_button (position, label, media_name, hotkey, last_modified)
-            VALUES ((SELECT coalesce(max(position), 0) + 1 FROM scene_button), @label, @media, @hotkey, @lastModified);
+            INSERT INTO scene_button (position, label, media_name, hotkey, display_mode, placement, duration_seconds, x, y, width, height, last_modified)
+            VALUES ((SELECT coalesce(max(position), 0) + 1 FROM scene_button), @label, @media, @hotkey, @displayMode, @placement, @durationSeconds, @x, @y, @width, @height, @lastModified);
             SELECT last_insert_rowid();
             """;
         command.Parameters.AddWithValue("@label", button.Label);
         command.Parameters.AddWithValue("@media", button.MediaName);
         command.Parameters.AddWithValue("@hotkey", SqliteValue.From(button.Hotkey));
+        command.Parameters.AddWithValue("@displayMode", button.DisplayMode);
+        command.Parameters.AddWithValue("@placement", button.Placement);
+        command.Parameters.AddWithValue("@durationSeconds", SqliteValue.From(button.DurationSeconds));
+        command.Parameters.AddWithValue("@x", SqliteValue.From(button.X));
+        command.Parameters.AddWithValue("@y", SqliteValue.From(button.Y));
+        command.Parameters.AddWithValue("@width", SqliteValue.From(button.Width));
+        command.Parameters.AddWithValue("@height", SqliteValue.From(button.Height));
         command.Parameters.AddWithValue("@lastModified", SqliteValue.From(button.LastModified));
         button.Pkid = Convert.ToInt64(command.ExecuteScalar(), CultureInfo.InvariantCulture);
         return button.Pkid;
@@ -81,12 +88,21 @@ public sealed class SceneButtonRepository
         command.CommandText =
             """
             UPDATE scene_button
-            SET label = @label, media_name = @media, hotkey = @hotkey, last_modified = @lastModified
+            SET label = @label, media_name = @media, hotkey = @hotkey,
+                display_mode = @displayMode, placement = @placement, duration_seconds = @durationSeconds,
+                x = @x, y = @y, width = @width, height = @height, last_modified = @lastModified
             WHERE pkid = @pkid;
             """;
         command.Parameters.AddWithValue("@label", button.Label);
         command.Parameters.AddWithValue("@media", button.MediaName);
         command.Parameters.AddWithValue("@hotkey", SqliteValue.From(button.Hotkey));
+        command.Parameters.AddWithValue("@displayMode", button.DisplayMode);
+        command.Parameters.AddWithValue("@placement", button.Placement);
+        command.Parameters.AddWithValue("@durationSeconds", SqliteValue.From(button.DurationSeconds));
+        command.Parameters.AddWithValue("@x", SqliteValue.From(button.X));
+        command.Parameters.AddWithValue("@y", SqliteValue.From(button.Y));
+        command.Parameters.AddWithValue("@width", SqliteValue.From(button.Width));
+        command.Parameters.AddWithValue("@height", SqliteValue.From(button.Height));
         command.Parameters.AddWithValue("@lastModified", SqliteValue.From(button.LastModified));
         command.Parameters.AddWithValue("@pkid", button.Pkid);
         command.ExecuteNonQuery();
@@ -114,7 +130,14 @@ public sealed class SceneButtonRepository
                 Label = reader.GetString(2),
                 MediaName = reader.GetString(3),
                 Hotkey = SqliteValue.ToText(reader.GetValue(4)),
-                LastModified = SqliteValue.ToNullableDateTime(reader.GetValue(5))
+                DisplayMode = SqliteValue.ToText(reader.GetValue(5)) ?? "fullscreen",
+                Placement = SqliteValue.ToText(reader.GetValue(6)) ?? "bottom-right",
+                DurationSeconds = SqliteValue.ToNullableInt32(reader.GetValue(7)),
+                X = SqliteValue.ToNullableInt32(reader.GetValue(8)),
+                Y = SqliteValue.ToNullableInt32(reader.GetValue(9)),
+                Width = SqliteValue.ToNullableInt32(reader.GetValue(10)),
+                Height = SqliteValue.ToNullableInt32(reader.GetValue(11)),
+                LastModified = SqliteValue.ToNullableDateTime(reader.GetValue(12))
             });
         }
 

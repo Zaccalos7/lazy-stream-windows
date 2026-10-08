@@ -18,7 +18,21 @@ namespace Orbis.Stream.Core.Services;
 /// <param name="Hotkey">Its key as <see cref="SceneHotkey"/> writes it; null when it has none.</param>
 /// <param name="Available">Whether its file is still there: a button without one cannot go on air.</param>
 public sealed record SceneButtonResponse(
-    long Pkid, string Label, string Kind, string MediaName, string MediaLabel, string Still, string? Hotkey, bool Available);
+    long Pkid,
+    string Label,
+    string Kind,
+    string MediaName,
+    string MediaLabel,
+    string Still,
+    string? Hotkey,
+    bool Available,
+    string DisplayMode,
+    string Placement,
+    int? DurationSeconds,
+    int? X,
+    int? Y,
+    int? Width,
+    int? Height);
 
 /// <summary>A file just added to the scene media, for the button being edited.</summary>
 public sealed record SceneMediaResponse(string Name, string Label, string Kind, string Still, long Size);
@@ -263,12 +277,44 @@ public sealed class SceneButtonService
             }
         }
 
+        var displayMode = string.Equals(request?.DisplayMode, "in_scene", StringComparison.OrdinalIgnoreCase)
+            ? "in_scene"
+            : "fullscreen";
+
+        var placement = (request?.Placement?.Trim().ToLowerInvariant()) switch
+        {
+            "bottom-left" => "bottom-left",
+            "top-right" => "top-right",
+            "top-left" => "top-left",
+            "center" => "center",
+            "custom" => "custom",
+            _ => "bottom-right"
+        };
+
+        var duration = request?.DurationSeconds is > 0 and var d ? d : (int?)null;
+        var x = request?.X is >= 0 and var rx ? rx : (int?)null;
+        var y = request?.Y is >= 0 and var ry ? ry : (int?)null;
+        var width = request?.Width is > 0 and var rw ? rw : (int?)null;
+        var height = request?.Height is > 0 and var rh ? rh : (int?)null;
+
         if (errors.Count > 0)
         {
             throw new RequestValidationException(errors);
         }
 
-        return new SceneButtonEntity { Label = label, MediaName = media, Hotkey = hotkey };
+        return new SceneButtonEntity
+        {
+            Label = label,
+            MediaName = media,
+            Hotkey = hotkey,
+            DisplayMode = displayMode,
+            Placement = placement,
+            DurationSeconds = duration,
+            X = x,
+            Y = y,
+            Width = width,
+            Height = height
+        };
     }
 
     /// <summary>
@@ -322,7 +368,14 @@ public sealed class SceneButtonService
         MediaStore.LabelOf(button.MediaName),
         StillUrl(button.MediaName),
         button.Hotkey,
-        _store.PathOf(button.MediaName) is not null);
+        _store.PathOf(button.MediaName) is not null,
+        button.DisplayMode ?? "fullscreen",
+        button.Placement ?? "bottom-right",
+        button.DurationSeconds,
+        button.X,
+        button.Y,
+        button.Width,
+        button.Height);
 
     private static string StillUrl(string name) => "/scene-buttons/media/" + Uri.EscapeDataString(name) + "/still";
 

@@ -407,5 +407,8 @@
   "encoderQualityBalanced": "均衡",
   "encoderQualityHigh": "高 · 更多细节",
   "encoderQualityHelp": "编码器在每一帧上投入的工作量。自动：直播开始时 Orbis 会测试电脑几秒钟，只有当 GPU 或 CPU 有充足余量时才使用均衡（NVENC p4），否则使用轻量（p1）。轻量占用更少，但在相同码率下细节更少；高需要强大的 GPU 或 CPU。在附加选项中选择的预设优先。",
-  "encoderQualityHint": "自动会测试电脑并自行选择：不确定时保持不变即可。"
+  "encoderQualityHint": "自动会测试电脑并自行选择：不确定时保持不变即可。",
+  "searchByTitle": "按标题搜索",
+  "search": "搜索",
+  "clearFilters": "清除筛选"
 }

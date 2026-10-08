@@ -407,5 +407,8 @@
   "encoderQualityBalanced": "Equilibrada",
   "encoderQualityHigh": "Alta · más detalle",
   "encoderQualityHelp": "Cuánto trabaja el codificador en cada fotograma. Automática: al iniciar el directo Orbis prueba el PC unos segundos y usa Equilibrada (NVENC p4) solo si la GPU o la CPU van sobradas; si no, Ligera (p1). Ligera consume menos pero, con el mismo bitrate, muestra menos detalle; Alta necesita una GPU o CPU potente. Un preset elegido en las opciones adicionales tiene prioridad.",
-  "encoderQualityHint": "Automática prueba el PC y decide sola: déjala si no estás seguro."
+  "encoderQualityHint": "Automática prueba el PC y decide sola: déjala si no estás seguro.",
+  "searchByTitle": "Buscar por título",
+  "search": "Buscar",
+  "clearFilters": "Limpiar filtros"
 }

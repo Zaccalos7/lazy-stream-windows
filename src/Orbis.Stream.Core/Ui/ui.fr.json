@@ -407,5 +407,8 @@
   "encoderQualityBalanced": "Équilibrée",
   "encoderQualityHigh": "Haute · plus de détails",
   "encoderQualityHelp": "La quantité de travail de l'encodeur sur chaque image. Automatique : au lancement du direct, Orbis teste le PC quelques secondes et utilise Équilibrée (NVENC p4) seulement si le GPU ou le CPU suit avec de la marge, sinon Légère (p1). Légère consomme moins mais montre moins de détails au même débit ; Haute demande un GPU ou CPU puissant. Un preset choisi dans les options supplémentaires est prioritaire.",
-  "encoderQualityHint": "Automatique teste le PC et choisit seule : gardez-la en cas de doute."
+  "encoderQualityHint": "Automatique teste le PC et choisit seule : gardez-la en cas de doute.",
+  "searchByTitle": "Rechercher par titre",
+  "search": "Rechercher",
+  "clearFilters": "Effacer les filtres"
 }

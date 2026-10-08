@@ -407,5 +407,8 @@
   "encoderQualityBalanced": "균형",
   "encoderQualityHigh": "높음 · 더 선명",
   "encoderQualityHelp": "인코더가 각 프레임에 들이는 작업량입니다. 자동: 라이브를 시작할 때 Orbis가 몇 초 동안 PC를 테스트하여 GPU나 CPU에 여유가 있을 때만 균형(NVENC p4)을, 그렇지 않으면 가벼움(p1)을 사용합니다. 가벼움은 부하가 적지만 같은 비트레이트에서 디테일이 줄고, 높음은 강력한 GPU나 CPU가 필요합니다. 추가 옵션에서 선택한 프리셋이 우선합니다.",
-  "encoderQualityHint": "자동은 PC를 테스트해 스스로 고릅니다. 잘 모르겠다면 그대로 두세요."
+  "encoderQualityHint": "자동은 PC를 테스트해 스스로 고릅니다. 잘 모르겠다면 그대로 두세요.",
+  "searchByTitle": "제목으로 검색",
+  "search": "검색",
+  "clearFilters": "필터 지우기"
 }

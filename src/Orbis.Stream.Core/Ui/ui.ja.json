@@ -407,5 +407,8 @@
   "encoderQualityBalanced": "バランス",
   "encoderQualityHigh": "高品質 · より精細",
   "encoderQualityHelp": "エンコーダーが各フレームにかける処理量です。自動：ライブ開始時に Orbis が数秒間 PC をテストし、GPU または CPU に余裕がある場合のみバランス（NVENC p4）を使い、そうでなければ軽量（p1）を使います。軽量は負荷が少ない代わりに同じビットレートでは精細さが下がり、高品質には高性能な GPU または CPU が必要です。追加オプションで選んだプリセットが優先されます。",
-  "encoderQualityHint": "自動は PC をテストして自分で選びます。迷ったらそのままにしてください。"
+  "encoderQualityHint": "自動は PC をテストして自分で選びます。迷ったらそのままにしてください。",
+  "searchByTitle": "タイトルで検索",
+  "search": "検索",
+  "clearFilters": "フィルターをクリア"
 }

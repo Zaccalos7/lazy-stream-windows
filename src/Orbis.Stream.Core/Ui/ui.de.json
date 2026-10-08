@@ -407,5 +407,8 @@
   "encoderQualityBalanced": "Ausgewogen",
   "encoderQualityHigh": "Hoch · mehr Details",
   "encoderQualityHelp": "Wie viel Arbeit der Encoder in jedes Bild steckt. Automatisch: Beim Start des Livestreams testet Orbis den PC einige Sekunden lang und nutzt Ausgewogen (NVENC p4) nur, wenn GPU oder CPU mit Reserve mithalten, sonst Leicht (p1). Leicht spart Leistung, zeigt bei gleicher Bitrate aber weniger Details; Hoch braucht eine starke GPU oder CPU. Ein in den zusätzlichen Optionen gewähltes Preset hat Vorrang.",
-  "encoderQualityHint": "Automatisch testet den PC und entscheidet selbst: im Zweifel so lassen."
+  "encoderQualityHint": "Automatisch testet den PC und entscheidet selbst: im Zweifel so lassen.",
+  "searchByTitle": "Nach Titel suchen",
+  "search": "Suchen",
+  "clearFilters": "Filter zurücksetzen"
 }

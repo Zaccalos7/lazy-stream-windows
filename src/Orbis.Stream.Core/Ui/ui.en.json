@@ -407,5 +407,8 @@
   "encoderQualityBalanced": "Balanced",
   "encoderQualityHigh": "High · more detail",
   "encoderQualityHelp": "How much work the encoder puts into every frame. Automatic: when the live starts Orbis tests this PC for a few seconds and uses Balanced (NVENC p4) only if the GPU or CPU keeps up with room to spare, Light (p1) otherwise. Light uses less but shows less detail at the same bitrate; High needs a powerful GPU or CPU. A preset chosen in the additional options takes precedence.",
-  "encoderQualityHint": "Automatic tests this PC and decides by itself: keep it if you are not sure."
+  "encoderQualityHint": "Automatic tests this PC and decides by itself: keep it if you are not sure.",
+  "searchByTitle": "Search by title",
+  "search": "Search",
+  "clearFilters": "Clear filters"
 }

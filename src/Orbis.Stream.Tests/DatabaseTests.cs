@@ -549,6 +549,91 @@ public sealed class VideoRepositoryTests
     }
 
     [Fact]
+    public void FindPaged_SearchesTheTitleAsAPartOfItAndNotAsAllOfIt()
+    {
+        using var database = new TemporaryDatabase();
+        var videos = database.Repository<VideoRepository>();
+        videos.Insert(Video(1, LiveStatus.Ended, "Saturday night live", database.LiveHistoryId));
+        videos.Insert(Video(2, LiveStatus.Ended, "Morning show", database.LiveHistoryId));
+
+        var page = videos.FindPaged(
+            new Dictionary<string, string> { [VideoRepository.TitleSearchFilter] = "night" },
+            PageRequest.Default(10, "pkid", false));
+
+        Assert.Equal(1, page.TotalElements);
+        Assert.Equal("Saturday night live", Assert.Single(page.Items).Name);
+    }
+
+    [Fact]
+    public void FindPaged_LooksTheWildcardsOfASearchForThemselves()
+    {
+        using var database = new TemporaryDatabase();
+        var videos = database.Repository<VideoRepository>();
+        videos.Insert(Video(1, LiveStatus.Ended, "100% live", database.LiveHistoryId));
+        videos.Insert(Video(2, LiveStatus.Ended, "clip_one", database.LiveHistoryId));
+        videos.Insert(Video(3, LiveStatus.Ended, "something else", database.LiveHistoryId));
+
+        // "%" and "_" are the wildcards of LIKE: unescaped they would match every row, and a
+        // search for "_" would narrow nothing at all while looking as if it had.
+        Assert.Equal(
+            "100% live",
+            Assert.Single(videos.FindPaged(
+                new Dictionary<string, string> { [VideoRepository.TitleSearchFilter] = "0% li" },
+                PageRequest.Default(10, "pkid", false)).Items).Name);
+
+        Assert.Equal(
+            "clip_one",
+            Assert.Single(videos.FindPaged(
+                new Dictionary<string, string> { [VideoRepository.TitleSearchFilter] = "_one" },
+                PageRequest.Default(10, "pkid", false)).Items).Name);
+    }
+
+    [Fact]
+    public void FindPaged_CombinesTheChannelTheStatusAndTheSearch()
+    {
+        using var database = new TemporaryDatabase();
+        var videos = database.Repository<VideoRepository>();
+        videos.Insert(Video(1, LiveStatus.Ended, "Launch party", database.LiveHistoryId));
+        videos.Insert(Video(2, LiveStatus.Error, "Launch party", database.LiveHistoryId));
+        videos.Insert(Video(3, LiveStatus.Ended, "Launch party", database.LiveHistoryId));
+
+        var second = videos.FindByPkid(2)!;
+        second.ChannelName = "another";
+        videos.Update(second);
+
+        // Each pick alone would keep all three rows: it is the three together that leave one.
+        var page = videos.FindPaged(
+            new Dictionary<string, string>
+            {
+                ["liveStatus"] = "ENDED",
+                ["channelName"] = "channel",
+                [VideoRepository.TitleSearchFilter] = "launch"
+            },
+            PageRequest.Default(10, "pkid", false));
+
+        Assert.Equal(2, page.TotalElements);
+        Assert.All(page.Items, video => Assert.Equal("Launch party", video.Name));
+    }
+
+    [Fact]
+    public void FindChannelNames_ListsEveryChannelOfTheVideosOnceAndInOrder()
+    {
+        using var database = new TemporaryDatabase();
+        var videos = database.Repository<VideoRepository>();
+        videos.Insert(Video(1, LiveStatus.Ended, "a", database.LiveHistoryId));
+        videos.Insert(Video(2, LiveStatus.Ended, "b", database.LiveHistoryId));
+        videos.Insert(Video(3, LiveStatus.Ended, "c", database.LiveHistoryId));
+
+        var third = videos.FindByPkid(3)!;
+        third.ChannelName = "alpha";
+        videos.Update(third);
+
+        // The filter of the history has to reach a channel the settings no longer list, so it is
+        // the videos that answer, not the settings.
+        Assert.Equal(["alpha", "channel"], videos.FindChannelNames());
+    }
+
+    [Fact]
     public void FindPaged_SupportsTheVideoLiveHistoryJoin()
     {
         using var database = new TemporaryDatabase();

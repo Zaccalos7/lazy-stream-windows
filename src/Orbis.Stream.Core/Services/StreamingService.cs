@@ -29,6 +29,8 @@ public sealed class StreamingService
     private readonly ILogger<StreamingService> _logger;
     private readonly FfmpegProbe _probe;
     private readonly SettingRepository _settingRepository;
+    private readonly LiveTakeovers _takeovers;
+    private readonly SceneButtonService _sceneButtons;
 
     public StreamingService(
         VideoRepository videoRepository,
@@ -43,7 +45,9 @@ public sealed class StreamingService
         LiveChangeNotifier notifier,
         ILogger<StreamingService> logger,
         FfmpegProbe probe,
-        SettingRepository settingRepository)
+        SettingRepository settingRepository,
+        LiveTakeovers takeovers,
+        SceneButtonService sceneButtons)
     {
         _videoRepository = videoRepository;
         _videoSettingRepository = videoSettingRepository;
@@ -58,6 +62,8 @@ public sealed class StreamingService
         _logger = logger;
         _probe = probe;
         _settingRepository = settingRepository;
+        _takeovers = takeovers;
+        _sceneButtons = sceneButtons;
     }
 
     public MessageResponse StartLive(StartLiveRequest request)
@@ -70,6 +76,7 @@ public sealed class StreamingService
         var streamKey = request.StreamKey!;
         var streamUrl = request.StreamUrl!;
 
+        RequireRealKey(streamKey);
         CheckIfALiveAlreadyStreamingForAChannel(channelName, platformStreamName);
 
         // Checked before any row is saved: ffprobe's own error on a missing file is unreadable.
@@ -119,14 +126,23 @@ public sealed class StreamingService
     /// Port of <c>startVideo</c>: replays or restarts a single video whose details and settings
     /// are already stored, so no video row is created here.
     /// </summary>
-    public MessageResponse StartVideo(VideoRequest videoRecord)
+    /// <param name="freshKey">
+    /// The key to go on air with in place of the one the live was started with: what a platform
+    /// that hands out a key for every live needs (TikTok, see LiveStreamKeys). Null keeps the old one.
+    /// </param>
+    public MessageResponse StartVideo(VideoRequest videoRecord, string? freshKey = null)
     {
         ArgumentNullException.ThrowIfNull(videoRecord);
 
         var startLiveRecord = MapToStartLiveRecord(videoRecord);
+        if (!string.IsNullOrWhiteSpace(freshKey))
+        {
+            startLiveRecord = startLiveRecord with { StreamKey = freshKey.Trim() };
+        }
 
         var channelName = startLiveRecord.ChannelName!;
         var platformStreamName = startLiveRecord.PlatformStreamName!;
+        RequireRealKey(startLiveRecord.StreamKey);
         CheckIfALiveAlreadyStreamingForAChannel(channelName, platformStreamName);
 
         var videoPathFolder = startLiveRecord.VideoPath!;
@@ -144,6 +160,10 @@ public sealed class StreamingService
         return StreamingVideo(videoLiveHistory, streamingUrl);
     }
 
+    /// <summary>
+    /// A spot for the live of a row: it waits for a clip already in place of the program to end,
+    /// then plays, and the program comes back after it (see <see cref="LiveTakeovers"/>).
+    /// </summary>
     public void EnqueueSpot(string spotPath, int videoLivePkid)
     {
         var normalized = NormalizeUserPath(spotPath ?? string.Empty);
@@ -153,15 +173,68 @@ public sealed class StreamingService
             throw new NotFoundCustomException("file.not.found", [normalized]);
         }
 
-        var video = CheckIfExistsAndReturnEntity(videoLivePkid);
-        var drivingRow = DrivingRowOf(video);
+        var history = RunningHistoryOf(videoLivePkid);
+        _takeovers.Request(history, TakeoverKind.Video, Path.GetFullPath(normalized), Path.GetFileName(normalized), null, cut: false);
+        _logger.LogInformation("Spot {Path} queued on the live {History}", normalized, history);
+    }
 
-        _streamer.EnqueueSpot(normalized);
+    /// <summary>
+    /// A button of the scene deck pressed for the live of a row: its file goes on air now, in place
+    /// of the program or of whatever stands in for it. A button already on air is left as it is,
+    /// so a second press of the key does not start a clip over.
+    /// </summary>
+    public MessageResponse PlaySceneButton(int videoLivePkid, long buttonPkid)
+    {
+        var history = RunningHistoryOf(videoLivePkid);
+        var button = _sceneButtons.Find(buttonPkid)
+            ?? throw new NotFoundCustomException("scene.button.not.found", [buttonPkid]);
+        var path = _sceneButtons.PathOf(button)
+            ?? throw new LiveException("scene.button.media.missing", [button.Label]);
 
-        if (_sessions.TryGet(drivingRow.Pkid, out var session) && session is not null)
+        if (_takeovers.CurrentOf(history)?.ButtonPkid == buttonPkid && !_takeovers.HasPending(history))
         {
-            session.Yield();
+            return _responses.Build("scene.already.on.air", StatusCodes.Status200OK, [button.Label]);
         }
+
+        var kind = SceneButtonService.KindOf(path) == SceneButtonKind.Image ? TakeoverKind.Image : TakeoverKind.Video;
+        if (_takeovers.Request(history, kind, path, button.Label, buttonPkid, cut: true) is null)
+        {
+            throw new LiveException("live.not.streaming");
+        }
+
+        _logger.LogInformation("Scene {Label} asked on the live {History}", button.Label, history);
+        return _responses.Build("scene.started", StatusCodes.Status202Accepted, [button.Label]);
+    }
+
+    /// <summary>"Resume live": what stands in for the program ends, and the program comes back where it was left.</summary>
+    public MessageResponse ResumeProgram(int videoLivePkid)
+    {
+        var history = RunningHistoryOf(videoLivePkid);
+        return _takeovers.Resume(history)
+            ? _responses.Build("scene.resumed", StatusCodes.Status200OK)
+            : _responses.Build("scene.nothing.to.resume", StatusCodes.Status200OK);
+    }
+
+    /// <summary>Whether the live of a row is running, and what is on air in place of its program.</summary>
+    public LiveSceneState SceneStateOf(int videoLivePkid)
+    {
+        var history = CheckIfExistsAndReturnEntity(videoLivePkid).VideoLiveHistoryId;
+        return history is { } pkid && _takeovers.IsOpen(pkid)
+            ? new LiveSceneState(true, pkid, LiveScene.Of(_takeovers.CurrentOf(pkid)))
+            : new LiveSceneState(false, history, null);
+    }
+
+    /// <summary>The live a row belongs to, when it is running: a request for a live that is not would wait for its next play.</summary>
+    private long RunningHistoryOf(int videoLivePkid)
+    {
+        var video = CheckIfExistsAndReturnEntity(videoLivePkid);
+        if (video.VideoLiveHistoryId is not { } history || !_takeovers.IsOpen(history))
+        {
+            _logger.LogWarning("{Message}", _localizer.PrintMessage("live.not.streaming"));
+            throw new LiveException("live.not.streaming");
+        }
+
+        return history;
     }
 
     public void StopVideoStreamingByPkid(int videoLivePkid)
@@ -330,6 +403,21 @@ public sealed class StreamingService
         throw new LiveException("channel.has.already.a.live.active", [channelName]);
     }
 
+    /// <summary>
+    /// A live of a platform whose key is asked for at every live is only started with the key of
+    /// that live: the stand-in its configuration keeps (LiveStreamKeys) would be refused by the
+    /// ingest after a connection that reads as a live for a while, and the user would see nothing.
+    /// An empty key is left alone: a custom ingest may well carry everything in its address.
+    /// </summary>
+    private void RequireRealKey(string? streamKey)
+    {
+        if (LiveStreamKeys.IsStandIn(streamKey))
+        {
+            _logger.LogWarning("{Message}", _localizer.PrintMessage("stream.key.required"));
+            throw new LiveException("stream.key.required");
+        }
+    }
+
     private string GetPlatformStreamName(long videoLiveHistoryPkid) =>
         _videoLiveHistoryRepository.FindByPkid(videoLiveHistoryPkid)?.PlatformStreamName ?? string.Empty;
 
@@ -348,6 +436,7 @@ public sealed class StreamingService
         var streamKey = request.StreamKey!;
         var streamUrl = request.StreamUrl!;
 
+        RequireRealKey(streamKey);
         CheckIfALiveAlreadyStreamingForAChannel(channelName, platformStreamName);
 
         // A layout is only slots: what goes on air is the scene filled from it, saved on its own.

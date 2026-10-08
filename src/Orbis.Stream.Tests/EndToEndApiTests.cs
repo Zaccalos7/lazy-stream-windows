@@ -10,6 +10,7 @@ using Orbis.Stream.Core.Data;
 using Orbis.Stream.Core.Domain;
 using Orbis.Stream.Core.Hosting;
 using Orbis.Stream.Core.Services;
+using Orbis.Stream.Core.Streaming;
 using Orbis.Stream.Core.SystemInfo;
 
 namespace Orbis.Stream.Tests;
@@ -75,6 +76,12 @@ public sealed class TestHostRunner : IAsyncDisposable
         NoRedirectClient.Dispose();
         if (_host is not null)
         {
+            // What the shell does on exit (App.ShutdownHostAsync): a live a test left on air - one
+            // that failed half way - is stopped with the host. A picture of the scene deck has no
+            // end of its own, and its ffmpeg would otherwise outlive the test run.
+            await _host.Services.GetRequiredService<StreamingSessionRegistry>().StopAllAsync();
+            _host.Services.GetRequiredService<StreamingService>().Shutdown();
+
             using var shutdown = new CancellationTokenSource(TimeSpan.FromSeconds(10));
             await _host.StopAsync(shutdown.Token);
             await _host.DisposeAsync();

@@ -21,6 +21,7 @@
     
     <link rel="stylesheet" href="/css/preview.css" />
     <link rel="stylesheet" href="/css/composer.css" />
+    <link rel="stylesheet" href="/css/scenes.css" />
 }
 <div class="page-header">
     <div style="display: flex; align-items: center; gap: 1rem;">
@@ -114,7 +115,11 @@ else
     // A picture that stands up gets a stage that stands up: a live going out in portrait (a
     // setting of 1080x1920, a phone video kept at its own size) is drawn at the height of the
     // window instead of twice as tall as the screen.
-    var portrait = live.Output.Height > live.Output.Width;
+    // A live to TikTok whose first frame is not known yet stands up too: TikTok is always sent
+    // upright (see StreamPlatformProfile.Portrait), so its stage is the shape the picture is about to be.
+    var portrait = live.Output.Width > 0 && live.Output.Height > 0
+        ? live.Output.Height > live.Output.Width
+        : platform == "tiktok";
 
     @* RTMP accepted and nothing on the channel: the ingest rating the stream is not the broadcast
        being on air (YouTubeAirWatch). It stays until the live is found on air, the live is over,
@@ -166,6 +171,26 @@ else
                     <span class="caption preview-time" data-preview-position>@Time(live.PositionMilliseconds) / @Time(live.DurationMilliseconds)</span>
                 </div>
             </div>
+
+            @* The scene deck of the live, above its volumes: the buttons that put a video, a banner or
+               an image on air in place of it, and "Resume live" while a picture does. They are locked
+               until the panel is opened for this live, which is what turns them and their keys on. *@
+            <section class="card scene-strip" data-scene-strip data-video="@live.VideoPkid" data-history="@live.History">
+                <div class="scene-strip-head">
+                    <h3 class="section">@T["sceneStrip"]</h3>
+                    <span class="caption scene-strip-state" data-scene-strip-state hidden></span>
+                    <span class="grow"></span>
+                    <button type="button" class="btn scene-resume is-pulsing" data-scene-strip-resume hidden>
+                        <i class="icon">&#xE768;</i><span>@T["sceneResume"]</span>
+                    </button>
+                    <button type="button" class="btn subtle" data-scene-deck-open data-video="@live.VideoPkid" data-history="@live.History"
+                            data-live="1" data-title="@live.VideoName · @live.ChannelName">
+                        <partial name="_SceneDeckIcon" /><span>@T["sceneConfigure"]</span>
+                    </button>
+                </div>
+                <div class="scene-strip-grid" data-scene-strip-grid></div>
+                <p class="caption scene-strip-locked" data-scene-strip-locked hidden><i class="icon">&#xE72E;</i>@T["sceneLocked"]</p>
+            </section>
 
             @* The level of every video of the canvas in the mix, under the picture it is heard with. The
                slider is not a [data-param] and lives outside the form: a volume is its own request, for
@@ -331,3 +356,5 @@ else
         </div>
     </form>
 </dialog>
+
+<partial name="_SceneDeck" />

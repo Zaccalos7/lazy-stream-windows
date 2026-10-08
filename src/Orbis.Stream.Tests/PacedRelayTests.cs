@@ -29,6 +29,11 @@ public sealed class StreamPlatformTests
     [InlineData("rtmps://rtmp-api.facebook.com:443/rtmp/FB-123-0-Abc", StreamPlatform.Facebook)]
     [InlineData("rtmps://live-api-s.facebook.com:443/rtmp/FB-123-0-Abc", StreamPlatform.Facebook)]
     [InlineData("rtmps://notfacebook.com/rtmp/key", StreamPlatform.Generic)]
+    // TikTok shows a server of the region of the account, under one of its CDN domains.
+    [InlineData("rtmp://push-rtmp-l11-va01.tiktokcdn.com/stage/stream-123?expire=1&sign=abc", StreamPlatform.TikTok)]
+    [InlineData("rtmp://push-rtmp-f5-tt02.tiktokcdn-eu.com/game/stream-123", StreamPlatform.TikTok)]
+    [InlineData("rtmp://push.tiktokcdn-us.com/live/stream-123", StreamPlatform.TikTok)]
+    [InlineData("rtmp://nottiktokcdn.com/live/key", StreamPlatform.Generic)]
     public void Detect_ReadsThePlatformOffTheHost(string? url, StreamPlatform expected) =>
         Assert.Equal(expected, StreamPlatforms.Detect(url));
 

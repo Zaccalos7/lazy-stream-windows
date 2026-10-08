@@ -15,8 +15,12 @@ else
     <div class="choice-list section" style="margin-top: 8px;">
         @foreach (var configuration in Model.ActiveConfigurations)
         {
-            <label class="choice">
-                <input type="radio" name="configurationId" value="@configuration.Id" required />
+            // TikTok: its key is asked for below, and its live stands up (the canvas does too).
+            var keyEachLive = Orbis.Stream.Core.Streaming.LiveStreamKeys.IsAskedFor(configuration.PlatformStreamName, configuration.StreamUrl);
+            var upright = Orbis.Stream.Core.Streaming.StreamPlatformProfile.For(configuration.StreamUrl).Portrait || keyEachLive;
+            <label class="choice @(MainChannelSettingModel.ChoiceOf(configuration.PlatformStreamName, configuration.StreamUrl)?.Value)">
+                <input type="radio" name="configurationId" value="@configuration.Id" required
+                       data-key-each-live="@(keyEachLive ? "1" : null)" data-portrait="@(upright ? "1" : null)" />
                 <span class="grow">
                     <strong>@configuration.ChannelName</strong> · @(MainChannelSettingModel.ChoiceOf(configuration.PlatformStreamName, configuration.StreamUrl)?.Label ?? configuration.PlatformStreamName)
                     <span class="caption" style="display: block;">@configuration.StreamUrl</span>
@@ -28,4 +32,18 @@ else
             </label>
         }
     </div>
+
+    @* The key of this live, for a destination that hands out one for every live (TikTok): it goes
+       with the start and is kept nowhere. The field is there for the configurations that need it. *@
+    <label class="field section" data-live-key hidden>
+        <span>@T["tiktokKey"]</span>
+        <span class="input-affix">
+            <input class="input" name="streamKey" type="password" autocomplete="off" disabled
+                   data-reveal-label-show="@T["showStreamKey"]" data-reveal-label-hide="@T["hideStreamKey"]" />
+            <button class="reveal" type="button" data-reveal aria-pressed="false" title="@T["showStreamKey"]" aria-label="@T["showStreamKey"]">
+                <i class="icon">&#xE7B3;</i>
+            </button>
+        </span>
+        <small>@T["tiktokKeyHint"]</small>
+    </label>
 }

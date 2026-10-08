@@ -3,6 +3,7 @@ using Orbis.Stream.Core.Contracts;
 using Orbis.Stream.Core.Http;
 using Orbis.Stream.Core.I18n;
 using Orbis.Stream.Core.Services;
+using Orbis.Stream.Core.Streaming;
 
 namespace Orbis.Stream.Core.Hosting;
 
@@ -31,7 +32,12 @@ public sealed class RequestValidator
 
         var errors = new Dictionary<string, string>();
         AddIfNull(errors, "streamUrl", request.StreamUrl, "not.valid.input");
-        AddIfNull(errors, "streamKey", request.StreamKey, "not.valid.input");
+        // TikTok hands out a key for every live: its configuration has none to give (LiveStreamKeys).
+        if (!LiveStreamKeys.IsAskedFor(request.PlatformStreamName, request.StreamUrl))
+        {
+            AddIfNull(errors, "streamKey", request.StreamKey, "not.valid.input");
+        }
+
         AddIfNull(errors, "platformStreamName", request.PlatformStreamName, "not.valid.input");
         AddIfNull(errors, "channelName", request.ChannelName, "not.valid.input");
 

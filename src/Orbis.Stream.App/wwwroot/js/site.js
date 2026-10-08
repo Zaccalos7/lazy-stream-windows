@@ -670,6 +670,11 @@ const paintVolume = slider => {
   if (icon) icon.textContent = value === 0 ? "" : value <= volumeLoud / 2 ? "" : value <= volumeLoud ? "" : "";
 };
 
+// How many samples in a row disagreed with the page. A live hands over from one ffmpeg to the next
+// (a spot, a scene of the deck, a change of parameters) in a moment with nothing running, and a
+// sample that lands in it is not a live that ended: only two in a row are.
+let previewMismatch = 0;
+
 const paintPreview = state => {
   if (!preview) return;
   const position = state.positionMilliseconds;
@@ -679,9 +684,11 @@ const paintPreview = state => {
   // open, and the reloaded page asks for the same live again. A page with nothing on air has no
   // form, and is only waiting for this.
   if (state.isLive !== previewIsLive || (state.isLive && state.videoPkid !== previewPkid)) {
-    location.reload();
+    if (++previewMismatch >= 2 || !previewIsLive) location.reload();
     return;
   }
+
+  previewMismatch = 0;
 
   paintLivePicker(state.running || []);
 
@@ -735,6 +742,8 @@ if (watchLive && stream) {
       return;
     }
     paintPreview(state);
+    // The scene deck of the preview (scenes.js) draws what is on air from the same sample.
+    document.dispatchEvent(new CustomEvent("orbis:live", { detail: state }));
   });
 }
 
@@ -972,6 +981,7 @@ for (const panel of document.querySelectorAll("[data-load]")) {
 document.addEventListener("submit", event => {
   const form = event.target;
   if (!(form instanceof HTMLFormElement) || (form.dataset.confirm && !form.dataset.confirmed)) return;
+  if (form.dataset.askKey && !form.elements.namedItem("streamKey")?.value) return;
   const host = form.closest("[data-busy-host], [data-row]");
   if (!host) return;
   host.dataset.busy = "1";
@@ -1104,8 +1114,12 @@ document.addEventListener("click", event => {
     const target = document.getElementById(next.dataset.wizardNext);
     if (!target) return;
     for (const name of (next.dataset.wizardFields || "").split(" ").filter(Boolean)) {
-      const value = form?.querySelector(`[name="${name}"]:checked, select[name="${name}"]`)?.value ?? "";
-      for (const field of target.querySelectorAll(`[name="${name}"]`)) field.value = value;
+      // A pick (a radio, a select) or a typed field, such as the key of a live to TikTok; a field
+      // that is switched off carries nothing.
+      const field = form?.querySelector(`[name="${name}"]:checked`)
+        || form?.querySelector(`select[name="${name}"], textarea[name="${name}"], input[name="${name}"]:not([type=radio]):not([type=checkbox])`);
+      const value = field && !field.disabled ? field.value : "";
+      for (const slot of target.querySelectorAll(`[name="${name}"]`)) slot.value = value;
     }
     next.closest("dialog")?.close();
     target.showModal();
@@ -1168,6 +1182,33 @@ document.addEventListener("submit", event => {
     form.requestSubmit(event.submitter);
   };
   dialog.showModal();
+});
+
+// <form data-ask-key="question">: a live to a platform that hands out a key for every live
+// (TikTok) is started again with the key of that live. The dialog asks what the button asks and
+// takes the key, which goes in the hidden streamKey field of the form: kept nowhere else.
+document.addEventListener("submit", event => {
+  const form = event.target;
+  if (!(form instanceof HTMLFormElement) || !form.dataset.askKey) return;
+  const field = form.elements.namedItem("streamKey");
+  if (!field || field.value.trim()) return;
+  event.preventDefault();
+  const dialog = document.getElementById("live-key-dialog");
+  if (!dialog) return;
+  const input = dialog.querySelector("input[name=liveKey]");
+  dialog.querySelector("[data-text]").textContent = form.dataset.askKey;
+  input.value = "";
+  dialog.returnValue = "";
+  dialog.onclose = () => {
+    dialog.onclose = null;
+    const key = input.value.trim();
+    input.value = "";
+    if (dialog.returnValue !== "ok" || !key) return;
+    field.value = key;
+    form.requestSubmit(event.submitter);
+  };
+  dialog.showModal();
+  input.focus();
 });
 
 // <div data-countdown="seconds" data-href="url">: counts down, then navigates.
@@ -1416,6 +1457,46 @@ for (const force of document.querySelectorAll("input[type=checkbox][data-force-t
 
   form.addEventListener("change", event => {
     if (event.target.type === "radio") update();
+  });
+  update();
+}
+
+// The opposite of data-show-when: the element goes away for the values it names, and its fields
+// with it - switched off, so a hidden field is neither asked for nor sent (the stream key of a
+// configuration of TikTok, which keeps none).
+for (const hide of document.querySelectorAll("[data-hide-when]")) {
+  const form = hide.closest("form");
+  if (!form) continue;
+
+  const targets = hide.dataset.hideWhen.split(/\s+/).filter(Boolean);
+  const update = () => {
+    const picked = targets.some(target => form.querySelector(`input[type=radio][value="${target}"]`)?.checked);
+    hide.hidden = picked;
+    for (const field of hide.querySelectorAll("input, select, textarea")) field.disabled = picked;
+  };
+
+  form.addEventListener("change", event => {
+    if (event.target.type === "radio") update();
+  });
+  update();
+}
+
+// [data-live-key]: the key of this live, asked for when the destination picked hands out a key for
+// every live (data-key-each-live on its radio). Required then, switched off otherwise.
+for (const block of document.querySelectorAll("[data-live-key]")) {
+  const form = block.closest("form");
+  const input = block.querySelector("input");
+  if (!form || !input) continue;
+
+  const update = () => {
+    const needs = form.querySelector('input[name="configurationId"]:checked')?.dataset.keyEachLive === "1";
+    block.hidden = !needs;
+    input.disabled = !needs;
+    input.required = needs;
+  };
+
+  form.addEventListener("change", event => {
+    if (event.target.name === "configurationId") update();
   });
   update();
 }

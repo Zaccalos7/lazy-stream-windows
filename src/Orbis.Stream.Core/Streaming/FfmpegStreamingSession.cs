@@ -42,7 +42,6 @@ public sealed class FfmpegStreamingSession : IAsyncDisposable
     private long _onAirSinceTicks;
     private int _stopRequested;
     private int _restartRequested;
-    private int _yieldRequested;
     private int _endedNaturally;
 
     private FfmpegStreamingSession(
@@ -238,7 +237,6 @@ public sealed class FfmpegStreamingSession : IAsyncDisposable
     /// loop watches this flag and does exactly that.
     /// </summary>
     public bool RestartRequested => Volatile.Read(ref _restartRequested) == 1;
-    public bool YieldRequested => Volatile.Read(ref _yieldRequested) == 1;
 
     public bool EndedNaturally => Volatile.Read(ref _endedNaturally) == 1;
 
@@ -285,7 +283,8 @@ public sealed class FfmpegStreamingSession : IAsyncDisposable
         string? previewPath = null,
         StreamPlatformProfile? profile = null,
         LiveOutput? output = null,
-        EncoderQuality? quality = null)
+        EncoderQuality? quality = null,
+        bool alwaysSound = false)
     {
         // The platform is read off the ingest; a caller may name it, which is how a relay is
         // exercised against a file on disk.
@@ -293,12 +292,13 @@ public sealed class FfmpegStreamingSession : IAsyncDisposable
 
         // On a shared connection of a platform that wants one format (YouTube) the first encoder
         // fixes the picture of the live and every one after it is fitted into it (see
-        // LiveOutput.Frame). Elsewhere every file keeps its own.
+        // LiveOutput.Frame). Elsewhere every file keeps its own. A platform watched upright
+        // (TikTok) has that picture stood up, whatever the first file was.
         var own = FfmpegCommandBuilder.ResolveOutput(setting, probe);
-        var frame = profile.UniformFormat ? output?.Pin(FfmpegCommandBuilder.FrameOfLive(setting, own)) : null;
+        var frame = profile.UniformFormat ? output?.Pin(profile.Orient(FfmpegCommandBuilder.FrameOfLive(setting, own))) : null;
         var arguments = FfmpegCommandBuilder.Build(
             new FfmpegStreamRequest(
-                inputPath, outputUrl, probe, setting, resumeFrom, previewPath, profile, quality, frame, BitrateOf(setting, output)));
+                inputPath, outputUrl, probe, setting, resumeFrom, previewPath, profile, quality, frame, BitrateOf(setting, output), alwaysSound));
         var session = Launch(locator, videoPkid, inputPath, outputUrl, arguments, probe, frame ?? own, resumeFrom, profile, logger, output);
         session.Measure(setting, profile);
         return session;
@@ -325,20 +325,22 @@ public sealed class FfmpegStreamingSession : IAsyncDisposable
         string? previewPath = null,
         StreamPlatformProfile? profile = null,
         LiveOutput? output = null,
-        EncoderQuality? quality = null)
+        EncoderQuality? quality = null,
+        bool alwaysSound = false)
     {
         profile ??= output?.Profile ?? StreamPlatformProfile.For(outputUrl);
 
         // The composition is sent at the size of the canvas: the resolution of the setting is not
         // applied on top of it (see BuildComposition). A canvas is a size the user chose, so where
-        // the platform wants one format the first one on a connection fixes the picture as it is.
+        // the platform wants one format the first one on a connection fixes the picture as it is -
+        // stood up where the platform is watched upright, with the canvas fitted into it.
         var frameRate = setting.FrameRate is > 0 ? setting.FrameRate.Value : canvasFrameRate;
         var frame = profile.UniformFormat
-            ? output?.Pin(new MediaOutput(FfmpegCommandBuilder.Even(canvasWidth), FfmpegCommandBuilder.Even(canvasHeight), frameRate))
+            ? output?.Pin(profile.Orient(new MediaOutput(FfmpegCommandBuilder.Even(canvasWidth), FfmpegCommandBuilder.Even(canvasHeight), frameRate)))
             : null;
         var arguments = FfmpegCommandBuilder.BuildComposition(new FfmpegCompositionRequest(
             items, outputUrl, setting, canvasWidth, canvasHeight, canvasFrameRate, resumeFrom, duration, previewPath, profile, quality, frame,
-            BitrateOf(setting, output)));
+            BitrateOf(setting, output), alwaysSound));
 
         var mediaOutput = frame ?? new MediaOutput(canvasWidth, canvasHeight, frameRate);
         var sound = FfmpegCommandBuilder.CarriesSound(items);
@@ -485,7 +487,6 @@ public sealed class FfmpegStreamingSession : IAsyncDisposable
 
     /// <summary>Asks the streaming loop to start this transcode again with a new configuration.</summary>
     public void RequestRestart() => Interlocked.Exchange(ref _restartRequested, 1);
-    public void Yield() => Interlocked.Exchange(ref _yieldRequested, 1);
 
     /// <summary>
     /// Reads the <c>-progress</c> block of ffmpeg, which repeats the state of the transcode until

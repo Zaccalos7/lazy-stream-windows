@@ -1,6 +1,3 @@
-using System.Security.Cryptography;
-using System.Text;
-using System.Text.RegularExpressions;
 using Microsoft.AspNetCore.Http;
 using Microsoft.Extensions.Logging;
 using Orbis.Stream.Core.Configuration;
@@ -38,7 +35,7 @@ public sealed record OverlayFile(string Path, string ContentType);
 /// <para>The file is named after its content as well as after its name, so the same overlay added
 /// twice is one file, and a name is never reused for another picture: the browser may keep it.</para>
 /// </summary>
-public sealed partial class OverlayLibrary
+public sealed class OverlayLibrary
 {
     public const string DirectoryName = "overlays";
 
@@ -63,9 +60,7 @@ public sealed partial class OverlayLibrary
     /// <summary>The extensions the page offers in its file picker, in the order it lists them.</summary>
     public static readonly string Accept = string.Join(',', ContentTypes.Keys);
 
-    private const int HashLength = 10;
-
-    private readonly string _directory;
+    private readonly MediaStore _store;
     private readonly FfmpegProbe _probe;
     private readonly SourceSnapshotService _snapshots;
     private readonly SceneRepository _scenes;
@@ -94,7 +89,7 @@ public sealed partial class OverlayLibrary
         Localizer localizer,
         ILogger<OverlayLibrary> logger)
     {
-        _directory = System.IO.Path.GetFullPath(directory);
+        _store = new MediaStore(directory, ContentTypes, MaxBytes, "overlay", logger);
         _probe = probe;
         _snapshots = snapshots;
         _scenes = scenes;
@@ -108,19 +103,7 @@ public sealed partial class OverlayLibrary
         !string.IsNullOrWhiteSpace(fileName) && ContentTypes.ContainsKey(System.IO.Path.GetExtension(fileName));
 
     /// <summary>The newest first: the one just added is the one about to be used.</summary>
-    public IReadOnlyList<OverlayEntry> List()
-    {
-        if (!Directory.Exists(_directory))
-        {
-            return [];
-        }
-
-        return [.. new DirectoryInfo(_directory).EnumerateFiles()
-            .Where(file => IsLibraryName(file.Name))
-            .OrderByDescending(file => file.CreationTimeUtc)
-            .ThenBy(file => file.Name, StringComparer.Ordinal)
-            .Select(EntryOf)];
-    }
+    public IReadOnlyList<OverlayEntry> List() => [.. _store.Files().Select(EntryOf)];
 
     /// <summary>
     /// Copies a file into the library and answers with what it is there. The copy is written beside
@@ -137,80 +120,25 @@ public sealed partial class OverlayLibrary
             throw Refused("overlay.not.valid", label);
         }
 
-        var extension = System.IO.Path.GetExtension(label).ToLowerInvariant();
-        Directory.CreateDirectory(_directory);
-        var upload = System.IO.Path.Combine(_directory, $".upload-{Guid.NewGuid():N}{extension}");
+        var name = await _store.AddAsync(
+                label,
+                content,
+                (upload, token) => CheckPictureAsync(upload, label, token),
+                () => Refused("overlay.too.large", label, MaxBytes / (1024 * 1024)),
+                cancellationToken)
+            .ConfigureAwait(false);
 
-        try
-        {
-            string hash;
-            await using (var file = new FileStream(upload, FileMode.CreateNew, FileAccess.Write, FileShare.None, 81920, useAsync: true))
-            using (var digest = IncrementalHash.CreateHash(HashAlgorithmName.SHA256))
-            {
-                var buffer = new byte[81920];
-                long total = 0;
-                int read;
-                while ((read = await content.ReadAsync(buffer, cancellationToken).ConfigureAwait(false)) > 0)
-                {
-                    total += read;
-                    if (total > MaxBytes)
-                    {
-                        throw Refused("overlay.too.large", label, MaxBytes / (1024 * 1024));
-                    }
-
-                    digest.AppendData(buffer, 0, read);
-                    await file.WriteAsync(buffer.AsMemory(0, read), cancellationToken).ConfigureAwait(false);
-                }
-
-                hash = Convert.ToHexStringLower(digest.GetHashAndReset())[..HashLength];
-            }
-
-            await CheckPictureAsync(upload, label, cancellationToken).ConfigureAwait(false);
-
-            var name = $"{StemOf(label)}-{hash}{extension}";
-            var path = System.IO.Path.Combine(_directory, name);
-            try
-            {
-                File.Move(upload, path);
-                _logger.LogInformation("Overlay {Label} added to the library as {Name}", label, name);
-            }
-            catch (IOException) when (File.Exists(path))
-            {
-                // The same picture is already there, added before or at this same moment: the
-                // name is the content, so the one on disk is this one.
-            }
-
-            return EntryOf(new FileInfo(path));
-        }
-        finally
-        {
-            if (File.Exists(upload))
-            {
-                File.Delete(upload);
-            }
-        }
+        return EntryOf(new FileInfo(System.IO.Path.Combine(_store.Directory, name)));
     }
 
     /// <summary>A file of the library, by its name: nothing outside the folder is ever answered.</summary>
     public OverlayFile? Find(string? name) =>
-        PathOf(name) is { } path
-            ? new OverlayFile(path, ContentTypes[System.IO.Path.GetExtension(path)])
+        _store.PathOf(name) is { } path
+            ? new OverlayFile(path, _store.ContentTypeOf(path))
             : null;
 
     /// <summary>Whether a path is a file of the library, the way a layout stores it.</summary>
-    public bool Contains(string? path)
-    {
-        if (string.IsNullOrWhiteSpace(path))
-        {
-            return false;
-        }
-
-        var full = System.IO.Path.GetFullPath(StreamingService.NormalizeUserPath(path));
-        var folder = System.IO.Path.GetDirectoryName(full);
-        return folder is not null
-            && string.Equals(folder.TrimEnd(System.IO.Path.DirectorySeparatorChar), _directory.TrimEnd(System.IO.Path.DirectorySeparatorChar), PathComparison)
-            && PathOf(System.IO.Path.GetFileName(full)) is not null;
-    }
+    public bool Contains(string? path) => _store.Contains(path);
 
     /// <summary>
     /// The first frame of an overlay as a PNG: what the page draws for a video it cannot play,
@@ -218,7 +146,7 @@ public sealed partial class OverlayLibrary
     /// </summary>
     public async Task<byte[]?> StillAsync(string? name, CancellationToken cancellationToken)
     {
-        if (PathOf(name) is not { } path)
+        if (_store.PathOf(name) is not { } path)
         {
             return null;
         }
@@ -251,7 +179,7 @@ public sealed partial class OverlayLibrary
     /// </summary>
     public MessageResponse Delete(string? name)
     {
-        var path = PathOf(name) ?? throw new NotFoundCustomException("overlay.not.found", [name]);
+        var path = _store.PathOf(name) ?? throw new NotFoundCustomException("overlay.not.found", [name]);
         if (_scenes.UsesOverlay(path))
         {
             throw new LiveException("overlay.in.use", [LabelOf(System.IO.Path.GetFileName(path))]);
@@ -290,20 +218,6 @@ public sealed partial class OverlayLibrary
         }
     }
 
-    private string? PathOf(string? name)
-    {
-        if (string.IsNullOrWhiteSpace(name) || System.IO.Path.GetFileName(name) != name || !IsLibraryName(name))
-        {
-            return null;
-        }
-
-        var path = System.IO.Path.Combine(_directory, name);
-        return File.Exists(path) ? path : null;
-    }
-
-    /// <summary>An upload on its way in starts with a dot and is never a file of the library.</summary>
-    private static bool IsLibraryName(string name) => !name.StartsWith('.') && IsOverlayFile(name);
-
     private static OverlayEntry EntryOf(FileInfo file)
     {
         var url = "/scene/overlays/" + Uri.EscapeDataString(file.Name);
@@ -319,46 +233,12 @@ public sealed partial class OverlayLibrary
     }
 
     /// <summary>The name the file was added with: the stored name less the hash of its content.</summary>
-    internal static string LabelOf(string name)
-    {
-        var extension = System.IO.Path.GetExtension(name);
-        var stem = System.IO.Path.GetFileNameWithoutExtension(name);
-        var match = HashSuffix().Match(stem);
-        return (match.Success ? stem[..match.Index] : stem) + extension;
-    }
+    internal static string LabelOf(string name) => MediaStore.LabelOf(name);
 
-    /// <summary>
-    /// The readable part of the stored name: letters, digits and a few separators, nothing a file
-    /// system or a URL could read as something else, and never empty.
-    /// </summary>
-    internal static string StemOf(string label)
-    {
-        var stem = System.IO.Path.GetFileNameWithoutExtension(label);
-        var safe = new StringBuilder(stem.Length);
-        foreach (var character in stem)
-        {
-            safe.Append(char.IsLetterOrDigit(character) || character is '-' or '_' ? character : '-');
-        }
-
-        var text = Dashes().Replace(safe.ToString(), "-").Trim('-');
-        if (text.Length > 48)
-        {
-            text = text[..48].TrimEnd('-');
-        }
-
-        return text.Length == 0 ? "overlay" : text;
-    }
+    /// <summary>The readable part of the stored name (see <see cref="MediaStore.StemOf"/>).</summary>
+    internal static string StemOf(string label) => MediaStore.StemOf(label, "overlay");
 
     /// <summary>A refusal about the file, answered as the field errors of any other form.</summary>
     private RequestValidationException Refused(string code, params object?[] parameters) =>
         new(new Dictionary<string, string> { ["file"] = _localizer.PrintMessage(code, parameters) });
-
-    private static StringComparison PathComparison =>
-        OperatingSystem.IsWindows() ? StringComparison.OrdinalIgnoreCase : StringComparison.Ordinal;
-
-    [GeneratedRegex("-[0-9a-f]{10}$")]
-    private static partial Regex HashSuffix();
-
-    [GeneratedRegex("-{2,}")]
-    private static partial Regex Dashes();
 }

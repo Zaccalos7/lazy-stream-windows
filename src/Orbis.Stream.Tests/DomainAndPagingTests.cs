@@ -222,6 +222,24 @@ public sealed class DatabaseBootstrapperTests
     }
 
     [Fact]
+    public void StartAsync_SeedsTikTokStandingUp()
+    {
+        using var database = new TemporaryDatabase();
+        var settings = database.Repository<VideoSettingRepository>();
+
+        // TikTok: 1080x1920 at 30 fps and 4.5 Mbps, upright as the phones it is watched on.
+        var tiktok = Assert.Single(settings.FindByIsDefaultConfigurationTrueAndDefaultPlatformConfiguration("TikTok"));
+        Assert.Equal("Default TikTok", tiktok.Title);
+        Assert.Equal((1080, 1920, 30d), (tiktok.VideoWidth, tiktok.VideoHeight, tiktok.FrameRate));
+        Assert.Equal(4_500_000, tiktok.VideoBitrate);
+
+        var low = settings.FindByTitleAndPlatform("Default Low TikTok", "TikTok");
+        Assert.NotNull(low);
+        Assert.False(low.IsDefaultConfiguration);
+        Assert.Equal((720, 1280, 2_500_000), (low.VideoWidth, low.VideoHeight, low.VideoBitrate));
+    }
+
+    [Fact]
     public async Task StartAsync_AddsTheNewPlatformsOnceToAnInstallationThatHadTheOldOnes()
     {
         using var database = new TemporaryDatabase();
@@ -235,7 +253,7 @@ public sealed class DatabaseBootstrapperTests
                 NullLogger<DatabaseBootstrapper>.Instance)
             .StartAsync(CancellationToken.None);
 
-        foreach (var platform in new[] { "Twitch", "Youtube", "Kick", "Facebook Gaming" })
+        foreach (var platform in new[] { "Twitch", "Youtube", "Kick", "Facebook Gaming", "TikTok" })
         {
             Assert.Single(settings.FindByIsDefaultConfigurationTrueAndDefaultPlatformConfiguration(platform));
         }
@@ -543,17 +561,20 @@ public sealed class LiveLinkTests
 
     private const string Kick = "rtmps://fa723fc1b171.global-contribute.live-video.net/app";
     private const string Facebook = "rtmps://rtmp-api.facebook.com:443/rtmp";
+    private const string TikTok = "rtmp://push-rtmp-l11-va01.tiktokcdn.com/stage";
 
     [Theory]
     // The presets of the channel settings...
     [InlineData(Kick, "kick")]
     [InlineData(Facebook, "facebook")]
+    [InlineData(TikTok, "tiktok")]
     // As the dashboards write them: with the slash at the end.
     [InlineData(Facebook + "/", "facebook")]
     [InlineData("rtmp://live.twitch.tv/app/", "twitch")]
     // ...and the ingest an account or a live has of its own, which is never the preset.
     [InlineData("rtmps://0123456789ab.global-contribute.live-video.net:443/app/", "kick")]
     [InlineData("rtmps://live-api-s.facebook.com:443/rtmp/", "facebook")]
+    [InlineData("rtmp://push-rtmp-f5-tt02.tiktokcdn-eu.com/game/", "tiktok")]
     public void PlatformOf_KnowsKickAndFacebookByTheDomainOfTheirIngest(string streamUrl, string platform) =>
         Assert.Equal(platform, LiveLinkView.PlatformOf(streamUrl));
 
@@ -573,25 +594,36 @@ public sealed class LiveLinkTests
     }
 
     [Fact]
+    public void UrlOf_TikTokIsTheLiveOfTheAccount()
+    {
+        Assert.Equal("https://www.tiktok.com/@repro.channel/live", LiveLinkView.UrlOf(TikTok, "@repro.channel", "tiktok"));
+        Assert.Equal("https://www.tiktok.com/@repro/live", LiveLinkView.UrlOf("rtmp://push.tiktokcdn-us.com/live", "repro", null));
+    }
+
+    [Fact]
     public void KickAndFacebookGamingHaveTheirNamesMarksAndColours()
     {
         Assert.Equal("Kick", LiveLinkView.LabelOf("kick"));
         Assert.Equal("Facebook Gaming", LiveLinkView.LabelOf("facebook"));
 
-        // The K of blocks, and the F of two blocks.
+        // The K of blocks; the blue square of Facebook Gaming with its two pieces cut out of it, as
+        // the official logo draws it; the note of TikTok.
         Assert.StartsWith("M1.333 0h8", LiveLinkView.MarkupOf("kick"), StringComparison.Ordinal);
-        Assert.StartsWith("M0 0v24h15.67", LiveLinkView.MarkupOf("facebook"), StringComparison.Ordinal);
-        var marks = new[] { "twitch", "youtube", "kick", "facebook", null }.Select(LiveLinkView.MarkupOf).ToList();
+        Assert.StartsWith("M0 0h24v24H0zM3.75 3.75", LiveLinkView.MarkupOf("facebook"), StringComparison.Ordinal);
+        Assert.StartsWith("M12.525.02", LiveLinkView.MarkupOf("tiktok"), StringComparison.Ordinal);
+        var marks = new[] { "twitch", "youtube", "kick", "facebook", "tiktok", null }.Select(LiveLinkView.MarkupOf).ToList();
         Assert.Equal(marks.Count, marks.Distinct().Count());
 
         Assert.Equal("platform-kick", LiveLinkView.ClassOf("kick"));
         Assert.Equal("platform-facebook", LiveLinkView.ClassOf("facebook"));
+        Assert.Equal("platform-tiktok", LiveLinkView.ClassOf("tiktok"));
+        Assert.Equal("TikTok", LiveLinkView.LabelOf("tiktok"));
     }
 
     [Fact]
-    public void TheChannelSettingsOfferTheFourPlatformsWithTheirIngest()
+    public void TheChannelSettingsOfferTheFivePlatformsWithTheirIngest()
     {
-        Assert.Equal(["twitch", "youtube", "kick", "facebook"], MainChannelSettingModel.Platforms.Select(platform => platform.Value));
+        Assert.Equal(["twitch", "youtube", "kick", "facebook", "tiktok"], MainChannelSettingModel.Platforms.Select(platform => platform.Value));
         Assert.All(MainChannelSettingModel.Platforms, platform =>
         {
             Assert.StartsWith("rtmp", platform.StreamUrl, StringComparison.Ordinal);
@@ -599,14 +631,18 @@ public sealed class LiveLinkTests
             Assert.Equal(platform.Platform, Orbis.Stream.Core.Streaming.StreamPlatforms.Detect(platform.StreamUrl + "/key"));
         });
 
-        // Kick and Facebook are the two whose address can be the account's or the live's own.
+        // Kick and Facebook are the two whose address can be the account's or the live's own and
+        // whose dashboard the hint points at; TikTok, whose key is asked for at every live, has its own.
         Assert.Equal("kick facebook", MainChannelSettingModel.PersonalIngests);
+        Assert.Equal("tiktok", MainChannelSettingModel.KeyEachLive);
     }
 
     [Fact]
     public void ChoiceOf_ReadsTheNameThenTheIngestOfAConfiguration()
     {
         Assert.Equal("facebook", MainChannelSettingModel.ChoiceOf("Facebook")?.Value);
+        Assert.Equal("tiktok", MainChannelSettingModel.ChoiceOf("TikTok")?.Value);
+        Assert.Equal("tiktok", MainChannelSettingModel.ChoiceOf("my channel", "rtmp://push-rtmp-f5-tt02.tiktokcdn-eu.com/game/")?.Value);
         Assert.Equal("kick", MainChannelSettingModel.ChoiceOf(" kick ")?.Value);
         Assert.Equal("kick", MainChannelSettingModel.ChoiceOf("my channel", Kick + "/")?.Value);
         Assert.Equal("youtube", MainChannelSettingModel.ChoiceOf(null, "rtmps://a.rtmps.youtube.com/live2")?.Value);

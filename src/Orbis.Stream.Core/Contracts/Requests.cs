@@ -166,6 +166,12 @@ public sealed record LiveParameterRequest(
 /// <summary>How loud one source of a canvas is in the mix of a running live, in percent.</summary>
 public sealed record LiveVolumeRequest(int SourcePkid, int Volume);
 
+/// <summary>
+/// A button of the scene deck as the panel saves it: its name, the file it puts on air (a name of
+/// the scene media folder, uploaded beforehand) and the key that asks for it, if any.
+/// </summary>
+public sealed record SceneButtonRequest(string? Label, string? MediaName, string? Hotkey);
+
 /// <summary>Port of <c>com.orbis.stream.record.VideoLiveHistoryRecord</c>.</summary>
 public sealed record VideoLiveHistoryRequest(
     long? Pkid,

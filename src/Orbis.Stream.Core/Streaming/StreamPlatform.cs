@@ -20,7 +20,13 @@ public enum StreamPlatform
     /// Facebook Gaming: the lives of Facebook, the gaming ones among them, on the RTMPS ingest of
     /// Facebook Live.
     /// </summary>
-    Facebook
+    Facebook,
+
+    /// <summary>
+    /// TikTok LIVE, whose stream key LIVE Producer hands out for every live (it expires), and whose
+    /// viewers hold their phone upright.
+    /// </summary>
+    TikTok
 }
 
 /// <summary>What carries the paced stream from the relay to the ingest.</summary>
@@ -67,8 +73,8 @@ public enum RelayPacing
 /// <para>Those are the two deliveries there are, and they stay two: the relay keeping the time
 /// over the native RTMP for a low latency player (Twitch), the ffmpeg sender keeping it with a
 /// head start for a player that buffers (YouTube). Kick is an ingest of the first kind - Amazon
-/// IVS, the network the Twitch ingest itself runs on - and Facebook Gaming one of the second, so
-/// each of them is the delivery of its kind with the needs of its own platform on top.</para>
+/// IVS, the network the Twitch ingest itself runs on - and Facebook Gaming and TikTok LIVE of the
+/// second, so each of them is the delivery of its kind with the needs of its own platform on top.</para>
 /// </summary>
 public sealed record StreamPlatformProfile(
     StreamPlatform Platform,
@@ -156,6 +162,13 @@ public sealed record StreamPlatformProfile(
     /// is the bound every streaming encoder uses. Zero is the two seconds a custom ingest had.
     /// </summary>
     TimeSpan RateBuffer = default,
+
+    /// <summary>
+    /// Whether the picture of the live stands up (9:16): every frame of the live is turned to
+    /// portrait, and a landscape source is fitted into it with black above and below, the way
+    /// the viewers of the platform see a film on a phone held upright (see <see cref="Orient"/>).
+    /// </summary>
+    bool Portrait = false,
 
     /// <summary>
     /// How the bitrate of the live follows what the network carries (see
@@ -261,6 +274,32 @@ public sealed record StreamPlatformProfile(
         RateBuffer: TimeSpan.FromSeconds(1),
         Adaptation: RateAdaptation.Buffered);
 
+    /// <summary>
+    /// TikTok LIVE: the delivery of YouTube - the ffmpeg sender keeps the time with a head start,
+    /// which is how every ffmpeg recipe for TikTok publishes - with a shorter jitter buffer, since
+    /// a TikTok live is talked to while it runs. The picture stands up: TikTok is watched on a
+    /// phone held upright, so the live goes out at 9:16 and a landscape file is fitted into it,
+    /// and since every encoder of the live is fitted into the same frame the format never changes
+    /// halfway either.
+    /// </summary>
+    public static readonly StreamPlatformProfile TikTok = new(
+        StreamPlatform.TikTok,
+        UsesRelay: true,
+        Preroll: TimeSpan.FromSeconds(2),
+        MaxLead: TimeSpan.FromSeconds(3),
+        ConnectTimeout: TimeSpan.FromSeconds(30),
+        StallTimeout: TimeSpan.FromSeconds(20),
+        ReconnectAttempts: 3,
+        RequiresAudio: true,
+        AudioSampleRate: 48_000,
+        Transport: RelayTransport.FfmpegSender,
+        KeyframeSeconds: 2,
+        Pacing: RelayPacing.Sender,
+        UniformFormat: true,
+        RateBuffer: TimeSpan.FromSeconds(1),
+        Portrait: true,
+        Adaptation: RateAdaptation.Buffered);
+
     /// <summary>A destination this application does not know: one ffmpeg, as before.</summary>
     public static readonly StreamPlatformProfile Generic = new(
         StreamPlatform.Generic,
@@ -282,8 +321,21 @@ public sealed record StreamPlatformProfile(
         StreamPlatform.YouTube => YouTube,
         StreamPlatform.Kick => Kick,
         StreamPlatform.Facebook => Facebook,
+        StreamPlatform.TikTok => TikTok,
         _ => Generic
     };
+
+    /// <summary>
+    /// The frame of a live as this platform shows it: stood up on a platform watched in portrait
+    /// (a 1920x1080 frame is a 1080x1920 one there, with the same pixels), as it is everywhere else.
+    /// </summary>
+    public MediaOutput Orient(MediaOutput frame)
+    {
+        ArgumentNullException.ThrowIfNull(frame);
+        return Portrait && frame.Width > frame.Height
+            ? frame with { Width = frame.Height, Height = frame.Width }
+            : frame;
+    }
 
     /// <summary>
     /// This profile carried by the transport the channel asks for, where the platform lets it
@@ -324,6 +376,14 @@ public static class StreamPlatforms
     /// <summary>The length of the name of an IVS channel endpoint, in hex digits.</summary>
     private const int IvsEndpointLength = 12;
 
+    /// <summary>
+    /// The domains TikTok hands its ingests out under: LIVE Producer shows a server of its region,
+    /// <c>push-rtmp-….tiktokcdn.com</c> and its regional twins, so the platform is read off the
+    /// domain and never off one address.
+    /// </summary>
+    private static readonly string[] TikTokDomains =
+        ["tiktokcdn.com", "tiktokcdn-eu.com", "tiktokcdn-us.com", "tiktokv.com", "tiktok.com"];
+
     /// <summary>The platform an ingest url belongs to, from its host; Generic when it is not known.</summary>
     public static StreamPlatform Detect(string? outputUrl)
     {
@@ -355,7 +415,20 @@ public static class StreamPlatforms
 
         // Facebook publishes on more than one host of its own (rtmp-api, live-api-s), and the
         // Graph API hands every broadcast an address of its own: the domain is what they share.
-        return IsOrUnder(host, "facebook.com") ? StreamPlatform.Facebook : StreamPlatform.Generic;
+        if (IsOrUnder(host, "facebook.com"))
+        {
+            return StreamPlatform.Facebook;
+        }
+
+        foreach (var domain in TikTokDomains)
+        {
+            if (IsOrUnder(host, domain))
+            {
+                return StreamPlatform.TikTok;
+            }
+        }
+
+        return StreamPlatform.Generic;
     }
 
     /// <summary>An ingest endpoint of an IVS channel: twelve hex digits under the global ingest.</summary>

@@ -308,13 +308,14 @@ public sealed class ConstantBitrateTests
         Assert.Contains("-b:v 2500000 -maxrate 2500000 -bufsize 2500000", command, StringComparison.Ordinal);
     }
 
-    public static TheoryData<string> Platforms => ["twitch", "youtube", "kick", "facebook"];
+    public static TheoryData<string> Platforms => ["twitch", "youtube", "kick", "facebook", "tiktok"];
 
     private static StreamPlatformProfile ProfileOf(string platform) => platform switch
     {
         "twitch" => StreamPlatformProfile.Twitch,
         "youtube" => StreamPlatformProfile.YouTube,
         "kick" => StreamPlatformProfile.Kick,
-        _ => StreamPlatformProfile.Facebook
+        "facebook" => StreamPlatformProfile.Facebook,
+        _ => StreamPlatformProfile.TikTok
     };
 }

@@ -119,6 +119,15 @@ public static class DatabaseSchema
                 Column("width", "INTEGER", "INTEGER DEFAULT '0' NOT NULL", nullable: false),
                 Column("height", "INTEGER", "INTEGER DEFAULT '0' NOT NULL", nullable: false),
                 Column("audio_enabled", "BOOLEAN", "BOOLEAN DEFAULT 'false' NOT NULL", nullable: false)
+            ],
+            ["scene_button"] =
+            [
+                Column("pkid", "INTEGER", "INTEGER PRIMARY KEY AUTOINCREMENT", nullable: false),
+                Column("position", "INTEGER", "INTEGER DEFAULT '0' NOT NULL", nullable: false),
+                Column("label", "VARCHAR(255)", "VARCHAR(255) NOT NULL", nullable: false),
+                Column("media_name", "VARCHAR(255)", "VARCHAR(255) NOT NULL", nullable: false),
+                Column("hotkey", "VARCHAR(64)", "VARCHAR(64)", nullable: true),
+                Column("last_modified", "TIMESTAMP", "TIMESTAMP", nullable: true)
             ]
         };
 
@@ -234,6 +243,16 @@ public static class DatabaseSchema
             height INTEGER DEFAULT '0' NOT NULL,
             audio_enabled BOOLEAN DEFAULT 'false' NOT NULL,
             FOREIGN KEY (scene_pkid) REFERENCES stream_scene (pkid) ON DELETE CASCADE
+        )
+        """,
+        """
+        CREATE TABLE IF NOT EXISTS scene_button (
+            pkid INTEGER PRIMARY KEY AUTOINCREMENT,
+            position INTEGER DEFAULT '0' NOT NULL,
+            label VARCHAR(255) NOT NULL,
+            media_name VARCHAR(255) NOT NULL,
+            hotkey VARCHAR(64),
+            last_modified TIMESTAMP
         )
         """,
         "CREATE INDEX IF NOT EXISTS idx_video_live_status_channel ON video (live_status, channel_name)",

@@ -13,10 +13,11 @@ namespace Orbis.Stream.Core.Pages;
 /// </summary>
 /// <param name="PersonalIngest">
 /// Whether the ingest can be the account's own (Kick, an IVS endpoint per channel) or the live's
-/// own (Facebook, whose Live Producer and Graph API hand a broadcast an address of their own)
-/// rather than one address for everybody. Its preset is where the ingest usually is, the address
-/// to use is the one the platform shows, and a live is recognised as one of this platform by the
-/// domain of its ingest instead of by the preset.
+/// own (Facebook, whose Live Producer and Graph API hand a broadcast an address of their own;
+/// TikTok, whose LIVE Producer shows the server of the account's region) rather than one address
+/// for everybody. Its preset is where the ingest usually is, the address to use is the one the
+/// platform shows, and a live is recognised as one of this platform by the domain of its ingest
+/// instead of by the preset.
 /// </param>
 public sealed record PlatformChoice(
     string Value, string Label, string StreamUrl, StreamPlatform Platform, bool PersonalIngest = false);
@@ -41,12 +42,24 @@ public sealed class MainChannelSettingModel(SettingService settings, RequestVali
         // The RTMPS ingest of Facebook Live, where Facebook Gaming lives go: RTMPS on 443 only, as
         // OBS lists it. Live Producer may show another host of Facebook's (live-api-s), and either
         // is recognised by its domain.
-        new("facebook", "Facebook Gaming", "rtmps://rtmp-api.facebook.com:443/rtmp", StreamPlatform.Facebook, PersonalIngest: true)
+        new("facebook", "Facebook Gaming", "rtmps://rtmp-api.facebook.com:443/rtmp", StreamPlatform.Facebook, PersonalIngest: true),
+        // A TikTok LIVE server as LIVE Producer shows it. The key that goes with it is good for one
+        // live only, so it is not kept here: it is asked for whenever a live starts (LiveStreamKeys).
+        new("tiktok", "TikTok", "rtmp://push-rtmp-l11-va01.tiktokcdn.com/stage", StreamPlatform.TikTok, PersonalIngest: true)
     ];
 
-    /// <summary>The values of the platforms whose ingest is the account's or the live's own, as the page lists them to a script.</summary>
-    public static string PersonalIngests { get; } =
-        string.Join(' ', Platforms.Where(platform => platform.PersonalIngest).Select(platform => platform.Value));
+    /// <summary>
+    /// The values of the platforms whose ingest is the account's or the live's own, as the page lists
+    /// them to a script for the hint about the dashboard. TikTok has a hint of its own: its key.
+    /// </summary>
+    public static string PersonalIngests { get; } = string.Join(' ', Platforms
+        .Where(platform => platform.PersonalIngest && !LiveStreamKeys.IsAskedFor(platform.Value, platform.StreamUrl))
+        .Select(platform => platform.Value));
+
+    /// <summary>The values of the platforms whose key is asked for at every live, as the page lists them to a script.</summary>
+    public static string KeyEachLive { get; } = string.Join(' ', Platforms
+        .Where(platform => LiveStreamKeys.IsAskedFor(platform.Value, platform.StreamUrl))
+        .Select(platform => platform.Value));
 
     /// <summary>
     /// The platform of a configuration: the one its platform field names, otherwise the one its

@@ -9,6 +9,7 @@
 @section Styles {
     
     <link rel="stylesheet" href="/css/composer.css" />
+    <link rel="stylesheet" href="/css/scenes.css" />
 }
 <div class="page-header">
     <div style="display: flex; align-items: center; gap: 1rem;">
@@ -89,7 +90,7 @@
                 @T["next"]<i class="icon" style="margin: 0 0 0 6px;">&#xE72A;</i>
             </button>
             <button class="btn accent" type="button" data-wizard-show="2" hidden disabled="@(Model.ActiveConfigurations.Count == 0)"
-                    data-wizard-next="compose-dialog" data-wizard-fields="settingId configurationId">
+                    data-wizard-next="compose-dialog" data-wizard-fields="settingId configurationId streamKey">
                 @T["composeNext"]<i class="icon" style="margin: 0 0 0 6px;">&#xE72A;</i>
             </button>
             <button class="btn" type="button" commandfor="start-dialog" command="close">@T["cancel"]</button>
@@ -104,6 +105,8 @@
     <form method="post" asp-page-handler="StartScene" asp-all-route-data="Model.FilterRoute" data-composer-start-form>
         <input type="hidden" name="settingId" value="@Model.SettingId" />
         <input type="hidden" name="configurationId" value="@Model.ConfigurationId" />
+        @* The key of a live to TikTok, typed in on the step before: never written into the page. *@
+        <input type="hidden" name="streamKey" />
         <input type="hidden" name="scenePkid" value="@Model.ComposeScene" data-composer-start-pkid />
     </form>
     <div class="dialog-head">
@@ -198,6 +201,32 @@
     </div>
 </dialog>
 
+@* A live to TikTok started again from its row: TikTok hands out a key for every live, so the one
+   it went on air with last time is no good any more. The dialog asks what the button asks, and the
+   key, which travels with the form of the button (site.js, data-ask-key). *@
+<dialog class="dialog" id="live-key-dialog">
+    <form method="dialog">
+        <div class="dialog-body">
+            <h2 data-text></h2>
+            <label class="field section">
+                <span>@T["tiktokKey"]</span>
+                <span class="input-affix">
+                    <input class="input" name="liveKey" type="password" autocomplete="off" required
+                           data-reveal-label-show="@T["showStreamKey"]" data-reveal-label-hide="@T["hideStreamKey"]" />
+                    <button class="reveal" type="button" data-reveal aria-pressed="false" title="@T["showStreamKey"]" aria-label="@T["showStreamKey"]">
+                        <i class="icon">&#xE7B3;</i>
+                    </button>
+                </span>
+                <small>@T["tiktokKeyHint"]</small>
+            </label>
+        </div>
+        <div class="dialog-footer">
+            <button class="btn accent" value="ok">@T["confirm"]</button>
+            <button class="btn" value="cancel" formnovalidate>@T["cancel"]</button>
+        </div>
+    </form>
+</dialog>
+
 <dialog class="dialog" id="spot-dialog">
     <div class="dialog-head">
         <h2>@T["playSpot"]</h2>
@@ -264,3 +293,5 @@
         </form>
     </dialog>
 }
+
+<partial name="_SceneDeck" />

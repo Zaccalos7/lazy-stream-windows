@@ -98,7 +98,7 @@ public sealed class MessageCatalogTests
         var catalog = CreateCatalog();
         var english = PropertiesBundle.Parse(File.ReadAllText(BundlePath("en")));
 
-        Assert.Equal(18, catalog.SupportedLanguages.Count);
+        Assert.Equal(19, catalog.SupportedLanguages.Count);
 
         foreach (var language in catalog.SupportedLanguages)
         {
@@ -110,6 +110,27 @@ public sealed class MessageCatalogTests
                 Assert.True(bundle.TryGetValue(code, out _), $"messages_{language}.properties is missing '{code}'");
             }
         }
+    }
+
+    /// <summary>
+    /// The formatter reads every pattern that has an apostrophe in it, with or without parameters
+    /// (MessageFormatter): a lone one opens a quoted literal and is never printed. "l'avvio" came out
+    /// as "lavvio", and every Klingon word with one in it lost it. An apostrophe is written twice.
+    /// </summary>
+    [Fact]
+    public void EveryApostropheOfEveryBundleIsWrittenTwice()
+    {
+        foreach (var path in Directory.GetFiles(Path.Combine(AppContext.BaseDirectory, "Messages"), "messages_*.properties"))
+        {
+            foreach (var (code, pattern) in PropertiesBundle.Parse(File.ReadAllText(path)).Values)
+            {
+                Assert.False(
+                    System.Text.RegularExpressions.Regex.IsMatch(pattern, "(?<!')'(?!')"),
+                    $"{Path.GetFileName(path)}: '{code}' has a lone apostrophe, which the formatter would swallow");
+            }
+        }
+
+        Assert.Equal("Errore durante l'avvio della live", CreateCatalog().GetMessage("it", "error.starting.live", []));
     }
 
     private static string BundlePath(string language) =>

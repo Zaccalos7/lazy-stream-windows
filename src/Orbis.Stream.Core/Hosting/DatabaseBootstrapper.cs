@@ -81,6 +81,8 @@ public sealed class DatabaseBootstrapper : IHostedService
         InitializeDefaultVideoSetting("Kick", createHighQuality: false);
         InitializeDefaultVideoSetting("Facebook Gaming", createHighQuality: true);
         InitializeDefaultVideoSetting("Facebook Gaming", createHighQuality: false);
+        InitializeDefaultVideoSetting("TikTok", createHighQuality: true);
+        InitializeDefaultVideoSetting("TikTok", createHighQuality: false);
         UpgradeLegacyYouTubeDefaults();
     }
 
@@ -139,6 +141,20 @@ public sealed class DatabaseBootstrapper : IHostedService
         3_000_000, 128_000, 1280, 720, 30,
         [("preset", "superfast"), ("profile", "main"), ("x264-params", "scenecut=0:rc_lookahead=0")]);
 
+    /// <summary>
+    /// TikTok LIVE: 1080x1920, standing up, at 30 fps and 4.5 Mbps - the middle of what TikTok is
+    /// known to take for that size, which it transcodes for phones anyway, so more is upload spent
+    /// for nothing. A landscape file is fitted into the frame (StreamPlatformProfile.Portrait).
+    /// </summary>
+    private static readonly DefaultSpec TikTokHigh = new(
+        4_500_000, 128_000, 1080, 1920, 30,
+        [("preset", "veryfast"), ("profile", "high")]);
+
+    /// <summary>TikTok on a light machine: 720x1280 at 30 fps and 2.5 Mbps.</summary>
+    private static readonly DefaultSpec TikTokLow = new(
+        2_500_000, 128_000, 720, 1280, 30,
+        [("preset", "superfast"), ("profile", "main"), ("x264-params", "scenecut=0:rc_lookahead=0")]);
+
     private static DefaultSpec SpecOf(string platform, bool highQuality) => (platform, highQuality) switch
     {
         ("Twitch", true) => new(6_000_000, 160_000, null, null, null,
@@ -146,6 +162,7 @@ public sealed class DatabaseBootstrapper : IHostedService
         ("Youtube", true) => YouTubeHigh,
         ("Kick", true) => KickHigh,
         ("Facebook Gaming", true) => FacebookGamingHigh,
+        ("TikTok", true) => TikTokHigh,
         (_, true) => new(5_000_000, 128_000, null, null, null,
             [("preset", "veryfast"), ("tune", "zerolatency")]),
 
@@ -155,6 +172,7 @@ public sealed class DatabaseBootstrapper : IHostedService
         ("Youtube", false) => YouTubeLow,
         ("Kick", false) => KickLow,
         ("Facebook Gaming", false) => FacebookGamingLow,
+        ("TikTok", false) => TikTokLow,
         _ => new(2_000_000, 64_000, 1280, 720, 30,
             [("preset", "ultrafast"), ("tune", "zerolatency")])
     };

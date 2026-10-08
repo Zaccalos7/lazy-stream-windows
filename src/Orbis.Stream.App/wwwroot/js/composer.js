@@ -6,9 +6,10 @@
 // It runs in two modes. The layout page draws skeletons: slots, rectangles with nothing in them,
 // saved to start lives from, and the overlays the layout is dressed with - pictures with clear
 // parts, laid over the slots the way an overlay of Streamlabs is. The live wizard opens one of
-// them as its empty slots and its overlays, fixed where the layout put them; the sources are
-// dropped into the slots, and what is on the canvas when the live starts is saved as the scene of
-// that live alone: it is what the live restarts from, and it never joins the layouts.
+// them as its empty slots and its overlays; the sources are dropped into the slots, more overlays
+// can be laid over them from the same library, and what is on the canvas when the live starts is
+// saved as the scene of that live alone: it is what the live restarts from, and it never joins
+// the layouts.
 (() => {
   const root = document.querySelector("[data-composer]");
   if (!root) return;
@@ -21,9 +22,9 @@
   const hasPicture = kind => kind !== Kind.Microphone;
   const isSlot = item => item.slot === true;
   const isOverlay = item => item.kind === Kind.Overlay;
-  // The overlays of a layout are where the layout put them: in the live wizard the sources are
-  // what is being placed, and a frame that moved under a drag would be a live dressed by accident.
-  const isLocked = item => isOverlay(item) && !layoutMode;
+  // An overlay the live wizard opened with its layout: as free as any other, and named for where
+  // it came from, so a frame moved by mistake is recognised as the layout's in the list of layers.
+  const fromLayout = item => isOverlay(item) && item.fromLayout === true && !layoutMode;
   // A screen never has a sound. A camera opened as video=… has none of its own either: its sound
   // is a microphone linked to it (item.mic), which goes on air in the same dshow input as the
   // picture - video=…:audio=… - so the two stay in sync.
@@ -457,7 +458,7 @@
 
   const fill = uid => {
     const item = scene.items.find(entry => entry.uid === uid);
-    if (!item || !hasPicture(item.kind) || isLocked(item)) return;
+    if (!item || !hasPicture(item.kind)) return;
     // A slot has no shape of its own: filling it is the whole frame.
     Object.assign(item, isSlot(item) ? { x: 0, y: 0, w: scene.width, h: scene.height } : fitted(aspectOf(item)));
     item.autoSized = false;
@@ -606,7 +607,6 @@
   // first frame, which the server makes with ffmpeg.
   const overlayTileOf = (item, tile) => {
     tile.classList.add("is-overlay");
-    tile.classList.toggle("is-locked", isLocked(item));
 
     const cover = document.createElement("div");
     cover.className = "composer-tile-cover";
@@ -684,13 +684,12 @@
 
   // What a press at that point is meant for: the topmost picture under it. An overlay is mostly
   // clear, and a press on a clear part of it is meant for what shows through - the slot inside the
-  // frame of a webcam, not the frame drawn over the whole canvas. A fixed overlay is looked through
-  // entirely.
+  // frame of a webcam, not the frame drawn over the whole canvas.
   const pickAt = point => {
     for (let index = scene.items.length - 1; index >= 0; index--) {
       const item = scene.items[index];
       if (!hasPicture(item.kind) || !covers(item, point)) continue;
-      if (isOverlay(item) && (isLocked(item) || !opaqueAt(item, point))) continue;
+      if (isOverlay(item) && !opaqueAt(item, point)) continue;
       return item;
     }
     return null;
@@ -810,7 +809,7 @@
       const where = `${item.w}×${item.h} · ${item.x}, ${item.y}`;
       facts.textContent = !hasPicture(item.kind) ? word("audio-only")
         : isSlot(item) && !layoutMode ? `${word("slot-empty")} · ${where}`
-        : isLocked(item) ? `${word("overlay-locked")} · ${where}`
+        : fromLayout(item) ? `${word("overlay-locked")} · ${where}`
         : where;
       text.append(name, facts);
       if (item.kind === Kind.Camera) text.append(micPicker(item));
@@ -824,8 +823,7 @@
           render();
         }, item.audio));
       }
-      // A fixed overlay can be left out of this live, not moved: it is where the layout put it.
-      if (hasPicture(item.kind) && !isLocked(item)) {
+      if (hasPicture(item.kind)) {
         actions.append(
           layerButton("\uE70E", word("up"), () => moveInStack(item.uid, 1)),
           layerButton("\uE70D", word("down"), () => moveInStack(item.uid, -1)),
@@ -905,6 +903,9 @@
 
   const render = () => {
     stage.style.aspectRatio = `${scene.width} / ${scene.height}`;
+    // As wide as the column lets it, as long as it is no taller than the window: a canvas that
+    // stands up is bounded by its height, and its width follows it.
+    stage.style.maxWidth = `calc((100vh - 240px) * ${scene.width} / ${scene.height})`;
 
     // The DOM order of the tiles is their stacking order, the same one ffmpeg will use.
     for (const item of scene.items) {
@@ -965,7 +966,6 @@
     event.preventDefault();
     select(item.uid);
     stage.focus({ preventScroll: true });
-    if (isLocked(item)) return;
 
     const corner = event.target.dataset?.corner || null;
     const origin = { x: event.clientX, y: event.clientY };
@@ -1054,7 +1054,7 @@
     const step = event.shiftKey ? 10 : 1;
     const moves = { ArrowLeft: [-step, 0], ArrowRight: [step, 0], ArrowUp: [0, -step], ArrowDown: [0, step] };
     const move = moves[event.key];
-    if (!move || !hasPicture(item.kind) || isLocked(item)) return;
+    if (!move || !hasPicture(item.kind)) return;
     event.preventDefault();
     item.x += move[0];
     item.y += move[1];
@@ -1163,16 +1163,15 @@
   ghostFrame.addEventListener("error", () => { ghostFrame.hidden = true; });
 
   stage.addEventListener("dragover", event => {
-    if (layoutMode) {
-      // The layout page takes overlays: an entry of the library, or a picture from Explorer.
-      if (!carriesOverlay(event)) return;
+    if (overlayDrag(event)) {
+      // An overlay: an entry of the library, or a picture from Explorer.
       event.preventDefault();
       event.dataTransfer.dropEffect = "copy";
       stage.classList.add("is-over");
       showOverlayDrop(carriedOverlay, pointOnCanvas(event));
       return;
     }
-    if (!carriesSource(event)) return;
+    if (layoutMode || !carriesSource(event)) return;
     event.preventDefault();
     event.dataTransfer.dropEffect = "copy";
     stage.classList.add("is-over");
@@ -1193,8 +1192,7 @@
   });
 
   stage.addEventListener("drop", event => {
-    if (layoutMode) {
-      if (!carriesOverlay(event)) return;
+    if (overlayDrag(event)) {
       event.preventDefault();
       const at = pointOnCanvas(event);
       const name = event.dataTransfer.getData(overlayType);
@@ -1205,6 +1203,7 @@
       else if (!name) uploadOverlays([...(event.dataTransfer.files || [])], at);
       return;
     }
+    if (layoutMode) return;
 
     const id = event.dataTransfer?.getData(sourceType);
     const files = event.dataTransfer?.files;
@@ -1397,6 +1396,17 @@
   const carriesOverlay = event => {
     const types = [...(event.dataTransfer?.types || [])];
     return types.includes(overlayType) || types.includes("Files");
+  };
+
+  // What a drag on the canvas is. On the layout page everything is an overlay. In the live wizard a
+  // file from Explorer is a source when it is a video and an overlay when it is a picture (a logo,
+  // a GIF): the browser tells the kind of a dragged file while it is in the air, not its name.
+  const overlayDrag = event => {
+    if (layoutMode) return carriesOverlay(event);
+    const transfer = event.dataTransfer;
+    if ([...(transfer?.types || [])].includes(overlayType)) return true;
+    const files = [...(transfer?.items || [])].filter(item => item.kind === "file");
+    return files.length > 0 && files.every(item => item.type.startsWith("image/"));
   };
 
   // Where the overlay will land, drawn while it is in the air. A picture from Explorer has no size
@@ -1614,8 +1624,12 @@
 
   // ---------- Resolution ----------
 
-  // The outputs on offer, smallest first.
-  const sizes = [[1280, 720], [1920, 1080], [2560, 1440], [3840, 2160]];
+  // The outputs on offer, smallest first: lying down, and standing up for a live watched on a
+  // phone held upright (TikTok), where a canvas that lies down would go out between two bands.
+  const landscapeSizes = [[1280, 720], [1920, 1080], [2560, 1440], [3840, 2160]];
+  const portraitSizes = [[720, 1280], [1080, 1920]];
+  const isUpright = () => scene.height > scene.width;
+  const sizesOf = upright => upright ? portraitSizes : landscapeSizes;
 
   // The real resolution of a file, asked of ffprobe once per file: the catalog does not probe a
   // whole folder for it, and the still is scaled down so it cannot tell.
@@ -1655,14 +1669,17 @@
     .filter(item => hasPicture(item.kind) && item.sourceWidth > 0 && item.sourceHeight > 0)
     .sort((a, b) => b.w * b.h - a.w * a.h || a.uid - b.uid)[0] || null;
 
-  // Nothing above the video is offered: the live would only upscale it. A portrait video is
-  // measured on its long side the same way. A video smaller than every size still gets the first.
-  const allowedSizes = source => {
-    if (!source) return sizes;
+  // Nothing above the video is offered: the live would only upscale it. Sides are compared long
+  // to long and short to short, so a portrait video caps a portrait canvas and a landscape one the
+  // same way. A video smaller than every size still gets the first. The shape is the one of the
+  // canvas, unless the other one is asked for.
+  const allowedSizes = (source, upright = isUpright()) => {
+    const shaped = sizesOf(upright);
+    if (!source) return shaped;
     const long = Math.max(source.sourceWidth, source.sourceHeight);
     const short = Math.min(source.sourceWidth, source.sourceHeight);
-    const allowed = sizes.filter(([w, h]) => w <= long && h <= short);
-    return allowed.length ? allowed : sizes.slice(0, 1);
+    const allowed = shaped.filter(([w, h]) => Math.max(w, h) <= long && Math.min(w, h) <= short);
+    return allowed.length ? allowed : shaped.slice(0, 1);
   };
 
   // Every tile is scaled with the canvas, so a scene drawn for 1080p is the same scene in 720p.
@@ -1695,7 +1712,10 @@
     if (source && (key !== decidedBy || !offered)) resizeCanvas(...allowed[allowed.length - 1]);
     decidedBy = key;
 
-    sizeBox.replaceChildren(...allowed.map(([w, h]) => new Option(`${w} × ${h}`, `${w}x${h}`)));
+    // The sizes of the other shape come after, capped by the video the same way: picking one turns
+    // the canvas round.
+    const turned = allowedSizes(source, !isUpright());
+    sizeBox.replaceChildren(...[...allowed, ...turned].map(([w, h]) => new Option(`${w} × ${h}`, `${w}x${h}`)));
     // A layout drawn at a size that is not in the list keeps it until a video says otherwise.
     if (!allowed.some(([w, h]) => w === scene.width && h === scene.height)) {
       sizeBox.append(new Option(`${scene.width} × ${scene.height}`, `${scene.width}x${scene.height}`));
@@ -1749,7 +1769,7 @@
       name: saved?.name || "",
       width: saved?.width || 1920,
       height: saved?.height || 1080,
-      items: items.map(entry => entry.sourceKind === Kind.Overlay ? overlayOf(entry)
+      items: items.map(entry => entry.sourceKind === Kind.Overlay ? Object.assign(overlayOf(entry), { fromLayout: asSlots })
         : asSlots ? slotOf(entry, slotIndex++)
         : sourceOf(entry))
     };
@@ -1798,8 +1818,26 @@
   // A new output size keeps the layout: every tile is scaled with the canvas.
   sizeBox.addEventListener("change", () => {
     resizeCanvas(...sizeBox.value.split("x").map(Number));
+    fitResolution();
     render();
   });
+
+  // The live wizard picks where the live goes before the canvas is drawn: a destination watched on
+  // a phone held upright (TikTok, data-portrait on its pick) gets a canvas that stands up, and the
+  // others one that lies down - as long as nothing was laid on the canvas yet.
+  if (!layoutMode) {
+    document.addEventListener("change", event => {
+      const pick = event.target;
+      if (!(pick instanceof HTMLInputElement) || pick.name !== "configurationId" || !pick.checked) return;
+      const upright = pick.dataset.portrait === "1";
+      if (upright === isUpright() || scene.items.length > 0 || layoutPkid !== null) return;
+      resizeCanvas(...(upright ? [1080, 1920] : [1920, 1080]));
+      decidedBy = "";
+      fitResolution();
+      render();
+      markClean();
+    });
+  }
 
   // A layout sends its slots and its overlays, in the order they are stacked. The scene of a live
   // sends its sources, the overlays among them: a slot left empty is a rectangle with nothing in
@@ -1947,7 +1985,7 @@
 
   const boot = async () => {
     render();
-    await Promise.all([layoutMode ? loadLibrary() : loadCatalog(), loadScenes()]);
+    await Promise.all([layoutMode ? Promise.resolve() : loadCatalog(), loadLibrary(), loadScenes()]);
     const saved = await wantedScene(Number(root.dataset.scene || 0));
     if (saved) loadScene(saved);
   };

@@ -1,5 +1,6 @@
 @model MainLiveModel
 @inject Orbis.Stream.Core.Services.YouTubeAirWatch Air
+@inject Orbis.Stream.Core.Services.LiveTakeovers Takeovers
 @{
     var page = Model.Videos.Page;
     var pager = new PagerModel(page.Number, page.TotalPages, index => Url.Page("/MainLive", new { Model.LiveStatus, Model.ChannelName, Model.Platform, p = index })!);
@@ -37,6 +38,11 @@ else
 
                         var knownPlatform = LiveLinkView.PlatformOf(video.VideoLiveHistory?.StreamUrl);
                         var liveUrl = live ? LiveLinkView.UrlOf(video.VideoLiveHistory?.StreamUrl, video.ChannelName, platform, Air.OnAirVideoOf(historyPkid)) : null;
+                        // A live to TikTok is started again with the key of the new live (LiveStreamKeys).
+                        var askKey = Orbis.Stream.Core.Streaming.LiveStreamKeys.IsAskedFor(platform, video.VideoLiveHistory?.StreamUrl);
+                        // A picture of the scene deck standing in for the live: it stays until it is taken off.
+                        var standIn = live ? Takeovers.CurrentOf(historyPkid) : null;
+                        var liveTitle = (row.SceneName ?? video.Name) + (string.IsNullOrEmpty(video.ChannelName) ? "" : " · " + video.ChannelName);
                         <tr data-row>
                             <td>
                                 <span class="badge @LiveStatusView.Css(status)">@T[LiveStatusView.Key(status)]</span>
@@ -71,6 +77,13 @@ else
                             <td>@LiveStatusView.Date(video.StartDateLive, "dd/MM/yyyy HH:mm:ss")</td>
                             <td>
                                 <div class="actions">
+                                    @if (standIn is { Holds: true })
+                                    {
+                                        <button type="button" class="btn scene-row-resume" data-scene-row-resume data-video="@video.Pkid"
+                                                title="@string.Format(T["sceneOnAirNow"], standIn.Label)" aria-label="@T["sceneResume"]">
+                                            <i class="icon">&#xE768;</i>@T["sceneResume"]
+                                        </button>
+                                    }
                                     @* The mark of the platform the row is on air on, with the other
                                        icons rather than beside the channel name: it is what the icons
                                        are about, and the channel name is long enough on its own. *@
@@ -126,6 +139,12 @@ else
                                             </a>
                                         }
                                     }
+                                    @* The scene deck: its buttons are the same for every live, and they are pressed for this one. *@
+                                    <button type="button" class="btn subtle icon-only@(standIn is null ? "" : " is-on")" data-scene-deck-open
+                                            data-video="@video.Pkid" data-history="@historyPkid" data-live="@(live ? "1" : "0")" data-title="@liveTitle"
+                                            title="@T["sceneDeckOpen"]" aria-label="@T["sceneDeckOpen"]">
+                                        <partial name="_SceneDeckIcon" />
+                                    </button>
                                     @if (hasSetting && !row.IsPlaylist)
                                     {
                                         @if (live)
@@ -142,10 +161,14 @@ else
                                         <form method="post" asp-page="/MainLive" asp-page-handler="Stop" asp-all-route-data="Model.RowRoute(video.Pkid)" data-confirm="@T["stopLive"]">
                                             <button class="btn subtle icon-only danger" disabled="@(!live)" title="@T["stopLiveIconLabel"]" aria-label="@T["stopLiveIconLabel"]"><i class="icon">&#xE71A;</i></button>
                                         </form>
-                                        <form method="post" asp-page="/MainLive" asp-page-handler="Replay" asp-all-route-data="Model.RowRoute(video.Pkid)" data-confirm="@T["startLiveAlert"]">
+                                        <form method="post" asp-page="/MainLive" asp-page-handler="Replay" asp-all-route-data="Model.RowRoute(video.Pkid)"
+                                              data-confirm="@(askKey ? null : T["startLiveAlert"])" data-ask-key="@(askKey ? T["startLiveAlert"] : null)">
+                                            <input type="hidden" name="streamKey" />
                                             <button class="btn subtle icon-only success" disabled="@live" title="@T["startLiveIconLabel"]" aria-label="@T["startLiveIconLabel"]"><i class="icon">&#xE768;</i></button>
                                         </form>
-                                        <form method="post" asp-page="/MainLive" asp-page-handler="Restart" asp-all-route-data="Model.RowRoute(video.Pkid)" data-confirm="@T["restartLiveAlert"]">
+                                        <form method="post" asp-page="/MainLive" asp-page-handler="Restart" asp-all-route-data="Model.RowRoute(video.Pkid)"
+                                              data-confirm="@(askKey ? null : T["restartLiveAlert"])" data-ask-key="@(askKey ? T["restartLiveAlert"] : null)">
+                                            <input type="hidden" name="streamKey" />
                                             <button class="btn subtle icon-only caution" title="@T["restartLiveIconLabel"]" aria-label="@T["restartLiveIconLabel"]"><i class="icon">&#xE72C;</i></button>
                                         </form>
                                     }

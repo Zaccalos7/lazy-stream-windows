@@ -1,6 +1,7 @@
 @model SceneComposerModel
 @{
-    (int Width, int Height)[] sizes = [(1280, 720), (1920, 1080), (2560, 1440), (3840, 2160)];
+    // Lying down, then standing up for a live watched on a phone held upright (TikTok).
+    (int Width, int Height)[] sizes = [(1280, 720), (1920, 1080), (2560, 1440), (3840, 2160), (720, 1280), (1080, 1920)];
     var layout = Model.Layout;
 }
 
@@ -33,20 +34,6 @@
                 <button type="button" class="btn" data-composer-add-slot><i class="icon">&#xE710;</i>@T["addSlot"]</button>
             </div>
 
-            @* The pictures the layout is dressed with. They are uploaded rather than named by a path:
-               see OverlayLibrary for why. A file dropped on this card joins the library; one
-               dropped on the canvas joins the library and the canvas, where it was let go. *@
-            <div class="card composer-sources composer-overlays" data-composer-overlay-zone aria-label="@T["overlays"]">
-                <div class="composer-head">
-                    <h3>@T["overlays"]</h3>
-                </div>
-                <p class="caption">@T["overlaysHint"]</p>
-                <div class="composer-overlay-grid" data-composer-overlays data-state="loading" data-max-bytes="@Orbis.Stream.Core.Services.OverlayLibrary.MaxBytes">
-                    <div class="composer-loading"><span class="spinner"></span><span class="caption">@T["loading"]</span></div>
-                </div>
-                <input type="file" accept="@Orbis.Stream.Core.Services.OverlayLibrary.Accept" multiple hidden data-composer-overlay-file />
-                <button type="button" class="btn" data-composer-overlay-upload><i class="icon">&#xE898;</i>@T["uploadOverlay"]</button>
-            </div>
         }
         else
         {
@@ -77,6 +64,22 @@
                 </label>
             </div>
         }
+
+        @* The pictures a scene is dressed with, on both pages: the layout keeps them for every live
+           started from it, the live wizard lays them over this live alone. They are uploaded rather
+           than named by a path: see OverlayLibrary for why. A file dropped on this card joins the
+           library; one dropped on the canvas joins the library and the canvas, where it was let go. *@
+        <div class="card composer-sources composer-overlays" data-composer-overlay-zone aria-label="@T["overlays"]">
+            <div class="composer-head">
+                <h3>@T["overlays"]</h3>
+            </div>
+            <p class="caption">@T["overlaysHint"]</p>
+            <div class="composer-overlay-grid" data-composer-overlays data-state="loading" data-max-bytes="@Orbis.Stream.Core.Services.OverlayLibrary.MaxBytes">
+                <div class="composer-loading"><span class="spinner"></span><span class="caption">@T["loading"]</span></div>
+            </div>
+            <input type="file" accept="@Orbis.Stream.Core.Services.OverlayLibrary.Accept" multiple hidden data-composer-overlay-file />
+            <button type="button" class="btn" data-composer-overlay-upload><i class="icon">&#xE898;</i>@T["uploadOverlay"]</button>
+        </div>
     </aside>
 
     <section class="composer-main">

@@ -328,7 +328,7 @@
   "youtubeUnverified": "Vérification YouTube impossible",
   "youtubeUnverifiedHelp": "Orbis ne trouve pas la chaîne sur YouTube : il ne peut donc pas savoir si le direct est à l’antenne ni vous prévenir quand il ne l’est pas. Dans les paramètres de la chaîne, indiquez comme nom de chaîne l’identifiant YouTube (par ex. @vostrechaine, comme dans youtube.com/@vostrechaine) ou l’ID de la chaîne (UC…).",
   "ffmpegSender": "Publier avec ffmpeg",
-  "ffmpegSenderHelp": "ffmpeg maintient le direct en temps réel et le publie avec son propre RTMPS, comme OBS.",
+  "ffmpegSenderHelp": "ffmpeg maintient le direct en temps réel et le publie avec son propre RTMPS.",
   "playSpot": "Diffuser une publicité",
   "playSpotHint": "Sélectionnez la vidéo publicitaire à diffuser. Le flux actuel sera mis en pause et reprendra automatiquement à la fin de la pub.",
   "spotFile": "Fichier vidéo de la pub",

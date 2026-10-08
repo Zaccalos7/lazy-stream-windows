@@ -111,13 +111,13 @@
         <div class="form-grid pair">
             <label class="field">
                 <span>preset</span>
-                <select class="input" asp-for="Preset" asp-items="VideoSettingForm.PresetItems()" data-tuning required="@(!Model.LowLatency)">
+                <select class="input" asp-for="Preset" asp-items="VideoSettingForm.PresetItems()" data-tuning disabled="@Model.LowLatency" required="@(!Model.LowLatency)">
                     <option value="">–</option>
                 </select>
             </label>
             <label class="field">
                 <span>tune</span>
-                <select class="input" asp-for="Tune" asp-items="VideoSettingForm.TuneItems()" data-tuning required="@(!Model.LowLatency)">
+                <select class="input" asp-for="Tune" asp-items="VideoSettingForm.TuneItems()" data-tuning disabled="@Model.LowLatency" required="@(!Model.LowLatency)">
                     <option value="">–</option>
                 </select>
             </label>

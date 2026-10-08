@@ -328,7 +328,7 @@
   "youtubeUnverified": "YouTube inspici non potest",
   "youtubeUnverifiedHelp": "Orbis canalem in YouTube non invenit: scire non potest an emissio fiat, nec te monere cum non fit. In optionibus canalis nomen canalis pone ansam YouTube (e.g. @canalistuus) vel ID canalis (UC…).",
   "ffmpegSender": "Per ffmpeg emitte",
-  "ffmpegSenderHelp": "ffmpeg spectaculum in tempore vero tenet et per suum RTMPS emittit, sicut OBS.",
+  "ffmpegSenderHelp": "ffmpeg spectaculum in tempore vero tenet et per suum RTMPS emittit.",
   "playSpot": "Lude praeconium",
   "playSpotHint": "Elige visificum praeconii ad emittendum. Flumen praesens intermittetur et post praeconium sponte resumetur.",
   "spotFile": "Fasciculus visificus praeconii",

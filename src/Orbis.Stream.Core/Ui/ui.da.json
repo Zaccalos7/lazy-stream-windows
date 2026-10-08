@@ -328,7 +328,7 @@
   "youtubeUnverified": "Kan ikke kontrollere YouTube",
   "youtubeUnverifiedHelp": "Orbis kan ikke finde kanalen på YouTube, så den kan ikke se, om livestreamet sendes, eller advare dig, når det ikke gør. Angiv YouTube-handlen som kanalnavn i kanalindstillingerne (f.eks. @dinkanal, som i youtube.com/@dinkanal) eller kanal-ID’et (UC…).",
   "ffmpegSender": "Udgiv med ffmpeg",
-  "ffmpegSenderHelp": "ffmpeg holder livestreamen i realtid og udgiver den over sin egen RTMPS, ligesom OBS.",
+  "ffmpegSenderHelp": "ffmpeg holder livestreamen i realtid og udgiver den over sin egen RTMPS.",
   "playSpot": "Afspil reklamespot",
   "playSpotHint": "Vælg den reklamevideo, der skal sendes. Den aktuelle stream sættes på pause og fortsætter automatisk efter spottet.",
   "spotFile": "Reklamevideofil",

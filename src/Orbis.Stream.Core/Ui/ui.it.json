@@ -328,7 +328,7 @@
   "youtubeUnverified": "Verifica YouTube non possibile",
   "youtubeUnverifiedHelp": "Orbis non trova il canale su YouTube, quindi non può sapere se la live è in onda né avvisarti quando non lo è. Nelle impostazioni del canale metti come nome canale l’handle YouTube (es. @tuocanale, come in youtube.com/@tuocanale) oppure l’ID del canale (UC…).",
   "ffmpegSender": "Pubblica con ffmpeg",
-  "ffmpegSenderHelp": "ffmpeg tiene la live in tempo reale e la pubblica con il proprio RTMPS, come fa OBS.",
+  "ffmpegSenderHelp": "ffmpeg tiene la live in tempo reale e la pubblica con il proprio RTMPS.",
   "playSpot": "Manda in onda spot",
   "playSpotHint": "Seleziona il video dello spot da mandare in onda. La trasmissione attuale verrà messa in pausa e riprenderà automaticamente alla fine dello spot.",
   "spotFile": "File video dello spot",

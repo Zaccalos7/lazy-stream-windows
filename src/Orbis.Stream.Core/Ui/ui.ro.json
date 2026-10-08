@@ -328,7 +328,7 @@
   "youtubeUnverified": "YouTube nu poate fi verificat",
   "youtubeUnverifiedHelp": "Orbis nu găsește canalul pe YouTube, așa că nu poate ști dacă live-ul este în emisie și nici nu te poate avertiza când nu este. În setările canalului, pune ca nume de canal handle-ul YouTube (ex. @canalultau, ca în youtube.com/@canalultau) sau ID-ul canalului (UC…).",
   "ffmpegSender": "Publică cu ffmpeg",
-  "ffmpegSenderHelp": "ffmpeg ține live-ul în timp real și îl publică prin propriul RTMPS, ca OBS.",
+  "ffmpegSenderHelp": "ffmpeg ține live-ul în timp real și îl publică prin propriul RTMPS.",
   "playSpot": "Difuzează spot publicitar",
   "playSpotHint": "Selectați videoclipul publicitar de difuzat. Transmisiunea curentă se va întrerupe și va relua automat după spot.",
   "spotFile": "Fișier video publicitar",

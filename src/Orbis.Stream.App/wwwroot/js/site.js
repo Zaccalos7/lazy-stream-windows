@@ -891,7 +891,10 @@ for (const slider of preview?.querySelectorAll("[data-volume]") || []) {
 const paintTuning = box => {
   const form = box.closest("form");
   if (!form) return;
-  for (const select of form.querySelectorAll("[data-tuning]")) select.required = !box.checked;
+  for (const select of form.querySelectorAll("[data-tuning]")) {
+    select.required = !box.checked;
+    select.disabled = box.checked;
+  }
   for (const hint of form.querySelectorAll("[data-tuning-hint]")) hint.hidden = box.checked;
 };
 for (const box of document.querySelectorAll("[data-low-latency]")) {
@@ -1370,6 +1373,27 @@ for (const force of document.querySelectorAll("input[type=checkbox][data-force-t
       force.disabled = true;
     } else {
       force.disabled = false;
+    }
+  };
+
+  form.addEventListener("change", event => {
+    if (event.target.type === "radio") update();
+  });
+  update();
+}
+
+// Show element based on radio selection
+for (const show of document.querySelectorAll("[data-show-when]")) {
+  const form = show.closest("form");
+  if (!form) continue;
+
+  const target = show.dataset.showWhen;
+  const update = () => {
+    const radio = form.querySelector(`input[type=radio][value="${target}"]`);
+    if (radio && radio.checked) {
+      show.style.display = "";
+    } else {
+      show.style.display = "none";
     }
   };
 

@@ -328,7 +328,7 @@
   "youtubeUnverified": "Não é possível verificar o YouTube",
   "youtubeUnverifiedHelp": "O Orbis não encontra o canal no YouTube, por isso não consegue saber se a live está no ar nem avisar-te quando não está. Nas definições do canal, usa como nome do canal o identificador do YouTube (p. ex. @oteucanal, como em youtube.com/@oteucanal) ou o ID do canal (UC…).",
   "ffmpegSender": "Publicar com ffmpeg",
-  "ffmpegSenderHelp": "O ffmpeg mantém a live em tempo real e a publica com o próprio RTMPS, como o OBS.",
+  "ffmpegSenderHelp": "O ffmpeg mantém a live em tempo real e a publica com o próprio RTMPS.",
   "playSpot": "Reproduzir anúncio",
   "playSpotHint": "Selecione o vídeo do anúncio para transmitir. A transmissão atual será pausada e retomada automaticamente após o anúncio.",
   "spotFile": "Arquivo de vídeo do anúncio",

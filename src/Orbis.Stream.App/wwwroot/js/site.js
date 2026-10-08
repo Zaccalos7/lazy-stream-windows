@@ -1382,19 +1382,16 @@ for (const force of document.querySelectorAll("input[type=checkbox][data-force-t
   update();
 }
 
-// Show element based on radio selection
+// Show element based on radio selection: data-show-when names one value, or several separated by
+// spaces (the hint of the platforms whose ingest is the account's own shows for all of them).
 for (const show of document.querySelectorAll("[data-show-when]")) {
   const form = show.closest("form");
   if (!form) continue;
 
-  const target = show.dataset.showWhen;
+  const targets = show.dataset.showWhen.split(/\s+/).filter(Boolean);
   const update = () => {
-    const radio = form.querySelector(`input[type=radio][value="${target}"]`);
-    if (radio && radio.checked) {
-      show.style.display = "";
-    } else {
-      show.style.display = "none";
-    }
+    const picked = targets.some(target => form.querySelector(`input[type=radio][value="${target}"]`)?.checked);
+    show.style.display = picked ? "" : "none";
   };
 
   form.addEventListener("change", event => {

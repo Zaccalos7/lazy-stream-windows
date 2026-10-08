@@ -34,6 +34,7 @@ public sealed class LiveOutput : IAsyncDisposable
     {
         OutputUrl = outputUrl;
         Profile = profile;
+        Ladder = new BitrateLadder(profile.Adaptation, profile.MaxLead);
         _locator = locator;
         _logger = logger;
     }
@@ -135,6 +136,29 @@ public sealed class LiveOutput : IAsyncDisposable
     /// <summary>The level a pass of this live goes out at: the one asked for, under the cap.</summary>
     public EncoderQuality Cap(EncoderQuality wanted) =>
         QualityCap is { } cap && wanted != EncoderQuality.Auto && wanted > cap ? cap : wanted;
+
+    /// <summary>
+    /// The video bitrate of the live, following what the network carries. It lasts as long as the
+    /// live, across its passes and its reconnections, as the quality cap does: the next file of a
+    /// playlist goes out on the network the last one could not get through, not on a fresh guess.
+    /// </summary>
+    public BitrateLadder Ladder { get; }
+
+    /// <summary>
+    /// Reads the connection and says whether the video bitrate of the live has to change (see
+    /// <see cref="BitrateLadder.Observe"/>): null while it holds, and while there is no open
+    /// connection to read.
+    /// </summary>
+    public RateDecision? AdaptBitrate(int nominal, int audioBitrate)
+    {
+        FlvPacedRelay? relay;
+        lock (_gate)
+        {
+            relay = _relay;
+        }
+
+        return relay is { IsOpen: true } ? Ladder.Observe(relay.Sample(), nominal, audioBitrate) : null;
+    }
 
     /// <summary>
     /// Hands the FLV an encoder writes to the connection, opening it first when there is none or

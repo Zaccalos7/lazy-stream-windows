@@ -191,6 +191,57 @@ public sealed class DatabaseBootstrapperTests
     }
 
     [Fact]
+    public void StartAsync_SeedsKickAndFacebookGamingWithTheirOwnDefaults()
+    {
+        using var database = new TemporaryDatabase();
+        var settings = database.Repository<VideoSettingRepository>();
+
+        // Kick: 1080p30 at 6 Mbps with the 160 Kbps of sound it asks for.
+        var kick = Assert.Single(settings.FindByIsDefaultConfigurationTrueAndDefaultPlatformConfiguration("Kick"));
+        Assert.Equal("Default Kick", kick.Title);
+        Assert.Equal((1920, 1080, 30d), (kick.VideoWidth, kick.VideoHeight, kick.FrameRate));
+        Assert.Equal(6_000_000, kick.VideoBitrate);
+        Assert.Equal(160_000, kick.AudioSetting!.AudioBitrate);
+        Assert.Equal(2, kick.GopSize);
+
+        // Facebook Gaming: 1080p30 in the middle of the 3-6 Mbps Facebook takes for it, main profile.
+        var facebook = Assert.Single(settings.FindByIsDefaultConfigurationTrueAndDefaultPlatformConfiguration("Facebook Gaming"));
+        Assert.Equal("Default Facebook Gaming", facebook.Title);
+        Assert.Equal((1920, 1080, 30d), (facebook.VideoWidth, facebook.VideoHeight, facebook.FrameRate));
+        Assert.Equal(4_500_000, facebook.VideoBitrate);
+        Assert.Equal(128_000, facebook.AudioSetting!.AudioBitrate);
+        Assert.Contains(facebook.VideoSettingsOptions, option => option.Key == "profile" && option.Value == "main");
+
+        var lowKick = settings.FindByTitleAndPlatform("Default Low Kick", "Kick");
+        var lowFacebook = settings.FindByTitleAndPlatform("Default Low Facebook Gaming", "Facebook Gaming");
+        Assert.NotNull(lowKick);
+        Assert.NotNull(lowFacebook);
+        Assert.False(lowKick.IsDefaultConfiguration);
+        Assert.False(lowFacebook.IsDefaultConfiguration);
+        Assert.Equal((1280, 720, 3_000_000), (lowFacebook.VideoWidth, lowFacebook.VideoHeight, lowFacebook.VideoBitrate));
+    }
+
+    [Fact]
+    public async Task StartAsync_AddsTheNewPlatformsOnceToAnInstallationThatHadTheOldOnes()
+    {
+        using var database = new TemporaryDatabase();
+        var settings = database.Repository<VideoSettingRepository>();
+
+        // A second start, as every start of the application after the first one is.
+        await new DatabaseBootstrapper(
+                database.ConnectionFactory,
+                settings,
+                database.Repository<VideoRepository>(),
+                NullLogger<DatabaseBootstrapper>.Instance)
+            .StartAsync(CancellationToken.None);
+
+        foreach (var platform in new[] { "Twitch", "Youtube", "Kick", "Facebook Gaming" })
+        {
+            Assert.Single(settings.FindByIsDefaultConfigurationTrueAndDefaultPlatformConfiguration(platform));
+        }
+    }
+
+    [Fact]
     public void Schema_TurnsTheFfmpegDeliveryOnForYouTubeOnceAndOffForTwitch()
     {
         using var database = new TemporaryDatabase();
@@ -488,6 +539,97 @@ public sealed class LiveLinkTests
         Assert.Equal("platform-twitch", LiveLinkView.ClassOf("twitch"));
         Assert.Equal("platform-youtube", LiveLinkView.ClassOf("youtube"));
         Assert.Equal("platform-generic", LiveLinkView.ClassOf("anythingElse"));
+    }
+
+    private const string Kick = "rtmps://fa723fc1b171.global-contribute.live-video.net/app";
+    private const string Facebook = "rtmps://rtmp-api.facebook.com:443/rtmp";
+
+    [Theory]
+    // The presets of the channel settings...
+    [InlineData(Kick, "kick")]
+    [InlineData(Facebook, "facebook")]
+    // As the dashboards write them: with the slash at the end.
+    [InlineData(Facebook + "/", "facebook")]
+    [InlineData("rtmp://live.twitch.tv/app/", "twitch")]
+    // ...and the ingest an account or a live has of its own, which is never the preset.
+    [InlineData("rtmps://0123456789ab.global-contribute.live-video.net:443/app/", "kick")]
+    [InlineData("rtmps://live-api-s.facebook.com:443/rtmp/", "facebook")]
+    public void PlatformOf_KnowsKickAndFacebookByTheDomainOfTheirIngest(string streamUrl, string platform) =>
+        Assert.Equal(platform, LiveLinkView.PlatformOf(streamUrl));
+
+    [Fact]
+    public void PlatformOf_StillWantsThePresetForTheIngestsThatAreTheSameForEverybody()
+    {
+        // A Twitch server of its own is not the address the configuration form fills in.
+        Assert.Null(LiveLinkView.PlatformOf("rtmps://fra05.contribute.live-video.net/app"));
+    }
+
+    [Fact]
+    public void UrlOf_KickIsTheChannelAndFacebookGamingThePage()
+    {
+        Assert.Equal("https://kick.com/reprochannel", LiveLinkView.UrlOf(Kick, "ReproChannel", "kick"));
+        Assert.Equal("https://www.facebook.com/ReproGaming", LiveLinkView.UrlOf(Facebook, "ReproGaming", "facebook"));
+        Assert.Equal("https://www.facebook.com/repro", LiveLinkView.UrlOf("rtmps://live-api-s.facebook.com:443/rtmp/", "@repro", null));
+    }
+
+    [Fact]
+    public void KickAndFacebookGamingHaveTheirNamesMarksAndColours()
+    {
+        Assert.Equal("Kick", LiveLinkView.LabelOf("kick"));
+        Assert.Equal("Facebook Gaming", LiveLinkView.LabelOf("facebook"));
+
+        // The K of blocks, and the F of two blocks.
+        Assert.StartsWith("M1.333 0h8", LiveLinkView.MarkupOf("kick"), StringComparison.Ordinal);
+        Assert.StartsWith("M0 0v24h15.67", LiveLinkView.MarkupOf("facebook"), StringComparison.Ordinal);
+        var marks = new[] { "twitch", "youtube", "kick", "facebook", null }.Select(LiveLinkView.MarkupOf).ToList();
+        Assert.Equal(marks.Count, marks.Distinct().Count());
+
+        Assert.Equal("platform-kick", LiveLinkView.ClassOf("kick"));
+        Assert.Equal("platform-facebook", LiveLinkView.ClassOf("facebook"));
+    }
+
+    [Fact]
+    public void TheChannelSettingsOfferTheFourPlatformsWithTheirIngest()
+    {
+        Assert.Equal(["twitch", "youtube", "kick", "facebook"], MainChannelSettingModel.Platforms.Select(platform => platform.Value));
+        Assert.All(MainChannelSettingModel.Platforms, platform =>
+        {
+            Assert.StartsWith("rtmp", platform.StreamUrl, StringComparison.Ordinal);
+            // The preset is an ingest of the platform it is offered for.
+            Assert.Equal(platform.Platform, Orbis.Stream.Core.Streaming.StreamPlatforms.Detect(platform.StreamUrl + "/key"));
+        });
+
+        // Kick and Facebook are the two whose address can be the account's or the live's own.
+        Assert.Equal("kick facebook", MainChannelSettingModel.PersonalIngests);
+    }
+
+    [Fact]
+    public void ChoiceOf_ReadsTheNameThenTheIngestOfAConfiguration()
+    {
+        Assert.Equal("facebook", MainChannelSettingModel.ChoiceOf("Facebook")?.Value);
+        Assert.Equal("kick", MainChannelSettingModel.ChoiceOf(" kick ")?.Value);
+        Assert.Equal("kick", MainChannelSettingModel.ChoiceOf("my channel", Kick + "/")?.Value);
+        Assert.Equal("youtube", MainChannelSettingModel.ChoiceOf(null, "rtmps://a.rtmps.youtube.com/live2")?.Value);
+        Assert.Null(MainChannelSettingModel.ChoiceOf("my channel", "rtmp://my.cdn.example/live"));
+    }
+
+    [Fact]
+    public void TheLowDefaultsAreShownInTheLanguageOfThePage()
+    {
+        var text = new Orbis.Stream.Core.I18n.UiText(new Orbis.Stream.Core.I18n.Localizer(
+            new Orbis.Stream.Core.I18n.MessageCatalog(
+                Path.Combine(AppContext.BaseDirectory, "Messages"), NullLogger<Orbis.Stream.Core.I18n.MessageCatalog>.Instance),
+            new HttpContextAccessor()));
+
+        Assert.Equal("Default Low Kick", SettingTitleView.Of("Default Low Kick", text));
+        // A name with a space is a key without it.
+        Assert.Equal("Default Low Facebook Gaming", SettingTitleView.Of("Default Low Facebook Gaming", text));
+        Assert.Equal(text["defaultLowFacebookGaming"], SettingTitleView.Of("default low facebook gaming", text));
+        // The seed spells YouTube the way it was stored, and is shown the way it is spelled.
+        Assert.Equal("Default Low YouTube", SettingTitleView.Of("Default Low Youtube", text));
+        Assert.Equal("Default Kick", SettingTitleView.Of("Default Kick", text));
+        Assert.Equal("Mine", SettingTitleView.Of("Mine", text));
+        Assert.Equal(text["untitled"], SettingTitleView.Of("  ", text));
     }
 }
 

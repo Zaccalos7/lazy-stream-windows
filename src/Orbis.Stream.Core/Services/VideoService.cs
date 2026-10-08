@@ -61,9 +61,9 @@ public sealed class VideoService
     }
 
     /// <summary>The live page, one row per playlist: see <see cref="VideoRepository.FindLivePage"/>.</summary>
-    public SpringPage<LiveRow> GetLivePage(LiveStatus? liveStatus, string? channelName, PageRequest page)
+    public SpringPage<LiveRow> GetLivePage(LiveStatus? liveStatus, string? channelName, PageRequest page, string? platform = null)
     {
-        var result = _videoRepository.FindLivePage(liveStatus, channelName, page.Page, page.Size);
+        var result = _videoRepository.FindLivePage(liveStatus, channelName, page.Page, page.Size, platform: platform);
         return SpringPageFactory.Create(
             Map(result, row => new LiveRow(WithRelations(row.Video), row.Position, row.Total, row.Status, SceneNameOf(row.Video))),
             page.Sorts);

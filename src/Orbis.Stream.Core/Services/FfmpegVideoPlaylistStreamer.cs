@@ -1087,7 +1087,8 @@ public sealed class FfmpegVideoPlaylistStreamer : IVideoPlaylistStreamer
                 videoLiveHistoryPkid,
                 spotPath,
                 () => { },
-                cancellationToken).ConfigureAwait(false);
+                cancellationToken,
+                adaptBitrate: false).ConfigureAwait(false);
 
             if (outcome == StreamOutcome.Stopped)
             {
@@ -1136,8 +1137,8 @@ public sealed class FfmpegVideoPlaylistStreamer : IVideoPlaylistStreamer
 
     /// <summary>
     /// The picture a pass is encoded at: the one of the live on a connection that keeps one format
-    /// (YouTube) - a short of 432x208 on a 1080p live costs what a 1080p frame costs - or its own
-    /// everywhere else.
+    /// (YouTube, Kick, Facebook Gaming) - a short of 432x208 on a 1080p live costs what a 1080p
+    /// frame costs - or its own everywhere else.
     /// </summary>
     private static MediaOutput PictureOf(VideoSettingEntity setting, MediaProbeResult probe, LiveOutput? output)
     {
@@ -1269,13 +1270,15 @@ public sealed class FfmpegVideoPlaylistStreamer : IVideoPlaylistStreamer
     /// once, when the ingest starts taking the stream, and a live that never gets there, or that
     /// stops moving once it did, is killed instead of being left on the page as LIVE.
     /// </summary>
+    /// <param name="adaptBitrate">Whether a network that does not carry the live restarts the pass at a lower bitrate.</param>
     private async Task<StreamOutcome> MonitorAsync(
         FfmpegStreamingSession session,
         int videoKey,
         long videoLiveHistoryPkid,
         string inputPath,
         Action onAir,
-        CancellationToken cancellationToken)
+        CancellationToken cancellationToken,
+        bool adaptBitrate = true)
     {
         var announced = false;
         var warnedSlow = false;
@@ -1374,6 +1377,34 @@ public sealed class FfmpegVideoPlaylistStreamer : IVideoPlaylistStreamer
                         profile.Platform);
                 }
 
+                // The other way a live falls behind: the encoder keeps ahead and the network does
+                // not take what it makes. The live goes on at the bitrate the network was measured
+                // to carry, from where it is, and climbs back once the network carried it cleanly
+                // for a while (BitrateLadder). A spot is short: it plays out as it started, and the
+                // pass after it goes out at whatever the ladder decided meanwhile.
+                if (adaptBitrate && session.AdaptBitrate() is { } rate)
+                {
+                    if (rate.Lowers)
+                    {
+                        _logger.LogWarning(
+                            "The network to {Platform} carries {Throughput} kbps, less than the live: carrying on at {To} kbps of video instead of {From}",
+                            profile.Platform,
+                            rate.Throughput / 1000,
+                            rate.To / 1000,
+                            rate.From / 1000);
+                    }
+                    else
+                    {
+                        _logger.LogInformation(
+                            "The live to {Platform} went out clean at {From} kbps of video: trying {To}",
+                            profile.Platform,
+                            rate.From / 1000,
+                            rate.To / 1000);
+                    }
+
+                    return StreamOutcome.Reconfigured;
+                }
+
                 if (session.SinceLastAdvance > profile.StallTimeout)
                 {
                     _logger.LogWarning(
@@ -1448,6 +1479,8 @@ public sealed class FfmpegVideoPlaylistStreamer : IVideoPlaylistStreamer
     {
         StreamPlatform.Twitch => "Twitch",
         StreamPlatform.YouTube => "YouTube",
+        StreamPlatform.Kick => "Kick",
+        StreamPlatform.Facebook => "Facebook Gaming",
         _ => "RTMP"
     };
 

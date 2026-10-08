@@ -19,6 +19,16 @@ public sealed class StreamPlatformTests
     [InlineData("/tmp/output/stream.flv", StreamPlatform.Generic)]
     [InlineData("rtmp://notyoutube.com/live2/key", StreamPlatform.Generic)]
     [InlineData(null, StreamPlatform.Generic)]
+    // Kick is an IVS channel endpoint: twelve hex digits under the network Twitch ingests on too.
+    [InlineData("rtmps://fa723fc1b171.global-contribute.live-video.net/app/sk_us-west-2_key", StreamPlatform.Kick)]
+    [InlineData("rtmps://fa723fc1b171.global-contribute.live-video.net:443/app/sk_us-west-2_key", StreamPlatform.Kick)]
+    [InlineData("rtmps://0123456789ab.global-contribute.live-video.net/app/key", StreamPlatform.Kick)]
+    [InlineData("rtmp://ingest.kick.com/app/key", StreamPlatform.Kick)]
+    [InlineData("rtmps://fra05.contribute.live-video.net/app/key", StreamPlatform.Twitch)]
+    // Facebook publishes on more than one host of its own: the domain is what they share.
+    [InlineData("rtmps://rtmp-api.facebook.com:443/rtmp/FB-123-0-Abc", StreamPlatform.Facebook)]
+    [InlineData("rtmps://live-api-s.facebook.com:443/rtmp/FB-123-0-Abc", StreamPlatform.Facebook)]
+    [InlineData("rtmps://notfacebook.com/rtmp/key", StreamPlatform.Generic)]
     public void Detect_ReadsThePlatformOffTheHost(string? url, StreamPlatform expected) =>
         Assert.Equal(expected, StreamPlatforms.Detect(url));
 
@@ -55,6 +65,61 @@ public sealed class StreamPlatformTests
         Assert.True(StreamPlatformProfile.YouTube.RequiresAudio);
         Assert.False(StreamPlatformProfile.Twitch.RequiresAudio);
         Assert.False(StreamPlatformProfile.Generic.UsesRelay);
+
+        Assert.Same(StreamPlatformProfile.Kick, StreamPlatformProfile.For("rtmps://fa723fc1b171.global-contribute.live-video.net/app/key"));
+        Assert.Same(StreamPlatformProfile.Facebook, StreamPlatformProfile.For("rtmps://rtmp-api.facebook.com:443/rtmp/key"));
+    }
+
+    [Fact]
+    public void KickIsDeliveredTheWayTwitchIsAndFacebookGamingTheWayYouTubeIs()
+    {
+        // The two deliveries stay two: the relay's clock over the native RTMP for a low latency
+        // player, the ffmpeg sender with a head start for a player that buffers.
+        var kick = StreamPlatformProfile.Kick;
+        Assert.Equal(StreamPlatform.Kick, kick.Platform);
+        Assert.Equal(RelayPacing.Relay, kick.Pacing);
+        Assert.Equal(RelayTransport.NativeRtmp, kick.Transport);
+        Assert.Equal(StreamPlatformProfile.Twitch.Preroll, kick.Preroll);
+        Assert.Equal(StreamPlatformProfile.Twitch.MaxLead, kick.MaxLead);
+        Assert.Same(StreamPlatformProfile.Twitch.Adaptation, kick.Adaptation);
+        // With what IVS needs on top of it.
+        Assert.True(kick.RequiresAudio);
+        Assert.Equal(48_000, kick.AudioSampleRate);
+        Assert.True(kick.UniformFormat);
+        Assert.False(kick.ChoosableTransport);
+
+        var facebook = StreamPlatformProfile.Facebook;
+        Assert.Equal(StreamPlatform.Facebook, facebook.Platform);
+        Assert.Equal(RelayPacing.Sender, facebook.Pacing);
+        Assert.Equal(RelayTransport.FfmpegSender, facebook.Transport);
+        Assert.Equal(StreamPlatformProfile.YouTube.Preroll, facebook.Preroll);
+        Assert.Equal(StreamPlatformProfile.YouTube.MaxLead, facebook.MaxLead);
+        Assert.Same(StreamPlatformProfile.YouTube.Adaptation, facebook.Adaptation);
+        // Facebook ends a broadcast without sound, or one that changes its settings, and wants CBR.
+        Assert.True(facebook.RequiresAudio);
+        Assert.Equal(48_000, facebook.AudioSampleRate);
+        Assert.True(facebook.UniformFormat);
+        Assert.True(facebook.ConstantBitrate);
+        // The switch of the channel settings stays YouTube's.
+        Assert.False(facebook.ChoosableTransport);
+    }
+
+    [Fact]
+    public void ThePlatformsAdaptTheirBitrateAtTheirOwnPaceAndBoundTheirKeyframes()
+    {
+        Assert.Same(RateAdaptation.LowLatency, StreamPlatformProfile.Twitch.Adaptation);
+        Assert.Same(RateAdaptation.Buffered, StreamPlatformProfile.YouTube.Adaptation);
+        Assert.True(RateAdaptation.LowLatency.MaxDrift < RateAdaptation.Buffered.MaxDrift);
+        Assert.True(RateAdaptation.LowLatency.Window < RateAdaptation.Buffered.Window);
+
+        // A custom ingest has no relay to measure the network on, and keeps the rate it always had.
+        Assert.Null(StreamPlatformProfile.Generic.Adaptation);
+        Assert.Equal(TimeSpan.Zero, StreamPlatformProfile.Generic.RateBuffer);
+        foreach (var profile in new[] { StreamPlatformProfile.Twitch, StreamPlatformProfile.YouTube, StreamPlatformProfile.Kick, StreamPlatformProfile.Facebook })
+        {
+            Assert.Equal(TimeSpan.FromSeconds(1), profile.RateBuffer);
+            Assert.Equal(2, profile.KeyframeSeconds);
+        }
     }
 }
 
@@ -123,6 +188,24 @@ public sealed class FlvPacedRelayTests
 
         Assert.Equal(flv, destination.ToArray());
         Assert.Equal(133, relay.SentTimestampMilliseconds);
+    }
+
+    [Fact]
+    public async Task Relay_CountsWhatItSentForTheBitrateLadder()
+    {
+        var flv = Flv([0, 33, 66, 100, 133]);
+        var relay = new FlvPacedRelay(new MemoryStream(flv), new MemoryStream(), Paced, NullLogger.Instance);
+        relay.Start();
+        await relay.Completion.WaitAsync(TimeSpan.FromSeconds(5));
+
+        var sample = relay.Sample();
+
+        // Every tag the sink took, header and trailer included: the FLV less its own header.
+        Assert.Equal(flv.Length - 13, sample.Bytes);
+        Assert.Equal(relay.BytesSent, sample.Bytes);
+        Assert.Equal(133, sample.MediaMilliseconds);
+        // Nothing is left queued: a lead of nothing, not the lead of the last frame sent.
+        Assert.Equal(0, sample.LeadMilliseconds);
     }
 
     [Fact]

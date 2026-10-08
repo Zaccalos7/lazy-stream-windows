@@ -32,7 +32,7 @@ public sealed class EncoderTuningService
     public const double RequiredSpeed = 2.0;
 
     /// <summary>The platforms of the settings this application seeds and owns.</summary>
-    private static readonly string[] DefaultPlatforms = ["Twitch", "Youtube"];
+    private static readonly string[] DefaultPlatforms = ["Twitch", "Youtube", "Kick", "Facebook Gaming"];
 
     /// <summary>The GPU encoders tried, in order; the first one that opens on this machine is used.</summary>
     private static readonly string[] HardwareEncoders = ["h264_nvenc", "h264_qsv", "h264_amf"];

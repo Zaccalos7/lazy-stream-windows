@@ -100,6 +100,8 @@ working directory when writable, then `~/.orbis-stream`.
 | `<data>/logs/twitch.log`  | application log                                |
 | `<data>/webview2`         | WebView2 user data folder                      |
 | `<cwd>/images`            | images uploaded through `/image/upload`        |
+| `<data>/overlays`         | overlay library of the layouts                 |
+| `<data>/scene-media`      | files of the scene deck buttons                |
 
 ## Configuration
 
@@ -122,6 +124,7 @@ working directory when writable, then `~/.orbis-stream`.
 | Video setting | `GET|POST|PUT|DELETE /video-setting/*`                                                        |
 | System        | `GET /taskManager/statistics/{allInfo,cpu,ram,swap,cpu/temperature,gpu/temperature}`       |
 | Image         | `POST /image/upload`, `GET /image/loadimage`                                                   |
+| Scene deck    | `GET|POST /scene-buttons`, `PUT|DELETE /scene-buttons/{pkid}`, `POST /scene-buttons/media?name=`, `GET /scene-buttons/media/{name}/still`, `GET /live/{pkid}/scene`, `POST /live/{pkid}/scene/{button}`, `POST /live/{pkid}/scene/resume` |
 | Docs          | `GET /documentazione`, `GET /swagger-ui.html`                                                  |
 
 Responses keep the conventions the frontend expects:
@@ -168,6 +171,22 @@ on every sample of the push channel.
 4. `PUT /live/stop-live` (or the frontend) flips the live status, which terminates the process
    tree and closes the playlist; the row ends in the `ENDED` state.
 
+### Scene deck
+
+The buttons of the scene deck (up to six, the same for every live) put a video, a banner or an
+image on air in place of a running live, the way Streamlabs switches to a scene. They are opened
+from the row of a live and from the preview, and their keys work on those two pages only after the
+panel has been opened for that live; every press asks for confirmation.
+
+- A request is queued per live (`LiveTakeovers`): the streaming loop hands the program over at the
+  position it reached, on the same connection to the platform, and brings it back from there.
+- A video plays once and the live comes back by itself; an image (a still is decoded once, an
+  animation loops) stays until *Resume live*, which pulses in the live row and in the preview.
+- Spots go through the same queue: they wait for a video on air to end, and take the place of an
+  image.
+- The files are uploaded into `<data>/scene-media` and served only as frames, by name, never by
+  path, for the reason the overlay library is (the server listens on every interface).
+
 ## Repository layout
 
 ```
@@ -183,7 +202,7 @@ samples/overlays          test overlays for the layouts page (PNG, animated WebM
 `wwwroot/css` holds one concern per file. The layout links the seven shared sheets in order
 (`tokens`, `base`, `layout`, `controls`, `surfaces`, `overlays`, `feedback`); a sheet of a single
 page travels with that page in its own `Styles` section (`composer.css` on the live management
-and the layouts page, `preview.css`, `meters.css`, `cleanup.css`, `dashboard.css`), and the
+and the layouts page, `scenes.css` on the live management and the preview, `preview.css`, `meters.css`, `cleanup.css`, `dashboard.css`), and the
 countdown page stands outside the shell and carries `tokens`, `base` and `countdown` on its own.
 Colours, shadows and radii are declared once, in `tokens.css`: a sheet that needs a tone names a
 property, and `StyleSheetTests` fails the build if a sheet reads a property no sheet defines or if

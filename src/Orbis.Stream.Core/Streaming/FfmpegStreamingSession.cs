@@ -42,7 +42,6 @@ public sealed class FfmpegStreamingSession : IAsyncDisposable
     private long _onAirSinceTicks;
     private int _stopRequested;
     private int _restartRequested;
-    private int _yieldRequested;
     private int _endedNaturally;
 
     private FfmpegStreamingSession(
@@ -238,7 +237,6 @@ public sealed class FfmpegStreamingSession : IAsyncDisposable
     /// loop watches this flag and does exactly that.
     /// </summary>
     public bool RestartRequested => Volatile.Read(ref _restartRequested) == 1;
-    public bool YieldRequested => Volatile.Read(ref _yieldRequested) == 1;
 
     public bool EndedNaturally => Volatile.Read(ref _endedNaturally) == 1;
 
@@ -285,7 +283,8 @@ public sealed class FfmpegStreamingSession : IAsyncDisposable
         string? previewPath = null,
         StreamPlatformProfile? profile = null,
         LiveOutput? output = null,
-        EncoderQuality? quality = null)
+        EncoderQuality? quality = null,
+        bool alwaysSound = false)
     {
         // The platform is read off the ingest; a caller may name it, which is how a relay is
         // exercised against a file on disk.
@@ -298,7 +297,7 @@ public sealed class FfmpegStreamingSession : IAsyncDisposable
         var frame = profile.UniformFormat ? output?.Pin(FfmpegCommandBuilder.FrameOfLive(setting, own)) : null;
         var arguments = FfmpegCommandBuilder.Build(
             new FfmpegStreamRequest(
-                inputPath, outputUrl, probe, setting, resumeFrom, previewPath, profile, quality, frame, BitrateOf(setting, output)));
+                inputPath, outputUrl, probe, setting, resumeFrom, previewPath, profile, quality, frame, BitrateOf(setting, output), alwaysSound));
         var session = Launch(locator, videoPkid, inputPath, outputUrl, arguments, probe, frame ?? own, resumeFrom, profile, logger, output);
         session.Measure(setting, profile);
         return session;
@@ -325,7 +324,8 @@ public sealed class FfmpegStreamingSession : IAsyncDisposable
         string? previewPath = null,
         StreamPlatformProfile? profile = null,
         LiveOutput? output = null,
-        EncoderQuality? quality = null)
+        EncoderQuality? quality = null,
+        bool alwaysSound = false)
     {
         profile ??= output?.Profile ?? StreamPlatformProfile.For(outputUrl);
 
@@ -338,7 +338,7 @@ public sealed class FfmpegStreamingSession : IAsyncDisposable
             : null;
         var arguments = FfmpegCommandBuilder.BuildComposition(new FfmpegCompositionRequest(
             items, outputUrl, setting, canvasWidth, canvasHeight, canvasFrameRate, resumeFrom, duration, previewPath, profile, quality, frame,
-            BitrateOf(setting, output)));
+            BitrateOf(setting, output), alwaysSound));
 
         var mediaOutput = frame ?? new MediaOutput(canvasWidth, canvasHeight, frameRate);
         var sound = FfmpegCommandBuilder.CarriesSound(items);
@@ -485,7 +485,6 @@ public sealed class FfmpegStreamingSession : IAsyncDisposable
 
     /// <summary>Asks the streaming loop to start this transcode again with a new configuration.</summary>
     public void RequestRestart() => Interlocked.Exchange(ref _restartRequested, 1);
-    public void Yield() => Interlocked.Exchange(ref _yieldRequested, 1);
 
     /// <summary>
     /// Reads the <c>-progress</c> block of ffmpeg, which repeats the state of the transcode until

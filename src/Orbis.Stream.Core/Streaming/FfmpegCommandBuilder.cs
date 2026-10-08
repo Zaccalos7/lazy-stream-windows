@@ -33,7 +33,14 @@ public sealed record FfmpegStreamRequest(
     /// The video bitrate the live goes out at when the network was measured to carry less than
     /// the setting (see <see cref="BitrateLadder"/>). Null is the bitrate of the setting.
     /// </summary>
-    int? Bitrate = null);
+    int? Bitrate = null,
+    /// <summary>
+    /// Whether the pass carries a sound track whatever the platform requires: a silent one when the
+    /// file has none. What goes on air in place of the program of a live (a spot, a scene button)
+    /// is set to it, so the track the viewers hear does not drop out under them for as long as it
+    /// is on, which a player waiting for sound shows as a live that froze.
+    /// </summary>
+    bool AlwaysSound = false);
 
 /// <summary>One source on the canvas, as the command line needs it.</summary>
 public sealed record FfmpegCompositionItem(
@@ -97,7 +104,9 @@ public sealed record FfmpegCompositionRequest(
     /// </summary>
     MediaOutput? Frame = null,
     /// <summary>The video bitrate decided by the network (see <see cref="BitrateLadder"/>); null is the setting's.</summary>
-    int? Bitrate = null);
+    int? Bitrate = null,
+    /// <summary>Whether the canvas carries a sound track whatever is heard on it (see <see cref="FfmpegStreamRequest.AlwaysSound"/>).</summary>
+    bool AlwaysSound = false);
 
 /// <summary>
 /// Translates the <c>FFmpegFrameRecorder</c> configuration of <c>StreamService</c> into the
@@ -203,10 +212,10 @@ public static class FfmpegCommandBuilder
         arguments.Add("-i");
         arguments.Add(request.InputPath);
 
-        var silence = NeedsSilence(profile, probe.HasAudio);
+        var silence = NeedsSilence(profile, probe.HasAudio, request.AlwaysSound);
         if (silence)
         {
-            AppendSilenceInput(arguments, profile!);
+            AppendSilenceInput(arguments, profile);
         }
 
         // JavaCV mapped the grabbed video/audio streams of the input file.
@@ -244,7 +253,8 @@ public static class FfmpegCommandBuilder
             scale,
             profile,
             request.Quality,
-            request.Bitrate);
+            request.Bitrate,
+            request.AlwaysSound);
 
         // The silent track never ends: the picture decides when the live does.
         if (silence)
@@ -334,10 +344,10 @@ public static class FfmpegCommandBuilder
         }
 
         // The silent track is the input after the last source, so the indexes of the graph stay put.
-        var silence = NeedsSilence(profile, HasAudioMix(items));
+        var silence = NeedsSilence(profile, HasAudioMix(items), request.AlwaysSound);
         if (silence)
         {
-            AppendSilenceInput(arguments, profile!);
+            AppendSilenceInput(arguments, profile);
         }
 
         // A label of the graph can feed one output only: with a preview the composed picture is
@@ -382,7 +392,7 @@ public static class FfmpegCommandBuilder
         // The composed picture is already the size the canvas is, so the encoder is not asked to
         // scale again: -vf here would resize the result of the composition, not its base.
         AppendEncoderArguments(
-            arguments, setting, frameRate, HasAudioMix(items) || silence, channels: silence || profile is { UniformFormat: true } ? 2 : 0, scaleFilter: null, profile, request.Quality, request.Bitrate);
+            arguments, setting, frameRate, HasAudioMix(items) || silence, channels: silence || profile is { UniformFormat: true } ? 2 : 0, scaleFilter: null, profile, request.Quality, request.Bitrate, request.AlwaysSound);
 
         // A canvas of devices has no end and neither has the silent track: -shortest only matters
         // for a canvas of files, whose picture ends when its longest file does.
@@ -944,6 +954,26 @@ public static class FfmpegCommandBuilder
         $"format=yuva420p,premultiply=inplace=1,scale={Even(width)}:{Even(height)},setsar=1");
 
     /// <summary>
+    /// Where a picture of one size goes on a frame of another, fitted whole: scaled down or up
+    /// until it touches two sides, and centred. Even numbers, because the tiles of a canvas are.
+    /// A picture that does not know its size fills the frame.
+    /// </summary>
+    public static (int X, int Y, int Width, int Height) Contain(int width, int height, int frameWidth, int frameHeight)
+    {
+        var frameW = Even(frameWidth);
+        var frameH = Even(frameHeight);
+        if (width <= 0 || height <= 0)
+        {
+            return (0, 0, frameW, frameH);
+        }
+
+        var scale = Math.Min((double)frameW / width, (double)frameH / height);
+        var w = Math.Clamp(Even((int)Math.Round(width * scale)), 2, frameW);
+        var h = Math.Clamp(Even((int)Math.Round(height * scale)), 2, frameH);
+        return (Even((frameW - w) / 2), Even((frameH - h) / 2), w, h);
+    }
+
+    /// <summary>
     /// A picture of any size, fitted whole into a frame of another one: scaled down or up until it
     /// touches two sides, centred, and the rest of the frame black. Square pixels, so a player
     /// does not stretch it back.
@@ -1042,7 +1072,8 @@ public static class FfmpegCommandBuilder
         string? scaleFilter,
         StreamPlatformProfile? profile = null,
         EncoderQuality? quality = null,
-        int? bitrate = null)
+        int? bitrate = null,
+        bool alwaysSound = false)
     {
         // The relay reads FLV whatever the setting names: it is the container of RTMP, and the
         // only one whose tags carry the timestamp the pacer needs.
@@ -1255,10 +1286,11 @@ public static class FfmpegCommandBuilder
             return;
         }
 
-        // A platform that requires sound gets AAC even from a setting that names no audio: a
-        // track that is mapped and not encoded is a command ffmpeg refuses.
+        // A platform that requires sound gets AAC even from a setting that names no audio, and so
+        // does a pass that always carries one: a track that is mapped and not encoded is a command
+        // ffmpeg refuses.
         var audio = setting.AudioSetting;
-        if (audio is null && profile is not { RequiresAudio: true })
+        if (audio is null && profile is not { RequiresAudio: true } && !alwaysSound)
         {
             return;
         }
@@ -1487,22 +1519,22 @@ public static class FfmpegCommandBuilder
         return arguments;
     }
 
-    /// <summary>Whether the platform needs a sound the source does not have.</summary>
-    private static bool NeedsSilence(StreamPlatformProfile? profile, bool hasAudio) =>
-        profile is { RequiresAudio: true } && !hasAudio;
+    /// <summary>Whether the platform, or the pass itself, needs a sound the source does not have.</summary>
+    private static bool NeedsSilence(StreamPlatformProfile? profile, bool hasAudio, bool always) =>
+        (always || profile is { RequiresAudio: true }) && !hasAudio;
 
     /// <summary>
     /// A silent stereo track at the rate of the platform. YouTube keeps a live with no audio
     /// stream off air - the connection is accepted, the broadcast never starts - and silence is
-    /// the cheapest audio there is.
+    /// the cheapest audio there is. Without a platform to ask, 48 kHz is what every one of them takes.
     /// </summary>
-    private static void AppendSilenceInput(List<string> arguments, StreamPlatformProfile profile)
+    private static void AppendSilenceInput(List<string> arguments, StreamPlatformProfile? profile)
     {
         arguments.Add("-f");
         arguments.Add("lavfi");
         arguments.Add("-i");
         arguments.Add(string.Create(
-            CultureInfo.InvariantCulture, $"anullsrc=channel_layout=stereo:sample_rate={profile.AudioSampleRate}"));
+            CultureInfo.InvariantCulture, $"anullsrc=channel_layout=stereo:sample_rate={profile?.AudioSampleRate ?? 48_000}"));
     }
 
     internal static int Even(int value) => value - (value % 2);

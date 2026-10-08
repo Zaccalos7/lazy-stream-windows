@@ -45,6 +45,7 @@ public static class OrbisEndpoints
         MapTaskManager(app);
         MapPreview(app);
         MapScene(app);
+        MapSceneButtons(app);
         MapUpdates(app);
         return app;
     }
@@ -247,6 +248,68 @@ public static class OrbisEndpoints
             service.StopVideoStreamingByPkid(videoLivePkid);
             localizer.PrintMessage("live.stopped");
             return AsResult(responses.Build("live.stopped", StatusCodes.Status200OK));
+        });
+
+        // The scene deck of a running live: what is on air in place of its program, a button to put
+        // on air now, and the way back to the program. Any row of the live answers for all of it.
+        group.MapGet("/{pkid:int}/scene", (int pkid, StreamingService service) => Results.Ok(service.SceneStateOf(pkid)));
+
+        group.MapPost("/{pkid:int}/scene/resume", (int pkid, StreamingService service) => AsResult(service.ResumeProgram(pkid)));
+
+        group.MapPost("/{pkid:int}/scene/{button:long}", (int pkid, long button, StreamingService service) =>
+            AsResult(service.PlaySceneButton(pkid, button)));
+    }
+
+    /// <summary>
+    /// The buttons of the scene deck and the files they carry (see <see cref="SceneButtonService"/>).
+    /// A file comes in as the body of the request, the way the browser hands it over, and goes out
+    /// as a frame of it, by its name in the folder: never by a path.
+    /// </summary>
+    private static void MapSceneButtons(IEndpointRouteBuilder app)
+    {
+        var group = app.MapGroup("/scene-buttons");
+
+        group.MapGet("", (SceneButtonService service) => Results.Ok(service.List()));
+
+        group.MapPost("", (SceneButtonRequest? request, SceneButtonService service) =>
+            Results.Json(service.Create(request), statusCode: StatusCodes.Status201Created));
+
+        group.MapPut("/{pkid:long}", (long pkid, SceneButtonRequest? request, SceneButtonService service) =>
+            Results.Ok(service.Update(pkid, request)));
+
+        group.MapDelete("/{pkid:long}", (long pkid, SceneButtonService service) => AsResult(service.Delete(pkid)));
+
+        // The file is the whole body, and its name is in the query: a clip is too big for a form
+        // to be worth its parsing, and Kestrel would stop it at 30 MB unless told otherwise.
+        group.MapPost("/media", async (
+            HttpRequest request,
+            string? name,
+            SceneButtonService service,
+            CancellationToken cancellationToken) =>
+        {
+            if (request.HttpContext.Features.Get<Microsoft.AspNetCore.Http.Features.IHttpMaxRequestBodySizeFeature>() is { IsReadOnly: false } limit)
+            {
+                limit.MaxRequestBodySize = SceneButtonService.MaxBytes + 1024 * 1024;
+            }
+
+            var media = await service.AddMediaAsync(name, request.Body, cancellationToken).ConfigureAwait(false);
+            return Results.Json(media, statusCode: StatusCodes.Status201Created);
+        });
+
+        // The name of a file is its content, so a frame of it is the same frame for ever.
+        group.MapGet("/media/{name}/still", async (
+            string name,
+            HttpContext context,
+            SceneButtonService service,
+            CancellationToken cancellationToken) =>
+        {
+            if (await service.StillAsync(name, cancellationToken).ConfigureAwait(false) is not { } still)
+            {
+                return Results.NoContent();
+            }
+
+            context.Response.Headers.CacheControl = "public, max-age=31536000, immutable";
+            return Results.File(still.Bytes, still.ContentType);
         });
     }
 

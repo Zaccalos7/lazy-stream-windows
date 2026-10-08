@@ -66,7 +66,11 @@ public sealed record LiveSnapshot(
     bool PlatformOffAir = false,
     bool PlatformUnverified = false,
     /// <summary>The video YouTube broadcasts the live as, once it was seen on air (YouTubeAirWatch).</summary>
-    string? PlatformVideoId = null)
+    string? PlatformVideoId = null,
+    /// <summary>The live this is, which the scene deck is armed for (see LiveTakeovers).</summary>
+    long? History = null,
+    /// <summary>What is on air in place of the program, when something is: a spot or a scene button.</summary>
+    LiveScene? Scene = null)
 {
     public static LiveSnapshot Offline(IReadOnlyList<LiveOption> running) => new(
         false,
@@ -127,6 +131,7 @@ public sealed class LivePreviewService
     private readonly ResponseFactory _responses;
     private readonly Localizer _localizer;
     private readonly LiveChangeNotifier _notifier;
+    private readonly LiveTakeovers _takeovers;
     private readonly ILogger<LivePreviewService> _logger;
 
     public LivePreviewService(
@@ -139,6 +144,7 @@ public sealed class LivePreviewService
         ResponseFactory responses,
         Localizer localizer,
         LiveChangeNotifier notifier,
+        LiveTakeovers takeovers,
         ILogger<LivePreviewService> logger)
     {
         _sessions = sessions;
@@ -150,6 +156,7 @@ public sealed class LivePreviewService
         _responses = responses;
         _localizer = localizer;
         _notifier = notifier;
+        _takeovers = takeovers;
         _logger = logger;
     }
 
@@ -248,7 +255,9 @@ public sealed class LivePreviewService
             // Studio rating the stream "excellent" is all the user would otherwise have to go by.
             _air.IsOffAir(video.VideoLiveHistoryId),
             _air.IsUnverified(video.VideoLiveHistoryId),
-            _air.OnAirVideoOf(video.VideoLiveHistoryId));
+            _air.OnAirVideoOf(video.VideoLiveHistoryId),
+            video.VideoLiveHistoryId,
+            LiveScene.Of(_takeovers.CurrentOf(video.VideoLiveHistoryId)));
     }
 
     /// <summary>

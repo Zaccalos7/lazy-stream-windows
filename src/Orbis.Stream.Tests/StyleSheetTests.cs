@@ -18,6 +18,7 @@ public sealed partial class StyleSheetTests : IClassFixture<ApplicationFixture>
         new Dictionary<string, string[]>(StringComparer.Ordinal)
         {
             ["composer"] = ["/orbis/mainLive", "/orbis/mainLayout", "/orbis/mainPreview"],
+            ["scenes"] = ["/orbis/mainLive", "/orbis/mainPreview"],
             ["preview"] = ["/orbis/mainPreview"],
             ["meters"] = ["/orbis/mainTaskManager"],
             ["cleanup"] = ["/orbis/mainLiveHistory"],

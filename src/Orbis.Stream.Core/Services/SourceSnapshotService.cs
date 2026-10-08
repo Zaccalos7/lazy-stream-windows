@@ -43,11 +43,13 @@ public sealed class SourceSnapshotService
 
     /// <summary>
     /// The first frame of an overlay of the library, as a PNG with its alpha: what the layout page
-    /// draws for a file the browser cannot play. Not reachable from the snapshot route, which takes
-    /// a path from the query string: the library has checked the file is one of its own.
+    /// draws for a file the browser cannot play, and the face of a scene button. Not reachable from
+    /// the snapshot route, which takes a path from the query string: the folder the file is read
+    /// from has checked it is one of its own.
     /// </summary>
-    internal Task<byte[]?> GrabOverlayAsync(string path, OverlayMedia media, CancellationToken cancellationToken) =>
-        RunAsync(FfmpegCommandBuilder.BuildSnapshot(SourceKind.Overlay, path, OverlayWidth, media), path, cancellationToken);
+    internal Task<byte[]?> GrabOverlayAsync(
+        string path, OverlayMedia media, CancellationToken cancellationToken, int width = OverlayWidth) =>
+        RunAsync(FfmpegCommandBuilder.BuildSnapshot(SourceKind.Overlay, path, width, media), path, cancellationToken);
 
     private async Task<byte[]?> RunAsync(IReadOnlyList<string> arguments, string target, CancellationToken cancellationToken)
     {

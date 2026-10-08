@@ -36,6 +36,7 @@ public static class OrbisServiceCollectionExtensions
         services.AddSingleton<SettingRepository>();
         services.AddSingleton<VideoLiveHistoryRepository>();
         services.AddSingleton<SceneRepository>();
+        services.AddSingleton<SceneButtonRepository>();
 
         var messagesDirectory = MessageCatalog.LocateMessagesDirectory(contentRoot: options.DataDirectory)
             ?? Path.Combine(AppContext.BaseDirectory, "Messages");
@@ -53,6 +54,8 @@ public static class OrbisServiceCollectionExtensions
         services.AddSingleton<FfmpegProbe>();
         services.AddSingleton<StreamingSessionRegistry>();
         services.AddSingleton<LivePreviewFrames>();
+        // What the scene deck and the spots put on air in place of the program of each live.
+        services.AddSingleton<LiveTakeovers>();
         services.AddSingleton(provider => new MediaProxyService(
             options,
             provider.GetRequiredService<FfmpegToolLocator>(),
@@ -99,6 +102,7 @@ public static class OrbisServiceCollectionExtensions
         services.AddSingleton<SourceCatalogService>();
         services.AddSingleton<SourceSnapshotService>();
         services.AddSingleton<OverlayLibrary>();
+        services.AddSingleton<SceneButtonService>();
         services.AddSingleton<SceneService>();
 
         services.AddSingleton<DatabaseBootstrapper>();

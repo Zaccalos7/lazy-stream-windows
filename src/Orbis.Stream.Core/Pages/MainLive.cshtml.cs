@@ -25,6 +25,10 @@ public sealed class MainLiveModel(
     [BindProperty(SupportsGet = true)]
     public string? ChannelName { get; set; }
 
+    /// <summary>The platform the lives were started for (<c>twitch</c>, <c>youtube</c>, <c>kick</c>, <c>facebook</c>).</summary>
+    [BindProperty(SupportsGet = true)]
+    public string? Platform { get; set; }
+
     /// <summary>Zero-based page (<c>page</c> is a reserved route value in Razor Pages).</summary>
     [BindProperty(SupportsGet = true, Name = "p")]
     public int PageIndex { get; set; }
@@ -89,7 +93,7 @@ public sealed class MainLiveModel(
     /// <summary>What the details dialog shows; null when no dialog is asked for, or the playlist is gone.</summary>
     public PlaylistDetails? OpenedPlaylist { get; private set; }
 
-    public object Filters => new { LiveStatus, ChannelName, p = PageIndex, details = Details };
+    public object Filters => new { LiveStatus, ChannelName, Platform, p = PageIndex, details = Details };
 
     /// <summary>
     /// The filters (and, when the form acts on a row, its key) as route data, so every action
@@ -122,6 +126,7 @@ public sealed class MainLiveModel(
         {
             ["liveStatus"] = LiveStatus ?? string.Empty,
             ["channelName"] = ChannelName ?? string.Empty,
+            ["platform"] = Platform ?? string.Empty,
             ["p"] = PageIndex.ToString(System.Globalization.CultureInfo.InvariantCulture)
         };
 
@@ -324,7 +329,7 @@ public sealed class MainLiveModel(
 
         return started
             ? RedirectToPage(Filters)
-            : RedirectToPage(new { LiveStatus, ChannelName, p = PageIndex, compose = scenePkid, settingId, configurationId });
+            : RedirectToPage(new { LiveStatus, ChannelName, Platform, p = PageIndex, compose = scenePkid, settingId, configurationId });
     }
 
     /// <summary>The same wizard, with the folder picked here in place of the configuration's one.</summary>
@@ -339,7 +344,7 @@ public sealed class MainLiveModel(
 
         return started
             ? RedirectToPage(Filters)
-            : RedirectToPage(new { LiveStatus, ChannelName, p = PageIndex, playlist = 1, folder = videoFolder });
+            : RedirectToPage(new { LiveStatus, ChannelName, Platform, p = PageIndex, playlist = 1, folder = videoFolder });
     }
 
     /// <summary>What the playlist wizard picked, as a start request; null (with the notice set) when
@@ -379,7 +384,8 @@ public sealed class MainLiveModel(
         Videos = videos.GetLivePage(
             LiveStatusExtensions.TryParseWireValue(LiveStatus, out var status) ? status : null,
             ChannelName,
-            new PageRequest(Math.Max(PageIndex, 0), PageSize, [new SortOrder("startDateLive", true)]));
+            new PageRequest(Math.Max(PageIndex, 0), PageSize, [new SortOrder("startDateLive", true)]),
+            Platform);
     }
 
     private void LoadDetails()

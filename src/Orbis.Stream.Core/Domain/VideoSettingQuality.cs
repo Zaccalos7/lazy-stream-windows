@@ -37,7 +37,7 @@ public static class VideoSettingQuality
     /// them as unknown.
     /// </summary>
     public static readonly IReadOnlySet<string> InternalKeys =
-        new HashSet<string>(StringComparer.Ordinal) { OptionKey, VideoSettingLatency.OptionKey };
+        new HashSet<string>(StringComparer.Ordinal) { OptionKey, VideoSettingLatency.OptionKey, VideoSettingAdaptiveBitrate.OptionKey };
 
     public static EncoderQuality Parse(string? value) =>
         Enum.TryParse<EncoderQuality>(value?.Trim(), ignoreCase: true, out var quality) && Enum.IsDefined(quality)

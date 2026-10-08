@@ -1116,6 +1116,44 @@ document.addEventListener("click", event => {
   }
 });
 
+// A wizard of several steps inside one dialog, one step on screen at a time: the body of a step is
+// [data-wizard-panel="n"], the dialog says which one is on screen in data-wizard-step, and the
+// controls of a step carry its number in data-wizard-show. <button data-wizard-go="n"> brings that
+// step in, after the picks of the one on screen have been checked (a step that is off screen has
+// nothing to focus, so the whole form cannot be asked); closing the dialog starts it over.
+const showWizardStep = (dialog, step) => {
+  for (const panel of dialog.querySelectorAll("[data-wizard-panel]")) {
+    panel.hidden = panel.dataset.wizardPanel !== step;
+  }
+  for (const part of dialog.querySelectorAll("[data-wizard-show]")) {
+    part.hidden = part.dataset.wizardShow !== step;
+  }
+  dialog.dataset.wizardStep = step;
+  const panel = dialog.querySelector(`[data-wizard-panel="${step}"]`);
+  panel?.querySelector("input, a, button")?.focus({ preventScroll: true });
+  dialog.querySelector(".dialog-body")?.scrollTo({ top: 0 });
+};
+
+document.addEventListener("click", event => {
+  const go = event.target.closest?.("[data-wizard-go]");
+  if (!go) return;
+  const dialog = go.closest("dialog");
+  if (!dialog) return;
+  const onScreen = dialog.querySelector(`[data-wizard-panel="${dialog.dataset.wizardStep}"]`);
+  if (go.dataset.wizardGo > dialog.dataset.wizardStep) {
+    for (const field of onScreen?.querySelectorAll("input, select, textarea") ?? []) {
+      if (field.checkValidity()) continue;
+      field.reportValidity();
+      return;
+    }
+  }
+  showWizardStep(dialog, go.dataset.wizardGo);
+});
+
+for (const dialog of document.querySelectorAll("dialog[data-wizard-step]")) {
+  dialog.addEventListener("close", () => showWizardStep(dialog, "1"));
+}
+
 // <form data-confirm="question">: asks in the shared ContentDialog before submitting.
 document.addEventListener("submit", event => {
   const form = event.target;

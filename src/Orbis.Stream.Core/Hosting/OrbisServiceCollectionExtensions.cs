@@ -98,6 +98,7 @@ public static class OrbisServiceCollectionExtensions
             new FileSourceProvider(ConfiguredFolders(provider.GetRequiredService<SettingRepository>())));
         services.AddSingleton<SourceCatalogService>();
         services.AddSingleton<SourceSnapshotService>();
+        services.AddSingleton<OverlayLibrary>();
         services.AddSingleton<SceneService>();
 
         services.AddSingleton<DatabaseBootstrapper>();

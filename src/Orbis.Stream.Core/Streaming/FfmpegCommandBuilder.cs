@@ -47,7 +47,9 @@ public sealed record FfmpegCompositionItem(
     /// <summary>A file the GPU was measured to decode faster than the CPU (see MediaProxyService).</summary>
     bool HardwareDecoding = false,
     /// <summary>How loud the source is in the mix, in percent: 100 leaves its sound as it is.</summary>
-    int Volume = 100);
+    int Volume = 100,
+    /// <summary>How an overlay is opened (see <see cref="OverlayMedia"/>); null for any other kind, and a still for an overlay.</summary>
+    OverlayMedia? Overlay = null);
 
 /// <summary>
 /// What makes a light copy (see <see cref="FfmpegCommandBuilder.BuildProxy"/>): the GPU decoder or
@@ -318,7 +320,10 @@ public static class FfmpegCommandBuilder
         // gets one clock, on what comes out: the relay when there is one, exactly as a single file
         // does, otherwise the realtime filter at the end of the graph. The files are decoded as
         // fast as that clock asks, and the overlay lines them up frame by frame.
-        var onlyFiles = items.All(item => item.Kind == SourceKind.File);
+        //
+        // An overlay counts as a file here: a still has no time at all, and an animation is a file
+        // that starts again whenever it ends. Neither of them can set the time of the canvas.
+        var onlyFiles = items.All(item => !item.Kind.IsCaptureDevice());
         var pacedInputs = !onlyFiles;
         var pacedGraph = !(onlyFiles && relay);
 
@@ -549,8 +554,11 @@ public static class FfmpegCommandBuilder
     /// One frame of a source as a JPEG on stdout, for the tile the canvas draws before the live
     /// starts. The source is opened exactly the way the live will open it, so a device that cannot
     /// be snapshotted is a device that would not have streamed either.
+    /// <para>An overlay is the exception to the JPEG: it is drawn over the canvas with its clear
+    /// parts clear, and a PNG keeps them where a JPEG would paint them black. Its first frame is the
+    /// one taken, opened with the decoder the live opens it with (<paramref name="overlay"/>).</para>
     /// </summary>
-    public static IReadOnlyList<string> BuildSnapshot(SourceKind kind, string target, int width)
+    public static IReadOnlyList<string> BuildSnapshot(SourceKind kind, string target, int width, OverlayMedia? overlay = null)
     {
         if (!kind.HasPicture())
         {
@@ -561,18 +569,14 @@ public static class FfmpegCommandBuilder
 
         // A file is looked at a second in, past the black frame most videos open on; the pacing
         // -readrate adds for a live would only make the one frame slower.
-        var item = new FfmpegCompositionItem(kind, target, 0, 0, 0, 0, AudioEnabled: false);
+        var item = new FfmpegCompositionItem(
+            kind, target, 0, 0, 0, 0, AudioEnabled: false, Overlay: overlay is null ? null : overlay with { Loop = false });
         AppendInput(arguments, item, kind == SourceKind.File ? TimeSpan.FromSeconds(1) : TimeSpan.Zero, frameRate: 5d, paced: false);
 
-        arguments.AddRange(
-        [
-            "-frames:v", "1",
-            "-vf", string.Create(CultureInfo.InvariantCulture, $"scale={Even(width)}:-2"),
-            "-f", "image2pipe",
-            "-c:v", "mjpeg",
-            "-q:v", "5",
-            "pipe:1"
-        ]);
+        var scale = string.Create(CultureInfo.InvariantCulture, $"scale={Even(width)}:-2");
+        arguments.AddRange(kind.IsOverlay()
+            ? ["-frames:v", "1", "-vf", scale, "-f", "image2pipe", "-c:v", "png", "pipe:1"]
+            : ["-frames:v", "1", "-vf", scale, "-f", "image2pipe", "-c:v", "mjpeg", "-q:v", "5", "pipe:1"]);
 
         return arguments;
     }
@@ -666,6 +670,10 @@ public static class FfmpegCommandBuilder
 
         switch (item.Kind)
         {
+            case SourceKind.Overlay:
+                AppendOverlayInput(arguments, item, paced);
+                break;
+
             case SourceKind.Screen:
                 // gdigrab reads the desktop and the monitors as they are; the frame rate it is told
                 // to read them at is the only thing worth setting, everything else it decides.
@@ -717,6 +725,40 @@ public static class FfmpegCommandBuilder
     }
 
     /// <summary>
+    /// An overlay is never sought into: a live that resumes thirty minutes in shows the same logo
+    /// it started with, and an animation has no position worth keeping. A still is opened as it is,
+    /// once (see <see cref="OverlayMedia"/>); an animation is read again whenever it ends, paced
+    /// like the files when a device keeps the time of the canvas. The decoder, when there is one,
+    /// is an input option: it has to come before the file it applies to.
+    /// </summary>
+    private static void AppendOverlayInput(List<string> arguments, FfmpegCompositionItem item, bool paced)
+    {
+        var media = item.Overlay ?? OverlayMedia.Still;
+        if (media.Loop)
+        {
+            arguments.Add("-stream_loop");
+            arguments.Add("-1");
+        }
+
+        if (media.Decoder is { } decoder)
+        {
+            arguments.Add("-c:v");
+            arguments.Add(decoder);
+        }
+
+        arguments.Add("-thread_queue_size");
+        arguments.Add("512");
+        if (paced && media.Loop)
+        {
+            arguments.Add("-readrate");
+            arguments.Add("1");
+        }
+
+        arguments.Add("-i");
+        arguments.Add(item.Target);
+    }
+
+    /// <summary>
     /// The graph that turns N inputs into one picture. The canvas is a blank frame of the output
     /// size, and every source is scaled into the rectangle it was dropped on and laid over what is
     /// already there, in the order the user stacked them: no source is stretched to be the
@@ -752,9 +794,11 @@ public static class FfmpegCommandBuilder
             }
 
             var label = $"tile{index}";
-            // For layout compositions, respect layout dimensions, scaling to fill and cropping as needed
+            // A source fills its rectangle and is cropped to it; an overlay is stretched to it, with
+            // its alpha (see OverlayTile).
+            var tile = item.Kind.IsOverlay() ? OverlayTile(width, height) : $"{Fit(width, height, true)},setsar=1";
             graph.Append(CultureInfo.InvariantCulture,
-                $"[{index}:v]setpts=PTS-STARTPTS,{Fit(width, height, true)},setsar=1[{label}];");
+                $"[{index}:v]setpts=PTS-STARTPTS,{tile}[{label}];");
             labels[index] = label;
         }
 
@@ -762,10 +806,15 @@ public static class FfmpegCommandBuilder
         foreach (var (item, index) in pictures)
         {
             var next = $"stack{index}";
-            var xExpr = $"{Even(item.X)}+({Even(item.Width)}-w)/2";
-            var yExpr = $"{Even(item.Y)}+({Even(item.Height)}-h)/2";
+
+            // An overlay is scaled to its rectangle exactly, so it is laid at its corner; its
+            // colours were multiplied by its alpha before the scale (see OverlayTile), and the
+            // overlay filter is told so.
+            var placement = item.Kind.IsOverlay()
+                ? string.Create(CultureInfo.InvariantCulture, $"{Even(item.X)}:{Even(item.Y)}:format=auto:alpha=premultiplied")
+                : string.Create(CultureInfo.InvariantCulture, $"{Even(item.X)}+({Even(item.Width)}-w)/2:{Even(item.Y)}+({Even(item.Height)}-h)/2:format=auto");
             graph.Append(CultureInfo.InvariantCulture,
-                $"[{composed}][{labels[index]}]overlay={xExpr}:{yExpr}:format=auto[{next}];");
+                $"[{composed}][{labels[index]}]overlay={placement}[{next}];");
             composed = next;
         }
 
@@ -849,7 +898,8 @@ public static class FfmpegCommandBuilder
 
     private static bool CanCarrySound(FfmpegCompositionItem item) => item.Kind switch
     {
-        SourceKind.Screen => false,
+        // An animated overlay may well have a track: it is a picture of the layout, never heard.
+        SourceKind.Screen or SourceKind.Overlay => false,
         SourceKind.Camera => item.Target.Contains("audio=", StringComparison.Ordinal),
         _ => true
     };
@@ -880,6 +930,18 @@ public static class FfmpegCommandBuilder
         }
         return $"scale={width}:{height}:force_original_aspect_ratio=decrease:force_divisible_by=2";
     }
+
+    /// <summary>
+    /// The tile of an overlay: its own picture stretched to the rectangle it was given, the way the
+    /// composer draws it, and its alpha kept for the overlay filter to lay it with.
+    /// <para>The colours are multiplied by the alpha before the scale. A PNG keeps black or white
+    /// in the pixels it leaves transparent, and a scale that mixes straight colours mixes those in
+    /// along every edge: white text shrunk onto a 720p canvas comes out with a grey halo. Multiplied
+    /// first, a transparent pixel weighs nothing in the mix and the edge stays clean.</para>
+    /// </summary>
+    public static string OverlayTile(int width, int height) => string.Create(
+        CultureInfo.InvariantCulture,
+        $"format=yuva420p,premultiply=inplace=1,scale={Even(width)}:{Even(height)},setsar=1");
 
     /// <summary>
     /// A picture of any size, fitted whole into a frame of another one: scaled down or up until it

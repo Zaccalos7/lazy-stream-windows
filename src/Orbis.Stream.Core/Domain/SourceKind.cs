@@ -24,7 +24,16 @@ public enum SourceKind
     /// canvas: it only joins the audio mix. A camera's own device is a video-only entry, which is
     /// why the microphone a user wants alongside it is a source of its own.
     /// </summary>
-    Microphone = 3
+    Microphone = 3,
+
+    /// <summary>
+    /// A picture of the layout laid over the sources, the way an overlay of Streamlabs is: a still
+    /// (PNG, JPEG, WebP) or an animation that starts again whenever it ends (GIF, APNG, a WebM or a
+    /// MOV with alpha). It is not a source: nothing is dropped into it when a live starts, it comes
+    /// with the layout, and its transparent pixels let whatever is under it through. It is never
+    /// heard and it never ends, so it decides neither the sound nor the length of a live.
+    /// </summary>
+    Overlay = 4
 }
 
 public static class SourceKindExtensions
@@ -36,6 +45,7 @@ public static class SourceKindExtensions
         SourceKind.Screen => "SCREEN",
         SourceKind.Camera => "CAMERA",
         SourceKind.Microphone => "MICROPHONE",
+        SourceKind.Overlay => "OVERLAY",
         _ => kind.ToString().ToUpperInvariant()
     };
 
@@ -61,6 +71,10 @@ public static class SourceKindExtensions
             case "AUDIO":
                 kind = SourceKind.Microphone;
                 return true;
+            case "OVERLAY":
+            case "IMAGE":
+                kind = SourceKind.Overlay;
+                return true;
             default:
                 kind = SourceKind.File;
                 return false;
@@ -77,9 +91,15 @@ public static class SourceKindExtensions
     /// <summary>Whether the source contributes a picture: a microphone is only heard.</summary>
     public static bool HasPicture(this SourceKind kind) => kind is not SourceKind.Microphone;
 
+    /// <summary>
+    /// Whether it is a picture of the layout rather than a source: it is laid over the canvas, but
+    /// a live is never named after it, never measured by it and never heard through it.
+    /// </summary>
+    public static bool IsOverlay(this SourceKind kind) => kind is SourceKind.Overlay;
+
     /// <summary>Rejects a value that is not a real kind, so a request cannot invent one.</summary>
     public static bool IsDefined(this SourceKind kind) =>
-        kind is SourceKind.File or SourceKind.Screen or SourceKind.Camera or SourceKind.Microphone;
+        kind is SourceKind.File or SourceKind.Screen or SourceKind.Camera or SourceKind.Microphone or SourceKind.Overlay;
 
     /// <summary>Accepts the wire names and the numbers, since both travel through the API.</summary>
     public static bool TryParse(string? value, out SourceKind kind)

@@ -30,6 +30,9 @@ dialog.dialog.compose .dialog-body { flex: 1; min-height: 0; max-height: none; }
 .dialog-head .grow { flex: 1; min-width: 0; }
 .dialog-body { padding: 20px 24px; max-height: 70vh; overflow-y: auto; overscroll-behavior: contain; }
 .dialog-body h2 { font-size: 18px; margin-bottom: 12px; font-weight: 600; }
+/* The live wizard shows one step at a time inside the sheet: the margin that tells the two steps
+   apart when they share a page (the playlist) would only open a hole at the top of the sheet. */
+dialog.dialog [data-wizard-panel] > h3.section { margin-top: 0; }
 .dialog-footer {
   display: flex;
   gap: 8px;

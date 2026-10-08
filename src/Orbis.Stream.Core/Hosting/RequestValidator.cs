@@ -163,6 +163,38 @@ public sealed class RequestValidator
         }
     }
 
+    /// <summary>
+    /// A file for the overlay library: there, of a kind a canvas can lay over itself, and not
+    /// bigger than the library takes. What is inside it is checked by the library, with ffprobe.
+    /// </summary>
+    public void RequireOverlay(IFormFile? file)
+    {
+        if (file is null)
+        {
+            throw new RequestValidationException(new Dictionary<string, string>
+            {
+                ["file"] = Message("input.not.valid")
+            });
+        }
+
+        if (!OverlayLibrary.IsOverlayFile(file.FileName))
+        {
+            throw new RequestValidationException(new Dictionary<string, string>
+            {
+                ["file"] = _localizer.PrintMessage("overlay.not.valid", [Path.GetFileName(file.FileName)])
+            });
+        }
+
+        if (file.Length > OverlayLibrary.MaxBytes)
+        {
+            throw new RequestValidationException(new Dictionary<string, string>
+            {
+                ["file"] = _localizer.PrintMessage(
+                    "overlay.too.large", [Path.GetFileName(file.FileName), OverlayLibrary.MaxBytes / (1024 * 1024)])
+            });
+        }
+    }
+
     private void AddIfNull(IDictionary<string, string> errors, string field, object? value, string code)
     {
         if (value is null)

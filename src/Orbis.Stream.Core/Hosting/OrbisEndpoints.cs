@@ -77,6 +77,8 @@ public static class OrbisEndpoints
         });
         group.MapDelete("/{pkid:long}", (long pkid, SceneService service) => AsResult(service.Delete(pkid)));
 
+        MapOverlays(group);
+
         app.MapGet("/preview/sources", (SourceCatalogService service) => Results.Ok(service.List()));
 
         // One still per tile. No content is an answer, not an error: a camera that is busy in
@@ -142,6 +144,67 @@ public static class OrbisEndpoints
                 return Results.NoContent();
             }
         });
+    }
+
+    /// <summary>
+    /// The overlay library of the layouts (see <see cref="OverlayLibrary"/>). The pictures come in
+    /// as uploads and go out by their name in the library, never by a path: these routes cannot
+    /// reach a file the user did not put there.
+    /// </summary>
+    private static void MapOverlays(RouteGroupBuilder group)
+    {
+        group.MapGet("/overlays", (OverlayLibrary library) => Results.Ok(library.List()));
+
+        group.MapPost("/overlays", async (
+            HttpRequest request,
+            OverlayLibrary library,
+            RequestValidator validator,
+            CancellationToken cancellationToken) =>
+        {
+            // Kestrel stops a body at 30 MB unless told otherwise, and an animated overlay can be
+            // bigger. The form around the file is a few hundred bytes more than the file itself.
+            if (request.HttpContext.Features.Get<Microsoft.AspNetCore.Http.Features.IHttpMaxRequestBodySizeFeature>() is { IsReadOnly: false } limit)
+            {
+                limit.MaxRequestBodySize = OverlayLibrary.MaxBytes + 1024 * 1024;
+            }
+
+            if (!request.HasFormContentType)
+            {
+                validator.RequireOverlay(null);
+            }
+
+            var form = await request.ReadFormAsync(cancellationToken).ConfigureAwait(false);
+            var file = form.Files["file"];
+            validator.RequireOverlay(file);
+
+            await using var content = file!.OpenReadStream();
+            var entry = await library.AddAsync(file.FileName, content, cancellationToken).ConfigureAwait(false);
+            return Results.Json(entry, statusCode: StatusCodes.Status201Created);
+        });
+
+        // The name of a file of the library is its content, so a name always answers with the same
+        // picture: the browser keeps it, and a layout opened again does not download it again.
+        group.MapGet("/overlays/{name}", (string name, HttpContext context, OverlayLibrary library) =>
+        {
+            if (library.Find(name) is not { } file)
+            {
+                return Results.NotFound();
+            }
+
+            context.Response.Headers.CacheControl = "public, max-age=31536000, immutable";
+            return Results.File(file.Path, file.ContentType, enableRangeProcessing: true);
+        });
+
+        group.MapGet("/overlays/{name}/still", async (
+            string name,
+            OverlayLibrary library,
+            CancellationToken cancellationToken) =>
+        {
+            var still = await library.StillAsync(name, cancellationToken).ConfigureAwait(false);
+            return still is null ? Results.NoContent() : Results.File(still, "image/png");
+        });
+
+        group.MapDelete("/overlays/{name}", (string name, OverlayLibrary library) => AsResult(library.Delete(name)));
     }
 
     private static void MapLive(IEndpointRouteBuilder app)

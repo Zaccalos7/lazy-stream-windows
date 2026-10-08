@@ -609,6 +609,40 @@ public sealed class FfmpegVideoPlaylistStreamer : IVideoPlaylistStreamer
         return inputs;
     }
 
+    /// <summary>
+    /// How each overlay of the canvas is opened, asked of ffprobe once a live (see OverlayMedia):
+    /// a still once, an animation in a loop, a WebM with alpha through libvpx. An overlay whose file
+    /// is gone is left off the canvas: it dresses the live, and the live goes on air without it
+    /// rather than not at all. One ffprobe cannot read is opened as a still, so that the error the
+    /// live ends on, if it does, is ffmpeg's own about that file.
+    /// </summary>
+    private async Task<Dictionary<VideoEntity, OverlayMedia>> OverlaysOfAsync(
+        IReadOnlyList<VideoEntity> rows,
+        CancellationToken cancellationToken)
+    {
+        var overlays = new Dictionary<VideoEntity, OverlayMedia>(ReferenceEqualityComparer.Instance);
+        foreach (var row in rows.Where(row => row.SourceKind.IsOverlay()))
+        {
+            if (!File.Exists(row.VideoPath))
+            {
+                _logger.LogWarning("The overlay {Path} is gone: the canvas goes on air without it", row.VideoPath);
+                continue;
+            }
+
+            try
+            {
+                overlays[row] = OverlayMedia.Of(await _probe.ProbeAsync(row.VideoPath, cancellationToken).ConfigureAwait(false));
+            }
+            catch (Exception exception) when (exception is not OperationCanceledException)
+            {
+                _logger.LogWarning(exception, "Could not probe the overlay {Path}", row.VideoPath);
+                overlays[row] = OverlayMedia.Still;
+            }
+        }
+
+        return overlays;
+    }
+
     private async Task<Dictionary<string, MediaProbeResult>> ProbedFilesAsync(
         IReadOnlyList<VideoEntity> rows,
         CancellationToken cancellationToken)
@@ -713,7 +747,7 @@ public sealed class FfmpegVideoPlaylistStreamer : IVideoPlaylistStreamer
         long videoLiveHistoryPkid,
         CancellationToken cancellationToken)
     {
-        var baseRow = rows.FirstOrDefault(row => row.SourceKind.HasPicture());
+        var baseRow = SceneRows.BaseOf(rows);
         if (baseRow is null)
         {
             return;
@@ -735,8 +769,9 @@ public sealed class FfmpegVideoPlaylistStreamer : IVideoPlaylistStreamer
 
         // A canvas made only of files has an end, and it is the end of the longest of them: a
         // video that runs out first leaves its shape on the canvas and the live goes on, the way a
-        // playlist goes on to the next video.
-        var onlyFiles = rows.All(row => row.SourceKind == SourceKind.File);
+        // playlist goes on to the next video. Its overlays do not change that: they are laid over
+        // the files for as long as the files last.
+        var onlyFiles = rows.All(row => !row.SourceKind.IsCaptureDevice());
         var videoKey = baseRow.Pkid;
         var description = _localizer.PrintMessage("video.live.scene", [rows.Count.ToString(CultureInfo.InvariantCulture)]);
         FfmpegStreamingSession? session = null;
@@ -750,6 +785,7 @@ public sealed class FfmpegVideoPlaylistStreamer : IVideoPlaylistStreamer
             var silent = SilentFilesOf(rows, probes);
             var duration = onlyFiles ? LongestFileDuration(rows, probes) : null;
             var inputs = FileInputsOf(rows, probes);
+            var overlays = await OverlaysOfAsync(rows, cancellationToken).ConfigureAwait(false);
             if (duration is { } canvasLength)
             {
                 _logger.LogInformation(
@@ -776,16 +812,23 @@ public sealed class FfmpegVideoPlaylistStreamer : IVideoPlaylistStreamer
                 }
 
                 var items = rows
+                    .Where(row => !row.SourceKind.IsOverlay() || overlays.ContainsKey(row))
                     .Select(row => new FfmpegCompositionItem(
                         row.SourceKind,
-                        row.SourceKind == SourceKind.File ? inputs[row].Path : row.SourceTarget ?? string.Empty,
+                        row.SourceKind switch
+                        {
+                            SourceKind.File => inputs[row].Path,
+                            SourceKind.Overlay => row.VideoPath,
+                            _ => row.SourceTarget ?? string.Empty
+                        },
                         row.X ?? 0,
                         row.Y ?? 0,
                         row.Width ?? 0,
                         row.Height ?? 0,
                         row.AudioEnabled && !silent.Contains(row),
                         row.SourceKind == SourceKind.File && inputs[row].HardwareDecoding,
-                        row.Volume))
+                        row.Volume,
+                        overlays.GetValueOrDefault(row)))
                     .ToList();
 
                 var canvasRate = videoSetting.FrameRate is > 0 ? videoSetting.FrameRate.Value : DefaultCanvasFrameRate;
@@ -1183,7 +1226,8 @@ public sealed class FfmpegVideoPlaylistStreamer : IVideoPlaylistStreamer
     /// is what the live is waiting on, and a canvas that runs out of CPU does not fall behind
     /// cleanly: it drops frames inside the picture, which is what a viewer reads as the live
     /// stuttering. The low latency defaults are the ones that spend the least CPU per frame, so a
-    /// canvas of two or more pictures turns them on for itself.</para>
+    /// canvas of two or more pictures turns them on for itself. Its overlays do not count: a still
+    /// is decoded once for the whole live, and a video with a logo on it is still one video.</para>
     /// <para>The setting the rows were given is never edited here. It may be a seeded default, one
     /// the wizard offers, or one another live is streaming with right now, and changing it would
     /// change all of them under the user's feet. Rows that already own their setting keep that one
@@ -1195,7 +1239,7 @@ public sealed class FfmpegVideoPlaylistStreamer : IVideoPlaylistStreamer
     private VideoSettingEntity CanvasSetting(int videoKey, IReadOnlyList<VideoEntity> rows)
     {
         var setting = FindSetting(videoKey);
-        if (VideoSettingLatency.IsOn(setting) || rows.Count(row => row.SourceKind.HasPicture()) < 2)
+        if (VideoSettingLatency.IsOn(setting) || rows.Count(row => row.SourceKind.HasPicture() && !row.SourceKind.IsOverlay()) < 2)
         {
             return setting;
         }

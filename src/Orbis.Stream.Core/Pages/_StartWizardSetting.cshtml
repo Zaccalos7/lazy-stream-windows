@@ -1,5 +1,6 @@
 @model MainLiveModel
 
+@* The first step of both wizards: the video/audio setting that goes on air. *@
 <h3>@T["wizardStep1Title"]</h3>
 @if (Model.ActiveSettings.Count == 0)
 {
@@ -28,35 +29,6 @@ else
                         @setting.VideoFormat?.ToUpperInvariant() · GOP @(setting.GopSize?.ToString() ?? "–") ·
                         @T["audioBitrate"] @VideoSettingForm.FormatBitrate(setting.AudioSettingRecord?.AudioBitrate)
                     </span>
-                </span>
-            </label>
-        }
-    </div>
-}
-
-<h3 class="section">@T["wizardStep2Title"]</h3>
-@if (Model.ActiveConfigurations.Count == 0)
-{
-    <div class="infobar warning section">
-        <i class="icon">&#xE7BA;</i>
-        <p><strong>@T["noActiveStreamingConfiguration"]</strong><br />@T["wizardNoActiveConfigurationsMessage"]</p>
-        <a class="btn" href="/orbis/mainChannelSetting">@T["activeConfigurationLabel"]</a>
-    </div>
-}
-else
-{
-    <div class="choice-list" style="margin-top: 8px;">
-        @foreach (var configuration in Model.ActiveConfigurations)
-        {
-            <label class="choice">
-                <input type="radio" name="configurationId" value="@configuration.Id" required />
-                <span class="grow">
-                    <strong>@configuration.ChannelName</strong> · @(MainChannelSettingModel.ChoiceOf(configuration.PlatformStreamName, configuration.StreamUrl)?.Label ?? configuration.PlatformStreamName)
-                    <span class="caption" style="display: block;">@configuration.StreamUrl</span>
-                    @if (!string.IsNullOrWhiteSpace(configuration.Description))
-                    {
-                        <span class="caption" style="display: block;">@configuration.Description</span>
-                    }
                 </span>
             </label>
         }

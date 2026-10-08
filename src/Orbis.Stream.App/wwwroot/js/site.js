@@ -1381,3 +1381,24 @@ for (const force of document.querySelectorAll("input[type=checkbox][data-force-t
   });
   update();
 }
+
+// Show element based on radio selection
+for (const show of document.querySelectorAll("[data-show-when]")) {
+  const form = show.closest("form");
+  if (!form) continue;
+
+  const target = show.dataset.showWhen;
+  const update = () => {
+    const radio = form.querySelector(`input[type=radio][value="${target}"]`);
+    if (radio && radio.checked) {
+      show.style.display = "";
+    } else {
+      show.style.display = "none";
+    }
+  };
+
+  form.addEventListener("change", event => {
+    if (event.target.type === "radio") update();
+  });
+  update();
+}

@@ -328,7 +328,7 @@
   "youtubeUnverified": "No se puede comprobar YouTube",
   "youtubeUnverifiedHelp": "Orbis no encuentra el canal en YouTube, así que no puede saber si el directo está en emisión ni avisarte cuando no lo esté. En la configuración del canal, pon como nombre del canal el identificador de YouTube (p. ej. @tucanal, como en youtube.com/@tucanal) o el ID del canal (UC…).",
   "ffmpegSender": "Publicar con ffmpeg",
-  "ffmpegSenderHelp": "ffmpeg mantiene el directo en tiempo real y lo publica con su propio RTMPS, como hace OBS.",
+  "ffmpegSenderHelp": "ffmpeg mantiene el directo en tiempo real y lo publica con su propio RTMPS.",
   "playSpot": "Emitir anuncio",
   "playSpotHint": "Seleccione el video publicitario a emitir. La transmisión actual se pausará y se reanudará automáticamente al finalizar el anuncio.",
   "spotFile": "Archivo de video del anuncio",

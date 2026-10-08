@@ -328,7 +328,7 @@
   "youtubeUnverified": "Hindi ma-check ang YouTube",
   "youtubeUnverifiedHelp": "Hindi mahanap ng Orbis ang channel sa YouTube, kaya hindi nito malalaman kung naka-live ang stream o mababalaan ka kung hindi. Sa settings ng channel, ilagay bilang pangalan ng channel ang YouTube handle (hal. @iyongchannel, gaya ng youtube.com/@iyongchannel) o ang channel ID (UC…).",
   "ffmpegSender": "I-publish gamit ang ffmpeg",
-  "ffmpegSenderHelp": "Pinapanatili ng ffmpeg ang live sa real time at ipinapublish ito gamit ang sarili nitong RTMPS, gaya ng OBS.",
+  "ffmpegSenderHelp": "Pinapanatili ng ffmpeg ang live sa real time at ipinapublish ito gamit ang sarili nitong RTMPS.",
   "playSpot": "I-play ang ad spot",
   "playSpotHint": "Piliin ang ad video na ibo-broadcast. Hihinto sandali ang kasalukuyang stream at awtomatikong magpapatuloy pagkatapos ng spot.",
   "spotFile": "File ng ad video",

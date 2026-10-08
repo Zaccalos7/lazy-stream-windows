@@ -119,8 +119,8 @@
                 @* How the live reaches the ingest. On, the ffmpeg delivery - ffmpeg keeps
                    the time and publishes over its own RTMPS; off, the relay and the RTMP of this
                    application. The option is always visible. YouTube cannot be turned off. *@
-                <label class="option-card">
-                    <svg class="option-card-mark" viewBox="0 0 24 24" aria-hidden="true" style="padding:0; display:flex; align-items:center; justify-content:center; color: var(--accent);"><i class="icon" style="font-size: 16px; margin: 0;">&#xE9D5;</i></svg>
+                <label class="option-card" data-show-when="youtube">
+                    <svg class="option-card-mark" viewBox="0 0 24 24" aria-hidden="true" style="padding:0; display:flex; align-items:center; justify-content:center; color: #ff0000;"><path d="@LiveLinkView.MarkupOf("youtube")" style="fill: currentColor;" /></svg>
                     <span class="option-card-text">
                         <strong>@T["ffmpegSender"]</strong>
                         <small>@T["ffmpegSenderHelp"]</small>

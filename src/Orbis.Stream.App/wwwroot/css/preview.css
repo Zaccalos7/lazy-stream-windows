@@ -68,6 +68,15 @@
 /* The cover is drawn with a flex layout and the player and the canvas are placed on the stage, so
    none of them would answer to `hidden` on their own: it is said here once, for all three. */
 .preview-screen [hidden] { display: none; }
+/* A picture that stands up (a portrait live): the stage keeps its shape at the height of the
+   window instead of growing with the width of the column - at full width a 9:16 stage would be
+   twice as tall as the screen - and stands in the middle of the column. The width carries the
+   size, so the aspect ratio is never broken by a column narrower than the height allows. */
+.preview-screen.portrait {
+  align-self: center;
+  width: min(100%, calc(min(70vh, 720px) * 9 / 16));
+  aspect-ratio: 9 / 16;
+}
 /* The lives on air to pick from: one control, not a row of buttons across the page. */
 .live-picker label.field { width: min(420px, 100%); }
 .preview-cover .icon { font-size: 30px; color: var(--text-3); }

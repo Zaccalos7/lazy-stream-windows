@@ -16,6 +16,8 @@
 
   --twitch: #af52de;
   --youtube: #ff3b30;
+  --kick: #1e9e00;
+  --facebook: #005fed;
   --grad: var(--accent);
   --hero: var(--panel);
 
@@ -85,6 +87,8 @@
 
     --twitch: #bf5af2;
     --youtube: #ff453a;
+    --kick: #53fc18;
+    --facebook: #3b82f6;
 
     --success: #30d158;
     --success-bg: rgba(48, 209, 88, 0.15);
@@ -127,6 +131,8 @@ html[data-theme="dark"] {
 
   --twitch: #bf5af2;
   --youtube: #ff453a;
+  --kick: #53fc18;
+  --facebook: #3b82f6;
 
   --success: #30d158;
   --success-bg: rgba(48, 209, 88, 0.15);

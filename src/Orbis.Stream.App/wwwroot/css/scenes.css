@@ -1,0 +1,290 @@
+/* Orbis Stream — the scene deck: the buttons that put a video, a banner or an image on air in place
+   of a live (scenes.js). The live management and the preview link it; the panel, the strip of the
+   preview and the "Resume live" of the rows are all drawn here. */
+
+.deck-icon { display: block; width: 16px; height: 16px; fill: currentColor; }
+.btn .deck-icon { flex: none; }
+.btn.icon-only .deck-icon { margin: auto; }
+
+/* ---------- Resume live: the way back, pulsing while a picture stands in for the live ---------- */
+
+.btn.scene-resume { color: var(--on-accent); background: var(--critical); border-color: transparent; font-weight: 600; }
+.btn.scene-resume:hover { background: color-mix(in srgb, var(--critical) 86%, #000000); }
+.btn.scene-resume.is-pulsing,
+.btn.scene-row-resume { animation: scene-pulse 1.6s ease-out infinite; }
+.btn.scene-row-resume {
+  gap: 5px;
+  padding: 0 10px;
+  color: var(--on-accent);
+  background: var(--critical);
+  border-color: transparent;
+  font-size: 12px;
+  font-weight: 600;
+  white-space: nowrap;
+}
+.btn.scene-row-resume:hover { background: color-mix(in srgb, var(--critical) 86%, #000000); }
+.btn.scene-row-resume .icon { font-size: 12px; }
+
+@keyframes scene-pulse {
+  0% { box-shadow: 0 0 0 0 color-mix(in srgb, var(--critical) 55%, transparent); }
+  70% { box-shadow: 0 0 0 9px color-mix(in srgb, var(--critical) 0%, transparent); }
+  100% { box-shadow: 0 0 0 0 color-mix(in srgb, var(--critical) 0%, transparent); }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .btn.scene-resume.is-pulsing,
+  .btn.scene-row-resume,
+  .scene-dot,
+  .scene-tile.is-on-air .scene-tile-face { animation: none; }
+}
+
+/* ---------- The panel ---------- */
+
+dialog.dialog.scene-deck { width: min(760px, calc(100vw - 32px)); }
+.scene-deck-mark {
+  display: inline-grid;
+  place-items: center;
+  width: 34px;
+  height: 34px;
+  border-radius: var(--radius);
+  color: var(--accent-text);
+  background: color-mix(in srgb, var(--accent) 14%, transparent);
+}
+.scene-deck-mark .deck-icon { width: 18px; height: 18px; }
+.scene-deck-hint { margin: 0 0 14px; }
+.scene-deck-foot { display: flex; align-items: center; gap: 6px; flex: 1; margin: 0; }
+.scene-deck-foot .icon { flex: none; font-size: 13px; }
+.scene-deck .infobar { margin-bottom: 14px; }
+
+.scene-onair {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  margin-bottom: 14px;
+  padding: 10px 12px;
+  border: 1px solid color-mix(in srgb, var(--critical) 35%, transparent);
+  border-radius: var(--radius-lg);
+  background: var(--critical-bg);
+}
+.scene-onair .grow { display: flex; flex-direction: column; min-width: 0; flex: 1; }
+.scene-dot {
+  flex: none;
+  width: 10px;
+  height: 10px;
+  border-radius: 50%;
+  background: var(--critical);
+  animation: scene-blink 1.6s ease-in-out infinite;
+}
+@keyframes scene-blink { 50% { opacity: 0.35; } }
+
+/* ---------- The buttons: keys of a Stream Deck, with the picture they put on air ---------- */
+
+.scene-grid { display: grid; gap: 12px; grid-template-columns: repeat(3, minmax(0, 1fr)); }
+.scene-loading { display: flex; align-items: center; gap: 8px; grid-column: 1 / -1; margin: 0; }
+.scene-limit { grid-column: 1 / -1; margin: 0; text-align: center; }
+
+.scene-tile { position: relative; min-width: 0; }
+.scene-tile-face {
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+  width: 100%;
+  padding: 6px 6px 8px;
+  color: var(--text);
+  font: inherit;
+  text-align: start;
+  background: var(--card);
+  border: 1px solid var(--stroke-strong);
+  border-radius: var(--radius-lg);
+  box-shadow: var(--shadow-card);
+  cursor: pointer;
+  transition: transform 0.12s ease, border-color 0.12s ease, box-shadow 0.12s ease;
+}
+.scene-tile-face:hover:not(:disabled) { border-color: var(--accent); box-shadow: var(--shadow-lift); }
+.scene-tile-face:active:not(:disabled) { transform: scale(0.97); }
+.scene-tile-face:focus-visible { outline: none; border-color: var(--accent); box-shadow: var(--glow); }
+.scene-tile-face:disabled { cursor: default; }
+.scene-tile-face:disabled .scene-tile-art img { filter: saturate(0.6); }
+
+/* The picture of the button on the checks a transparent picture is shown on everywhere: a banner
+   with clear edges is told from one on black. */
+.scene-tile-art {
+  position: relative;
+  display: grid;
+  place-items: center;
+  aspect-ratio: 16 / 9;
+  overflow: hidden;
+  border-radius: var(--radius);
+  color: var(--text-3);
+  background: repeating-conic-gradient(var(--tint-strong) 0% 25%, var(--tint) 0% 50%) 50% / 16px 16px;
+}
+/* Laid over the box rather than in its grid: a grid cell sized by its content would be as wide as
+   the picture, and the box would show the middle of it. */
+.scene-tile-art img,
+.scene-editor-art img { position: absolute; inset: 0; width: 100%; height: 100%; object-fit: contain; }
+.scene-tile-art > .icon { font-size: 22px; }
+.scene-tile-name { padding: 0 4px; font-size: 13px; font-weight: 600; }
+
+.scene-tile-kind,
+.scene-tile-key,
+.scene-tile-badge {
+  position: absolute;
+  padding: 2px 6px;
+  border-radius: var(--radius-sm);
+  font-size: 10px;
+  font-weight: 600;
+  line-height: 14px;
+}
+.scene-tile-kind { inset-block-end: 6px; inset-inline-start: 6px; color: #ffffff; background: rgba(0, 0, 0, 0.62); }
+.scene-tile[data-kind="image"] .scene-tile-kind { background: color-mix(in srgb, var(--accent) 80%, #000000); }
+.scene-tile-key {
+  inset-block-start: 6px;
+  inset-inline-end: 6px;
+  min-width: 22px;
+  color: var(--text);
+  font-family: inherit;
+  text-align: center;
+  background: var(--panel-solid);
+  border: 1px solid var(--stroke-strong);
+  box-shadow: 0 1px 0 var(--stroke-strong);
+}
+.scene-tile-badge { inset-block-start: 6px; inset-inline-start: 6px; color: #ffffff; background: var(--critical); }
+
+/* On air: the key lights up, the way a pressed Stream Deck key does. */
+.scene-tile.is-on-air .scene-tile-face {
+  border-color: var(--critical);
+  box-shadow: 0 0 0 2px var(--critical);
+  animation: scene-onair 2s ease-in-out infinite;
+}
+@keyframes scene-onair { 50% { box-shadow: 0 0 0 4px color-mix(in srgb, var(--critical) 45%, transparent); } }
+.scene-tile.is-pressed .scene-tile-face { border-color: var(--accent); box-shadow: var(--glow); }
+.scene-tile.is-pressed .scene-tile-art::after {
+  content: "";
+  position: absolute;
+  width: 22px;
+  height: 22px;
+  border: 2px solid var(--on-accent);
+  border-top-color: transparent;
+  border-radius: 50%;
+  animation: spin 0.8s linear infinite;
+}
+.scene-tile.is-missing .scene-tile-art { color: var(--caution); }
+.scene-tile.is-locked .scene-tile-face { opacity: 0.6; }
+.scene-tile.is-locked .scene-tile-face:hover { opacity: 1; }
+
+/* Edit and delete sit on the picture, out of the way until the key is pointed at. */
+.scene-tile-tools {
+  position: absolute;
+  inset-block-end: 40px;
+  inset-inline-end: 12px;
+  display: flex;
+  gap: 4px;
+  opacity: 0;
+  transition: opacity 0.12s ease;
+}
+.scene-tile:hover .scene-tile-tools,
+.scene-tile:focus-within .scene-tile-tools { opacity: 1; }
+.scene-tile-tools .btn { background: var(--panel-solid); border-color: var(--stroke-strong); box-shadow: var(--shadow-card); }
+.scene-tile-tools .btn.danger:hover { background: var(--critical-bg); }
+
+.scene-tile-add {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  gap: 8px;
+  min-height: 140px;
+  padding: 12px;
+  color: var(--text-2);
+  font: inherit;
+  font-size: 12px;
+  text-align: center;
+  background: var(--panel);
+  border: 2px dashed var(--stroke-strong);
+  border-radius: var(--radius-lg);
+  cursor: pointer;
+}
+.scene-tile-add:hover { color: var(--accent-text); border-color: var(--accent); }
+.scene-tile-add .icon { font-size: 20px; }
+
+/* ---------- The editor of a button ---------- */
+
+.scene-editor .section { margin-top: 0; }
+.scene-editor-media {
+  display: grid;
+  grid-template-columns: minmax(0, 220px) minmax(0, 1fr);
+  gap: 14px;
+  padding: 12px;
+  border: 1px dashed var(--stroke-strong);
+  border-radius: var(--radius-lg);
+}
+.scene-editor-media.is-over { border-style: solid; border-color: var(--accent); background: var(--tint); }
+.scene-editor-art {
+  position: relative;
+  display: grid;
+  place-items: center;
+  aspect-ratio: 16 / 9;
+  overflow: hidden;
+  border-radius: var(--radius);
+  color: var(--text-3);
+  background: repeating-conic-gradient(var(--tint-strong) 0% 25%, var(--tint) 0% 50%) 50% / 16px 16px;
+}
+.scene-editor-art > .icon { font-size: 28px; }
+.scene-editor-file { display: flex; flex-direction: column; gap: 4px; min-width: 0; }
+.scene-editor-caption { font-size: 12px; font-weight: 500; }
+.scene-editor-file progress { width: 100%; height: 6px; accent-color: var(--accent); }
+.scene-editor-row { display: flex; align-items: center; gap: 8px; flex-wrap: wrap; margin-top: 4px; }
+.scene-editor-fields { margin-top: 14px; }
+.scene-key-field { display: flex; flex-direction: column; gap: 5px; }
+.scene-key-field > span:first-child { font-weight: 500; font-size: 12px; }
+.scene-key-field > small { font-size: 11px; }
+.btn.scene-key { min-width: 120px; justify-content: center; }
+.btn.scene-key kbd { font-family: inherit; font-weight: 600; }
+.btn.scene-key.is-capturing { border-color: var(--accent); box-shadow: var(--glow); color: var(--accent-text); }
+.scene-error { min-height: 13px; color: var(--critical); font-size: 11px; }
+.scene-error:empty { min-height: 0; }
+.scene-editor-actions { display: flex; align-items: center; gap: 8px; margin-top: 16px; }
+.scene-editor-actions .grow { flex: 1; }
+
+/* ---------- The strip of the preview, above the volumes ---------- */
+
+.scene-strip { display: flex; flex-direction: column; gap: 10px; padding: 14px 16px; }
+.scene-strip-head { display: flex; align-items: center; gap: 10px; flex-wrap: wrap; }
+.scene-strip-head .section { margin: 0; }
+.scene-strip-head .grow { flex: 1; }
+.scene-strip-state { color: var(--critical); font-weight: 600; }
+.scene-strip-grid { display: grid; gap: 10px; grid-template-columns: repeat(auto-fill, minmax(130px, 1fr)); }
+.scene-strip-grid .scene-tile-face { padding: 4px 4px 6px; gap: 4px; }
+.scene-strip-grid .scene-tile-name { font-size: 12px; }
+.scene-strip-grid .scene-tile-add { min-height: 0; aspect-ratio: auto; padding: 18px 12px; }
+.scene-strip-locked { display: flex; align-items: center; gap: 6px; margin: 0; }
+
+/* ---------- The keys are on: said in a corner of the page ---------- */
+
+.scene-keys {
+  position: fixed;
+  inset-block-end: 16px;
+  inset-inline-end: 16px;
+  z-index: 20;
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  max-width: min(420px, calc(100vw - 32px));
+  padding: 6px 6px 6px 12px;
+  color: var(--text);
+  font-size: 12px;
+  font-weight: 600;
+  background: var(--panel-solid);
+  border: 1px solid color-mix(in srgb, var(--accent) 45%, transparent);
+  border-radius: var(--radius-lg);
+  box-shadow: var(--shadow-flyout);
+}
+.scene-keys > .icon { flex: none; color: var(--accent-text); }
+
+@media (max-width: 720px) {
+  .scene-grid { grid-template-columns: repeat(2, minmax(0, 1fr)); }
+  .scene-editor-media { grid-template-columns: minmax(0, 1fr); }
+}
+
+/* The deck icon of a row whose live has something of the deck on air. */
+.btn.subtle.is-on[data-scene-deck-open] { color: var(--critical); }

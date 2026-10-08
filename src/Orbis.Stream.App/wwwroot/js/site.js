@@ -670,6 +670,11 @@ const paintVolume = slider => {
   if (icon) icon.textContent = value === 0 ? "" : value <= volumeLoud / 2 ? "" : value <= volumeLoud ? "" : "";
 };
 
+// How many samples in a row disagreed with the page. A live hands over from one ffmpeg to the next
+// (a spot, a scene of the deck, a change of parameters) in a moment with nothing running, and a
+// sample that lands in it is not a live that ended: only two in a row are.
+let previewMismatch = 0;
+
 const paintPreview = state => {
   if (!preview) return;
   const position = state.positionMilliseconds;
@@ -679,9 +684,11 @@ const paintPreview = state => {
   // open, and the reloaded page asks for the same live again. A page with nothing on air has no
   // form, and is only waiting for this.
   if (state.isLive !== previewIsLive || (state.isLive && state.videoPkid !== previewPkid)) {
-    location.reload();
+    if (++previewMismatch >= 2 || !previewIsLive) location.reload();
     return;
   }
+
+  previewMismatch = 0;
 
   paintLivePicker(state.running || []);
 
@@ -735,6 +742,8 @@ if (watchLive && stream) {
       return;
     }
     paintPreview(state);
+    // The scene deck of the preview (scenes.js) draws what is on air from the same sample.
+    document.dispatchEvent(new CustomEvent("orbis:live", { detail: state }));
   });
 }
 

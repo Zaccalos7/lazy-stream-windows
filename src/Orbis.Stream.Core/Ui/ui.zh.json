@@ -328,7 +328,7 @@
   "youtubeUnverified": "无法检查 YouTube",
   "youtubeUnverifiedHelp": "Orbis 在 YouTube 上找不到该频道，因此无法判断直播是否在播出，也无法在未播出时提醒你。请在频道设置中将频道名称设为 YouTube 账号名（例如 youtube.com/@yourchannel 中的 @yourchannel）或频道 ID（UC…）。",
   "ffmpegSender": "使用 ffmpeg 推流",
-  "ffmpegSenderHelp": "由 ffmpeg 保持直播实时，并像 OBS 一样通过其自带的 RTMPS 推流。",
+  "ffmpegSenderHelp": "由 ffmpeg 保持直播实时通过其自带的 RTMPS 推流。",
   "playSpot": "播放广告",
   "playSpotHint": "选择要播放的广告视频。当前流将暂停，并在广告结束后自动恢复。",
   "spotFile": "广告视频文件",

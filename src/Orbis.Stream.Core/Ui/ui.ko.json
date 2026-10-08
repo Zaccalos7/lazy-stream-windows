@@ -328,7 +328,7 @@
   "youtubeUnverified": "YouTube를 확인할 수 없음",
   "youtubeUnverifiedHelp": "Orbis가 YouTube에서 채널을 찾지 못해 라이브가 방송 중인지 알 수 없고, 방송되지 않을 때 알려 줄 수도 없습니다. 채널 설정에서 채널 이름을 YouTube 핸들(예: youtube.com/@yourchannel의 @yourchannel) 또는 채널 ID(UC…)로 설정하세요.",
   "ffmpegSender": "ffmpeg로 송출",
-  "ffmpegSenderHelp": "ffmpeg가 라이브를 실시간으로 유지하고 OBS처럼 자체 RTMPS로 송출합니다.",
+  "ffmpegSenderHelp": "ffmpeg가 라이브를 실시간으로 유지하고 자체 RTMPS로 송출합니다.",
   "playSpot": "광고 재생",
   "playSpotHint": "방송할 광고 비디오를 선택하세요. 현재 스트림이 일시 중지되고 광고 후 자동으로 다시 시작됩니다.",
   "spotFile": "광고 비디오 파일",

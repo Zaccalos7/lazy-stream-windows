@@ -328,7 +328,7 @@
   "youtubeUnverified": "YouTube を確認できません",
   "youtubeUnverifiedHelp": "Orbis が YouTube でチャンネルを見つけられないため、ライブが配信中かどうかを判断できず、配信されていないときに警告もできません。チャンネル設定で、チャンネル名に YouTube のハンドル（例：youtube.com/@yourchannel の @yourchannel）またはチャンネル ID（UC…）を入力してください。",
   "ffmpegSender": "ffmpeg で配信する",
-  "ffmpegSenderHelp": "ffmpeg がライブをリアルタイムに保ち、OBS と同じように独自の RTMPS で配信します。",
+  "ffmpegSenderHelp": "ffmpeg がライブをリアルタイムに保ち独自の RTMPS で配信します。",
   "playSpot": "広告を再生する",
   "playSpotHint": "放送する広告動画を選択してください。現在のストリームは一時停止し、広告の後に自動的に再開されます。",
   "spotFile": "広告動画ファイル",

@@ -12,29 +12,27 @@ dialog.dialog {
   border-radius: var(--radius-xl);
   box-shadow: var(--shadow-dialog);
 }
-dialog.dialog[open] { animation: pop 0.18s cubic-bezier(0.16, 1, 0.3, 1); }
-dialog.dialog::before { content: ""; display: block; height: 3px; background: var(--accent); }
+dialog.dialog[open] { display: flex; flex-direction: column; max-height: calc(100vh - 32px); animation: pop 0.18s cubic-bezier(0.16, 1, 0.3, 1); }
+dialog.dialog::before { content: ""; display: block; flex: none; height: 3px; background: var(--accent); }
 dialog.dialog::backdrop { background: var(--smoke); backdrop-filter: blur(8px); -webkit-backdrop-filter: blur(8px); }
 dialog.dialog.wide { width: min(840px, calc(100vw - 32px)); }
 dialog.dialog.x-wide { width: min(1140px, calc(100vw - 32px)); }
 /* A video setting, in both the places it is edited (the settings page and the live management): wide
    enough for five fields a row, and tall enough that the whole setting is read without a scroll. */
 dialog.dialog.settings { width: min(1280px, calc(100vw - 32px)); max-height: calc(100vh - 32px); }
-dialog.dialog.settings .dialog-body { max-height: calc(100vh - 32px - 3px - 70px); }
 /* The scene composer of the live wizard: nearly the whole window, because the canvas is the step. */
 dialog.dialog.compose { width: 100vw; height: 100vh; max-width: 100vw; max-height: 100vh; margin: 0; border-radius: 0; }
-dialog.dialog.compose[open] { display: flex; flex-direction: column; }
-dialog.dialog.compose .dialog-body { flex: 1; min-height: 0; max-height: none; }
-.dialog-head { display: flex; align-items: center; gap: 10px; padding: 14px 24px; border-bottom: 1px solid var(--stroke); }
+.dialog-head { display: flex; flex: none; align-items: center; gap: 10px; padding: 14px 24px; border-bottom: 1px solid var(--stroke); }
 .dialog-head h2 { font-size: 18px; font-weight: 600; }
 .dialog-head .grow { flex: 1; min-width: 0; }
-.dialog-body { padding: 20px 24px; max-height: 70vh; overflow-y: auto; overscroll-behavior: contain; }
+.dialog-body { padding: 20px 24px; flex: 1; min-height: 0; overflow-y: auto; overscroll-behavior: contain; }
 .dialog-body h2 { font-size: 18px; margin-bottom: 12px; font-weight: 600; }
 /* The live wizard shows one step at a time inside the sheet: the margin that tells the two steps
    apart when they share a page (the playlist) would only open a hole at the top of the sheet. */
 dialog.dialog [data-wizard-panel] > h3.section { margin-top: 0; }
 .dialog-footer {
   display: flex;
+  flex: none;
   gap: 8px;
   justify-content: flex-end;
   padding: 12px 24px 16px;

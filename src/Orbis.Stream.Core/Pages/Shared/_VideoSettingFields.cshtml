@@ -137,3 +137,15 @@
     </span>
     <span class="toggle"><input asp-for="LowLatency" data-low-latency /></span>
 </label>
+
+@* The bitrate following the network is a decision about the whole live as well: a card of its
+   own, on by default. Off, the live goes out at the bitrate above whatever the network does
+   (VideoSettingAdaptiveBitrate, BitrateLadder). *@
+<label class="option-card">
+    <i class="icon option-card-mark" aria-hidden="true">&#xEC4A;</i>
+    <span class="option-card-text">
+        <strong>@T["adaptiveBitrate"]</strong>
+        <small>@T["adaptiveBitrateHelp"]</small>
+    </span>
+    <span class="toggle"><input asp-for="AdaptiveBitrate" /></span>
+</label>

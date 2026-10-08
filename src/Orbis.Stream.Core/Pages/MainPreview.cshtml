@@ -111,6 +111,11 @@ else
     var platform = LiveLinkView.PlatformOf(live.StreamUrl);
     var platformLabel = LiveLinkView.LabelOf(platform);
 
+    // A picture that stands up gets a stage that stands up: a live going out in portrait (a
+    // setting of 1080x1920, a phone video kept at its own size) is drawn at the height of the
+    // window instead of twice as tall as the screen.
+    var portrait = live.Output.Height > live.Output.Width;
+
     @* RTMP accepted and nothing on the channel: the ingest rating the stream is not the broadcast
        being on air (YouTubeAirWatch). It stays until the live is found on air, the live is over,
        or the user closes it; the push channel shows and hides it as the check answers. *@
@@ -130,7 +135,7 @@ else
         <div class="preview-main">
             <div class="preview-stage card">
             
-                <div class="preview-screen" style="@shape">
+                <div class="preview-screen@(portrait ? " portrait" : "")" style="@shape">
                     <div class="preview-cover" data-preview-cover>
                         <span class="spinner"></span>
                         <p class="muted" data-cover-text>@T["previewWaiting"]</p>
@@ -143,9 +148,9 @@ else
                             scrolling="no"
                             hidden></iframe>
                     <canvas data-preview-frame role="img" aria-label="@live.VideoName" hidden></canvas>
-                    @if (platform == "youtube" || platform == "twitch")
+                    @if (platformLabel is not null)
                     {
-                        <div class="preview-badge-live" title="@T["liveNow"]"><span class="live-dot"></span><span>LIVE · @(platformLabel ?? (platform == "youtube" ? "YouTube" : "Twitch"))</span></div>
+                        <div class="preview-badge-live" title="@T["liveNow"]"><span class="live-dot"></span><span>LIVE · @platformLabel</span></div>
                     }
                     <div class="preview-embed-status" hidden>
                         <span class="spinner"></span>

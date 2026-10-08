@@ -3,7 +3,7 @@
 @{
     ViewData["Title"] = T["liveManagement"];
     var statuses = new[] { LiveStatus.Live, LiveStatus.Offline, LiveStatus.Ended, LiveStatus.Error, LiveStatus.Stopped };
-    var cancelLink = Url.Page("/MainLive", new { Model.LiveStatus, Model.ChannelName, p = Model.PageIndex });
+    var cancelLink = Url.Page("/MainLive", new { Model.LiveStatus, Model.ChannelName, Model.Platform, p = Model.PageIndex });
     var canStart = Model.ActiveSettings.Count > 0 && Model.ActiveConfigurations.Count > 0;
 }
 @section Styles {
@@ -50,9 +50,21 @@
             }
         </select>
     </label>
+    @* The platforms of the channel settings, all of them: a live is listed under the one it was
+       started for. *@
+    <label class="field">
+        <span class="caption">@T["platform"]</span>
+        <select class="input" name="platform" onchange="this.form.requestSubmit()">
+            <option value="">–</option>
+            @foreach (var platform in MainChannelSettingModel.Platforms)
+            {
+                <option value="@platform.Value" selected="@(string.Equals(Model.Platform, platform.Value, StringComparison.OrdinalIgnoreCase))">@platform.Label</option>
+            }
+        </select>
+    </label>
 </form>
 
-<div data-refresh="@Url.Page("/MainLive", "Rows", new { Model.LiveStatus, Model.ChannelName, p = Model.PageIndex })" data-since="@Model.ChangeVersion">
+<div data-refresh="@Url.Page("/MainLive", "Rows", new { Model.LiveStatus, Model.ChannelName, Model.Platform, p = Model.PageIndex })" data-since="@Model.ChangeVersion">
     <partial name="_LiveRows" model="Model" />
 </div>
 

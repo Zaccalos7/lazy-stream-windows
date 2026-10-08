@@ -14,11 +14,7 @@ else
     <div class="choice-list section" style="margin-top: 8px;">
         @foreach (var setting in Model.ActiveSettings)
         {
-            var displayTitle = string.IsNullOrWhiteSpace(setting.Title)
-                ? T["untitled"]
-                : (setting.Title == "Default Low Twitch" ? T["defaultLowTwitch"]
-                   : setting.Title == "Default Low YouTube" ? T["defaultLowYouTube"]
-                   : setting.Title);
+            var displayTitle = SettingTitleView.Of(setting.Title, T);
             <label class="choice">
                 <input type="radio" name="settingId" value="@setting.Id" required />
                 <span class="grow">
@@ -55,7 +51,7 @@ else
             <label class="choice">
                 <input type="radio" name="configurationId" value="@configuration.Id" required />
                 <span class="grow">
-                    <strong>@configuration.ChannelName</strong> · @configuration.PlatformStreamName
+                    <strong>@configuration.ChannelName</strong> · @(MainChannelSettingModel.ChoiceOf(configuration.PlatformStreamName, configuration.StreamUrl)?.Label ?? configuration.PlatformStreamName)
                     <span class="caption" style="display: block;">@configuration.StreamUrl</span>
                     @if (!string.IsNullOrWhiteSpace(configuration.Description))
                     {

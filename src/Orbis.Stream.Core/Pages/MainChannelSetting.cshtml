@@ -41,11 +41,12 @@
 @foreach (var configuration in Model.Configurations)
 {
     var active = configuration.IsActive ?? false;
-    var youtube = configuration.PlatformStreamName?.Contains("youtube", StringComparison.OrdinalIgnoreCase) ?? false;
-    <div class="row-card @(youtube ? "youtube" : "twitch")">
-        <span class="icon lead" title="@configuration.PlatformStreamName"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="@LiveLinkView.MarkupOf(youtube ? "youtube" : "twitch")" /></svg></span>
+    var choice = MainChannelSettingModel.ChoiceOf(configuration.PlatformStreamName, configuration.StreamUrl);
+    var youtube = choice?.Platform == Orbis.Stream.Core.Streaming.StreamPlatform.YouTube;
+    <div class="row-card @(choice?.Value)">
+        <span class="icon lead" title="@configuration.PlatformStreamName"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="@LiveLinkView.MarkupOf(choice?.Value)" /></svg></span>
         <div class="grow">
-            <h3 class="truncate">@configuration.ChannelName · @(youtube ? "YouTube" : "Twitch")</h3>
+            <h3 class="truncate">@configuration.ChannelName · @(choice?.Label ?? configuration.PlatformStreamName)</h3>
             @if (!string.IsNullOrWhiteSpace(configuration.Description))
             {
                 <div class="caption truncate">@configuration.Description</div>
@@ -100,6 +101,9 @@
                     <label class="field">
                         <span>@T["url"]</span>
                         <input class="input" name="streamUrl" value="@editing.StreamUrl" placeholder="rtmp://…" />
+                        @* Kick and Facebook Gaming fill in where their ingest usually is, and the address to use is
+                           the one their dashboard shows: said where the address is typed. *@
+                        <small data-show-when="@MainChannelSettingModel.PersonalIngests">@T["ingestFromDashboard"]</small>
                     </label>
                     <label class="field">
                         <span>@T["key"]</span>

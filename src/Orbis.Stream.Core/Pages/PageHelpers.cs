@@ -1,4 +1,5 @@
 using Orbis.Stream.Core.Domain;
+using Orbis.Stream.Core.I18n;
 using Orbis.Stream.Core.Streaming;
 
 namespace Orbis.Stream.Core.Pages;
@@ -47,6 +48,36 @@ public static class LiveStatusView
         value?.ToString(format, System.Globalization.CultureInfo.InvariantCulture) ?? "N/A";
 }
 
+/// <summary>The name a video setting is shown under, in the wizard and in the settings.</summary>
+public static class SettingTitleView
+{
+    /// <summary>
+    /// The name it was given; for the low CPU defaults this application seeds, the one of the
+    /// language of the page. The seeds spell some platforms the way they were stored ("Default Low
+    /// Youtube"), so the match ignores case, and the key is the name of the platform without its
+    /// spaces ("Facebook Gaming" is <c>defaultLowFacebookGaming</c>).
+    /// </summary>
+    public static string Of(string? title, UiText text)
+    {
+        ArgumentNullException.ThrowIfNull(text);
+
+        if (string.IsNullOrWhiteSpace(title))
+        {
+            return text["untitled"];
+        }
+
+        foreach (var platform in MainChannelSettingModel.Platforms)
+        {
+            if (string.Equals(title.Trim(), "Default Low " + platform.Label, StringComparison.OrdinalIgnoreCase))
+            {
+                return text["defaultLow" + platform.Label.Replace(" ", string.Empty, StringComparison.Ordinal)];
+            }
+        }
+
+        return title;
+    }
+}
+
 /// <summary>
 /// Public page of a live on its platform, built from the RTMP ingest stored with the live: the
 /// ingest URL is the only platform evidence a video row carries, so a configuration that points
@@ -54,7 +85,7 @@ public static class LiveStatusView
 /// </summary>
 public static class LiveLinkView
 {
-    /// <summary>Platform of an ingest URL (<c>twitch</c>, <c>youtube</c>), or null if unknown.</summary>
+    /// <summary>Platform of an ingest URL (<c>twitch</c>, <c>youtube</c>, <c>kick</c>, <c>facebook</c>), or null if unknown.</summary>
     public static string? PlatformOf(string? streamUrl)
     {
         if (string.IsNullOrWhiteSpace(streamUrl))
@@ -63,23 +94,34 @@ public static class LiveLinkView
         }
 
         // A configuration saved with the RTMPS url of before still points at YouTube: it is compared
-        // the way it is streamed, with the host the stream is sent to.
-        var normalized = StreamPlatforms.NormalizeIngestUrl(streamUrl);
+        // the way it is streamed, with the host the stream is sent to. The slash at the end is the
+        // one the dashboards write and the presets do not: it is the same ingest either way.
+        var normalized = StreamPlatforms.NormalizeIngestUrl(streamUrl).Trim().TrimEnd('/');
         var platform = MainChannelSettingModel.Platforms
             .FirstOrDefault(known => string.Equals(known.StreamUrl, normalized, StringComparison.OrdinalIgnoreCase));
+        if (platform is not null)
+        {
+            return platform.Value;
+        }
 
-        return platform.Label is null ? null : platform.Value;
+        // An ingest of the account or of the live is not always the preset (a Kick endpoint of its
+        // own, a Facebook host of the broadcast): those platforms are recognised by their domain.
+        var detected = StreamPlatforms.Detect(normalized);
+        return MainChannelSettingModel.Platforms
+            .FirstOrDefault(known => known.PersonalIngest && known.Platform == detected)?.Value;
     }
 
     /// <summary>
     /// The platform mark, as the outline of an SVG so it is drawn in the colour of the page rather
-    /// than as a glyph of an icon font: the Twitch and the YouTube mark are brands of their own and
-    /// the Segoe glyphs they were drawn with were neither.
+    /// than as a glyph of an icon font: the marks of the platforms are brands of their own and the
+    /// Segoe glyphs they were drawn with were none of them.
     /// </summary>
     public static string MarkupOf(string? platform) => platform switch
     {
         "twitch" => TwitchMark,
         "youtube" => YoutubeMark,
+        "kick" => KickMark,
+        "facebook" => FacebookGamingMark,
         _ => PlayMark
     };
 
@@ -88,6 +130,8 @@ public static class LiveLinkView
     {
         "twitch" => "platform-twitch",
         "youtube" => "platform-youtube",
+        "kick" => "platform-kick",
+        "facebook" => "platform-facebook",
         _ => "platform-generic"
     };
 
@@ -99,17 +143,25 @@ public static class LiveLinkView
     private const string YoutubeMark =
         "M23.498 6.186a3.016 3.016 0 0 0-2.122-2.136C19.505 3.545 12 3.545 12 3.545s-7.505 0-9.377.505A3.017 3.017 0 0 0 .502 6.186C0 8.07 0 12 0 12s0 3.93.502 5.814a3.016 3.016 0 0 0 2.122 2.136c1.871.505 9.376.505 9.376.505s7.505 0 9.377-.505a3.015 3.015 0 0 0 2.122-2.136C24 15.93 24 12 24 12s0-3.93-.502-5.814zM9.545 15.568V8.432L15.818 12l-6.273 3.568z";
 
+    /// <summary>The Kick mark.</summary>
+    private const string KickMark =
+        "M1.333 0h8v5.333H12V2.667h2.667V0h8v8H20v2.667h-2.667v2.666H20V16h2.667v8h-8v-2.667H12v-2.666H9.333V24h-8Z";
+
+    /// <summary>The Facebook Gaming mark.</summary>
+    private const string FacebookGamingMark = "M0 0v24h15.67v-7.35H7.35v-9.3H24V0zm8.33 15.68h8.32V24H24V8.32H8.33Z";
+
     /// <summary>The play mark of a platform this application does not know.</summary>
     private const string PlayMark = "M8 5v14l11-7z";
 
-    /// <summary>Name the platform shows in its own interface (Twitch, YouTube).</summary>
+    /// <summary>Name the platform shows in its own interface (Twitch, YouTube, Kick, Facebook Gaming).</summary>
     public static string? LabelOf(string? platform) =>
         MainChannelSettingModel.Platforms
-            .FirstOrDefault(known => known.Value == platform).Label;
+            .FirstOrDefault(known => known.Value == platform)?.Label;
 
     /// <summary>
-    /// Where the icon of a live leads: on Twitch the channel, on YouTube the live control room of
-    /// YouTube Studio (<see cref="YouTubeStudioUrl"/>), which is where a live there is managed.
+    /// Where the icon of a live leads: on Twitch and Kick the channel, on Facebook Gaming the page,
+    /// on YouTube the live control room of YouTube Studio (<see cref="YouTubeStudioUrl"/>), which
+    /// is where a live there is managed.
     /// </summary>
     /// <param name="channelName">
     /// The channel of the configuration. The form of the configuration keeps the platform in the
@@ -132,6 +184,10 @@ public static class LiveLinkView
         {
             "twitch" => "https://www.twitch.tv/" + Uri.EscapeDataString(name),
             "youtube" => YouTubeStudioUrl(name, videoId),
+            // A Kick channel is its name in lower case, as its address shows it.
+            "kick" => "https://kick.com/" + Uri.EscapeDataString(name.ToLowerInvariant()),
+            // A gaming creator streams from a page, addressed by its user name.
+            "facebook" => "https://www.facebook.com/" + Uri.EscapeDataString(name.TrimStart('@')),
             _ => null
         };
     }

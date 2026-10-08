@@ -18,7 +18,7 @@ public sealed class RtmpException(string message) : IOException(message);
 /// is: the ingest answers <c>NetStream.Publish.Start</c> when it takes the stream, so "on air" is
 /// the server saying so rather than a byte count that only proves a socket was open. It is also
 /// the last point before the wire, so the pacing of the relay is the pacing of the network.</para>
-/// <para>The protocol is the subset every publisher (OBS, ffmpeg) speaks to Twitch and YouTube:
+/// <para>The protocol is the subset every publisher (OBS, ffmpeg) speaks to Twitch, YouTube and Kick:
 /// the plain handshake, <c>connect</c>, <c>releaseStream</c>, <c>FCPublish</c>,
 /// <c>createStream</c>, <c>publish</c>, then audio, video and <c>@setDataFrame</c> messages
 /// chunked at 4 KB, with the acknowledgements and pings the server asks for.</para>

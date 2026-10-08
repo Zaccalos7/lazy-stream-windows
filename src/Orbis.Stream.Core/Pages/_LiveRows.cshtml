@@ -2,7 +2,7 @@
 @inject Orbis.Stream.Core.Services.YouTubeAirWatch Air
 @{
     var page = Model.Videos.Page;
-    var pager = new PagerModel(page.Number, page.TotalPages, index => Url.Page("/MainLive", new { Model.LiveStatus, Model.ChannelName, p = index })!);
+    var pager = new PagerModel(page.Number, page.TotalPages, index => Url.Page("/MainLive", new { Model.LiveStatus, Model.ChannelName, Model.Platform, p = index })!);
 }
 @if (Model.Videos.Content.Count == 0)
 {
@@ -93,20 +93,20 @@ else
                                     {
                                         
                                         var detailsLabel = T[row.IsScene ? "sceneDetails" : "playlistDetails"];
-                                        <a class="btn subtle icon-only" href="@Url.Page("/MainLive", new { Model.LiveStatus, Model.ChannelName, p = Model.PageIndex, details = historyPkid })"
+                                        <a class="btn subtle icon-only" href="@Url.Page("/MainLive", new { Model.LiveStatus, Model.ChannelName, Model.Platform, p = Model.PageIndex, details = historyPkid })"
                                            title="@detailsLabel" aria-label="@detailsLabel"><i class="icon">&#xE8FD;</i></a>
                                     }
                                     @if (hasSetting)
                                     {
                                         if (row.IsPlaylist)
                                         {
-                                            <a class="btn subtle icon-only" href="@Url.Page("/MainLive", new { Model.LiveStatus, Model.ChannelName, p = Model.PageIndex, linkHistory = historyPkid })" title="@T["connectVideoSetting"]" aria-label="@T["connectVideoSetting"]">
+                                            <a class="btn subtle icon-only" href="@Url.Page("/MainLive", new { Model.LiveStatus, Model.ChannelName, Model.Platform, p = Model.PageIndex, linkHistory = historyPkid })" title="@T["connectVideoSetting"]" aria-label="@T["connectVideoSetting"]">
                                                 <i class="icon">&#xE713;</i>
                                             </a>
                                         }
                                         else
                                         {
-                                            <a class="btn subtle icon-only" href="@Url.Page("/MainLive", new { Model.LiveStatus, Model.ChannelName, p = Model.PageIndex, link = video.Pkid })" title="@T["connectVideoSetting"]" aria-label="@T["connectVideoSetting"]">
+                                            <a class="btn subtle icon-only" href="@Url.Page("/MainLive", new { Model.LiveStatus, Model.ChannelName, Model.Platform, p = Model.PageIndex, link = video.Pkid })" title="@T["connectVideoSetting"]" aria-label="@T["connectVideoSetting"]">
                                                 <i class="icon">&#xE713;</i>
                                             </a>
                                         }
@@ -115,13 +115,13 @@ else
                                     {
                                         if (row.IsPlaylist)
                                         {
-                                            <a class="btn subtle" href="@Url.Page("/MainLive", new { Model.LiveStatus, Model.ChannelName, p = Model.PageIndex, linkHistory = historyPkid })">
+                                            <a class="btn subtle" href="@Url.Page("/MainLive", new { Model.LiveStatus, Model.ChannelName, Model.Platform, p = Model.PageIndex, linkHistory = historyPkid })">
                                                 <i class="icon">&#xE71B;</i>@T["connectVideoSetting"]
                                             </a>
                                         }
                                         else
                                         {
-                                            <a class="btn subtle" href="@Url.Page("/MainLive", new { Model.LiveStatus, Model.ChannelName, p = Model.PageIndex, link = video.Pkid })">
+                                            <a class="btn subtle" href="@Url.Page("/MainLive", new { Model.LiveStatus, Model.ChannelName, Model.Platform, p = Model.PageIndex, link = video.Pkid })">
                                                 <i class="icon">&#xE71B;</i>@T["connectVideoSetting"]
                                             </a>
                                         }

@@ -51,6 +51,9 @@
 .btn.brand svg { width: 15px; height: 15px; flex: none; fill: currentColor; }
 .btn.brand.twitch { --hue: var(--twitch); }
 .btn.brand.youtube { --hue: var(--youtube); }
+/* Kick is black on its green, as Kick draws it: white on that green cannot be read in either theme. */
+.btn.brand.kick { --hue: var(--kick); color: #000000; }
+.btn.brand.facebook { --hue: var(--facebook); }
 
 .btn.icon-only { width: 30px; padding: 0; }
 .btn.icon-only .icon { font-size: 14px; }
@@ -262,6 +265,8 @@ form:has(input[name="platformStreamName"][value="youtube"]:checked) .option-card
 }
 .choice.twitch { --hue: var(--twitch); }
 .choice.youtube { --hue: var(--youtube); }
+.choice.kick { --hue: var(--kick); }
+.choice.facebook { --hue: var(--facebook); }
 .choice > .icon { color: var(--text); font-size: 16px; }
 .choice:hover { border-color: var(--text-3); }
 .choice:has(input:checked) {

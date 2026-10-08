@@ -92,6 +92,10 @@ a.row-card:hover { transform: translateX(2px); box-shadow: var(--shadow-lift); b
 .row-card p { margin: 2px 0 0; color: var(--text-2); }
 .row-card.twitch { --hue: var(--twitch); }
 .row-card.youtube { --hue: var(--youtube); }
+.row-card.kick { --hue: var(--kick); }
+.row-card.facebook { --hue: var(--facebook); }
+/* Kick's mark is black on its green, as on the brand buttons: white on that green cannot be read. */
+.row-card.kick > .icon.lead { color: #000000; }
 .row-card > .icon:last-child:not(.lead) { color: var(--text-3); }
 a.row-card:hover > .icon:last-child { color: var(--hue); }
 
@@ -215,6 +219,10 @@ a > .platform-mark { border-radius: 6px; }
 a:hover > .platform-mark { background: var(--tint); }
 .platform-twitch { color: #9146ff; }
 .platform-youtube { color: #ff0000; }
+/* Kick's green and the blue of Facebook Gaming are tokens: the brand green is unreadable on white,
+   so the light theme has a darker one (tokens.css). */
+.platform-kick { color: var(--kick); }
+.platform-facebook { color: var(--facebook); }
 .platform-generic { color: var(--text-2); }
 
 .toolbar { display: flex; gap: 10px; align-items: end; flex-wrap: wrap; margin-bottom: 14px; }

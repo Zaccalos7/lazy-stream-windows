@@ -53,6 +53,14 @@ public sealed class VideoSettingForm
     public bool LowLatency { get; set; }
 
     /// <summary>
+    /// Whether the bitrate of a live follows what the network carries (see
+    /// <see cref="VideoSettingAdaptiveBitrate"/>). On by default: a network that cannot carry the
+    /// live brings it down instead of leaving the viewers to rebuffer, and never above the bitrate
+    /// typed here.
+    /// </summary>
+    public bool AdaptiveBitrate { get; set; } = true;
+
+    /// <summary>
     /// How much work the encoder puts into every frame (see <see cref="EncoderQuality"/>). A new
     /// setting starts automatic: measured on this machine when the live starts.
     /// </summary>
@@ -103,11 +111,12 @@ public sealed class VideoSettingForm
         Preset = Option(setting, "preset"),
         Tune = Option(setting, "tune"),
         LowLatency = VideoSettingLatency.IsOn(Option(setting, VideoSettingLatency.OptionKey)),
+        AdaptiveBitrate = VideoSettingAdaptiveBitrate.IsOn(Option(setting, VideoSettingAdaptiveBitrate.OptionKey)),
         Quality = VideoSettingQuality.Parse(Option(setting, VideoSettingQuality.OptionKey)),
         IsActive = setting.IsVideoAndAudioSettingActive ?? false
     };
 
-    /// <summary>User settings are always "custom": only the seeded Twitch/Youtube rows are defaults.</summary>
+    /// <summary>User settings are always "custom": only the seeded rows of the platforms (Twitch, Youtube, Kick, Facebook Gaming) are defaults.</summary>
     public VideoSettingsRequest ToRequest() => new(
         Id,
         Title?.Trim(),
@@ -123,6 +132,7 @@ public sealed class VideoSettingForm
                 ("preset", Preset),
                 ("tune", Tune),
                 (VideoSettingLatency.OptionKey, LowLatency ? "1" : "0"),
+                (VideoSettingAdaptiveBitrate.OptionKey, AdaptiveBitrate ? "1" : "0"),
                 (VideoSettingQuality.OptionKey, Quality.ToString())
             }
             .Where(option => !string.IsNullOrEmpty(option.Item2))

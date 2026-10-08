@@ -130,6 +130,30 @@ public sealed class FfmpegStreamingSession : IAsyncDisposable
     public LiveOutput? Connection => _output;
 
     /// <summary>
+    /// The video bitrate of the setting this pass was started from, before the ladder of the live
+    /// took anything off it: what the ladder climbs back to. Zero when the setting names none.
+    /// </summary>
+    public int NominalBitrate { get; private set; }
+
+    /// <summary>The bitrate of the sound of this pass, which the network carries next to the picture.</summary>
+    public int AudioBitrate { get; private set; }
+
+    /// <summary>
+    /// Whether the setting of this pass lets its bitrate follow the network (the adaptive bitrate
+    /// switch of the setting, <see cref="VideoSettingAdaptiveBitrate"/>).
+    /// </summary>
+    public bool AdaptsBitrate { get; private set; }
+
+    /// <summary>
+    /// Reads how the connection of the live is getting through and says whether its video bitrate
+    /// has to change (see <see cref="BitrateLadder"/>): null while it holds, on a live that has the
+    /// connection to itself, for a setting that leaves the bitrate to the encoder, and for one
+    /// whose adaptive bitrate is switched off.
+    /// </summary>
+    public RateDecision? AdaptBitrate() =>
+        _output is { } output && AdaptsBitrate && NominalBitrate > 0 ? output.AdaptBitrate(NominalBitrate, AudioBitrate) : null;
+
+    /// <summary>
     /// How long, past its warm up, this encoder has produced the live no faster than it goes out
     /// (<see cref="FlvPacedRelay.LowLeadSinceTicks"/>); zero while it keeps ahead, and on a live
     /// that has the connection to itself.
@@ -273,8 +297,11 @@ public sealed class FfmpegStreamingSession : IAsyncDisposable
         var own = FfmpegCommandBuilder.ResolveOutput(setting, probe);
         var frame = profile.UniformFormat ? output?.Pin(FfmpegCommandBuilder.FrameOfLive(setting, own)) : null;
         var arguments = FfmpegCommandBuilder.Build(
-            new FfmpegStreamRequest(inputPath, outputUrl, probe, setting, resumeFrom, previewPath, profile, quality, frame));
-        return Launch(locator, videoPkid, inputPath, outputUrl, arguments, probe, frame ?? own, resumeFrom, profile, logger, output);
+            new FfmpegStreamRequest(
+                inputPath, outputUrl, probe, setting, resumeFrom, previewPath, profile, quality, frame, BitrateOf(setting, output)));
+        var session = Launch(locator, videoPkid, inputPath, outputUrl, arguments, probe, frame ?? own, resumeFrom, profile, logger, output);
+        session.Measure(setting, profile);
+        return session;
     }
 
     /// <summary>
@@ -310,7 +337,8 @@ public sealed class FfmpegStreamingSession : IAsyncDisposable
             ? output?.Pin(new MediaOutput(FfmpegCommandBuilder.Even(canvasWidth), FfmpegCommandBuilder.Even(canvasHeight), frameRate))
             : null;
         var arguments = FfmpegCommandBuilder.BuildComposition(new FfmpegCompositionRequest(
-            items, outputUrl, setting, canvasWidth, canvasHeight, canvasFrameRate, resumeFrom, duration, previewPath, profile, quality, frame));
+            items, outputUrl, setting, canvasWidth, canvasHeight, canvasFrameRate, resumeFrom, duration, previewPath, profile, quality, frame,
+            BitrateOf(setting, output)));
 
         var mediaOutput = frame ?? new MediaOutput(canvasWidth, canvasHeight, frameRate);
         var sound = FfmpegCommandBuilder.CarriesSound(items);
@@ -321,8 +349,31 @@ public sealed class FfmpegStreamingSession : IAsyncDisposable
         var probe = new MediaProbeResult(
             canvasWidth, canvasHeight, frameRate, sound, sound ? 2 : 0, duration?.TotalSeconds ?? 0);
 
-        return Launch(locator, videoPkid, SceneDescriptionOf(items), outputUrl, arguments, probe, mediaOutput, resumeFrom, profile, logger, output);
+        var session = Launch(locator, videoPkid, SceneDescriptionOf(items), outputUrl, arguments, probe, mediaOutput, resumeFrom, profile, logger, output);
+        session.Measure(setting, profile);
+        return session;
     }
+
+    /// <summary>
+    /// What the ladder of the live measures this pass against: the bitrate of the setting, and the
+    /// one of the sound, which is the setting's or the AAC a platform that requires sound is given.
+    /// A setting with the adaptive bitrate switched off is not measured at all.
+    /// </summary>
+    private void Measure(VideoSettingEntity setting, StreamPlatformProfile profile)
+    {
+        AdaptsBitrate = VideoSettingAdaptiveBitrate.IsOn(setting);
+        NominalBitrate = setting.VideoBitrate is > 0 ? setting.VideoBitrate.Value : 0;
+        AudioBitrate = setting.AudioSetting?.AudioBitrate is int audio and > 0
+            ? audio
+            : setting.AudioSetting is not null || profile.RequiresAudio ? 128_000 : 0;
+    }
+
+    /// <summary>
+    /// The video bitrate a pass goes out at: under the ladder of the live when the setting lets the
+    /// bitrate follow the network, the bitrate of the setting itself when it does not (null).
+    /// </summary>
+    internal static int? BitrateOf(VideoSettingEntity setting, LiveOutput? output) =>
+        VideoSettingAdaptiveBitrate.IsOn(setting) ? output?.Ladder.BitrateFor(setting.VideoBitrate) : null;
 
     private static FfmpegStreamingSession Launch(
         FfmpegToolLocator locator,

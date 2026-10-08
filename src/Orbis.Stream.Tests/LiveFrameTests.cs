@@ -126,6 +126,49 @@ public sealed class LiveFrameTests
         Assert.Contains("[orbisv]scale=1920:1080:force_original_aspect_ratio=decrease", text, StringComparison.Ordinal);
         Assert.Contains("-map [orbisvfit]", text, StringComparison.Ordinal);
     }
+
+    private static readonly MediaOutput Upright = new(1080, 1920, 30d);
+
+    [Fact]
+    public void APortraitLiveIsPreviewedUpright()
+    {
+        // A live that goes out standing up (a 1080x1920 setting, a phone video kept at its size):
+        // the preview is bounded on its height, 360x640 - the pixels of the landscape one, turned -
+        // instead of a 640x1138 picture three times as heavy for a stage that shows it smaller.
+        var command = string.Join(' ', FfmpegCommandBuilder.Build(new FfmpegStreamRequest(
+            "/videos/clip.mp4", "rtmp://example.com/live/key", new MediaProbeResult(1080, 1920, 30d, true, 2, 60d), Setting(),
+            PreviewPath: "/tmp/preview.jpg")));
+
+        Assert.Contains("fps=30,scale=w=-2:h='min(640,ih)'", command, StringComparison.Ordinal);
+        Assert.DoesNotContain("scale=w='min(640,iw)'", command, StringComparison.Ordinal);
+    }
+
+    [Fact]
+    public void APortraitCanvasIsPreviewedUprightToo()
+    {
+        var command = string.Join(' ', FfmpegCommandBuilder.BuildComposition(new FfmpegCompositionRequest(
+            [new FfmpegCompositionItem(SourceKind.Camera, "video=Cam", 0, 0, 1080, 1920, false)],
+            "rtmps://a.rtmps.youtube.com/live2/key",
+            Setting(),
+            1080,
+            1920,
+            30d,
+            PreviewPath: "/tmp/preview.jpg",
+            Profile: StreamPlatformProfile.YouTube,
+            Frame: Upright)));
+
+        Assert.Contains("[orbisp0]fps=30,scale=w=-2:h='min(640,ih)'[orbisp]", command, StringComparison.Ordinal);
+    }
+
+    [Fact]
+    public void ALandscapeLiveKeepsItsPreviewBoundedOnItsWidth()
+    {
+        var command = string.Join(' ', FfmpegCommandBuilder.Build(new FfmpegStreamRequest(
+            "/videos/clip.mp4", "rtmps://a.rtmps.youtube.com/live2/key", new MediaProbeResult(1920, 1080, 30d, true, 2, 60d), Setting(),
+            PreviewPath: "/tmp/preview.jpg", Profile: StreamPlatformProfile.YouTube, Frame: FullHd)));
+
+        Assert.Contains("fps=30,scale=w='min(640,iw)':h=-2", command, StringComparison.Ordinal);
+    }
 }
 
 /// <summary>
@@ -214,4 +257,64 @@ public sealed class ConstantBitrateTests
 
         Assert.Contains("-filler_data 1", command, StringComparison.Ordinal);
     }
+
+    [Theory]
+    [MemberData(nameof(Platforms))]
+    public void APlatformBoundsTheRateControlToOneSecondOfTheBitrate(string platform)
+    {
+        // A keyframe may spend one second of the bitrate, not two: the peak every frame behind it
+        // waits on the wire for.
+        var command = Command(ProfileOf(platform));
+
+        Assert.Contains("-maxrate 6000000", command, StringComparison.Ordinal);
+        Assert.Contains("-bufsize 6000000", command, StringComparison.Ordinal);
+    }
+
+    [Fact]
+    public void ACustomIngestKeepsTheRateControlItHad()
+    {
+        var command = string.Join(' ', FfmpegCommandBuilder.Build(new FfmpegStreamRequest(
+            "/videos/clip.mp4", "rtmp://example.com/live/key", new MediaProbeResult(1920, 1080, 30d, true, 2, 60d), Setting())));
+
+        Assert.Contains("-bufsize 12000000", command, StringComparison.Ordinal);
+    }
+
+    [Fact]
+    public void TheBitrateTheNetworkCarriesTakesThePlaceOfTheSetting()
+    {
+        var command = string.Join(' ', FfmpegCommandBuilder.Build(new FfmpegStreamRequest(
+            "/videos/clip.mp4", "rtmps://ingest/live2/key", new MediaProbeResult(1920, 1080, 30d, true, 2, 60d), Setting(),
+            Profile: StreamPlatformProfile.YouTube, Bitrate: 3_240_000)));
+
+        // Still constant - at the rate the network carries.
+        Assert.Contains("-b:v 3240000 -maxrate 3240000 -minrate 3240000 -bufsize 3240000", command, StringComparison.Ordinal);
+        Assert.Contains("nal-hrd=cbr", command, StringComparison.Ordinal);
+        Assert.DoesNotContain("6000000", command, StringComparison.Ordinal);
+    }
+
+    [Fact]
+    public void ACanvasGoesOutAtTheBitrateTheNetworkCarriesToo()
+    {
+        var command = string.Join(' ', FfmpegCommandBuilder.BuildComposition(new FfmpegCompositionRequest(
+            [new FfmpegCompositionItem(SourceKind.Camera, "video=Cam", 0, 0, 1280, 720, false)],
+            "rtmp://live.twitch.tv/app/key",
+            Setting(),
+            1280,
+            720,
+            30d,
+            Profile: StreamPlatformProfile.Twitch,
+            Bitrate: 2_500_000)));
+
+        Assert.Contains("-b:v 2500000 -maxrate 2500000 -bufsize 2500000", command, StringComparison.Ordinal);
+    }
+
+    public static TheoryData<string> Platforms => ["twitch", "youtube", "kick", "facebook"];
+
+    private static StreamPlatformProfile ProfileOf(string platform) => platform switch
+    {
+        "twitch" => StreamPlatformProfile.Twitch,
+        "youtube" => StreamPlatformProfile.YouTube,
+        "kick" => StreamPlatformProfile.Kick,
+        _ => StreamPlatformProfile.Facebook
+    };
 }

@@ -721,3 +721,57 @@ public sealed class SettingRepositoryTests
         Assert.Null(settings.FindById(id));
     }
 }
+
+/// <summary>
+/// The platform filter of the live page: a live is listed under the platform it was started for,
+/// which its live history keeps, whatever the case it was stored in.
+/// </summary>
+public sealed class LivePagePlatformTests
+{
+    [Fact]
+    public void TheLivePageListsTheLivesOfOnePlatform()
+    {
+        using var database = new TemporaryDatabase();
+        var histories = database.Repository<VideoLiveHistoryRepository>();
+        var videos = database.Repository<VideoRepository>();
+
+        void Live(string platform, string channel)
+        {
+            var history = histories.Insert(new VideoLiveHistoryEntity
+            {
+                FolderOfVideoToStream = database.Directory,
+                LocalDateTimeStartLive = new DateTime(2026, 10, 8, 10, 0, 0, DateTimeKind.Local),
+                StreamUrl = "rtmp://ingest/live",
+                StreamKey = "key-" + channel,
+                PlatformStreamName = platform,
+                UserName = "orbis"
+            });
+            videos.Insert(new VideoEntity
+            {
+                Name = channel + ".mp4",
+                VideoPath = "/clips/" + channel + ".mp4",
+                Extension = "mp4",
+                ChannelName = channel,
+                VideoLiveHistoryId = history,
+                VideoSettingId = 1
+            });
+        }
+
+        Live("kick", "kick-channel");
+        Live("Facebook", "facebook-channel");
+        Live("twitch", "twitch-channel");
+
+        var kick = videos.FindLivePage(null, null, 0, 10, platform: "kick");
+        Assert.Equal("kick-channel", Assert.Single(kick.Items).Video.ChannelName);
+        Assert.Equal(1, kick.TotalElements);
+
+        // Stored as the form wrote it once, asked for as the filter spells it now.
+        Assert.Equal("facebook-channel", Assert.Single(videos.FindLivePage(null, null, 0, 10, platform: "facebook").Items).Video.ChannelName);
+        Assert.Empty(videos.FindLivePage(null, null, 0, 10, platform: "youtube").Items);
+
+        // With the other filters, and without any.
+        Assert.Single(videos.FindLivePage(LiveStatus.Offline, "twitch-channel", 0, 10, platform: "twitch").Items);
+        Assert.Empty(videos.FindLivePage(null, "twitch-channel", 0, 10, platform: "kick").Items);
+        Assert.Equal(3, videos.FindLivePage(null, null, 0, 10).Items.Count(row => row.Video.ChannelName.EndsWith("-channel", StringComparison.Ordinal)));
+    }
+}

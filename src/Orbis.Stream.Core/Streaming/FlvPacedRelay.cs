@@ -85,6 +85,7 @@ public sealed class FlvPacedRelay
     private long _sentTimestamp = -1;
     private long _lastMediaTimestamp = -1;
     private long _positionMilliseconds;
+    private long _bytesSent;
     private long _onAirSinceTicks;
     private long _lastAdvanceTicks = Environment.TickCount64;
     private long _firstMediaQueued = -1;
@@ -134,6 +135,26 @@ public sealed class FlvPacedRelay
     /// stamps from an offset, or that jumped, still resumes from the point it really got to.
     /// </summary>
     public long PositionMilliseconds => Interlocked.Read(ref _positionMilliseconds);
+
+    /// <summary>The bytes of the tags the sink took, as the encoder wrote them.</summary>
+    public long BytesSent => Interlocked.Read(ref _bytesSent);
+
+    /// <summary>
+    /// The counters of the relay at this moment, for the bitrate ladder of the live (see
+    /// <see cref="BitrateLadder"/>). The lead is the one of now, not the one of the last frame sent:
+    /// an encoder that stopped writing leaves an empty queue, which is a lead of nothing, and the
+    /// ladder must not read it as frames waiting for the network.
+    /// </summary>
+    public DeliverySample Sample()
+    {
+        long lead;
+        lock (_gate)
+        {
+            lead = _queue.Count == 0 ? 0 : Math.Max(0, _lastQueuedTimestamp - _lastSentTimestamp);
+        }
+
+        return new DeliverySample(Environment.TickCount64, PositionMilliseconds, BytesSent, lead);
+    }
 
     /// <summary>When the first frame was handed to an open sink (Environment.TickCount64); 0 before.</summary>
     public long OnAirSinceTicks => Interlocked.Read(ref _onAirSinceTicks);
@@ -653,6 +674,7 @@ public sealed class FlvPacedRelay
     private void MarkSent(FlvTag tag)
     {
         var now = Environment.TickCount64;
+        Interlocked.Add(ref _bytesSent, tag.Length);
         if (tag.Timestamp > Interlocked.Read(ref _sentTimestamp))
         {
             Interlocked.Exchange(ref _sentTimestamp, tag.Timestamp);

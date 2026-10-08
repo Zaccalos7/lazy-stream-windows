@@ -77,6 +77,10 @@ public sealed class DatabaseBootstrapper : IHostedService
         InitializeDefaultVideoSetting("Twitch", createHighQuality: false);
         InitializeDefaultVideoSetting("Youtube", createHighQuality: true);
         InitializeDefaultVideoSetting("Youtube", createHighQuality: false);
+        InitializeDefaultVideoSetting("Kick", createHighQuality: true);
+        InitializeDefaultVideoSetting("Kick", createHighQuality: false);
+        InitializeDefaultVideoSetting("Facebook Gaming", createHighQuality: true);
+        InitializeDefaultVideoSetting("Facebook Gaming", createHighQuality: false);
         UpgradeLegacyYouTubeDefaults();
     }
 
@@ -105,11 +109,43 @@ public sealed class DatabaseBootstrapper : IHostedService
         3_000_000, 128_000, 1280, 720, 30,
         [("preset", "superfast"), ("profile", "main"), ("x264-params", "scenecut=0:rc_lookahead=0")]);
 
+    /// <summary>
+    /// Kick: a fixed 1080p30 at 6 Mbps, under the 8 Mbps its IVS ingest takes with the headroom a
+    /// home uplink needs, and the 160 Kbps of sound Kick asks for. The size is named because the
+    /// whole live keeps one format there (StreamPlatformProfile.Kick), like on YouTube, and the
+    /// first file of a playlist is no reason for all of it to go out small.
+    /// </summary>
+    private static readonly DefaultSpec KickHigh = new(
+        6_000_000, 160_000, 1920, 1080, 30,
+        [("preset", "veryfast"), ("profile", "high")]);
+
+    /// <summary>Kick on a light machine: 720p30 at 3 Mbps.</summary>
+    private static readonly DefaultSpec KickLow = new(
+        3_000_000, 128_000, 1280, 720, 30,
+        [("preset", "superfast"), ("profile", "main"), ("x264-params", "scenecut=0:rc_lookahead=0")]);
+
+    /// <summary>
+    /// Facebook Gaming: a fixed 1080p30 at 4.5 Mbps, the middle of the 3 to 6 Mbps Facebook takes
+    /// for that size and rate - its ingest keeps the settings of a broadcast from changing halfway
+    /// and checks them against what it announced, so the size is named - with the 128 Kbps of
+    /// sound it asks for, and the main profile OBS sends it.
+    /// </summary>
+    private static readonly DefaultSpec FacebookGamingHigh = new(
+        4_500_000, 128_000, 1920, 1080, 30,
+        [("preset", "veryfast"), ("profile", "main")]);
+
+    /// <summary>Facebook Gaming on a light machine: 720p30 at 3 Mbps, under the 4 Mbps of that size.</summary>
+    private static readonly DefaultSpec FacebookGamingLow = new(
+        3_000_000, 128_000, 1280, 720, 30,
+        [("preset", "superfast"), ("profile", "main"), ("x264-params", "scenecut=0:rc_lookahead=0")]);
+
     private static DefaultSpec SpecOf(string platform, bool highQuality) => (platform, highQuality) switch
     {
         ("Twitch", true) => new(6_000_000, 160_000, null, null, null,
             [("preset", "veryfast"), ("tune", "zerolatency"), ("profile", "high"), ("x264-params", "rc_lookahead=20")]),
         ("Youtube", true) => YouTubeHigh,
+        ("Kick", true) => KickHigh,
+        ("Facebook Gaming", true) => FacebookGamingHigh,
         (_, true) => new(5_000_000, 128_000, null, null, null,
             [("preset", "veryfast"), ("tune", "zerolatency")]),
 
@@ -117,6 +153,8 @@ public sealed class DatabaseBootstrapper : IHostedService
         ("Twitch", false) => new(3_000_000, 96_000, 1280, 720, 30,
             [("preset", "ultrafast"), ("tune", "zerolatency"), ("profile", "main"), ("x264-params", "scenecut=0:rc_lookahead=0")]),
         ("Youtube", false) => YouTubeLow,
+        ("Kick", false) => KickLow,
+        ("Facebook Gaming", false) => FacebookGamingLow,
         _ => new(2_000_000, 64_000, 1280, 720, 30,
             [("preset", "ultrafast"), ("tune", "zerolatency")])
     };

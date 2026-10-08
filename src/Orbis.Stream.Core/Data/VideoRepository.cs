@@ -236,9 +236,11 @@ public sealed class VideoRepository
     /// <para>The status of a playlist is its own, not the one of the video shown: LIVE while any video
     /// is on air, ENDED once the last one was streamed through, else the one of the video it got to.
     /// The status filter reads the same value.</para>
+    /// <para>The platform filter reads the platform the live was started for, which the live history
+    /// keeps (<c>twitch</c>, <c>youtube</c>, <c>kick</c>, <c>facebook</c>), in whatever case it was stored.</para>
     /// </summary>
     public PagedResult<LiveRowEntity> FindLivePage(
-        LiveStatus? liveStatus, string? channelName, int page, int size, long? videoLiveHistoryPkid = null)
+        LiveStatus? liveStatus, string? channelName, int page, int size, long? videoLiveHistoryPkid = null, string? platform = null)
     {
         const string Grouped =
             """
@@ -263,7 +265,10 @@ public sealed class VideoRepository
         var where = "WHERE t.pick = 1"
             + (liveStatus is null ? string.Empty : " AND COALESCE(t.group_status, t.live_status) = @status")
             + (string.IsNullOrEmpty(channelName) ? string.Empty : " AND t.channel_name = @channel")
-            + (videoLiveHistoryPkid is null ? string.Empty : " AND t.video_live_history_pkid = @history");
+            + (videoLiveHistoryPkid is null ? string.Empty : " AND t.video_live_history_pkid = @history")
+            + (string.IsNullOrEmpty(platform)
+                ? string.Empty
+                : " AND t.video_live_history_pkid IN (SELECT h.pkid FROM video_live_history h WHERE lower(h.platform_stream_name) = @platform)");
 
         void Bind(SqliteCommand command)
         {
@@ -284,6 +289,11 @@ public sealed class VideoRepository
             if (videoLiveHistoryPkid is { } history)
             {
                 command.Parameters.AddWithValue("@history", history);
+            }
+
+            if (!string.IsNullOrEmpty(platform))
+            {
+                command.Parameters.AddWithValue("@platform", platform.Trim().ToLowerInvariant());
             }
         }
 

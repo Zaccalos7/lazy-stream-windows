@@ -1,7 +1,7 @@
 # Orbis Stream
 
-Desktop application that streams local video files to Twitch, YouTube and any other
-RTMP-compatible platform.
+Desktop application that streams local video files to Twitch, YouTube, Kick, Facebook Gaming
+and any other RTMP-compatible platform.
 
 The application is a native rewrite of the original Java Spring Boot + JCEF project:
 

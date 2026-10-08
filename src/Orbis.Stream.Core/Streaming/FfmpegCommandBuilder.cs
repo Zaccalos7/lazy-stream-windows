@@ -28,7 +28,12 @@ public sealed record FfmpegStreamRequest(
     /// first one on it. Null leaves the output to the setting and the source, as a live that has
     /// the connection to itself always did.
     /// </summary>
-    MediaOutput? Frame = null);
+    MediaOutput? Frame = null,
+    /// <summary>
+    /// The video bitrate the live goes out at when the network was measured to carry less than
+    /// the setting (see <see cref="BitrateLadder"/>). Null is the bitrate of the setting.
+    /// </summary>
+    int? Bitrate = null);
 
 /// <summary>One source on the canvas, as the command line needs it.</summary>
 public sealed record FfmpegCompositionItem(
@@ -88,7 +93,9 @@ public sealed record FfmpegCompositionRequest(
     /// first one on it. Null leaves the output to the setting and the source, as a live that has
     /// the connection to itself always did.
     /// </summary>
-    MediaOutput? Frame = null);
+    MediaOutput? Frame = null,
+    /// <summary>The video bitrate decided by the network (see <see cref="BitrateLadder"/>); null is the setting's.</summary>
+    int? Bitrate = null);
 
 /// <summary>
 /// Translates the <c>FFmpegFrameRecorder</c> configuration of <c>StreamService</c> into the
@@ -127,6 +134,20 @@ public static class FfmpegCommandBuilder
     /// small slice of a core next to the live.
     /// </summary>
     private const string PreviewFilter = "fps=30,scale=w='min(640,iw)':h=-2";
+
+    /// <summary>
+    /// The same preview for a picture that stands up: bounded on its height rather than on its
+    /// width. 640 wide is a 1138 pixel tall JPEG for a 9:16 live - three times the pixels of the
+    /// landscape preview, to be drawn on a stage that shows it a third of that size; 640 tall is
+    /// the same number of pixels as the landscape one, turned.
+    /// </summary>
+    private const string PortraitPreviewFilter = "fps=30,scale=w=-2:h='min(640,ih)'";
+
+    /// <summary>
+    /// The rate control window of a custom ingest, in seconds of the bitrate: the two seconds every
+    /// live had before the platforms were told apart (see <see cref="StreamPlatformProfile.RateBuffer"/>).
+    /// </summary>
+    private const double DefaultRateBufferSeconds = 2;
 
     /// <summary>
     /// The real-time buffer of a dshow device: a couple of seconds of raw 1080p, enough to ride out
@@ -220,7 +241,8 @@ public static class FfmpegCommandBuilder
             silence || profile is { UniformFormat: true } ? 2 : probe.AudioChannels,
             scale,
             profile,
-            request.Quality);
+            request.Quality,
+            request.Bitrate);
 
         // The silent track never ends: the picture decides when the live does.
         if (silence)
@@ -234,7 +256,7 @@ public static class FfmpegCommandBuilder
         {
             // The scale of the output applies to the preview too: it gets the same picture the live
             // does, then shrinks it on its own.
-            AppendPreviewOutput(arguments, "0:v:0", (scale is null ? string.Empty : scale + ",") + PreviewFilter, previewPath);
+            AppendPreviewOutput(arguments, "0:v:0", (scale is null ? string.Empty : scale + ",") + PreviewFilterOf(output), previewPath);
         }
 
         return arguments;
@@ -329,7 +351,8 @@ public static class FfmpegCommandBuilder
         {
             var whole = videoLabel;
             videoLabel = VideoLabel + "out";
-            graph += $";[{whole}]split=2[{videoLabel}][{PreviewLabel}0];[{PreviewLabel}0]{PreviewFilter}[{PreviewLabel}]";
+            var shown = request.Frame ?? new MediaOutput(canvasWidth, canvasHeight, frameRate);
+            graph += $";[{whole}]split=2[{videoLabel}][{PreviewLabel}0];[{PreviewLabel}0]{PreviewFilterOf(shown)}[{PreviewLabel}]";
         }
 
         arguments.Add("-filter_complex");
@@ -354,7 +377,7 @@ public static class FfmpegCommandBuilder
         // The composed picture is already the size the canvas is, so the encoder is not asked to
         // scale again: -vf here would resize the result of the composition, not its base.
         AppendEncoderArguments(
-            arguments, setting, frameRate, HasAudioMix(items) || silence, channels: silence || profile is { UniformFormat: true } ? 2 : 0, scaleFilter: null, profile, request.Quality);
+            arguments, setting, frameRate, HasAudioMix(items) || silence, channels: silence || profile is { UniformFormat: true } ? 2 : 0, scaleFilter: null, profile, request.Quality, request.Bitrate);
 
         // A canvas of devices has no end and neither has the silent track: -shortest only matters
         // for a canvas of files, whose picture ends when its longest file does.
@@ -382,6 +405,10 @@ public static class FfmpegCommandBuilder
 
         return arguments;
     }
+
+    /// <summary>The preview filter of a live that goes out at this size: bounded on its width, or on its height when it stands up.</summary>
+    private static string PreviewFilterOf(MediaOutput output) =>
+        output.Height > output.Width ? PortraitPreviewFilter : PreviewFilter;
 
     /// <summary>
     /// The second output of a live: one JPEG, overwritten a few times a second.
@@ -952,7 +979,8 @@ public static class FfmpegCommandBuilder
         int channels,
         string? scaleFilter,
         StreamPlatformProfile? profile = null,
-        EncoderQuality? quality = null)
+        EncoderQuality? quality = null,
+        int? bitrate = null)
     {
         // The relay reads FLV whatever the setting names: it is the container of RTMP, and the
         // only one whose tags carry the timestamp the pacer needs.
@@ -981,23 +1009,28 @@ public static class FfmpegCommandBuilder
             arguments.Add(scaleFilter);
         }
 
-        if (setting.VideoBitrate is > 0)
+        // The bitrate the network was measured to carry, when it carries less than the setting.
+        var videoBitrate = bitrate is > 0 ? bitrate : setting.VideoBitrate;
+        if (videoBitrate is > 0)
         {
-            var bitrate = setting.VideoBitrate.Value.ToString(CultureInfo.InvariantCulture);
+            var rate = videoBitrate.Value.ToString(CultureInfo.InvariantCulture);
             arguments.Add("-b:v");
-            arguments.Add(bitrate);
-            // Constrain rate for CBR-like streaming: maxrate = bitrate, bufsize = 2x bitrate
+            arguments.Add(rate);
+            // Constrain rate for CBR-like streaming: maxrate = bitrate, and a rate control window
+            // (bufsize) of one second for a platform, two for a custom ingest.
             arguments.Add("-maxrate");
-            arguments.Add(bitrate);
+            arguments.Add(rate);
             if (profile is { ConstantBitrate: true })
             {
                 // The floor as well as the ceiling: with the filler below, the rate the ingest
                 // measures is the rate of the setting whatever the picture is.
                 arguments.Add("-minrate");
-                arguments.Add(bitrate);
+                arguments.Add(rate);
             }
+
+            var window = profile is { RateBuffer.Ticks: > 0 } ? profile.RateBuffer.TotalSeconds : DefaultRateBufferSeconds;
             arguments.Add("-bufsize");
-            arguments.Add((setting.VideoBitrate.Value * 2).ToString(CultureInfo.InvariantCulture));
+            arguments.Add(((long)(videoBitrate.Value * window)).ToString(CultureInfo.InvariantCulture));
         }
 
         // Constant frame rate output for stable streaming. -fps_mode is the name -vsync has had
@@ -1031,7 +1064,7 @@ public static class FfmpegCommandBuilder
         // filled, so a still picture still arrives at the bitrate of the setting. An x264-params
         // of the setting gets these merged into it rather than replacing them: the YouTube defaults
         // used to carry one, and with it the live went out capped instead of constant.
-        var required = isLibX264 && profile is { ConstantBitrate: true } && setting.VideoBitrate is > 0
+        var required = isLibX264 && profile is { ConstantBitrate: true } && videoBitrate is > 0
             ? new List<string> { "nal-hrd=cbr", "force-cfr=1" }
             : [];
         var hasPreset = setting.VideoSettingsOptions.Any(o => o.Key?.Trim() == "preset");

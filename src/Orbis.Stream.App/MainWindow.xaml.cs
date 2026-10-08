@@ -1,5 +1,6 @@
 ﻿using System.Diagnostics;
 using System.IO;
+using System.Text.Json;
 using System.Windows;
 using Microsoft.Win32;
 using Microsoft.AspNetCore.Builder;
@@ -156,27 +157,55 @@ public partial class MainWindow : Window
             return;
         }
 
-        if (message == "\"browseVideo\"")
+        if (message is "\"browseVideo\"" or "\"browseFolder\"")
         {
-            var dialog = new OpenFileDialog
-            {
-                Filter = "Video Files|*.mp4;*.mkv;*.avi;*.mov;*.wmv;*.flv;*.webm;*.m4v;*.mpeg;*.mpg|All Files|*.*"
-            };
-            if (dialog.ShowDialog(this) == true)
-            {
-                Browser.CoreWebView2.PostWebMessageAsString($"{{\"type\":\"browseVideo\",\"path\":\"{dialog.FileName.Replace("\\", "\\\\")}\"}}");
-            }
+            // Not from inside this handler: WebView2 is still waiting for it to return, and a modal
+            // dialog opened here runs a message loop of its own underneath that call - the dialog
+            // is drawn blank and both windows stop answering ("Not responding"). Posted to the
+            // dispatcher, the dialog opens once the handler has returned and WebView2 is free.
+            var type = message.Trim('"');
+            Dispatcher.InvokeAsync(() => Browse(type));
+        }
+    }
+
+    /// <summary>Whether a picker is open: a second click while it is up opens nothing more.</summary>
+    private bool _browsing;
+
+    /// <summary>The picker the page asked for (<c>browseVideo</c>, <c>browseFolder</c>); what was picked goes back to the page.</summary>
+    private void Browse(string type)
+    {
+        if (_browsing || Browser.CoreWebView2 is null)
+        {
             return;
         }
 
-        if (message == "\"browseFolder\"")
+        _browsing = true;
+        try
         {
-            var dialog = new OpenFolderDialog();
-            if (dialog.ShowDialog(this) == true)
+            string? path = null;
+            if (type == "browseVideo")
             {
-                Browser.CoreWebView2.PostWebMessageAsString($"{{\"type\":\"browseFolder\",\"path\":\"{dialog.FolderName.Replace("\\", "\\\\")}\"}}");
+                var dialog = new OpenFileDialog
+                {
+                    Filter = "Video Files|*.mp4;*.mkv;*.avi;*.mov;*.wmv;*.flv;*.webm;*.m4v;*.mpeg;*.mpg|All Files|*.*"
+                };
+                path = dialog.ShowDialog(this) == true ? dialog.FileName : null;
             }
-            return;
+            else
+            {
+                var dialog = new OpenFolderDialog();
+                path = dialog.ShowDialog(this) == true ? dialog.FolderName : null;
+            }
+
+            if (path is not null)
+            {
+                // Serialized rather than written by hand, so whatever the path holds the page reads JSON.
+                Browser.CoreWebView2.PostWebMessageAsString(JsonSerializer.Serialize(new { type, path }));
+            }
+        }
+        finally
+        {
+            _browsing = false;
         }
     }
 

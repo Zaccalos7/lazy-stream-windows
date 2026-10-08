@@ -19,11 +19,7 @@
 @foreach (var setting in Model.Settings)
 {
     var active = setting.IsVideoAndAudioSettingActive ?? false;
-    var displayTitle = string.IsNullOrWhiteSpace(setting.Title)
-        ? T["untitled"]
-        : (setting.Title == "Default Low Twitch" ? T["defaultLowTwitch"]
-           : setting.Title == "Default Low YouTube" ? T["defaultLowYouTube"]
-           : setting.Title);
+    var displayTitle = SettingTitleView.Of(setting.Title, T);
     <div class="row-card">
         <i class="icon lead">&#xE714;</i>
         <div class="grow">
@@ -58,7 +54,7 @@
         <form method="post" asp-page-handler="Save">
             <div class="dialog-body">
                 <h2>@(Model.IsNew ? T["addNewAudioVideoConfiguration"] : T["editModalTitle"])</h2>
-                @* The two templates, each in the colour and with the mark of the platform it is made for. *@
+                @* The templates, each in the colour and with the mark of the platform it is made for. *@
                 <div class="toolbar preset-bar">
                     <span class="muted">@T["clickButtonToLoadVideoSettings"]</span>
                     <a class="btn brand twitch" href="?edit=@(Model.Form.Id?.ToString() ?? "new")&preset=Twitch">
@@ -66,6 +62,12 @@
                     </a>
                     <a class="btn brand youtube" href="?edit=@(Model.Form.Id?.ToString() ?? "new")&preset=Youtube">
                         <svg viewBox="0 0 24 24" aria-hidden="true"><path d="@LiveLinkView.MarkupOf("youtube")" /></svg>YouTube
+                    </a>
+                    <a class="btn brand kick" href="?edit=@(Model.Form.Id?.ToString() ?? "new")&preset=Kick">
+                        <svg viewBox="0 0 24 24" aria-hidden="true"><path d="@LiveLinkView.MarkupOf("kick")" /></svg>Kick
+                    </a>
+                    <a class="btn brand facebook" href="?edit=@(Model.Form.Id?.ToString() ?? "new")&preset=@Uri.EscapeDataString("Facebook Gaming")">
+                        <svg viewBox="0 0 24 24" aria-hidden="true"><path d="@LiveLinkView.MarkupOf("facebook")" /></svg>Facebook Gaming
                     </a>
                 </div>
                 <partial name="_VideoSettingFields" for="Form" />

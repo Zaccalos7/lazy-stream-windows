@@ -19,6 +19,21 @@ public sealed class StreamPlatformTests
     [InlineData("/tmp/output/stream.flv", StreamPlatform.Generic)]
     [InlineData("rtmp://notyoutube.com/live2/key", StreamPlatform.Generic)]
     [InlineData(null, StreamPlatform.Generic)]
+    // Kick is an IVS channel endpoint: twelve hex digits under the network Twitch ingests on too.
+    [InlineData("rtmps://fa723fc1b171.global-contribute.live-video.net/app/sk_us-west-2_key", StreamPlatform.Kick)]
+    [InlineData("rtmps://fa723fc1b171.global-contribute.live-video.net:443/app/sk_us-west-2_key", StreamPlatform.Kick)]
+    [InlineData("rtmps://0123456789ab.global-contribute.live-video.net/app/key", StreamPlatform.Kick)]
+    [InlineData("rtmp://ingest.kick.com/app/key", StreamPlatform.Kick)]
+    [InlineData("rtmps://fra05.contribute.live-video.net/app/key", StreamPlatform.Twitch)]
+    // Facebook publishes on more than one host of its own: the domain is what they share.
+    [InlineData("rtmps://rtmp-api.facebook.com:443/rtmp/FB-123-0-Abc", StreamPlatform.Facebook)]
+    [InlineData("rtmps://live-api-s.facebook.com:443/rtmp/FB-123-0-Abc", StreamPlatform.Facebook)]
+    [InlineData("rtmps://notfacebook.com/rtmp/key", StreamPlatform.Generic)]
+    // TikTok shows a server of the region of the account, under one of its CDN domains.
+    [InlineData("rtmp://push-rtmp-l11-va01.tiktokcdn.com/stage/stream-123?expire=1&sign=abc", StreamPlatform.TikTok)]
+    [InlineData("rtmp://push-rtmp-f5-tt02.tiktokcdn-eu.com/game/stream-123", StreamPlatform.TikTok)]
+    [InlineData("rtmp://push.tiktokcdn-us.com/live/stream-123", StreamPlatform.TikTok)]
+    [InlineData("rtmp://nottiktokcdn.com/live/key", StreamPlatform.Generic)]
     public void Detect_ReadsThePlatformOffTheHost(string? url, StreamPlatform expected) =>
         Assert.Equal(expected, StreamPlatforms.Detect(url));
 
@@ -55,6 +70,61 @@ public sealed class StreamPlatformTests
         Assert.True(StreamPlatformProfile.YouTube.RequiresAudio);
         Assert.False(StreamPlatformProfile.Twitch.RequiresAudio);
         Assert.False(StreamPlatformProfile.Generic.UsesRelay);
+
+        Assert.Same(StreamPlatformProfile.Kick, StreamPlatformProfile.For("rtmps://fa723fc1b171.global-contribute.live-video.net/app/key"));
+        Assert.Same(StreamPlatformProfile.Facebook, StreamPlatformProfile.For("rtmps://rtmp-api.facebook.com:443/rtmp/key"));
+    }
+
+    [Fact]
+    public void KickIsDeliveredTheWayTwitchIsAndFacebookGamingTheWayYouTubeIs()
+    {
+        // The two deliveries stay two: the relay's clock over the native RTMP for a low latency
+        // player, the ffmpeg sender with a head start for a player that buffers.
+        var kick = StreamPlatformProfile.Kick;
+        Assert.Equal(StreamPlatform.Kick, kick.Platform);
+        Assert.Equal(RelayPacing.Relay, kick.Pacing);
+        Assert.Equal(RelayTransport.NativeRtmp, kick.Transport);
+        Assert.Equal(StreamPlatformProfile.Twitch.Preroll, kick.Preroll);
+        Assert.Equal(StreamPlatformProfile.Twitch.MaxLead, kick.MaxLead);
+        Assert.Same(StreamPlatformProfile.Twitch.Adaptation, kick.Adaptation);
+        // With what IVS needs on top of it.
+        Assert.True(kick.RequiresAudio);
+        Assert.Equal(48_000, kick.AudioSampleRate);
+        Assert.True(kick.UniformFormat);
+        Assert.False(kick.ChoosableTransport);
+
+        var facebook = StreamPlatformProfile.Facebook;
+        Assert.Equal(StreamPlatform.Facebook, facebook.Platform);
+        Assert.Equal(RelayPacing.Sender, facebook.Pacing);
+        Assert.Equal(RelayTransport.FfmpegSender, facebook.Transport);
+        Assert.Equal(StreamPlatformProfile.YouTube.Preroll, facebook.Preroll);
+        Assert.Equal(StreamPlatformProfile.YouTube.MaxLead, facebook.MaxLead);
+        Assert.Same(StreamPlatformProfile.YouTube.Adaptation, facebook.Adaptation);
+        // Facebook ends a broadcast without sound, or one that changes its settings, and wants CBR.
+        Assert.True(facebook.RequiresAudio);
+        Assert.Equal(48_000, facebook.AudioSampleRate);
+        Assert.True(facebook.UniformFormat);
+        Assert.True(facebook.ConstantBitrate);
+        // The switch of the channel settings stays YouTube's.
+        Assert.False(facebook.ChoosableTransport);
+    }
+
+    [Fact]
+    public void ThePlatformsAdaptTheirBitrateAtTheirOwnPaceAndBoundTheirKeyframes()
+    {
+        Assert.Same(RateAdaptation.LowLatency, StreamPlatformProfile.Twitch.Adaptation);
+        Assert.Same(RateAdaptation.Buffered, StreamPlatformProfile.YouTube.Adaptation);
+        Assert.True(RateAdaptation.LowLatency.MaxDrift < RateAdaptation.Buffered.MaxDrift);
+        Assert.True(RateAdaptation.LowLatency.Window < RateAdaptation.Buffered.Window);
+
+        // A custom ingest has no relay to measure the network on, and keeps the rate it always had.
+        Assert.Null(StreamPlatformProfile.Generic.Adaptation);
+        Assert.Equal(TimeSpan.Zero, StreamPlatformProfile.Generic.RateBuffer);
+        foreach (var profile in new[] { StreamPlatformProfile.Twitch, StreamPlatformProfile.YouTube, StreamPlatformProfile.Kick, StreamPlatformProfile.Facebook })
+        {
+            Assert.Equal(TimeSpan.FromSeconds(1), profile.RateBuffer);
+            Assert.Equal(2, profile.KeyframeSeconds);
+        }
     }
 }
 
@@ -126,6 +196,24 @@ public sealed class FlvPacedRelayTests
     }
 
     [Fact]
+    public async Task Relay_CountsWhatItSentForTheBitrateLadder()
+    {
+        var flv = Flv([0, 33, 66, 100, 133]);
+        var relay = new FlvPacedRelay(new MemoryStream(flv), new MemoryStream(), Paced, NullLogger.Instance);
+        relay.Start();
+        await relay.Completion.WaitAsync(TimeSpan.FromSeconds(5));
+
+        var sample = relay.Sample();
+
+        // Every tag the sink took, header and trailer included: the FLV less its own header.
+        Assert.Equal(flv.Length - 13, sample.Bytes);
+        Assert.Equal(relay.BytesSent, sample.Bytes);
+        Assert.Equal(133, sample.MediaMilliseconds);
+        // Nothing is left queued: a lead of nothing, not the lead of the last frame sent.
+        Assert.Equal(0, sample.LeadMilliseconds);
+    }
+
+    [Fact]
     public async Task Relay_SendsEveryTagWhenItsTimestampIsDue()
     {
         var destination = new TimedStream();
@@ -157,6 +245,56 @@ public sealed class FlvPacedRelayTests
 
         // Everything stamped before two seconds is a burst; the last tag waits for its 300 ms.
         Assert.InRange(Stopwatch.GetElapsedTime(start).TotalMilliseconds, 280, 1000);
+    }
+
+    [Fact]
+    public async Task Relay_StartsTheClockOnAFullJitterBuffer()
+    {
+        // An encoder that produces the live at real time from the first frame: started on that
+        // frame, the relay had nothing in hand and every hiccup after it was a frame late on air.
+        var bytes = Flv(Enumerable.Range(0, 20).Select(index => index * 100).ToList());
+        var pipe = new System.IO.Pipelines.Pipe();
+        var destination = new TimedStream();
+        var relay = new FlvPacedRelay(pipe.Reader.AsStream(), destination, Paced, NullLogger.Instance);
+        var start = Stopwatch.GetTimestamp();
+        relay.Start();
+
+        // The header and the first tag at once, then one tag every 100 ms.
+        const int header = 13;
+        const int tag = 11 + 32 + 4;
+        await pipe.Writer.WriteAsync(bytes.AsMemory(0, header + tag));
+        for (var at = header + tag; at < bytes.Length; at += tag)
+        {
+            await Task.Delay(100);
+            await pipe.Writer.WriteAsync(bytes.AsMemory(at, tag));
+        }
+
+        await pipe.Writer.CompleteAsync();
+        await relay.Completion.WaitAsync(TimeSpan.FromSeconds(10));
+
+        // The first frame goes out once a second of the live (MaxLead of Twitch) is in hand.
+        var firstFrame = Stopwatch.GetElapsedTime(start, destination.Writes[1]).TotalMilliseconds;
+        Assert.InRange(firstFrame, 900, 1600);
+        Assert.Equal(20, destination.Writes.Count - 1);
+    }
+
+    [Fact]
+    public void LiveOutput_LowersTheLevelOneStepAtATimeDownToTheLightest()
+    {
+        var output = LiveOutput.For("rtmp://live.twitch.tv/app/key", new FfmpegToolLocator("ffmpeg", "ffprobe"), NullLogger.Instance)!;
+
+        Assert.Null(output.QualityCap);
+        Assert.Equal(EncoderQuality.High, output.Cap(EncoderQuality.High));
+
+        Assert.True(output.TryLower(EncoderQuality.High, out var first));
+        Assert.Equal(EncoderQuality.Balanced, first);
+        Assert.True(output.TryLower(EncoderQuality.Balanced, out var second));
+        Assert.Equal(EncoderQuality.Light, second);
+        Assert.False(output.TryLower(EncoderQuality.Light, out _));
+
+        // Every pass after it goes out under the cap.
+        Assert.Equal(EncoderQuality.Light, output.Cap(EncoderQuality.High));
+        Assert.Equal(EncoderQuality.Light, output.Cap(EncoderQuality.Balanced));
     }
 
     [Fact]
@@ -228,10 +366,97 @@ public sealed class FlvPacedRelayTests
         Assert.Empty(destination.ToArray());
     }
 
+    [Fact]
+    public async Task Relay_LaysEncodersEndToEndOnOneConnection()
+    {
+        var destination = new MemoryStream();
+        var relay = new FlvPacedRelay(new StreamFlvSink(destination), Paced, NullLogger.Instance);
+        relay.Start();
+
+        // Two encoders that both count from zero, as two ffmpeg processes do.
+        var first = relay.Attach(new MemoryStream(Flv([0, 33, 66])));
+        var second = relay.Attach(new MemoryStream(Flv([0, 33], scriptFirst: true)));
+        relay.Close();
+        await relay.Completion.WaitAsync(TimeSpan.FromSeconds(5));
+
+        var (headers, tags) = Parse(destination.ToArray());
+
+        // One header, the one the stream opened with; the metadata of the second encoder is
+        // dropped; and its frames carry on one frame after the last of the first.
+        Assert.Equal(1, headers);
+        Assert.Equal([0L, 33, 66, 99, 132], tags.Select(tag => tag.Timestamp));
+        Assert.All(tags, tag => Assert.Equal(9, tag.Type));
+
+        Assert.Equal(66, first.ReadPositionMilliseconds);
+        Assert.Equal(33, second.ReadPositionMilliseconds);
+        Assert.Equal(66, first.SentPositionMilliseconds);
+        Assert.Equal(33, second.SentPositionMilliseconds);
+        Assert.True(first.Ended);
+        Assert.True(second.Ended);
+    }
+
+    [Fact]
+    public async Task Relay_KeepsTheConnectionOpenBetweenEncoders()
+    {
+        var destination = new MemoryStream();
+        var relay = new FlvPacedRelay(new StreamFlvSink(destination), Paced, NullLogger.Instance);
+        relay.Start();
+
+        var first = relay.Attach(new MemoryStream(Flv([0, 33])));
+        await first.ReadCompletion.WaitAsync(TimeSpan.FromSeconds(5));
+        await Task.Delay(100);
+
+        // The first encoder is over and nothing else is attached yet: the live is not.
+        Assert.False(relay.Completion.IsCompleted);
+        Assert.True(relay.IsOpen);
+
+        relay.Attach(new MemoryStream(Flv([0])));
+        relay.Close();
+        await relay.Completion.WaitAsync(TimeSpan.FromSeconds(5));
+
+        Assert.Equal([0L, 33, 66], Parse(destination.ToArray()).Tags.Select(tag => tag.Timestamp));
+        Assert.Throws<InvalidOperationException>(() => relay.Attach(new MemoryStream(Flv([0]))));
+    }
+
+    /// <summary>The FLV headers and the tags of a stream, read back.</summary>
+    private static (int Headers, List<(byte Type, long Timestamp)> Tags) Parse(byte[] bytes)
+    {
+        var headers = 0;
+        var tags = new List<(byte Type, long Timestamp)>();
+        var at = 0;
+        while (at < bytes.Length)
+        {
+            if (bytes[at] == 'F' && bytes[at + 1] == 'L' && bytes[at + 2] == 'V')
+            {
+                headers++;
+                at += 13;
+                continue;
+            }
+
+            var size = (bytes[at + 1] << 16) | (bytes[at + 2] << 8) | bytes[at + 3];
+            var timestamp = ((long)bytes[at + 7] << 24) | ((long)bytes[at + 4] << 16) | ((long)bytes[at + 5] << 8) | bytes[at + 6];
+            tags.Add(((byte)(bytes[at] & 0x1F), timestamp));
+            at += 11 + size + 4;
+        }
+
+        return (headers, tags);
+    }
+
     /// <summary>An FLV header and one video tag per timestamp, with a payload to tell them apart.</summary>
-    private static byte[] Flv(IReadOnlyList<int> timestamps)
+    private static byte[] Flv(IReadOnlyList<int> timestamps, bool scriptFirst = false)
     {
         var bytes = new List<byte> { (byte)'F', (byte)'L', (byte)'V', 1, 5, 0, 0, 0, 9, 0, 0, 0, 0 };
+        if (scriptFirst)
+        {
+            // An onMetaData of sorts: what the ingest is told once, at the start of the publish.
+            byte[] script = [2, 0, 10, .. "onMetaData"u8];
+            bytes.Add(18);
+            bytes.AddRange([0, 0, (byte)script.Length, 0, 0, 0, 0, 0, 0, 0]);
+            bytes.AddRange(script);
+            var size = 11 + script.Length;
+            bytes.AddRange([(byte)(size >> 24), (byte)(size >> 16), (byte)(size >> 8), (byte)size]);
+        }
+
         foreach (var timestamp in timestamps)
         {
             var data = Enumerable.Range(0, 32).Select(index => (byte)(index + timestamp)).ToArray();
@@ -352,7 +577,7 @@ public sealed class RelayCommandTests
 
         // What is not low latency either way: the preset is about the CPU, not the delay, and the
         // switch is not allowed to quietly re-encode the machine's weakest encoder.
-        Assert.Contains("-preset ultrafast", text, StringComparison.Ordinal);
+        Assert.Contains("-preset veryfast", text, StringComparison.Ordinal);
     }
 
     [Fact]
@@ -603,6 +828,102 @@ public sealed class PacedRelayFfmpegTests
             // One clock for the whole scene: six seconds of canvas take six seconds, less the
             // preroll, however many files are on it.
             Assert.InRange(elapsed.TotalSeconds, 6 - profile.Preroll.TotalSeconds - 0.5, 6 + 2);
+        }
+        finally
+        {
+            directory.Delete(recursive: true);
+        }
+    }
+
+    /// <summary>
+    /// What a spot does to a live, with real encoders: the first is let go halfway through the
+    /// clip, the second carries on from the point the relay took, on the same connection. What
+    /// comes out has to be one stream - one header, timestamps that only move forward and never
+    /// jump, the whole clip once and nothing twice - that decodes from end to end.
+    /// </summary>
+    [Fact]
+    public async Task Relay_SplicesTwoEncodersIntoOneContinuousStream()
+    {
+        var ffmpeg = Which("ffmpeg");
+        var ffprobe = Which("ffprobe");
+        if (ffmpeg is null || ffprobe is null)
+        {
+            _output.WriteLine("ffmpeg/ffprobe are not installed: the relay test is skipped.");
+            return;
+        }
+
+        var directory = Directory.CreateTempSubdirectory("orbis-splice-");
+        try
+        {
+            var clip = Path.Combine(directory.FullName, "clip.mp4");
+            var output = Path.Combine(directory.FullName, "out.flv");
+            await RunAsync(ffmpeg,
+                $"-y -f lavfi -i testsrc=size=320x240:rate=30 -f lavfi -i sine=frequency=440:sample_rate=48000 " +
+                $"-t 4 -pix_fmt yuv420p -c:a aac -shortest \"{clip}\"");
+
+            var locator = new FfmpegToolLocator(ffmpeg, ffprobe);
+            var probe = await new FfmpegProbe(locator, NullLogger<FfmpegProbe>.Instance).ProbeAsync(clip, CancellationToken.None);
+            var profile = StreamPlatformProfile.YouTube;
+            var setting = new VideoSettingEntity
+            {
+                Title = "test",
+                VideoCodec = 27,
+                VideoCodecName = "libx264",
+                PixelFormat = 0,
+                VideoBitrate = 800_000,
+                VideoFormat = "flv",
+                GopSize = 2,
+                AudioSetting = new AudioSettingEntity { AudioCodec = 86018, AudioBitrate = 96_000 }
+            };
+
+            Process Encoder(TimeSpan resumeFrom)
+            {
+                var arguments = FfmpegCommandBuilder.Build(new FfmpegStreamRequest(
+                    clip, "rtmps://a.rtmps.youtube.com/live2/key", probe, setting, resumeFrom, Profile: profile));
+                return Process.Start(locator.CreateStartInfo(ffmpeg, arguments))!;
+            }
+
+            await using var file = File.Create(output);
+            var relay = new FlvPacedRelay(new StreamFlvSink(file), profile, NullLogger.Instance);
+            relay.Start();
+
+            using var first = Encoder(TimeSpan.Zero);
+            _ = first.StandardError.ReadToEndAsync();
+            var head = relay.Attach(first.StandardOutput.BaseStream);
+            var deadline = Stopwatch.GetTimestamp();
+            while (head.ReadPositionMilliseconds < 1500 && Stopwatch.GetElapsedTime(deadline) < TimeSpan.FromSeconds(20))
+            {
+                await Task.Delay(20);
+            }
+
+            head.Detach();
+            first.Kill(entireProcessTree: true);
+            await head.ReadCompletion.WaitAsync(TimeSpan.FromSeconds(10));
+            var handOver = head.ReadPositionMilliseconds;
+            _output.WriteLine($"handed over at {handOver} ms");
+
+            using var second = Encoder(TimeSpan.FromMilliseconds(handOver));
+            _ = second.StandardError.ReadToEndAsync();
+            relay.Attach(second.StandardOutput.BaseStream);
+            relay.Close();
+            await relay.Completion.WaitAsync(TimeSpan.FromSeconds(30));
+            await file.DisposeAsync();
+
+            var times = (await RunAsync(ffprobe,
+                    $"-v error -select_streams v:0 -show_entries packet=dts_time -of csv=p=0 \"{output}\""))
+                .Split('\n', StringSplitOptions.RemoveEmptyEntries | StringSplitOptions.TrimEntries)
+                .Select(value => double.Parse(value.TrimEnd(','), System.Globalization.CultureInfo.InvariantCulture))
+                .ToList();
+
+            var gaps = times.Zip(times.Skip(1), (before, after) => after - before).ToList();
+            _output.WriteLine($"{times.Count} frames, {times[0]:0.000}s to {times[^1]:0.000}s, widest gap {gaps.Max():0.000}s");
+
+            Assert.All(gaps, gap => Assert.InRange(gap, 0.001, 0.1));
+            Assert.InRange(times[^1] - times[0], 3.6, 4.3);
+
+            // Decodable from the first byte to the last, the splice included.
+            var decode = await RunAsync(ffmpeg, $"-v error -i \"{output}\" -f null -");
+            Assert.True(string.IsNullOrWhiteSpace(decode), decode);
         }
         finally
         {

@@ -25,6 +25,10 @@
 .badge.stopped { color: var(--caution); background: var(--caution-bg); }
 .badge.playlist { color: var(--accent); background: color-mix(in srgb, var(--accent) 15%, transparent); margin-right: 6px; font-variant-numeric: tabular-nums; }
 .badge.playlist::before { display: none; }
+/* A live the ingest takes and YouTube does not show: beside LIVE, so the two are read together. */
+.badge.offair { margin-left: 6px; color: var(--caution); background: var(--caution-bg); cursor: help; }
+.badge.offair::before { animation: offair 1.6s ease-in-out infinite; }
+@keyframes offair { 50% { opacity: 0.35; } }
 
 /* ---------- InfoBar ---------- */
 

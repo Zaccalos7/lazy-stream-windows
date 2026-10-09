@@ -13,7 +13,9 @@ public sealed record SettingRequest(
     string? ChannelName,
     bool AutoCleanupEnabled,
     int AutoCleanupIntervalMonths,
-    int AutoCleanupOlderThanMonths);
+    int AutoCleanupOlderThanMonths,
+    // Null leaves the stored value alone, the way every other field of an edit does.
+    bool? FfmpegSender = null);
 
 /// <summary>Port of <c>com.orbis.stream.dto.SettingDto</c>.</summary>
 public sealed record SettingResponse(
@@ -29,7 +31,8 @@ public sealed record SettingResponse(
     string? ChannelName,
     bool AutoCleanupEnabled,
     int AutoCleanupIntervalMonths,
-    int AutoCleanupOlderThanMonths)
+    int AutoCleanupOlderThanMonths,
+    bool FfmpegSender = false)
 {
     public static SettingResponse FromEntity(SettingEntity entity) => new(
         entity.Id,
@@ -44,7 +47,8 @@ public sealed record SettingResponse(
         entity.ChannelName,
         entity.AutoCleanupEnabled,
         entity.AutoCleanupIntervalMonths,
-        entity.AutoCleanupOlderThanMonths);
+        entity.AutoCleanupOlderThanMonths,
+        entity.FfmpegSender);
 }
 
 /// <summary>Port of <c>com.orbis.stream.record.output.VideoPathRecord</c>.</summary>
@@ -158,6 +162,25 @@ public sealed record LiveParameterRequest(
     int? VideoWidth,
     int? VideoHeight,
     double? FrameRate);
+
+/// <summary>How loud one source of a canvas is in the mix of a running live, in percent.</summary>
+public sealed record LiveVolumeRequest(int SourcePkid, int Volume);
+
+/// <summary>
+/// A button of the scene deck as the panel saves it: its name, the file it puts on air (a name of
+/// the scene media folder, uploaded beforehand) and the key that asks for it, if any.
+/// </summary>
+public sealed record SceneButtonRequest(
+    string? Label,
+    string? MediaName,
+    string? Hotkey,
+    string? DisplayMode = "fullscreen",
+    string? Placement = "bottom-right",
+    int? DurationSeconds = null,
+    int? X = null,
+    int? Y = null,
+    int? Width = null,
+    int? Height = null);
 
 /// <summary>Port of <c>com.orbis.stream.record.VideoLiveHistoryRecord</c>.</summary>
 public sealed record VideoLiveHistoryRequest(
@@ -294,7 +317,8 @@ public sealed record SceneItemRequest(
 
 /// <summary>
 /// A canvas, with the sources on it in stacking order. A layout (<see cref="IsLayout"/>) carries
-/// slots instead: the rectangles are kept and whatever source came with them is dropped.
+/// slots instead: the rectangles are kept and whatever source came with them is dropped. Its
+/// overlays are the exception: they are what the layout is dressed with, so they are kept whole.
 /// </summary>
 public sealed record SceneRequest(
     long? Pkid,
@@ -338,8 +362,17 @@ public sealed record SceneRequest(
             Height = Height,
             LastModified = DateTime.Now,
             IsLayout = IsLayout,
-            Items = [.. (Items ?? []).Select(item => IsLayout ? AsSlot(item.ToEntity(scenePkid)) : item.ToEntity(scenePkid))]
+            Items = [.. (Items ?? []).Select(item => item.SourceKind.IsOverlay()
+                ? AsOverlay(item.ToEntity(scenePkid))
+                : IsLayout ? AsSlot(item.ToEntity(scenePkid)) : item.ToEntity(scenePkid))]
         };
+    }
+
+    /// <summary>An overlay is a picture of the layout: it is laid over the canvas and never heard.</summary>
+    private static SceneItemEntity AsOverlay(SceneItemEntity item)
+    {
+        item.AudioEnabled = false;
+        return item;
     }
 
     /// <summary>A slot is a rectangle and nothing else: no source to open, nothing to hear.</summary>

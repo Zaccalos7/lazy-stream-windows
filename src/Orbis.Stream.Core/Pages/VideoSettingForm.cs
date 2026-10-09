@@ -52,9 +52,23 @@ public sealed class VideoSettingForm
     /// </summary>
     public bool LowLatency { get; set; }
 
+    /// <summary>
+    /// Whether the bitrate of a live follows what the network carries (see
+    /// <see cref="VideoSettingAdaptiveBitrate"/>). On by default: a network that cannot carry the
+    /// live brings it down instead of leaving the viewers to rebuffer, and never above the bitrate
+    /// typed here.
+    /// </summary>
+    public bool AdaptiveBitrate { get; set; } = true;
+
+    /// <summary>
+    /// How much work the encoder puts into every frame (see <see cref="EncoderQuality"/>). A new
+    /// setting starts automatic: measured on this machine when the live starts.
+    /// </summary>
+    public EncoderQuality Quality { get; set; } = EncoderQuality.Auto;
+
     public bool IsActive { get; set; }
 
-    /// <summary>Everything but the extra options is required (the React form let the GOP size empty, but the column is NOT NULL).</summary>
+    /// <summary>Everything but the extra options is required, and those too once low latency is off (the React form let the GOP size empty, but the column is NOT NULL).</summary>
     public bool IsComplete =>
         !string.IsNullOrWhiteSpace(Title)
         && VideoCodec is not null
@@ -66,7 +80,15 @@ public sealed class VideoSettingForm
         && AudioCodec is not null
         && AudioBitrate is not null
         && IsResolutionComplete
-        && FrameRate is not > 480;
+        && FrameRate is not > 480
+        && IsTuningComplete;
+
+    /// <summary>
+    /// Without low latency the encoder is tuned by hand: a preset and a tune are then part of the
+    /// setting, not extras. With it on, the latency options pick them and both may stay empty.
+    /// </summary>
+    public bool IsTuningComplete =>
+        LowLatency || (!string.IsNullOrWhiteSpace(Preset) && !string.IsNullOrWhiteSpace(Tune));
 
     /// <summary>The two halves of a resolution travel together: one alone is a half typed form.</summary>
     public bool IsResolutionComplete => VideoWidth is null == (VideoHeight is null);
@@ -89,10 +111,12 @@ public sealed class VideoSettingForm
         Preset = Option(setting, "preset"),
         Tune = Option(setting, "tune"),
         LowLatency = VideoSettingLatency.IsOn(Option(setting, VideoSettingLatency.OptionKey)),
+        AdaptiveBitrate = VideoSettingAdaptiveBitrate.IsOn(Option(setting, VideoSettingAdaptiveBitrate.OptionKey)),
+        Quality = VideoSettingQuality.Parse(Option(setting, VideoSettingQuality.OptionKey)),
         IsActive = setting.IsVideoAndAudioSettingActive ?? false
     };
 
-    /// <summary>User settings are always "custom": only the seeded Twitch/Youtube rows are defaults.</summary>
+    /// <summary>User settings are always "custom": only the seeded rows of the platforms (Twitch, Youtube, Kick, Facebook Gaming) are defaults.</summary>
     public VideoSettingsRequest ToRequest() => new(
         Id,
         Title?.Trim(),
@@ -103,7 +127,14 @@ public sealed class VideoSettingForm
         null,
         IsActive,
         GopSize,
-        [.. new[] { ("preset", Preset), ("tune", Tune), (VideoSettingLatency.OptionKey, LowLatency ? "1" : "0") }
+        [.. new[]
+            {
+                ("preset", Preset),
+                ("tune", Tune),
+                (VideoSettingLatency.OptionKey, LowLatency ? "1" : "0"),
+                (VideoSettingAdaptiveBitrate.OptionKey, AdaptiveBitrate ? "1" : "0"),
+                (VideoSettingQuality.OptionKey, Quality.ToString())
+            }
             .Where(option => !string.IsNullOrEmpty(option.Item2))
             .Select(option => new VideoOptionRequest(option.Item1, option.Item2))],
         VideoFormat,
@@ -136,11 +167,42 @@ public sealed class VideoSettingForm
     public static IEnumerable<SelectListItem> TuneItems() =>
         FfmpegCodecCatalog.Tunes.Select(tune => new SelectListItem($"{tune.Label} ({tune.Value})", tune.Value));
 
-    /// <summary>Bitrate as the cards show it: millions above 999 999 bps.</summary>
-    public static string FormatBitrate(int? bitrate, string millionLabel) => bitrate switch
+    /// <summary>
+    /// The unit a bitrate reads best in: the largest one it divides evenly, which is also the one
+    /// nobody has to count zeros in. 5 000 000 is "5M", 128 000 is "128k", 1 234 567 stays digits.
+    /// </summary>
+    private static (double Scaled, string Suffix, string Label) BitrateUnit(int bitrate)
     {
-        null => "0",
-        > 999_999 => $"{bitrate.Value / 1_000_000d:0.##} {millionLabel}",
-        _ => bitrate.Value.ToString(System.Globalization.CultureInfo.InvariantCulture)
+        foreach (var unit in new[] { (1_000_000d, "M", "Mbit/s"), (1_000d, "k", "kbit/s"), (1d, "", "bit/s") })
+        {
+            var scaled = bitrate / unit.Item1;
+            if (scaled >= 1 && Math.Abs(scaled - Math.Round(scaled, 2)) < 1e-9)
+            {
+                return (Math.Round(scaled, 2), unit.Item2, unit.Item3);
+            }
+        }
+
+        return (bitrate, "", "bit/s");
+    }
+
+    /// <summary>
+    /// The bitrate as a person reads it: "5 Mbit/s", "128 kbit/s", never a row of digits. This is
+    /// what the cards and the read-only rows show.
+    /// </summary>
+    public static string FormatBitrate(int? bitrate) => bitrate switch
+    {
+        > 0 => Format(BitrateUnit(bitrate.Value).Scaled) + " " + BitrateUnit(bitrate.Value).Label,
+        _ => "0"
     };
+
+    /// <summary>
+    /// The same number as the boxes write it, unit suffix included: "5M", "128k". What the setting
+    /// stores stays the plain count of bits per second, hidden beside the box (site.js).
+    /// </summary>
+    public static string WriteBitrate(int? bitrate) => bitrate is > 0
+        ? Format(BitrateUnit(bitrate.Value).Scaled) + BitrateUnit(bitrate.Value).Suffix
+        : string.Empty;
+
+    private static string Format(double value) =>
+        value.ToString("0.##", System.Globalization.CultureInfo.InvariantCulture);
 }

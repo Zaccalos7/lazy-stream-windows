@@ -279,6 +279,120 @@ public sealed class SceneLiveTests : IAsyncLifetime
         streaming.StopVideoStreamingByPkid(basePkid);
     }
 
+    [Fact]
+    public async Task SceneLive_EnqueueSpot_StreamsSpotThroughAndResumesScene()
+    {
+        var ffmpeg = Tool("ffmpeg");
+        if (ffmpeg is null || Tool("ffprobe") is null)
+        {
+            return;
+        }
+
+        var folder = Path.Combine(_host.DataDirectory, "scene-spot-sources");
+        Directory.CreateDirectory(folder);
+        Directory.CreateDirectory(Path.Combine(_host.DataDirectory, "output-scene-spot"));
+        var background = Path.Combine(folder, "scene-bg.mp4");
+        var spotVideo = Path.Combine(folder, "scene-spot.mp4");
+
+        await RunAsync(ffmpeg, $"-y -f lavfi -i testsrc=size=320x180:rate=15 -t 15 -pix_fmt yuv420p \"{background}\"");
+        await RunAsync(ffmpeg, $"-y -f lavfi -i testsrc2=size=160x90:rate=15 -t 3 -pix_fmt yuv420p \"{spotVideo}\"");
+
+        var (_, scenePkid) = _host.Services.GetRequiredService<SceneService>().Save(new SceneRequest(
+            null, "Spot Scene", null, 640, 360,
+            [
+                new SceneItemRequest(SourceKind.File, background, "Background", 0, 0, 640, 360, false)
+            ]));
+
+        var streaming = _host.Services.GetRequiredService<StreamingService>();
+        var repository = _host.Services.GetRequiredService<VideoRepository>();
+        streaming.StartSceneLive(new StartSceneLiveRequest(
+            scenePkid,
+            new Uri(Path.Combine(_host.DataDirectory, "output-scene-spot")).AbsoluteUri,
+            "scene-spot.flv",
+            "scene-spot-platform",
+            "scene-spot-channel",
+            Setting()));
+
+        LiveRow Row() => Assert.Single(_host.Services.GetRequiredService<VideoService>()
+            .GetLivePage(null, "scene-spot-channel", new PageRequest(0, 10, [])).Content);
+
+        Assert.True(await WaitForAsync(() => Row().Status == LiveStatus.Live), "scene never went live");
+
+        var basePkid = Row().Video.Pkid!.Value;
+
+        // Enqueue spot
+        streaming.EnqueueSpot(spotVideo, basePkid);
+
+        // While spot is streaming, status must stay Live and paused position must be saved in repository
+        await Task.Delay(1500);
+        Assert.Equal(LiveStatus.Live, Row().Status);
+        Assert.True(repository.FindByPkid(basePkid)!.LastTimeStampBeforeStop > 0, "LastTimeStampBeforeStop was not saved in repository when spot yielded");
+
+        // After spot finishes, scene should resume and eventually reach end
+        Assert.True(await WaitForAsync(() => Row().Status == LiveStatus.Ended), "scene never finished after spot: " + Row().Status + " " + Row().Video.Message);
+    }
+
+    [Fact]
+    public async Task SceneLive_StopAndReplay_ResumesFromLastTimeStamp()
+    {
+        var ffmpeg = Tool("ffmpeg");
+        if (ffmpeg is null || Tool("ffprobe") is null)
+        {
+            return;
+        }
+
+        var folder = Path.Combine(_host.DataDirectory, "scene-stop-sources");
+        Directory.CreateDirectory(folder);
+        Directory.CreateDirectory(Path.Combine(_host.DataDirectory, "output-scene-stop"));
+        var background = Path.Combine(folder, "scene-stop-bg.mp4");
+
+        await RunAsync(ffmpeg, $"-y -f lavfi -i testsrc=size=320x180:rate=15 -t 15 -pix_fmt yuv420p \"{background}\"");
+
+        var (_, scenePkid) = _host.Services.GetRequiredService<SceneService>().Save(new SceneRequest(
+            null, "Stop Scene", null, 640, 360,
+            [
+                new SceneItemRequest(SourceKind.File, background, "Background", 0, 0, 640, 360, false)
+            ]));
+
+        var streaming = _host.Services.GetRequiredService<StreamingService>();
+        var repository = _host.Services.GetRequiredService<VideoRepository>();
+        streaming.StartSceneLive(new StartSceneLiveRequest(
+            scenePkid,
+            new Uri(Path.Combine(_host.DataDirectory, "output-scene-stop")).AbsoluteUri,
+            "scene-stop.flv",
+            "scene-stop-platform",
+            "scene-stop-channel",
+            Setting()));
+
+        LiveRow Row() => Assert.Single(_host.Services.GetRequiredService<VideoService>()
+            .GetLivePage(null, "scene-stop-channel", new PageRequest(0, 10, [])).Content);
+
+        Assert.True(await WaitForAsync(() => Row().Status == LiveStatus.Live), "scene never went live");
+
+        var basePkid = Row().Video.Pkid!.Value;
+
+        // Stream for a few seconds
+        await Task.Delay(2500);
+
+        // Stop the live
+        streaming.StopVideoStreamingByPkid(basePkid);
+        Assert.True(await WaitForAsync(() => Row().Status == LiveStatus.Stopped), "scene did not stop");
+
+        var stoppedPosition = repository.FindByPkid(basePkid)!.LastTimeStampBeforeStop;
+        Assert.True(stoppedPosition > 0, "LastTimeStampBeforeStop was not saved on stop");
+
+        // Replay the scene
+        streaming.StartVideo(_host.Services.GetRequiredService<VideoService>().FindVideo(basePkid));
+        Assert.True(await WaitForAsync(() => Row().Status == LiveStatus.Live), "scene did not restart");
+
+        // It must not reset LastTimeStampBeforeStop to 0
+        Assert.True(repository.FindByPkid(basePkid)!.LastTimeStampBeforeStop >= stoppedPosition,
+            "LastTimeStampBeforeStop was reset to zero upon replay");
+
+        // Eventually finishes
+        Assert.True(await WaitForAsync(() => Row().Status == LiveStatus.Ended), "scene never finished");
+    }
+
     /// <summary>Two files laid over each other, which is what a composition is made of.</summary>
     private async Task<long> TwoFileSceneAsync()
     {

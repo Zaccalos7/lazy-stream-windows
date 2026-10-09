@@ -45,8 +45,26 @@
 .btn.caution:not(:disabled) { color: var(--caution); }
 .btn.caution:not(:disabled):hover { background: var(--caution-bg); border-color: transparent; }
 
+/* A button that stands for a platform: filled with the colour of the brand, its mark beside the name. */
+.btn.brand { --hue: var(--accent); color: #ffffff; background: var(--hue); border-color: transparent; font-weight: 600; }
+.btn.brand:hover { background: color-mix(in srgb, var(--hue) 86%, #000000); border-color: transparent; }
+.btn.brand svg { width: 15px; height: 15px; flex: none; fill: currentColor; }
+.btn.brand.twitch { --hue: var(--twitch); }
+.btn.brand.youtube { --hue: var(--youtube); }
+/* Kick is black on its green, as Kick draws it: white on that green cannot be read in either theme. */
+.btn.brand.kick { --hue: var(--kick); color: #000000; }
+.btn.brand.facebook { --hue: var(--facebook); }
+/* Its logo as it is, a blue square with the mark cut out: the white behind it shows through the
+   cut, where the white of the other buttons would draw it in negative. */
+.btn.brand.facebook svg { fill: var(--facebook-logo); background: #ffffff; }
+/* TikTok is its note on black, with the cyan and the red copies of it off its edges. */
+.btn.brand.tiktok { --hue: #000000; border-color: var(--stroke-strong); }
+.btn.brand.tiktok svg { filter: drop-shadow(-0.8px -0.8px 0 var(--tiktok-cyan)) drop-shadow(0.8px 0.8px 0 var(--tiktok)); }
+
 .btn.icon-only { width: 30px; padding: 0; }
 .btn.icon-only .icon { font-size: 14px; }
+.spot-icon { display: inline-block; width: 16px; height: 16px; vertical-align: middle; fill: currentColor; }
+.btn.icon-only .spot-icon { display: block; margin: auto; }
 
 :focus-visible { outline: none; box-shadow: var(--glow); }
 
@@ -56,6 +74,8 @@ label.field { display: flex; flex-direction: column; gap: 5px; }
 label.field > span { color: var(--text); font-weight: 500; font-size: 12px; }
 label.field > span.caption { color: var(--text-2); font-weight: 600; text-transform: uppercase; letter-spacing: 0.04em; font-size: 10px; }
 label.field > small { color: var(--text-3); font-size: 11px; }
+/* A field whose meaning needs more than its name: the mark carries the explanation as a tooltip. */
+label.field > span .field-help { cursor: help; margin-left: 4px; font-size: 11px; color: var(--text-3); vertical-align: middle; }
 
 .input, select.input, textarea.input {
   width: 100%;
@@ -101,6 +121,26 @@ textarea.input { resize: vertical; padding: 8px 10px; }
 }
 .input-affix .reveal:hover { color: var(--text); background: var(--tint-strong); }
 .input-affix .reveal[aria-pressed="true"] { color: var(--accent-text); background: var(--tint-strong); }
+
+/* Bitrate. The number is read in the unit that fits it (5M, 128k), the unit rides inside the box,
+   and the count of bits per second the setting really stores is spelled out underneath it, so the
+   friendlier form costs nothing in what is saved. */
+.bitrate { position: relative; display: flex; }
+.bitrate .input { padding-inline-end: 62px; font-variant-numeric: tabular-nums; }
+.bitrate-unit {
+  position: absolute;
+  top: 50%;
+  inset-inline-end: 10px;
+  color: var(--text-3);
+  font-size: 11px;
+  pointer-events: none;
+  transform: translateY(-50%);
+}
+.bitrate-hint { min-height: 13px; font-variant-numeric: tabular-nums; }
+[data-bitrate-state="bad"] .input,
+[data-bitrate-state="bad"] .bitrate-unit,
+[data-bitrate-state="bad"] .bitrate-hint { color: var(--critical); }
+[data-bitrate-state="bad"] .input { border-color: var(--critical); }
 
 /* Hide native Edge/Chromium password reveal button since we use a custom one */
 input[type="password"]::-ms-reveal,
@@ -150,6 +190,70 @@ input[type="password"]::-ms-clear {
 .toggle input:checked { background: var(--success); }
 .toggle input:checked::after { transform: translateX(16px); }
 
+/* Two sections on one row, each with its own heading: they stack again once the row is too narrow. */
+.settings-split { display: grid; gap: 0 24px; grid-template-columns: repeat(auto-fit, minmax(340px, 1fr)); }
+
+/* ---------- An option card: one on/off decision that matters, with its explanation beside it ---------- */
+
+.option-card {
+  --hue: var(--accent);
+  display: flex;
+  align-items: center;
+  gap: 14px;
+  margin-top: 16px;
+  padding: 14px 16px;
+  background: var(--control);
+  border: 1px solid var(--stroke-strong);
+  border-radius: var(--radius-lg);
+  cursor: pointer;
+  transition: border-color 0.15s, background 0.15s, box-shadow 0.15s;
+}
+.option-card:hover { border-color: var(--text-3); }
+.option-card:has(input:checked) {
+  border-color: var(--hue);
+  background: color-mix(in srgb, var(--hue) 8%, var(--control));
+  box-shadow: 0 0 0 1px var(--hue);
+}
+.option-card-mark {
+  flex: none;
+  display: grid;
+  place-items: center;
+  width: 36px;
+  height: 36px;
+  border-radius: var(--radius);
+  font-size: 18px;
+  color: var(--text-2);
+  background: var(--tint-strong);
+  transition: color 0.15s, background 0.15s;
+}
+.option-card:has(input:checked) .option-card-mark { color: var(--on-accent); background: var(--hue); }
+.option-card.youtube { --hue: var(--youtube); }
+svg.option-card-mark { box-sizing: border-box; padding: 8px; fill: currentColor; }
+
+/* A card that only belongs to YouTube: it shows while YouTube is the platform picked in its form. */
+.option-card[data-youtube-only] { display: none; }
+form:has(input[name="platformStreamName"][value="youtube"]:checked) .option-card[data-youtube-only] {
+  display: flex;
+  animation: option-card-in 0.18s ease-out;
+}
+@keyframes option-card-in { from { opacity: 0; transform: translateY(-4px); } }
+@media (prefers-reduced-motion: reduce) {
+  form:has(input[name="platformStreamName"][value="youtube"]:checked) .option-card[data-youtube-only] { animation: none; }
+}
+
+.option-card-text { flex: 1; min-width: 0; display: flex; flex-direction: column; gap: 3px; }
+.option-card-text strong { font-size: 13px; font-weight: 600; }
+.option-card-text small { font-size: 11px; line-height: 1.45; color: var(--text-2); }
+.option-card .toggle input:checked { background: var(--hue); }
+.option-card .toggle input:focus-visible { box-shadow: var(--glow); }
+
+/* Said under the preset and the tune while low latency is off, when both are required. */
+.tuning-hint { display: flex; align-items: center; gap: 6px; margin-top: 6px; font-size: 11px; color: var(--caution); }
+.tuning-hint[hidden] { display: none; }
+.tuning-hint .icon { font-size: 12px; }
+
+.toolbar.preset-bar { align-items: center; }
+
 /* ---------- Choices: a list of radios that look like cards ---------- */
 
 .choice-list { display: flex; flex-direction: column; gap: 6px; }
@@ -167,6 +271,9 @@ input[type="password"]::-ms-clear {
 }
 .choice.twitch { --hue: var(--twitch); }
 .choice.youtube { --hue: var(--youtube); }
+.choice.kick { --hue: var(--kick); }
+.choice.facebook { --hue: var(--facebook); }
+.choice.tiktok { --hue: var(--tiktok); }
 .choice > .icon { color: var(--text); font-size: 16px; }
 .choice:hover { border-color: var(--text-3); }
 .choice:has(input:checked) {
@@ -177,3 +284,8 @@ input[type="password"]::-ms-clear {
 .choice:has(input:checked) > .icon { color: var(--hue); }
 .choice input { accent-color: var(--hue); margin: 0; width: 15px; height: 15px; }
 .choice .badge { margin-left: 6px; }
+/* The mark of the platform a choice stands for: always in the colour of its brand, so it can be
+   told apart before it is picked. */
+.choice > .choice-mark { flex: none; width: 18px; height: 18px; fill: var(--hue); }
+.choice.facebook > .choice-mark { fill: var(--facebook-logo); background: #ffffff; }
+.choice.tiktok > .choice-mark { fill: var(--text); filter: drop-shadow(-0.8px -0.8px 0 var(--tiktok-cyan)) drop-shadow(0.8px 0.8px 0 var(--tiktok)); }

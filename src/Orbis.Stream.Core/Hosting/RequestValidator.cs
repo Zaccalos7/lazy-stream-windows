@@ -3,6 +3,7 @@ using Orbis.Stream.Core.Contracts;
 using Orbis.Stream.Core.Http;
 using Orbis.Stream.Core.I18n;
 using Orbis.Stream.Core.Services;
+using Orbis.Stream.Core.Streaming;
 
 namespace Orbis.Stream.Core.Hosting;
 
@@ -31,7 +32,12 @@ public sealed class RequestValidator
 
         var errors = new Dictionary<string, string>();
         AddIfNull(errors, "streamUrl", request.StreamUrl, "not.valid.input");
-        AddIfNull(errors, "streamKey", request.StreamKey, "not.valid.input");
+        // TikTok hands out a key for every live: its configuration has none to give (LiveStreamKeys).
+        if (!LiveStreamKeys.IsAskedFor(request.PlatformStreamName, request.StreamUrl))
+        {
+            AddIfNull(errors, "streamKey", request.StreamKey, "not.valid.input");
+        }
+
         AddIfNull(errors, "platformStreamName", request.PlatformStreamName, "not.valid.input");
         AddIfNull(errors, "channelName", request.ChannelName, "not.valid.input");
 
@@ -141,6 +147,17 @@ public sealed class RequestValidator
         }
     }
 
+    public void RequireLiveVolume(LiveVolumeRequest? request)
+    {
+        if (request is null)
+        {
+            throw new RequestValidationException(new Dictionary<string, string>
+            {
+                ["volume"] = Message("live.parameters.empty")
+            });
+        }
+    }
+
     public void RequireImage(IFormFile? image)
     {
         if (image is null)
@@ -148,6 +165,38 @@ public sealed class RequestValidator
             throw new RequestValidationException(new Dictionary<string, string>
             {
                 ["image"] = Message("input.not.valid")
+            });
+        }
+    }
+
+    /// <summary>
+    /// A file for the overlay library: there, of a kind a canvas can lay over itself, and not
+    /// bigger than the library takes. What is inside it is checked by the library, with ffprobe.
+    /// </summary>
+    public void RequireOverlay(IFormFile? file)
+    {
+        if (file is null)
+        {
+            throw new RequestValidationException(new Dictionary<string, string>
+            {
+                ["file"] = Message("input.not.valid")
+            });
+        }
+
+        if (!OverlayLibrary.IsOverlayFile(file.FileName))
+        {
+            throw new RequestValidationException(new Dictionary<string, string>
+            {
+                ["file"] = _localizer.PrintMessage("overlay.not.valid", [Path.GetFileName(file.FileName)])
+            });
+        }
+
+        if (file.Length > OverlayLibrary.MaxBytes)
+        {
+            throw new RequestValidationException(new Dictionary<string, string>
+            {
+                ["file"] = _localizer.PrintMessage(
+                    "overlay.too.large", [Path.GetFileName(file.FileName), OverlayLibrary.MaxBytes / (1024 * 1024)])
             });
         }
     }

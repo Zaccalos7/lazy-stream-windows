@@ -41,11 +41,12 @@
 @foreach (var configuration in Model.Configurations)
 {
     var active = configuration.IsActive ?? false;
-    var youtube = configuration.PlatformStreamName?.Contains("youtube", StringComparison.OrdinalIgnoreCase) ?? false;
-    <div class="row-card @(youtube ? "youtube" : "twitch")">
-        <i class="icon lead" title="@configuration.PlatformStreamName">@(youtube ? "\uE714" : "\uE93E")</i>
+    var choice = MainChannelSettingModel.ChoiceOf(configuration.PlatformStreamName, configuration.StreamUrl);
+    var youtube = choice?.Platform == Orbis.Stream.Core.Streaming.StreamPlatform.YouTube;
+    <div class="row-card @(choice?.Value)">
+        <span class="icon lead" title="@configuration.PlatformStreamName"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="@LiveLinkView.MarkupOf(choice?.Value)" /></svg></span>
         <div class="grow">
-            <h3 class="truncate">@configuration.ChannelName · @(youtube ? "YouTube" : "Twitch")</h3>
+            <h3 class="truncate">@configuration.ChannelName · @(choice?.Label ?? configuration.PlatformStreamName)</h3>
             @if (!string.IsNullOrWhiteSpace(configuration.Description))
             {
                 <div class="caption truncate">@configuration.Description</div>
@@ -53,6 +54,11 @@
             <div class="caption truncate">@configuration.StreamUrl</div>
         </div>
         <div class="actions">
+            @if (youtube && !configuration.FfmpegSender)
+            {
+                @* ffmpeg is how YouTube goes out: only the exception is worth a badge. *@
+                <span class="badge" title="@T["ffmpegSenderHelp"]">RTMP Orbis</span>
+            }
             <span class="badge @(active ? "ended" : "")">@(active ? T["active"] : T["deactive"])</span>
             <a class="btn subtle icon-only" asp-route-edit="@configuration.Id" asp-route-platform="@Model.Platform" asp-route-active="@Model.Active" title="@T["seeDetails"]" aria-label="@T["seeDetails"]"><i class="icon">&#xE70F;</i></a>
             <form method="post" asp-page-handler="Toggle" asp-route-id="@configuration.Id" asp-route-platform="@Model.Platform" asp-route-active="@Model.Active" data-confirm="@(active ? T["deactivateConfiguration"] : T["activateConfigurations"])">
@@ -81,7 +87,7 @@
                         <label class="choice @platform.Value">
                             <input type="radio" name="platformStreamName" value="@platform.Value" data-stream-url="@platform.StreamUrl" required
                                    checked="@(string.Equals(editing.PlatformStreamName, platform.Value, StringComparison.OrdinalIgnoreCase))" />
-                            <i class="icon">@(platform.Value == "youtube" ? "\uE714" : "\uE93E")</i>
+                            <svg class="choice-mark" viewBox="0 0 24 24" aria-hidden="true"><path d="@LiveLinkView.MarkupOf(platform.Value)" /></svg>
                             <span class="grow">@platform.Label</span>
                             <span class="caption">@platform.StreamUrl</span>
                         </label>
@@ -95,21 +101,41 @@
                     <label class="field">
                         <span>@T["url"]</span>
                         <input class="input" name="streamUrl" value="@editing.StreamUrl" placeholder="rtmp://…" />
+                        @* Kick and Facebook Gaming fill in where their ingest usually is, and the address to use is
+                           the one their dashboard shows: said where the address is typed. *@
+                        <small data-show-when="@MainChannelSettingModel.PersonalIngests">@T["ingestFromDashboard"]</small>
                     </label>
-                    <label class="field">
+                    @* TikTok hands out a key for every live, which goes stale by the next one: its
+                       configuration keeps none, and the key is asked for when a live starts. *@
+                    <label class="field" data-hide-when="@MainChannelSettingModel.KeyEachLive">
                         <span>@T["key"]</span>
                         <div class="input-affix">
-                            <input class="input" name="streamKey" type="password" value="@editing.StreamKey" autocomplete="off" required
+                            <input class="input" name="streamKey" type="password" value="@(Orbis.Stream.Core.Streaming.LiveStreamKeys.IsStandIn(editing.StreamKey) ? "" : editing.StreamKey)" autocomplete="off" required
                                    data-reveal-label-show="@T["showStreamKey"]" data-reveal-label-hide="@T["hideStreamKey"]" />
                             <button class="reveal" type="button" data-reveal aria-pressed="false" title="@T["showStreamKey"]" aria-label="@T["showStreamKey"]">
                                 <i class="icon">&#xE7B3;</i>
                             </button>
                         </div>
                     </label>
+                    <div class="field" data-show-when="@MainChannelSettingModel.KeyEachLive">
+                        <span>@T["key"]</span>
+                        <p class="caption key-each-live"><i class="icon">&#xE72E;</i><span>@T["keyEachLiveHint"]</span></p>
+                    </div>
                 </div>
                 <label class="field section">
                     <span>@T["description"]</span>
                     <textarea class="input" name="description" rows="3">@editing.Description</textarea>
+                </label>
+                @* How the live reaches the ingest. On, the ffmpeg delivery - ffmpeg keeps
+                   the time and publishes over its own RTMPS; off, the relay and the RTMP of this
+                   application. The option is always visible. YouTube cannot be turned off. *@
+                <label class="option-card" data-show-when="youtube">
+                    <svg class="option-card-mark" viewBox="0 0 24 24" aria-hidden="true" style="padding:0; display:flex; align-items:center; justify-content:center; color: #ff0000;"><path d="@LiveLinkView.MarkupOf("youtube")" style="fill: currentColor;" /></svg>
+                    <span class="option-card-text">
+                        <strong>@T["ffmpegSender"]</strong>
+                        <small>@T["ffmpegSenderHelp"]</small>
+                    </span>
+                    <span class="toggle"><input type="checkbox" name="ffmpegSender" value="true" checked="@editing.FfmpegSender" data-force-true-when="youtube" /></span>
                 </label>
             </div>
             <div class="dialog-footer">

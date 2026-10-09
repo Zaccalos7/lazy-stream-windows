@@ -16,17 +16,20 @@ namespace Orbis.Stream.Core.Services;
 public sealed class SceneService
 {
     private readonly SceneRepository _sceneRepository;
+    private readonly OverlayLibrary _overlays;
     private readonly ResponseFactory _responses;
     private readonly Localizer _localizer;
     private readonly ILogger<SceneService> _logger;
 
     public SceneService(
         SceneRepository sceneRepository,
+        OverlayLibrary overlays,
         ResponseFactory responses,
         Localizer localizer,
         ILogger<SceneService> logger)
     {
         _sceneRepository = sceneRepository;
+        _overlays = overlays;
         _responses = responses;
         _localizer = localizer;
         _logger = logger;
@@ -121,11 +124,30 @@ public sealed class SceneService
             throw new NotFoundCustomException("scene.no.picture", [scene.Name]);
         }
 
-        var seen = new HashSet<(SourceKind, string)>(items.Select(item => (item.SourceKind, item.SourceTarget)));
-        if (items.Count != seen.Count)
+        var sources = items.Where(item => !item.SourceKind.IsOverlay()).ToList();
+        var seen = new HashSet<(SourceKind, string)>(sources.Select(item => (item.SourceKind, item.SourceTarget)));
+        if (sources.Count != seen.Count)
         {
             // The same device twice is two inputs of one camera, which dshow cannot open twice.
-            // Two different sources of one kind (the desktop and a monitor, two files) are fine.
+            // Two different sources of one kind (the desktop and a monitor, two files) are fine,
+            // and so is one overlay laid twice: a logo in two corners is two pictures of one file.
+            throw new NotFoundCustomException("scene.duplicated.kind");
+        }
+
+        // A microphone linked to a camera (video=…:audio=…) is the same device as that microphone
+        // on its own: dshow cannot open it for both.
+        var microphones = items
+            .Select(item => item.SourceKind switch
+            {
+                SourceKind.Microphone => item.SourceTarget,
+                SourceKind.Camera when item.SourceTarget.IndexOf(":audio=", StringComparison.Ordinal) is var at and >= 0
+                    => item.SourceTarget[(at + 1)..],
+                _ => null
+            })
+            .OfType<string>()
+            .ToList();
+        if (microphones.Count != microphones.Distinct(StringComparer.Ordinal).Count())
+        {
             throw new NotFoundCustomException("scene.duplicated.kind");
         }
 
@@ -141,6 +163,8 @@ public sealed class SceneService
             {
                 throw new NotFoundCustomException("scene.item.file.missing", [item.SourceTarget]);
             }
+
+            CheckOverlay(item, item.Label ?? item.SourceTarget);
 
             if (item.SourceKind.HasPicture() && (item.Width <= 0 || item.Height <= 0))
             {
@@ -158,9 +182,10 @@ public sealed class SceneService
 
     /// <summary>
     /// A layout is only rectangles: a name, a canvas, and at least one slot that stays inside it.
-    /// The sources are checked later, on the scene filled from it.
+    /// The sources are checked later, on the scene filled from it. Its overlays are checked now:
+    /// they are part of the layout, and one that is not in the library is a picture nothing can show.
     /// </summary>
-    private static void CheckSlots(SceneEntity scene)
+    private void CheckSlots(SceneEntity scene)
     {
         if (string.IsNullOrWhiteSpace(scene.Name))
         {
@@ -181,6 +206,7 @@ public sealed class SceneService
         foreach (var item in scene.Items)
         {
             var name = item.Label ?? (++position).ToString(System.Globalization.CultureInfo.InvariantCulture);
+            CheckOverlay(item, name);
             if (item.Width <= 0 || item.Height <= 0)
             {
                 throw new NotFoundCustomException("scene.item.no.size", [name]);
@@ -190,6 +216,18 @@ public sealed class SceneService
             {
                 throw new NotFoundCustomException("scene.item.out.of.canvas", [name]);
             }
+        }
+    }
+
+    /// <summary>
+    /// An overlay is a file of the library: the page draws it from there and the live opens it
+    /// there, so a path anywhere else is refused, whoever sent it.
+    /// </summary>
+    private void CheckOverlay(SceneItemEntity item, string name)
+    {
+        if (item.SourceKind.IsOverlay() && !_overlays.Contains(item.SourceTarget))
+        {
+            throw new NotFoundCustomException("scene.overlay.unknown", [name]);
         }
     }
 

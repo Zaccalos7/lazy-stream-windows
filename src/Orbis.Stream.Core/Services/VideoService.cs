@@ -60,10 +60,17 @@ public sealed class VideoService
         return SpringPageFactory.Create(Map(result, WithRelations), page.Sorts);
     }
 
+    /// <summary>
+    /// The channel names there are videos of, for the pick that filters the live history. It asks
+    /// the videos rather than the settings: a channel taken off the settings keeps the lives it
+    /// streamed, and those rows are still on the page.
+    /// </summary>
+    public List<string> GetVideoChannelNames() => _videoRepository.FindChannelNames();
+
     /// <summary>The live page, one row per playlist: see <see cref="VideoRepository.FindLivePage"/>.</summary>
-    public SpringPage<LiveRow> GetLivePage(LiveStatus? liveStatus, string? channelName, PageRequest page)
+    public SpringPage<LiveRow> GetLivePage(LiveStatus? liveStatus, string? channelName, PageRequest page, string? platform = null)
     {
-        var result = _videoRepository.FindLivePage(liveStatus, channelName, page.Page, page.Size);
+        var result = _videoRepository.FindLivePage(liveStatus, channelName, page.Page, page.Size, platform: platform);
         return SpringPageFactory.Create(
             Map(result, row => new LiveRow(WithRelations(row.Video), row.Position, row.Total, row.Status, SceneNameOf(row.Video))),
             page.Sorts);

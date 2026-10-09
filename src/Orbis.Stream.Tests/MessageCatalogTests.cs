@@ -19,13 +19,18 @@ public sealed class MessageCatalogTests
     [InlineData("en-US", "en")]
     [InlineData("pt-BR", "pt")]
     [InlineData("ko-KR", "ko")]
-    [InlineData("ar-EG", "en")]
+    [InlineData("ar-EG", "ar")]
+    [InlineData("ar", "ar")]
     [InlineData("tlh", "tlh")]
     [InlineData("hod", "hod")]
     [InlineData("la", "la")]
-    // Bengali and Hindi were dropped: their bundles were the English text behind a "[bn]" tag,
-    // which is not a language. They resolve to English like anything else the catalogue lacks.
-    [InlineData("hi-IN", "en")]
+    [InlineData("ro-RO", "ro")]
+    // Bengali was dropped: its bundle was the English text behind a "[bn]" tag,
+    // which is not a language. It resolves to English like anything else the catalogue lacks.
+    [InlineData("hi-IN", "hi")]
+    [InlineData("da-DK", "da")]
+    [InlineData("fil-PH", "fil")]
+    [InlineData("tl-PH", "fil")]
     [InlineData("bn-BD", "en")]
     [InlineData(null, "en")]
     public void ResolveLanguage_MapsToAnAvailableBundle(string? requested, string expected)
@@ -47,8 +52,8 @@ public sealed class MessageCatalogTests
     {
         var catalog = CreateCatalog();
 
-        Assert.Equal("Not valid field", catalog.GetMessage("ar-EG", "not.valid.input"));
-        Assert.Equal("Not valid field", catalog.GetMessage("hi-IN", "not.valid.input"));
+        Assert.Equal("Not valid field", catalog.GetMessage("he-IL", "not.valid.input"));
+        Assert.Equal("Not valid field", catalog.GetMessage("bn-BD", "not.valid.input"));
     }
 
     [Fact]
@@ -93,7 +98,7 @@ public sealed class MessageCatalogTests
         var catalog = CreateCatalog();
         var english = PropertiesBundle.Parse(File.ReadAllText(BundlePath("en")));
 
-        Assert.Equal(13, catalog.SupportedLanguages.Count);
+        Assert.Equal(19, catalog.SupportedLanguages.Count);
 
         foreach (var language in catalog.SupportedLanguages)
         {
@@ -105,6 +110,27 @@ public sealed class MessageCatalogTests
                 Assert.True(bundle.TryGetValue(code, out _), $"messages_{language}.properties is missing '{code}'");
             }
         }
+    }
+
+    /// <summary>
+    /// The formatter reads every pattern that has an apostrophe in it, with or without parameters
+    /// (MessageFormatter): a lone one opens a quoted literal and is never printed. "l'avvio" came out
+    /// as "lavvio", and every Klingon word with one in it lost it. An apostrophe is written twice.
+    /// </summary>
+    [Fact]
+    public void EveryApostropheOfEveryBundleIsWrittenTwice()
+    {
+        foreach (var path in Directory.GetFiles(Path.Combine(AppContext.BaseDirectory, "Messages"), "messages_*.properties"))
+        {
+            foreach (var (code, pattern) in PropertiesBundle.Parse(File.ReadAllText(path)).Values)
+            {
+                Assert.False(
+                    System.Text.RegularExpressions.Regex.IsMatch(pattern, "(?<!')'(?!')"),
+                    $"{Path.GetFileName(path)}: '{code}' has a lone apostrophe, which the formatter would swallow");
+            }
+        }
+
+        Assert.Equal("Errore durante l'avvio della live", CreateCatalog().GetMessage("it", "error.starting.live", []));
     }
 
     private static string BundlePath(string language) =>

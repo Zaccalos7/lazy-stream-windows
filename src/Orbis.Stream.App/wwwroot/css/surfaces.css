@@ -65,6 +65,8 @@ a.tile > .icon:first-child,
 }
 
 .row-card > .icon.lead { width: 36px; height: 36px; font-size: 16px; }
+/* A lead that is the mark of a platform rather than a glyph of the icon font. */
+.row-card > .icon.lead svg { width: 18px; height: 18px; fill: currentColor; }
 
 /* Inset row card */
 .row-card {
@@ -90,6 +92,17 @@ a.row-card:hover { transform: translateX(2px); box-shadow: var(--shadow-lift); b
 .row-card p { margin: 2px 0 0; color: var(--text-2); }
 .row-card.twitch { --hue: var(--twitch); }
 .row-card.youtube { --hue: var(--youtube); }
+.row-card.kick { --hue: var(--kick); }
+.row-card.facebook { --hue: var(--facebook); }
+/* Facebook Gaming's lead is its logo itself: the blue square fills the tile and the white behind it
+   shows through the cut, where a white mark on the blue tile would draw the logo in negative. */
+.row-card.facebook > .icon.lead { overflow: hidden; background: #ffffff; }
+.row-card.facebook > .icon.lead svg { width: 100%; height: 100%; fill: var(--facebook-logo); }
+/* TikTok's lead is its note on black, as TikTok draws it. */
+.row-card.tiktok { --hue: #000000; }
+.row-card.tiktok > .icon.lead svg { filter: drop-shadow(-0.8px -0.8px 0 var(--tiktok-cyan)) drop-shadow(0.8px 0.8px 0 var(--tiktok)); }
+/* Kick's mark is black on its green, as on the brand buttons: white on that green cannot be read. */
+.row-card.kick > .icon.lead { color: #000000; }
 .row-card > .icon:last-child:not(.lead) { color: var(--text-3); }
 a.row-card:hover > .icon:last-child { color: var(--hue); }
 
@@ -213,6 +226,19 @@ a > .platform-mark { border-radius: 6px; }
 a:hover > .platform-mark { background: var(--tint); }
 .platform-twitch { color: #9146ff; }
 .platform-youtube { color: #ff0000; }
+/* Kick's green and the blue of Facebook Gaming are tokens: the brand green is unreadable on white,
+   so the light theme has a darker one (tokens.css). */
+.platform-kick { color: var(--kick); }
+/* The Facebook Gaming logo is a blue square with its mark cut out in white, in either theme: the
+   white is put behind the square, where the cut shows it. */
+.platform-facebook { color: var(--facebook-logo); }
+.platform-facebook svg { background: #ffffff; }
+/* Drawn in white on a button of its own colour, the logo keeps its cut-out instead. */
+.btn.live-indicator .platform-facebook svg { background: none; }
+/* TikTok: the note in the colour of the text, with its cyan and its red copy just off its edges. */
+.platform-tiktok { color: var(--text); }
+.platform-tiktok svg { filter: drop-shadow(-0.8px -0.8px 0 var(--tiktok-cyan)) drop-shadow(0.8px 0.8px 0 var(--tiktok)); }
+.btn.live-indicator .platform-tiktok { color: var(--on-accent); }
 .platform-generic { color: var(--text-2); }
 
 .toolbar { display: flex; gap: 10px; align-items: end; flex-wrap: wrap; margin-bottom: 14px; }

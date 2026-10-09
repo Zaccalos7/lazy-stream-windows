@@ -3,7 +3,12 @@
 @{
     ViewData["Title"] = T["liveHistory"];
     var page = Model.Videos.Page;
-    var pager = new PagerModel(page.Number, page.TotalPages, index => Url.Page("/MainLiveHistory", new { p = index })!);
+    // Every link of the page carries the picks, or a page of a narrowed table would answer a link
+    // with the whole table behind it.
+    var pager = new PagerModel(
+        page.Number,
+        page.TotalPages,
+        index => Url.Page("/MainLiveHistory", new { p = index, liveStatus = Model.LiveStatus, channelName = Model.ChannelName, titleSearch = Model.TitleSearch })!);
 }
 
 @section Styles {
@@ -23,6 +28,13 @@
        top of the page; Run Cleanup Now queues the work and the popover at the foot of the page
        follows it, because a form post cannot draw a walk that takes seconds. *@
     <form method="post" asp-page-handler="SaveAutoCleanup" class="toolbar auto-cleanup">
+        @* The picks of the table below travel through every form of the page as well: a save or a
+           deletion that answered with the whole table would throw away the narrowing the user just
+           did. *@
+        @foreach (var pick in Model.Link())
+        {
+            <input type="hidden" name="@pick.Key" value="@pick.Value" />
+        }
         <label class="field">
             <span class="caption">@T["autoCleanupEnabled"]</span>
             <label class="toggle auto-cleanup-toggle">
@@ -85,8 +97,51 @@
     <div class="cleanup-bar"><span data-role="bar"></span></div>
 </div>
 
+@* The picks of the table: a channel, a status and a word of the title, the three narrowing it
+   together. They are a form of their own, answered by the server as the whole page is, because
+   what they change is what the query is and not a panel of it. The box goes after a pause rather
+   than on every letter, which would redraw the table under the hand that is still typing. *@
+<form method="get" class="toolbar history-filters" data-history-filters>
+    <label class="field">
+        <span class="caption">@T["channel"]</span>
+        <select class="input" name="channelName">
+            <option value="">–</option>
+            @foreach (var channel in Model.Channels)
+            {
+                <option value="@channel" selected="@(Model.ChannelName == channel)">@channel</option>
+            }
+        </select>
+    </label>
+    <label class="field">
+        <span class="caption">@T["liveStatus"]</span>
+        <select class="input" name="liveStatus">
+            <option value="">–</option>
+            @foreach (var status in MainLiveHistoryModel.Statuses)
+            {
+                var wire = status.ToWireValue();
+                <option value="@wire" selected="@(string.Equals(Model.LiveStatus, wire, StringComparison.OrdinalIgnoreCase))">@T[LiveStatusView.Key(status)]</option>
+            }
+        </select>
+    </label>
+    <label class="field history-search">
+        <span class="caption">@T["searchByTitle"]</span>
+        <input class="input" type="search" name="titleSearch" value="@Model.TitleSearch"
+               placeholder="@T["searchByTitle"]" autocomplete="off" spellcheck="false"
+               aria-label="@T["searchByTitle"]" />
+    </label>
+    <button type="submit" class="btn accent"><i class="icon">&#xE721;</i>@T["search"]</button>
+    @if (Model.Filtered)
+    {
+        <a class="btn subtle" href="@Url.Page("/MainLiveHistory")" title="@T["clearFilters"]">
+            <i class="icon">&#xE711;</i> @T["clearFilters"]
+        </a>
+    }
+</form>
+
 @if (Model.Videos.Content.Count == 0)
 {
+    @* An empty table under three picks says nothing about whether there is nothing or whether the
+       picks say it is elsewhere, so the picks get a way back when they are the reason. *@
     <div class="card empty"><i class="icon">&#xE81C;</i>@T["noDataPresent"]</div>
 }
 else
@@ -134,7 +189,7 @@ else
                     <td class="nowrap">
                         @if (historyPkid > 0)
                         {
-                            <form method="post" asp-page-handler="Delete" asp-route-id="@historyPkid" class="inline" data-confirm="@T["deleteLiveHistoryConfirm"]">
+                            <form method="post" asp-page-handler="Delete" asp-all-route-data="@Model.DeleteRoute(historyPkid)" class="inline" data-confirm="@T["deleteLiveHistoryConfirm"]">
                                 <button type="submit" class="btn subtle icon-only danger" title="@T["deleteLiveHistory"]" aria-label="@T["deleteLiveHistory"]"><i class="icon">&#xE74D;</i></button>
                             </form>
                         }
@@ -152,6 +207,30 @@ else
 }
 
 <script>
+    // The picks narrow the table, so the server has to answer them: each one sends the form on the
+    // spot, and the box waits for a pause in the typing rather than sending a letter at a time,
+    // which would redraw the table under the hand that is still writing. Enter sends it too, the
+    // button is there for anyone who does not find either.
+    const historyFilters = document.querySelector("[data-history-filters]");
+
+    if (historyFilters) {
+        for (const control of historyFilters.querySelectorAll("select")) {
+            control.addEventListener("change", () => historyFilters.requestSubmit());
+        }
+
+        const search = historyFilters.querySelector('input[type="search"]');
+        let pending = 0;
+
+        search?.addEventListener("input", () => {
+            clearTimeout(pending);
+            pending = setTimeout(() => historyFilters.requestSubmit(), 400);
+        });
+
+        // The little cross a search box carries clears it; there is nothing to search for left, so
+        // it sends the form rather than waiting for the next letter that will never come.
+        search?.addEventListener("search", () => historyFilters.requestSubmit());
+    }
+
     // The two picks only mean something while the cleanup is on: the toggle shows and hides them,
     // the server draws them the way they were left.
     const autoCleanupEnabled = document.getElementById("autoCleanupEnabled");

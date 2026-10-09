@@ -1,4 +1,5 @@
 @model MainLiveModel
+@inject Orbis.Stream.Core.Services.YouTubeAirWatch Air
 
 @if (Model.OpenedPlaylist is { } playlist)
 {
@@ -41,13 +42,47 @@
                         <td class="num">@(position > 0 && status != LiveStatus.Ended ? TimeSpan.FromMilliseconds(position).ToString(@"hh\:mm\:ss") : "–")</td>
                         <td>
                             <div class="actions">
+                                @{
+                                    var history = playlist.History;
+                                    var platform = history.PlatformStreamName;
+                                    var knownPlatform = LiveLinkView.PlatformOf(history.StreamUrl);
+                                    var liveUrl = live ? LiveLinkView.UrlOf(history.StreamUrl, history.UserName, platform, Air.OnAirVideoOf(history.Pkid)) : null;
+                                    // A live to TikTok is started again with the key of the new live (LiveStreamKeys).
+                                    var askKey = Orbis.Stream.Core.Streaming.LiveStreamKeys.IsAskedFor(platform, history.StreamUrl);
+                                }
+
+                                @if (knownPlatform != null && liveUrl != null)
+                                {
+                                    var markClass = "platform-mark " + LiveLinkView.ClassOf(knownPlatform);
+                                    var platformName = LiveLinkView.LabelOf(knownPlatform) ?? knownPlatform;
+                                    <a href="@liveUrl" class="btn subtle icon-only" target="_blank" rel="noopener noreferrer" title="@platformName" aria-label="@platformName">
+                                        <span class="@markClass"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="@LiveLinkView.MarkupOf(knownPlatform)" /></svg></span>
+                                    </a>
+                                }
+
+                                @if (live)
+                                {
+                                    <a class="btn subtle icon-only" href="/orbis/mainPreview?live=@video.Pkid" title="@T["preview"]" aria-label="@T["preview"]">
+                                        <i class="icon">&#xE7F4;</i>
+                                    </a>
+                                }
+
+                                <button type="button" class="btn subtle icon-only" disabled="@(!live)" title="@T["playSpot"]" aria-label="@T["playSpot"]"
+                                        onclick="document.querySelector('#spot-dialog input[name=videoKey]').value = '@video.Pkid'; document.getElementById('spot-dialog').showModal();"
+                                        commandfor="spot-dialog" command="show-modal">
+                                    <partial name="_SpotIcon" />
+                                </button>
                                 <form method="post" asp-page="/MainLive" asp-page-handler="Stop" asp-all-route-data="Model.DetailsRowRoute(video.Pkid)" data-confirm="@T["stopLive"]">
                                     <button class="btn subtle icon-only danger" disabled="@(!live)" title="@T["stopLiveIconLabel"]" aria-label="@T["stopLiveIconLabel"]"><i class="icon">&#xE71A;</i></button>
                                 </form>
-                                <form method="post" asp-page="/MainLive" asp-page-handler="ReplayFrom" asp-all-route-data="Model.DetailsRowRoute(video.Pkid)" data-confirm="@string.Format(T["playlistStartFromConfirm"], index + 1)">
+                                <form method="post" asp-page="/MainLive" asp-page-handler="ReplayFrom" asp-all-route-data="Model.DetailsRowRoute(video.Pkid)"
+                                      data-confirm="@(askKey ? null : string.Format(T["playlistStartFromConfirm"], index + 1))" data-ask-key="@(askKey ? string.Format(T["playlistStartFromConfirm"], index + 1) : null)">
+                                    <input type="hidden" name="streamKey" />
                                     <button class="btn subtle icon-only success" disabled="@playlistLive" title="@T["playlistStartFrom"]" aria-label="@T["playlistStartFrom"]"><i class="icon">&#xE768;</i></button>
                                 </form>
-                                <form method="post" asp-page="/MainLive" asp-page-handler="Restart" asp-all-route-data="Model.DetailsRowRoute(video.Pkid)" data-confirm="@T["restartLiveAlert"]">
+                                <form method="post" asp-page="/MainLive" asp-page-handler="Restart" asp-all-route-data="Model.DetailsRowRoute(video.Pkid)"
+                                      data-confirm="@(askKey ? null : T["restartLiveAlert"])" data-ask-key="@(askKey ? T["restartLiveAlert"] : null)">
+                                    <input type="hidden" name="streamKey" />
                                     <button class="btn subtle icon-only caution" title="@T["restartLiveIconLabel"]" aria-label="@T["restartLiveIconLabel"]"><i class="icon">&#xE72C;</i></button>
                                 </form>
                                 <form method="post" asp-page="/MainLive" asp-page-handler="Delete" asp-all-route-data="Model.DetailsRowRoute(video.Pkid)" data-confirm="@T["deleteLiveRowConfirm"]">

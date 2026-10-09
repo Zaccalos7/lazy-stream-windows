@@ -1,0 +1,163 @@
+@using Orbis.Stream.Core.Services
+@* The scene deck: the buttons that put a video, a banner or an image on air in place of a live, the
+   way Streamlabs switches to a scene. One panel for the page, opened from the row of a live or from
+   the scene strip of the preview, and drawn by scenes.js from /scene-buttons. Opening it for a live
+   that is on air is what turns the keys of its buttons on, on this page and on the other one, and
+   every button asks before it goes on air: a key pressed by mistake must not cut a live. *@
+<dialog class="dialog wide scene-deck" id="scene-deck" data-scene-deck
+        data-max="@SceneButtonService.MaxButtons" data-max-label="@SceneButtonService.MaxLabelLength"
+        data-max-bytes="@SceneButtonService.MaxBytes"
+        data-w-add="@T["sceneAdd"]" data-w-edit="@T["sceneEdit"]" data-w-delete="@T["sceneDelete"]"
+        data-w-delete-confirm="@T["sceneDeleteConfirm"]" data-w-confirm="@T["sceneConfirm"]"
+        data-w-confirm-in-scene="@T["sceneConfirmInScene"]"
+        data-w-stop-overlay="@T["sceneStopOverlay"]"
+        data-w-resume="@T["sceneResume"]"
+        data-w-video="@T["sceneKindVideo"]" data-w-image="@T["sceneKindImage"]"
+        data-w-video-behaviour="@T["sceneVideoBehaviour"]" data-w-image-behaviour="@T["sceneImageBehaviour"]"
+        data-w-on-air="@T["sceneOnAir"]" data-w-on-air-now="@T["sceneOnAirNow"]"
+        data-w-on-air-in-scene="@T["sceneOnAirInScene"]"
+        data-w-mode-fullscreen="@T["sceneModeFullscreen"]" data-w-mode-in-scene="@T["sceneModeInScene"]"
+        data-w-placement-bottom-right="@T["scenePlacementBottomRight"]"
+        data-w-placement-bottom-left="@T["scenePlacementBottomLeft"]"
+        data-w-placement-top-right="@T["scenePlacementTopRight"]"
+        data-w-placement-top-left="@T["scenePlacementTopLeft"]"
+        data-w-placement-center="@T["scenePlacementCenter"]"
+        data-w-placement-custom="@T["scenePlacementCustom"]"
+        data-w-duration-forever="@T["sceneDurationForever"]"
+        data-w-empty="@T["sceneEmpty"]" data-w-limit="@T["sceneLimit"]"
+        data-w-missing="@T["sceneMediaMissing"]" data-w-uploading="@T["sceneMediaUploading"]" data-w-upload-failed="@T["sceneMediaFailed"]"
+        data-w-too-large="@T["sceneMediaTooLarge"]"
+        data-w-key-none="@T["sceneKeyNone"]" data-w-key-press="@T["sceneKeyPress"]" data-w-key-taken="@T["sceneKeyTaken"]"
+        data-w-key-reserved="@T["sceneKeyReserved"]" data-w-keys-armed="@T["sceneKeysArmed"]" data-w-locked="@T["sceneLocked"]"
+        data-w-failed="@T["sceneFailed"]" data-w-ok="@T["success"]" data-w-ko="@T["error"]" data-w-loading="@T["loading"]">
+    <div class="dialog-head">
+        <span class="scene-deck-mark"><partial name="_SceneDeckIcon" /></span>
+        <div class="grow">
+            <h2>@T["sceneDeck"]</h2>
+            <p class="caption truncate" data-scene-deck-live></p>
+        </div>
+        <button class="btn subtle icon-only" type="button" data-scene-deck-close title="@T["close"]" aria-label="@T["close"]"><i class="icon">&#xE711;</i></button>
+    </div>
+    <div class="dialog-body" data-say-here>
+        @* What is on air in place of the live, and the way back to it. *@
+        <div class="scene-onair" data-scene-onair hidden>
+            <span class="scene-dot" aria-hidden="true"></span>
+            <div class="grow">
+                <strong class="truncate" data-scene-onair-text></strong>
+                <span class="caption" data-scene-onair-hint></span>
+            </div>
+            <button type="button" class="btn scene-resume" data-scene-resume><i class="icon">&#xE768;</i><span>@T["sceneResume"]</span></button>
+        </div>
+        <div class="infobar warning" data-scene-offline hidden>
+            <i class="icon">&#xE7BA;</i>
+            <p>@T["sceneNotLive"]</p>
+        </div>
+        <p class="caption scene-deck-hint">@T["sceneDeckHint"]</p>
+
+        <div class="scene-grid" data-scene-grid aria-live="polite">
+            <div class="scene-loading"><span class="spinner"></span><span class="caption">@T["loading"]</span></div>
+        </div>
+
+        @* The editor of one button, in place of the grid: a name, the file, and the key. *@
+        <form class="scene-editor" data-scene-editor hidden novalidate>
+            <h3 class="section" data-scene-editor-title></h3>
+            <div class="scene-editor-media dropzone" data-scene-media-zone>
+                <div class="scene-editor-art" data-scene-media-art>
+                    <img alt="" data-scene-media-still hidden />
+                    <i class="icon" data-scene-media-empty>&#xE8B9;</i>
+                </div>
+                <div class="scene-editor-file">
+                    <span class="scene-editor-caption">@T["sceneMedia"]</span>
+                    <strong class="truncate" data-scene-media-label></strong>
+                    <span class="caption" data-scene-media-kind></span>
+                    <progress max="100" value="0" data-scene-media-progress hidden></progress>
+                    <small class="caption">@T["sceneMediaDrop"]</small>
+                    <span class="scene-editor-row">
+                        <button type="button" class="btn" data-scene-media-choose><i class="icon">&#xE898;</i>@T["sceneMediaChoose"]</button>
+                    </span>
+                    <input type="file" hidden accept="@SceneButtonService.Accept" data-scene-media-file />
+                    <small class="scene-error" data-scene-error="mediaName"></small>
+                    <small class="scene-error" data-scene-error="file"></small>
+                </div>
+            </div>
+            <div class="form-grid scene-editor-fields">
+                <label class="field">
+                    <span>@T["sceneButtonName"]</span>
+                    <input class="input" name="label" maxlength="@SceneButtonService.MaxLabelLength" autocomplete="off"
+                           placeholder="@T["sceneNamePlaceholder"]" data-scene-label />
+                    <small class="scene-error" data-scene-error="label"></small>
+                </label>
+                <div class="field scene-key-field">
+                    <span>@T["sceneKey"]</span>
+                    <span class="scene-editor-row">
+                        <button type="button" class="btn scene-key" data-scene-key-capture title="@T["sceneKeySet"]" aria-label="@T["sceneKeySet"]">
+                            <kbd data-scene-key-label>@T["sceneKeyNone"]</kbd>
+                        </button>
+                        <button type="button" class="btn subtle" data-scene-key-clear>@T["sceneKeyClear"]</button>
+                    </span>
+                    <small class="caption">@T["sceneKeyHint"]</small>
+                    <small class="scene-error" data-scene-error="hotkey"></small>
+                </div>
+                <label class="field">
+                    <span>@T["sceneDisplayMode"]</span>
+                    <select class="input select" name="displayMode" data-scene-display-mode>
+                        <option value="fullscreen">@T["sceneModeFullscreen"]</option>
+                        <option value="in_scene">@T["sceneModeInScene"]</option>
+                    </select>
+                    <small class="scene-error" data-scene-error="displayMode"></small>
+                </label>
+                <label class="field" data-scene-placement-field hidden>
+                    <span>@T["scenePlacement"]</span>
+                    <select class="input select" name="placement" data-scene-placement>
+                        <option value="bottom-right">@T["scenePlacementBottomRight"]</option>
+                        <option value="bottom-left">@T["scenePlacementBottomLeft"]</option>
+                        <option value="top-right">@T["scenePlacementTopRight"]</option>
+                        <option value="top-left">@T["scenePlacementTopLeft"]</option>
+                        <option value="center">@T["scenePlacementCenter"]</option>
+                        <option value="custom">@T["scenePlacementCustom"]</option>
+                    </select>
+                    <small class="scene-error" data-scene-error="placement"></small>
+                </label>
+                <div class="field" data-scene-duration-field hidden>
+                    <span>@T["sceneDuration"]</span>
+                    <span class="scene-editor-row">
+                        <input class="input" type="number" name="durationSeconds" min="1" max="86400" placeholder="@T["sceneDurationSeconds"]" data-scene-duration style="width: 120px;" />
+                        <label class="checkbox-label" style="display:inline-flex;align-items:center;gap:6px;cursor:pointer;">
+                            <input type="checkbox" data-scene-duration-forever />
+                            <span>@T["sceneDurationForever"]</span>
+                        </label>
+                    </span>
+                    <small class="scene-error" data-scene-error="durationSeconds"></small>
+                </div>
+                <div class="field scene-custom-coords-field" data-scene-custom-coords hidden style="grid-column: 1 / -1;">
+                    <span>@T["sceneCustomCoords"]</span>
+                    <div style="display:flex;gap:12px;flex-wrap:wrap;align-items:center;margin-top:4px;">
+                        <label style="display:flex;align-items:center;gap:6px;"><span>X:</span><input class="input" type="number" name="x" min="0" max="7680" placeholder="0" data-scene-coord-x style="width:90px;" /></label>
+                        <label style="display:flex;align-items:center;gap:6px;"><span>Y:</span><input class="input" type="number" name="y" min="0" max="4320" placeholder="0" data-scene-coord-y style="width:90px;" /></label>
+                        <label style="display:flex;align-items:center;gap:6px;"><span>W:</span><input class="input" type="number" name="width" min="10" max="7680" placeholder="1920" data-scene-coord-w style="width:90px;" /></label>
+                        <label style="display:flex;align-items:center;gap:6px;"><span>H:</span><input class="input" type="number" name="height" min="10" max="4320" placeholder="1080" data-scene-coord-h style="width:90px;" /></label>
+                    </div>
+                </div>
+            </div>
+            <div class="scene-editor-actions">
+                <button type="submit" class="btn accent" data-scene-save>@T["save"]</button>
+                <button type="button" class="btn" data-scene-editor-cancel>@T["cancel"]</button>
+                <span class="grow"></span>
+                <button type="button" class="btn danger" data-scene-delete hidden><i class="icon">&#xE74D;</i>@T["sceneDelete"]</button>
+            </div>
+        </form>
+    </div>
+    <div class="dialog-footer">
+        <p class="caption scene-deck-foot"><i class="icon">&#xE765;</i>@T["sceneKeysHint"]</p>
+        <button class="btn" type="button" data-scene-deck-close>@T["close"]</button>
+    </div>
+</dialog>
+
+@* The keys of the deck are on: said in a corner of the page, with the way to turn them off. *@
+<div class="scene-keys" data-scene-keys hidden role="status">
+    <i class="icon">&#xE765;</i>
+    <span class="truncate" data-scene-keys-text></span>
+    <button type="button" class="btn subtle icon-only" data-scene-keys-off title="@T["sceneKeysOff"]" aria-label="@T["sceneKeysOff"]"><i class="icon">&#xE711;</i></button>
+</div>
+
+<script src="/js/scenes.js" defer></script>

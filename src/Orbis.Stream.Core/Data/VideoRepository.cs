@@ -12,13 +12,38 @@ public sealed class VideoRepository
         "t.pkid, t.name, t.video_path, t.extension, t.live_status, t.last_time_stamp_before_stop, " +
         "t.message, t.should_be_stop, t.start_date_live, t.channel_name, t.video_live_history_pkid, t.video_setting_id, " +
         "t.source_kind, t.source_target, t.scene_pkid, t.x, t.y, t.width, t.height, t.audio_enabled, t.duration_milliseconds, " +
-        "t.source_width, t.source_height";
+        "t.source_width, t.source_height, t.volume";
+
+    /// <summary>
+    /// The filter that searches the title instead of matching it: the live history asks for it to
+    /// look a live up by a word of its name, which is the one thing its rows have that a pkid does
+    /// not. Not a column of the entity, so it is named apart from the JPA attributes the compiled
+    /// React build sends.
+    /// </summary>
+    public const string TitleSearchFilter = "titleSearch";
+
+    private const string LikeEscape = "\\";
 
     private readonly SqliteConnectionFactory _connectionFactory;
 
     public VideoRepository(SqliteConnectionFactory connectionFactory)
     {
         _connectionFactory = connectionFactory;
+    }
+
+    /// <summary>
+    /// The value of a LIKE that matches the rows holding the word somewhere: the wildcards in the
+    /// word are escaped so they are looked for as themselves, and <c>%</c> around it is what turns
+    /// the match into a search.
+    /// </summary>
+    private static string LikeContains(string value)
+    {
+        var escaped = value
+            .Replace(LikeEscape, LikeEscape + LikeEscape, StringComparison.Ordinal)
+            .Replace("%", LikeEscape + "%", StringComparison.Ordinal)
+            .Replace("_", LikeEscape + "_", StringComparison.Ordinal);
+
+        return "%" + escaped + "%";
     }
 
     public PagedResult<VideoEntity> FindPaged(IReadOnlyDictionary<string, string> filters, PageRequest page)
@@ -37,6 +62,17 @@ public sealed class VideoRepository
                 builder.Join = "LEFT JOIN video_live_history h ON h.pkid = t.video_live_history_pkid";
                 builder.WhereEquals("h.platform_stream_name", value);
                 needsHistoryJoin = true;
+                continue;
+            }
+
+            if (property.Equals(TitleSearchFilter, StringComparison.Ordinal))
+            {
+                // Every other filter of this endpoint is an equality, because that is what the
+                // request parameters of the compiled React build mean. A search is not one: it is
+                // the word the user typed, which is a part of a title rather than all of it. The
+                // wildcards of LIKE are escaped, or a title holding a % or a _ would match rows it
+                // has nothing to do with, and a search for "_" would match every row there is.
+                builder.WhereRaw($"{builder.Qualified("name")} LIKE {{value}} ESCAPE '\\'", LikeContains(value));
                 continue;
             }
 
@@ -82,6 +118,28 @@ public sealed class VideoRepository
         }
 
         return new PagedResult<VideoEntity>(items, page.Page, page.Size, total);
+    }
+
+    /// <summary>
+    /// The channel names the history carries, each one once and in alphabetical order: the filter
+    /// of the page offers the channels that have actually streamed, not the ones the settings
+    /// happen to list, because a channel deleted from the settings leaves its past lives behind
+    /// and those rows are the ones the filter has to be able to reach.
+    /// </summary>
+    public List<string> FindChannelNames()
+    {
+        using var connection = _connectionFactory.Open();
+        using var command = connection.CreateCommand();
+        command.CommandText = "SELECT DISTINCT channel_name FROM video WHERE channel_name <> '' ORDER BY channel_name;";
+
+        var names = new List<string>();
+        using var reader = command.ExecuteReader();
+        while (reader.Read())
+        {
+            names.Add(reader.GetString(0));
+        }
+
+        return names;
     }
 
     public List<VideoEntity> FindByLiveHistoryId(long videoLiveHistoryPkid)
@@ -156,13 +214,14 @@ public sealed class VideoRepository
             INSERT INTO video (name, video_path, extension, live_status, last_time_stamp_before_stop, message,
                                should_be_stop, start_date_live, channel_name, video_live_history_pkid, video_setting_id,
                                source_kind, source_target, scene_pkid, x, y, width, height, audio_enabled, duration_milliseconds,
-                               source_width, source_height)
+                               source_width, source_height, volume)
             VALUES (@name, @path, @extension, @liveStatus, @lastTimeStamp, @message, @shouldBeStop, @startDateLive, @channelName, @history, @setting,
                     @sourceKind, @sourceTarget, @scenePkid, @x, @y, @width, @height, @audioEnabled, @duration,
-                    @sourceWidth, @sourceHeight);
+                    @sourceWidth, @sourceHeight, @volume);
             SELECT last_insert_rowid();
             """;
         Bind(command, video);
+        command.Parameters.AddWithValue("@volume", video.Volume);
         return Convert.ToInt32(command.ExecuteScalar(), CultureInfo.InvariantCulture);
     }
 
@@ -202,6 +261,21 @@ public sealed class VideoRepository
         command.ExecuteNonQuery();
     }
 
+    /// <summary>
+    /// The volume has a writer of its own and <see cref="Update"/> leaves it alone: the streaming
+    /// loop writes the rows of a live it holds in memory every time their status changes, and a
+    /// volume set from the preview in between would be written back to what it was.
+    /// </summary>
+    public void SetVolume(int pkid, int volume)
+    {
+        using var connection = _connectionFactory.Open();
+        using var command = connection.CreateCommand();
+        command.CommandText = "UPDATE video SET volume = @volume WHERE pkid = @pkid;";
+        command.Parameters.AddWithValue("@volume", volume);
+        command.Parameters.AddWithValue("@pkid", pkid);
+        command.ExecuteNonQuery();
+    }
+
     public void SetStopFlag(int pkid, bool shouldBeStop)
     {
         using var connection = _connectionFactory.Open();
@@ -215,14 +289,17 @@ public sealed class VideoRepository
     /// <summary>
     /// The live page: one row per live. A folder playlist shows the video it got to (the one on air,
     /// else the last one that was played, else the first one), with where it stands in the playlist.
-    /// A canvas shows its base source, the first one with a picture: that is the row its ffmpeg is
-    /// registered under, so it is the row a stop has to be addressed to.
+    /// A canvas shows its base source, the first one with a picture that is not an overlay (an
+    /// overlay only when there is nothing else): that is the row its ffmpeg is registered under
+    /// (SceneRows.BaseOf), so it is the row a stop has to be addressed to.
     /// <para>The status of a playlist is its own, not the one of the video shown: LIVE while any video
     /// is on air, ENDED once the last one was streamed through, else the one of the video it got to.
     /// The status filter reads the same value.</para>
+    /// <para>The platform filter reads the platform the live was started for, which the live history
+    /// keeps (<c>twitch</c>, <c>youtube</c>, <c>kick</c>, <c>facebook</c>), in whatever case it was stored.</para>
     /// </summary>
     public PagedResult<LiveRowEntity> FindLivePage(
-        LiveStatus? liveStatus, string? channelName, int page, int size, long? videoLiveHistoryPkid = null)
+        LiveStatus? liveStatus, string? channelName, int page, int size, long? videoLiveHistoryPkid = null, string? platform = null)
     {
         const string Grouped =
             """
@@ -230,7 +307,7 @@ public sealed class VideoRepository
                    ROW_NUMBER() OVER (PARTITION BY v.grp ORDER BY v.pkid) AS position,
                    COUNT(*) OVER (PARTITION BY v.grp) AS total,
                    ROW_NUMBER() OVER (PARTITION BY v.grp ORDER BY
-                       CASE WHEN v.scene_pkid IS NOT NULL THEN (CASE WHEN v.source_kind = @microphone THEN 1 ELSE 0 END)
+                       CASE WHEN v.scene_pkid IS NOT NULL THEN (CASE WHEN v.source_kind = @microphone THEN 2 WHEN v.source_kind = @overlay THEN 1 ELSE 0 END)
                             WHEN v.live_status = @live THEN 0 WHEN v.live_status = @offline THEN 2 ELSE 1 END,
                        CASE WHEN v.scene_pkid IS NOT NULL OR v.live_status = @offline THEN NULL ELSE v.start_date_live END DESC,
                        CASE WHEN v.scene_pkid IS NOT NULL OR v.live_status = @offline THEN v.pkid ELSE -v.pkid END) AS pick,
@@ -247,7 +324,10 @@ public sealed class VideoRepository
         var where = "WHERE t.pick = 1"
             + (liveStatus is null ? string.Empty : " AND COALESCE(t.group_status, t.live_status) = @status")
             + (string.IsNullOrEmpty(channelName) ? string.Empty : " AND t.channel_name = @channel")
-            + (videoLiveHistoryPkid is null ? string.Empty : " AND t.video_live_history_pkid = @history");
+            + (videoLiveHistoryPkid is null ? string.Empty : " AND t.video_live_history_pkid = @history")
+            + (string.IsNullOrEmpty(platform)
+                ? string.Empty
+                : " AND t.video_live_history_pkid IN (SELECT h.pkid FROM video_live_history h WHERE lower(h.platform_stream_name) = @platform)");
 
         void Bind(SqliteCommand command)
         {
@@ -255,6 +335,7 @@ public sealed class VideoRepository
             command.Parameters.AddWithValue("@offline", LiveStatus.Offline.ToStorageValue());
             command.Parameters.AddWithValue("@ended", LiveStatus.Ended.ToStorageValue());
             command.Parameters.AddWithValue("@microphone", (int)SourceKind.Microphone);
+            command.Parameters.AddWithValue("@overlay", (int)SourceKind.Overlay);
             if (liveStatus is { } status)
             {
                 command.Parameters.AddWithValue("@status", status.ToStorageValue());
@@ -268,6 +349,11 @@ public sealed class VideoRepository
             if (videoLiveHistoryPkid is { } history)
             {
                 command.Parameters.AddWithValue("@history", history);
+            }
+
+            if (!string.IsNullOrEmpty(platform))
+            {
+                command.Parameters.AddWithValue("@platform", platform.Trim().ToLowerInvariant());
             }
         }
 
@@ -410,7 +496,8 @@ private static VideoEntity Map(SqliteDataReader reader, int offset = 0) => new()
         AudioEnabled = SqliteValue.ToBoolean(reader.GetValue(offset + 19)),
         DurationMilliseconds = SqliteValue.ToNullableInt64(reader.GetValue(offset + 20)),
         SourceWidth = SqliteValue.ToNullableInt32(reader.GetValue(offset + 21)),
-        SourceHeight = SqliteValue.ToNullableInt32(reader.GetValue(offset + 22))
+        SourceHeight = SqliteValue.ToNullableInt32(reader.GetValue(offset + 22)),
+        Volume = SqliteValue.ToNullableInt32(reader.GetValue(offset + 23)) ?? 100
     };
 }
 

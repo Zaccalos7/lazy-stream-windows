@@ -10,6 +10,7 @@ using Orbis.Stream.Core.Data;
 using Orbis.Stream.Core.Domain;
 using Orbis.Stream.Core.Hosting;
 using Orbis.Stream.Core.Services;
+using Orbis.Stream.Core.Streaming;
 using Orbis.Stream.Core.SystemInfo;
 
 namespace Orbis.Stream.Tests;
@@ -75,6 +76,12 @@ public sealed class TestHostRunner : IAsyncDisposable
         NoRedirectClient.Dispose();
         if (_host is not null)
         {
+            // What the shell does on exit (App.ShutdownHostAsync): a live a test left on air - one
+            // that failed half way - is stopped with the host. A picture of the scene deck has no
+            // end of its own, and its ffmpeg would otherwise outlive the test run.
+            await _host.Services.GetRequiredService<StreamingSessionRegistry>().StopAllAsync();
+            _host.Services.GetRequiredService<StreamingService>().Shutdown();
+
             using var shutdown = new CancellationTokenSource(TimeSpan.FromSeconds(10));
             await _host.StopAsync(shutdown.Token);
             await _host.DisposeAsync();
@@ -217,6 +224,29 @@ public sealed class EndToEndApiTests : IClassFixture<ApplicationFixture>
             items = new object[] { scene.items[2], scene.items[2] }
         });
         Assert.False(duplicated.IsSuccessStatusCode);
+
+        // A camera heard through its microphone keeps both in one target, and that microphone
+        // cannot also be on the canvas on its own: it would be the same device opened twice.
+        var webcamWithMic = new { sourceKind = 2, sourceTarget = "video=Integrated Camera:audio=Microphone", label = "Webcam", x = 0, y = 0, width = 1920, height = 1080, audioEnabled = true };
+        using var heard = await _fixture.Client.PostAsJsonAsync("/scene/save", new
+        {
+            pkid = (long?)null,
+            name = "Webcam with its microphone",
+            width = 1920,
+            height = 1080,
+            items = new object[] { webcamWithMic }
+        });
+        Assert.Equal(HttpStatusCode.Created, heard.StatusCode);
+
+        using var micTwice = await _fixture.Client.PostAsJsonAsync("/scene/save", new
+        {
+            pkid = (long?)null,
+            name = "Microphone twice",
+            width = 1920,
+            height = 1080,
+            items = new object[] { webcamWithMic, scene.items[3] }
+        });
+        Assert.False(micTwice.IsSuccessStatusCode);
     }
 
     /// <summary>
@@ -370,6 +400,48 @@ public sealed class EndToEndApiTests : IClassFixture<ApplicationFixture>
         var stored = settingRepository.FindById(copy!.Value)!;
         var options = stored.VideoSettingsOptions.ToDictionary(option => option.Key!, option => option.Value);
         Assert.Equal("0", options[VideoSettingLatency.OptionKey]);
+    }
+
+    [Fact]
+    public void FfmpegSenderSwitch_IsSavedAndSurvivesTheActiveToggle()
+    {
+        var settings = _fixture.Services.GetRequiredService<SettingService>();
+        var repository = _fixture.Services.GetRequiredService<SettingRepository>();
+        const string url = "rtmps://a.rtmps.youtube.com/live2";
+        const string key = "ffmpeg-sender-switch-key";
+
+        settings.AddNewConfiguration(new Orbis.Stream.Core.Contracts.SettingRequest(
+            url, key, "youtube", "", null, true, "ffmpeg-sender-channel", false, 0, 0, FfmpegSender: true));
+        var saved = repository.FindByStreamUrlAndStreamKey(url, key)!;
+        Assert.True(saved.FfmpegSender);
+
+        // The switch of the list only sends IsActive: the transport is left as it was.
+        settings.ModifySetting(saved.Id, new Orbis.Stream.Core.Contracts.SettingRequest(null, null, null, null, null, false, null, false, 0, 0));
+        Assert.True(repository.FindById(saved.Id)!.FfmpegSender);
+
+        // The form sends it every time, and off is off (unless it's YouTube, then it's ignored and always true).
+        settings.ModifySetting(saved.Id, new Orbis.Stream.Core.Contracts.SettingRequest(
+            url, key, "youtube", "", null, null, "ffmpeg-sender-channel", false, 0, 0, FfmpegSender: false));
+        Assert.True(repository.FindById(saved.Id)!.FfmpegSender);
+    }
+
+    [Fact]
+    public void FfmpegSenderSwitch_IsOnForANewConfiguration()
+    {
+        var settings = _fixture.Services.GetRequiredService<SettingService>();
+        var repository = _fixture.Services.GetRequiredService<SettingRepository>();
+        const string youtube = "rtmps://a.rtmps.youtube.com/live2";
+        const string twitch = "rtmp://live.twitch.tv/app";
+
+        // An API caller that says nothing gets the ffmpeg delivery.
+        settings.AddNewConfiguration(new Orbis.Stream.Core.Contracts.SettingRequest(
+            youtube, "ffmpeg-default-key", "youtube", "", null, true, "ffmpeg-default-channel", false, 0, 0));
+        Assert.True(repository.FindByStreamUrlAndStreamKey(youtube, "ffmpeg-default-key")!.FfmpegSender);
+
+        // The switch also works for Twitch now.
+        settings.AddNewConfiguration(new Orbis.Stream.Core.Contracts.SettingRequest(
+            twitch, "ffmpeg-twitch-key", "twitch", "", null, true, "ffmpeg-twitch-channel", false, 0, 0, FfmpegSender: true));
+        Assert.True(repository.FindByStreamUrlAndStreamKey(twitch, "ffmpeg-twitch-key")!.FfmpegSender);
     }
 
     [Fact]
@@ -902,6 +974,13 @@ Assert.Equal(HttpStatusCode.Redirect, chosen.StatusCode);
         Assert.Contains("data-wizard-next=\"compose-dialog\"", plainBody, StringComparison.Ordinal);
         Assert.Contains("id=\"compose-dialog\" data-busy-host data-open=\"0\"", plainBody, StringComparison.Ordinal);
         Assert.Contains("data-composer-start-form", plainBody, StringComparison.Ordinal);
+
+        // The setting is chosen on a step of its own, and the channel on the next one: only the first
+        // is on screen, and the button on the footer is the one that goes with the step on screen.
+        Assert.Contains("data-wizard-panel=\"1\"", plainBody, StringComparison.Ordinal);
+        Assert.Contains("data-wizard-panel=\"2\" hidden", plainBody, StringComparison.Ordinal);
+        Assert.Contains("data-wizard-show=\"1\" data-wizard-go=\"2\"", plainBody, StringComparison.Ordinal);
+        Assert.Contains("data-wizard-show=\"2\" data-wizard-go=\"1\" hidden", plainBody, StringComparison.Ordinal);
 
         // A refused start comes back on the canvas, with the scene and the two picks it was sent with.
         using var refused = await _fixture.Client.GetAsync("/orbis/mainLive?compose=7&settingId=3&configurationId=4");

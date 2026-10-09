@@ -17,7 +17,30 @@ public sealed record FfmpegStreamRequest(
     /// for the pacer instead of reaching the ingest itself (see <see cref="FlvPacedRelay"/>).
     /// Null is the single ffmpeg of before.
     /// </summary>
-    StreamPlatformProfile? Profile = null);
+    StreamPlatformProfile? Profile = null,
+    /// <summary>
+    /// The encoder quality the live goes out at, already decided for this machine when the setting
+    /// says automatic (see EncoderTuningService). Null reads it off the setting.
+    /// </summary>
+    EncoderQuality? Quality = null,
+    /// <summary>
+    /// The picture every encoder of one connection has to produce: the size and the rate of the
+    /// first one on it. Null leaves the output to the setting and the source, as a live that has
+    /// the connection to itself always did.
+    /// </summary>
+    MediaOutput? Frame = null,
+    /// <summary>
+    /// The video bitrate the live goes out at when the network was measured to carry less than
+    /// the setting (see <see cref="BitrateLadder"/>). Null is the bitrate of the setting.
+    /// </summary>
+    int? Bitrate = null,
+    /// <summary>
+    /// Whether the pass carries a sound track whatever the platform requires: a silent one when the
+    /// file has none. What goes on air in place of the program of a live (a spot, a scene button)
+    /// is set to it, so the track the viewers hear does not drop out under them for as long as it
+    /// is on, which a player waiting for sound shows as a live that froze.
+    /// </summary>
+    bool AlwaysSound = false);
 
 /// <summary>One source on the canvas, as the command line needs it.</summary>
 public sealed record FfmpegCompositionItem(
@@ -29,7 +52,13 @@ public sealed record FfmpegCompositionItem(
     int Height,
     bool AudioEnabled,
     /// <summary>A file the GPU was measured to decode faster than the CPU (see MediaProxyService).</summary>
-    bool HardwareDecoding = false);
+    bool HardwareDecoding = false,
+    /// <summary>How loud the source is in the mix, in percent: 100 leaves its sound as it is.</summary>
+    int Volume = 100,
+    /// <summary>How an overlay is opened (see <see cref="OverlayMedia"/>); null for any other kind, and a still for an overlay.</summary>
+    OverlayMedia? Overlay = null,
+    /// <summary>Optional ffmpeg timeline enable expression (e.g. "between(t,0,10)"); null keeps it on air continuously.</summary>
+    string? TimelineEnable = null);
 
 /// <summary>
 /// What makes a light copy (see <see cref="FfmpegCommandBuilder.BuildProxy"/>): the GPU decoder or
@@ -68,7 +97,18 @@ public sealed record FfmpegCompositionRequest(
     /// </summary>
     TimeSpan? Duration = null,
     string? PreviewPath = null,
-    StreamPlatformProfile? Profile = null);
+    StreamPlatformProfile? Profile = null,
+    EncoderQuality? Quality = null,
+    /// <summary>
+    /// The picture every encoder of one connection has to produce: the size and the rate of the
+    /// first one on it. Null leaves the output to the setting and the source, as a live that has
+    /// the connection to itself always did.
+    /// </summary>
+    MediaOutput? Frame = null,
+    /// <summary>The video bitrate decided by the network (see <see cref="BitrateLadder"/>); null is the setting's.</summary>
+    int? Bitrate = null,
+    /// <summary>Whether the canvas carries a sound track whatever is heard on it (see <see cref="FfmpegStreamRequest.AlwaysSound"/>).</summary>
+    bool AlwaysSound = false);
 
 /// <summary>
 /// Translates the <c>FFmpegFrameRecorder</c> configuration of <c>StreamService</c> into the
@@ -109,6 +149,20 @@ public static class FfmpegCommandBuilder
     private const string PreviewFilter = "fps=30,scale=w='min(640,iw)':h=-2";
 
     /// <summary>
+    /// The same preview for a picture that stands up: bounded on its height rather than on its
+    /// width. 640 wide is a 1138 pixel tall JPEG for a 9:16 live - three times the pixels of the
+    /// landscape preview, to be drawn on a stage that shows it a third of that size; 640 tall is
+    /// the same number of pixels as the landscape one, turned.
+    /// </summary>
+    private const string PortraitPreviewFilter = "fps=30,scale=w=-2:h='min(640,ih)'";
+
+    /// <summary>
+    /// The rate control window of a custom ingest, in seconds of the bitrate: the two seconds every
+    /// live had before the platforms were told apart (see <see cref="StreamPlatformProfile.RateBuffer"/>).
+    /// </summary>
+    private const double DefaultRateBufferSeconds = 2;
+
+    /// <summary>
     /// The real-time buffer of a dshow device: a couple of seconds of raw 1080p, enough to ride out
     /// the start of the live and a slow moment of the encoder (see <see cref="AppendInput"/>).
     /// </summary>
@@ -123,10 +177,18 @@ public static class FfmpegCommandBuilder
 
         // The rate the encoder is asked for: what the setting asks for, otherwise the rate ffprobe
         // read from the file (25 is the fallback of the probe, kept for a probe that knows nothing).
-        var output = ResolveOutput(setting, probe);
+        var output = request.Frame ?? ResolveOutput(setting, probe);
         var frameRate = output.FrameRate;
         var profile = request.Profile;
         var relay = profile is { UsesRelay: true };
+
+        // On a connection that is already open the picture keeps the size it went on air with:
+        // the file is fitted into it and the rest is black, the way a television shows a film.
+        // An ingest takes a change of size halfway through a live badly - YouTube stops making
+        // its renditions and the viewers are left on "preparing".
+        var scale = request.Frame is { } frame && (frame.Width != probe.Width || frame.Height != probe.Height || ScaleFilter(setting) is not null)
+            ? Letterbox(frame.Width, frame.Height)
+            : request.Frame is null ? ScaleFilter(setting) : null;
 
         var arguments = GlobalArguments(relay);
 
@@ -152,10 +214,10 @@ public static class FfmpegCommandBuilder
         arguments.Add("-i");
         arguments.Add(request.InputPath);
 
-        var silence = NeedsSilence(profile, probe.HasAudio);
+        var silence = NeedsSilence(profile, probe.HasAudio, request.AlwaysSound);
         if (silence)
         {
-            AppendSilenceInput(arguments, profile!);
+            AppendSilenceInput(arguments, profile);
         }
 
         // JavaCV mapped the grabbed video/audio streams of the input file.
@@ -187,9 +249,14 @@ public static class FfmpegCommandBuilder
             setting,
             frameRate,
             probe.HasAudio || silence,
-            silence ? 2 : probe.AudioChannels,
-            ScaleFilter(setting),
-            profile);
+            // One layout of sound for the whole connection too: a mono file after a stereo one is
+            // the same change of format, for the audio.
+            silence || profile is { UniformFormat: true } ? 2 : probe.AudioChannels,
+            scale,
+            profile,
+            request.Quality,
+            request.Bitrate,
+            request.AlwaysSound);
 
         // The silent track never ends: the picture decides when the live does.
         if (silence)
@@ -201,10 +268,9 @@ public static class FfmpegCommandBuilder
 
         if (request.PreviewPath is { } previewPath)
         {
-            // The scale of the setting applies to the output before it: the preview gets the same
-            // picture the live does, then shrinks it on its own.
-            var scale = ScaleFilter(setting);
-            AppendPreviewOutput(arguments, "0:v:0", (scale is null ? string.Empty : scale + ",") + PreviewFilter, previewPath);
+            // The scale of the output applies to the preview too: it gets the same picture the live
+            // does, then shrinks it on its own.
+            AppendPreviewOutput(arguments, "0:v:0", (scale is null ? string.Empty : scale + ",") + PreviewFilterOf(output), previewPath);
         }
 
         return arguments;
@@ -243,7 +309,7 @@ public static class FfmpegCommandBuilder
             throw new ArgumentException("The canvas has no usable size", nameof(request));
         }
 
-        var frameRate = setting.FrameRate is > 0 ? setting.FrameRate.Value : request.CanvasFrameRate;
+        var frameRate = request.Frame?.FrameRate ?? (setting.FrameRate is > 0 ? setting.FrameRate.Value : request.CanvasFrameRate);
         if (frameRate <= 0)
         {
             frameRate = 25d;
@@ -266,7 +332,10 @@ public static class FfmpegCommandBuilder
         // gets one clock, on what comes out: the relay when there is one, exactly as a single file
         // does, otherwise the realtime filter at the end of the graph. The files are decoded as
         // fast as that clock asks, and the overlay lines them up frame by frame.
-        var onlyFiles = items.All(item => item.Kind == SourceKind.File);
+        //
+        // An overlay counts as a file here: a still has no time at all, and an animation is a file
+        // that starts again whenever it ends. Neither of them can set the time of the canvas.
+        var onlyFiles = items.All(item => !item.Kind.IsCaptureDevice());
         var pacedInputs = !onlyFiles;
         var pacedGraph = !(onlyFiles && relay);
 
@@ -277,20 +346,30 @@ public static class FfmpegCommandBuilder
         }
 
         // The silent track is the input after the last source, so the indexes of the graph stay put.
-        var silence = NeedsSilence(profile, HasAudioMix(items));
+        var silence = NeedsSilence(profile, HasAudioMix(items), request.AlwaysSound);
         if (silence)
         {
-            AppendSilenceInput(arguments, profile!);
+            AppendSilenceInput(arguments, profile);
         }
 
         // A label of the graph can feed one output only: with a preview the composed picture is
         // split in two, and the copy is shrunk inside the graph (-vf cannot act on a graph output).
         var graph = BuildFilterGraph(items, pictures, canvasWidth, canvasHeight, frameRate, pacedGraph);
         var videoLabel = VideoLabel;
+
+        // A canvas on a connection that went on air at another size is fitted into that size.
+        if (request.Frame is { } frame && (frame.Width != canvasWidth || frame.Height != canvasHeight))
+        {
+            graph += $";[{videoLabel}]{Letterbox(frame.Width, frame.Height)}[{VideoLabel}fit]";
+            videoLabel = VideoLabel + "fit";
+        }
+
         if (request.PreviewPath is not null)
         {
+            var whole = videoLabel;
             videoLabel = VideoLabel + "out";
-            graph += $";[{VideoLabel}]split=2[{videoLabel}][{PreviewLabel}0];[{PreviewLabel}0]{PreviewFilter}[{PreviewLabel}]";
+            var shown = request.Frame ?? new MediaOutput(canvasWidth, canvasHeight, frameRate);
+            graph += $";[{whole}]split=2[{videoLabel}][{PreviewLabel}0];[{PreviewLabel}0]{PreviewFilterOf(shown)}[{PreviewLabel}]";
         }
 
         arguments.Add("-filter_complex");
@@ -315,7 +394,7 @@ public static class FfmpegCommandBuilder
         // The composed picture is already the size the canvas is, so the encoder is not asked to
         // scale again: -vf here would resize the result of the composition, not its base.
         AppendEncoderArguments(
-            arguments, setting, frameRate, HasAudioMix(items) || silence, channels: silence ? 2 : 0, scaleFilter: null, profile);
+            arguments, setting, frameRate, HasAudioMix(items) || silence, channels: silence || profile is { UniformFormat: true } ? 2 : 0, scaleFilter: null, profile, request.Quality, request.Bitrate, request.AlwaysSound);
 
         // A canvas of devices has no end and neither has the silent track: -shortest only matters
         // for a canvas of files, whose picture ends when its longest file does.
@@ -343,6 +422,10 @@ public static class FfmpegCommandBuilder
 
         return arguments;
     }
+
+    /// <summary>The preview filter of a live that goes out at this size: bounded on its width, or on its height when it stands up.</summary>
+    private static string PreviewFilterOf(MediaOutput output) =>
+        output.Height > output.Width ? PortraitPreviewFilter : PreviewFilter;
 
     /// <summary>
     /// The second output of a live: one JPEG, overwritten a few times a second.
@@ -483,8 +566,11 @@ public static class FfmpegCommandBuilder
     /// One frame of a source as a JPEG on stdout, for the tile the canvas draws before the live
     /// starts. The source is opened exactly the way the live will open it, so a device that cannot
     /// be snapshotted is a device that would not have streamed either.
+    /// <para>An overlay is the exception to the JPEG: it is drawn over the canvas with its clear
+    /// parts clear, and a PNG keeps them where a JPEG would paint them black. Its first frame is the
+    /// one taken, opened with the decoder the live opens it with (<paramref name="overlay"/>).</para>
     /// </summary>
-    public static IReadOnlyList<string> BuildSnapshot(SourceKind kind, string target, int width)
+    public static IReadOnlyList<string> BuildSnapshot(SourceKind kind, string target, int width, OverlayMedia? overlay = null)
     {
         if (!kind.HasPicture())
         {
@@ -495,18 +581,14 @@ public static class FfmpegCommandBuilder
 
         // A file is looked at a second in, past the black frame most videos open on; the pacing
         // -readrate adds for a live would only make the one frame slower.
-        var item = new FfmpegCompositionItem(kind, target, 0, 0, 0, 0, AudioEnabled: false);
+        var item = new FfmpegCompositionItem(
+            kind, target, 0, 0, 0, 0, AudioEnabled: false, Overlay: overlay is null ? null : overlay with { Loop = false });
         AppendInput(arguments, item, kind == SourceKind.File ? TimeSpan.FromSeconds(1) : TimeSpan.Zero, frameRate: 5d, paced: false);
 
-        arguments.AddRange(
-        [
-            "-frames:v", "1",
-            "-vf", string.Create(CultureInfo.InvariantCulture, $"scale={Even(width)}:-2"),
-            "-f", "image2pipe",
-            "-c:v", "mjpeg",
-            "-q:v", "5",
-            "pipe:1"
-        ]);
+        var scale = string.Create(CultureInfo.InvariantCulture, $"scale={Even(width)}:-2");
+        arguments.AddRange(kind.IsOverlay()
+            ? ["-frames:v", "1", "-vf", scale, "-f", "image2pipe", "-c:v", "png", "pipe:1"]
+            : ["-frames:v", "1", "-vf", scale, "-f", "image2pipe", "-c:v", "mjpeg", "-q:v", "5", "pipe:1"]);
 
         return arguments;
     }
@@ -600,6 +682,10 @@ public static class FfmpegCommandBuilder
 
         switch (item.Kind)
         {
+            case SourceKind.Overlay:
+                AppendOverlayInput(arguments, item, paced);
+                break;
+
             case SourceKind.Screen:
                 // gdigrab reads the desktop and the monitors as they are; the frame rate it is told
                 // to read them at is the only thing worth setting, everything else it decides.
@@ -651,6 +737,40 @@ public static class FfmpegCommandBuilder
     }
 
     /// <summary>
+    /// An overlay is never sought into: a live that resumes thirty minutes in shows the same logo
+    /// it started with, and an animation has no position worth keeping. A still is opened as it is,
+    /// once (see <see cref="OverlayMedia"/>); an animation is read again whenever it ends, paced
+    /// like the files when a device keeps the time of the canvas. The decoder, when there is one,
+    /// is an input option: it has to come before the file it applies to.
+    /// </summary>
+    private static void AppendOverlayInput(List<string> arguments, FfmpegCompositionItem item, bool paced)
+    {
+        var media = item.Overlay ?? OverlayMedia.Still;
+        if (media.Loop)
+        {
+            arguments.Add("-stream_loop");
+            arguments.Add("-1");
+        }
+
+        if (media.Decoder is { } decoder)
+        {
+            arguments.Add("-c:v");
+            arguments.Add(decoder);
+        }
+
+        arguments.Add("-thread_queue_size");
+        arguments.Add("512");
+        if (paced && media.Loop)
+        {
+            arguments.Add("-readrate");
+            arguments.Add("1");
+        }
+
+        arguments.Add("-i");
+        arguments.Add(item.Target);
+    }
+
+    /// <summary>
     /// The graph that turns N inputs into one picture. The canvas is a blank frame of the output
     /// size, and every source is scaled into the rectangle it was dropped on and laid over what is
     /// already there, in the order the user stacked them: no source is stretched to be the
@@ -686,9 +806,11 @@ public static class FfmpegCommandBuilder
             }
 
             var label = $"tile{index}";
-            // For layout compositions, respect layout dimensions, scaling to fill and cropping as needed
+            // A source fills its rectangle and is cropped to it; an overlay is stretched to it, with
+            // its alpha (see OverlayTile).
+            var tile = item.Kind.IsOverlay() ? OverlayTile(width, height) : $"{Fit(width, height, true)},setsar=1";
             graph.Append(CultureInfo.InvariantCulture,
-                $"[{index}:v]setpts=PTS-STARTPTS,{Fit(width, height, true)},setsar=1[{label}];");
+                $"[{index}:v]setpts=PTS-STARTPTS,{tile}[{label}];");
             labels[index] = label;
         }
 
@@ -696,10 +818,21 @@ public static class FfmpegCommandBuilder
         foreach (var (item, index) in pictures)
         {
             var next = $"stack{index}";
-            var xExpr = $"{Even(item.X)}+({Even(item.Width)}-w)/2";
-            var yExpr = $"{Even(item.Y)}+({Even(item.Height)}-h)/2";
+
+            // An overlay is scaled to its rectangle exactly, so it is laid at its corner; its
+            // colours were multiplied by its alpha before the scale (see OverlayTile), and the
+            // overlay filter is told so.
+            var placement = item.Kind.IsOverlay()
+                ? string.Create(CultureInfo.InvariantCulture, $"{Even(item.X)}:{Even(item.Y)}:format=auto:alpha=premultiplied")
+                : string.Create(CultureInfo.InvariantCulture, $"{Even(item.X)}+({Even(item.Width)}-w)/2:{Even(item.Y)}+({Even(item.Height)}-h)/2:format=auto");
+
+            if (!string.IsNullOrEmpty(item.TimelineEnable))
+            {
+                placement += $":enable='{item.TimelineEnable}'";
+            }
+
             graph.Append(CultureInfo.InvariantCulture,
-                $"[{composed}][{labels[index]}]overlay={xExpr}:{yExpr}:format=auto[{next}];");
+                $"[{composed}][{labels[index]}]overlay={placement}[{next}];");
             composed = next;
         }
 
@@ -731,7 +864,13 @@ public static class FfmpegCommandBuilder
         var graph = new StringBuilder();
         foreach (var index in contributors)
         {
-            graph.Append(CultureInfo.InvariantCulture, $"[{index}:a]asetpts=PTS-STARTPTS[sound{index}];");
+            // The level of each source is set before the mix, so one loud video can be brought down
+            // to the others without touching them. 100 is the sound as it is and adds no filter.
+            var volume = Math.Max(0, items[index].Volume);
+            var level = volume == 100
+                ? string.Empty
+                : string.Create(CultureInfo.InvariantCulture, $",volume={Number(volume / 100d)}");
+            graph.Append(CultureInfo.InvariantCulture, $"[{index}:a]asetpts=PTS-STARTPTS{level}[sound{index}];");
         }
 
         if (contributors.Count == 1)
@@ -777,7 +916,8 @@ public static class FfmpegCommandBuilder
 
     private static bool CanCarrySound(FfmpegCompositionItem item) => item.Kind switch
     {
-        SourceKind.Screen => false,
+        // An animated overlay may well have a track: it is a picture of the layout, never heard.
+        SourceKind.Screen or SourceKind.Overlay => false,
         SourceKind.Camera => item.Target.Contains("audio=", StringComparison.Ordinal),
         _ => true
     };
@@ -807,6 +947,143 @@ public static class FfmpegCommandBuilder
             return $"scale={width}:{height}:force_original_aspect_ratio=increase:force_divisible_by=2,crop={width}:{height}";
         }
         return $"scale={width}:{height}:force_original_aspect_ratio=decrease:force_divisible_by=2";
+    }
+
+    /// <summary>
+    /// The tile of an overlay: its own picture stretched to the rectangle it was given, the way the
+    /// composer draws it, and its alpha kept for the overlay filter to lay it with.
+    /// <para>The colours are multiplied by the alpha before the scale. A PNG keeps black or white
+    /// in the pixels it leaves transparent, and a scale that mixes straight colours mixes those in
+    /// along every edge: white text shrunk onto a 720p canvas comes out with a grey halo. Multiplied
+    /// first, a transparent pixel weighs nothing in the mix and the edge stays clean.</para>
+    /// </summary>
+    public static string OverlayTile(int width, int height) => string.Create(
+        CultureInfo.InvariantCulture,
+        $"format=yuva420p,premultiply=inplace=1,scale={Even(width)}:{Even(height)},setsar=1");
+
+    /// <summary>
+    /// Where a picture of one size goes on a frame of another, fitted whole: scaled down or up
+    /// until it touches two sides, and centred. Even numbers, because the tiles of a canvas are.
+    /// A picture that does not know its size fills the frame.
+    /// </summary>
+    public static (int X, int Y, int Width, int Height) Contain(int width, int height, int frameWidth, int frameHeight)
+    {
+        var frameW = Even(frameWidth);
+        var frameH = Even(frameHeight);
+        if (width <= 0 || height <= 0)
+        {
+            return (0, 0, frameW, frameH);
+        }
+
+        var scale = Math.Min((double)frameW / width, (double)frameH / height);
+        var w = Math.Clamp(Even((int)Math.Round(width * scale)), 2, frameW);
+        var h = Math.Clamp(Even((int)Math.Round(height * scale)), 2, frameH);
+        return (Even((frameW - w) / 2), Even((frameH - h) / 2), w, h);
+    }
+
+    /// <summary>
+    /// Computes where an overlay (GIF, picture, video) sits on a canvas given a placement preset or custom coordinates.
+    /// </summary>
+    public static (int X, int Y, int Width, int Height) CalculateOverlayPlacement(
+        string? placement,
+        int? customX,
+        int? customY,
+        int? customWidth,
+        int? customHeight,
+        int canvasWidth,
+        int canvasHeight,
+        int mediaWidth,
+        int mediaHeight)
+    {
+        var cw = Even(canvasWidth);
+        var ch = Even(canvasHeight);
+        if (cw <= 0) cw = 1920;
+        if (ch <= 0) ch = 1080;
+
+        var mode = placement?.Trim().ToLowerInvariant() ?? "bottom-right";
+        if (mode == "fullscreen")
+        {
+            return Contain(mediaWidth, mediaHeight, cw, ch);
+        }
+
+        if (mode == "custom" && customWidth is > 0 && customHeight is > 0)
+        {
+            var w = Math.Clamp(Even(customWidth.Value), 2, cw);
+            var h = Math.Clamp(Even(customHeight.Value), 2, ch);
+            var x = Math.Clamp(Even(customX ?? (cw - w)), 0, Math.Max(0, cw - w));
+            var y = Math.Clamp(Even(customY ?? (ch - h)), 0, Math.Max(0, ch - h));
+            return (x, y, w, h);
+        }
+
+        var targetW = customWidth is > 0 ? customWidth.Value : Math.Max(120, (int)Math.Round(cw * 0.28));
+        int targetH;
+        if (customHeight is > 0)
+        {
+            targetH = customHeight.Value;
+        }
+        else if (mediaWidth > 0 && mediaHeight > 0)
+        {
+            var aspect = (double)mediaWidth / mediaHeight;
+            targetH = (int)Math.Round(targetW / aspect);
+            var maxH = (int)Math.Round(ch * 0.40);
+            if (targetH > maxH)
+            {
+                targetH = maxH;
+                targetW = (int)Math.Round(targetH * aspect);
+            }
+        }
+        else
+        {
+            targetH = (int)Math.Round(targetW * 9.0 / 16.0);
+        }
+
+        var overlayW = Math.Clamp(Even(targetW), 2, cw);
+        var overlayH = Math.Clamp(Even(targetH), 2, ch);
+        var margin = Even(Math.Max(16, (int)Math.Round(cw * 0.025)));
+
+        var (posX, posY) = mode switch
+        {
+            "bottom-left" => (margin, ch - overlayH - margin),
+            "top-right" => (cw - overlayW - margin, margin),
+            "top-left" => (margin, margin),
+            "center" => ((cw - overlayW) / 2, (ch - overlayH) / 2),
+            _ => (cw - overlayW - margin, ch - overlayH - margin)
+        };
+
+        var finalX = Math.Clamp(Even(posX), 0, Math.Max(0, cw - overlayW));
+        var finalY = Math.Clamp(Even(posY), 0, Math.Max(0, ch - overlayH));
+        return (finalX, finalY, overlayW, overlayH);
+    }
+
+    /// <summary>
+    /// A picture of any size, fitted whole into a frame of another one: scaled down or up until it
+    /// touches two sides, centred, and the rest of the frame black. Square pixels, so a player
+    /// does not stretch it back.
+    /// </summary>
+    public static string Letterbox(int width, int height)
+    {
+        var w = Even(width);
+        var h = Even(height);
+        return string.Create(
+            CultureInfo.InvariantCulture,
+            $"scale={w}:{h}:force_original_aspect_ratio=decrease:force_divisible_by=2,pad={w}:{h}:(ow-iw)/2:(oh-ih)/2:color=black,setsar=1");
+    }
+
+    /// <summary>
+    /// The picture a live on a shared connection keeps from its first file on: the resolution of
+    /// the setting when it names one, otherwise the file's own when it is a landscape picture of
+    /// at least 720p. A short in portrait or a small clip that happens to come first would
+    /// otherwise make every video after it that small, so those start the live at 1080p instead.
+    /// </summary>
+    public static MediaOutput FrameOfLive(VideoSettingEntity setting, MediaOutput first)
+    {
+        ArgumentNullException.ThrowIfNull(setting);
+        ArgumentNullException.ThrowIfNull(first);
+
+        var named = setting.VideoWidth is > 0 && setting.VideoHeight is > 0;
+        return named || (first.Width >= first.Height && first.Width >= 1280)
+            ? new MediaOutput(Even(first.Width), Even(first.Height), first.FrameRate)
+            : new MediaOutput(1920, 1080, first.FrameRate);
     }
 
     /// <summary>
@@ -875,7 +1152,10 @@ public static class FfmpegCommandBuilder
         bool hasAudio,
         int channels,
         string? scaleFilter,
-        StreamPlatformProfile? profile = null)
+        StreamPlatformProfile? profile = null,
+        EncoderQuality? quality = null,
+        int? bitrate = null,
+        bool alwaysSound = false)
     {
         // The relay reads FLV whatever the setting names: it is the container of RTMP, and the
         // only one whose tags carry the timestamp the pacer needs.
@@ -904,16 +1184,28 @@ public static class FfmpegCommandBuilder
             arguments.Add(scaleFilter);
         }
 
-        if (setting.VideoBitrate is > 0)
+        // The bitrate the network was measured to carry, when it carries less than the setting.
+        var videoBitrate = bitrate is > 0 ? bitrate : setting.VideoBitrate;
+        if (videoBitrate is > 0)
         {
-            var bitrate = setting.VideoBitrate.Value.ToString(CultureInfo.InvariantCulture);
+            var rate = videoBitrate.Value.ToString(CultureInfo.InvariantCulture);
             arguments.Add("-b:v");
-            arguments.Add(bitrate);
-            // Constrain rate for CBR-like streaming: maxrate = bitrate, bufsize = 2x bitrate
+            arguments.Add(rate);
+            // Constrain rate for CBR-like streaming: maxrate = bitrate, and a rate control window
+            // (bufsize) of one second for a platform, two for a custom ingest.
             arguments.Add("-maxrate");
-            arguments.Add(bitrate);
+            arguments.Add(rate);
+            if (profile is { ConstantBitrate: true })
+            {
+                // The floor as well as the ceiling: with the filler below, the rate the ingest
+                // measures is the rate of the setting whatever the picture is.
+                arguments.Add("-minrate");
+                arguments.Add(rate);
+            }
+
+            var window = profile is { RateBuffer.Ticks: > 0 } ? profile.RateBuffer.TotalSeconds : DefaultRateBufferSeconds;
             arguments.Add("-bufsize");
-            arguments.Add((setting.VideoBitrate.Value * 2).ToString(CultureInfo.InvariantCulture));
+            arguments.Add(((long)(videoBitrate.Value * window)).ToString(CultureInfo.InvariantCulture));
         }
 
         // Constant frame rate output for stable streaming. -fps_mode is the name -vsync has had
@@ -941,6 +1233,15 @@ public static class FfmpegCommandBuilder
 
         // x264-specific low-CPU options (applied when user hasn't overridden via VideoSettingsOptions)
         var isLibX264 = codecName.Equals("libx264", StringComparison.OrdinalIgnoreCase);
+
+        // What the platform needs of x264 whatever the setting says, unlike the defaults above it:
+        // true CBR, the way OBS sends to YouTube - the HRD signalled as constant and the gaps
+        // filled, so a still picture still arrives at the bitrate of the setting. An x264-params
+        // of the setting gets these merged into it rather than replacing them: the YouTube defaults
+        // used to carry one, and with it the live went out capped instead of constant.
+        var required = isLibX264 && profile is { ConstantBitrate: true } && videoBitrate is > 0
+            ? new List<string> { "nal-hrd=cbr", "force-cfr=1" }
+            : [];
         var hasPreset = setting.VideoSettingsOptions.Any(o => o.Key?.Trim() == "preset");
         var hasTune = setting.VideoSettingsOptions.Any(o => o.Key?.Trim() == "tune");
         var hasProfile = setting.VideoSettingsOptions.Any(o => o.Key?.Trim() == "profile");
@@ -951,32 +1252,43 @@ public static class FfmpegCommandBuilder
         // A canvas of two or more pictures turns it back on for itself (VideoSettingLatency).
         var fastEncoder = VideoSettingLatency.IsOn(setting);
         
+        // The level of the setting, spelled the way this encoder spells it. A preset typed into the
+        // options by hand is more specific than a level, so it wins.
+        var level = quality ?? Concrete(VideoSettingQuality.Of(setting));
+        if (!hasPreset)
+        {
+            arguments.AddRange(PresetArguments(codecName, level));
+        }
+
         if (isLibX264)
         {
-            if (!hasPreset)
-            {
-                arguments.Add("-preset");
-                arguments.Add("ultrafast");
-            }
             if (!hasTune && fastEncoder)
             {
                 arguments.Add("-tune");
                 arguments.Add("zerolatency");
             }
+            // High is what every platform takes, and its 8x8 transform is detail main cannot keep
+            // at the same bitrate.
             if (!hasProfile)
             {
                 arguments.Add("-profile:v");
-                arguments.Add("main");
+                arguments.Add("high");
             }
             // Reduce CPU further: disable scenecut and lookahead. The lookahead is what makes the
             // encoder able to see a forced keyframe coming, so without it the rate control buffer
             // fills on the keyframe and the frames after it have nothing left to spend: that is a
             // stall of the encoder, which the ingest reads as the live going quiet.
             var hasX264Params = setting.VideoSettingsOptions.Any(o => o.Key?.Trim() == "x264-params");
-            if (!hasX264Params && fastEncoder)
+            var x264Params = new List<string>();
+            if (fastEncoder)
+            {
+                x264Params.Add("scenecut=0:rc_lookahead=0");
+            }
+
+            if (!hasX264Params && (x264Params.Count > 0 || required.Count > 0))
             {
                 arguments.Add("-x264-params");
-                arguments.Add("scenecut=0:rc_lookahead=0");
+                arguments.Add(string.Join(':', x264Params.Concat(required)));
             }
         }
 
@@ -991,11 +1303,6 @@ public static class FfmpegCommandBuilder
             var hasRc = setting.VideoSettingsOptions.Any(o => o.Key?.Trim() == "rc");
             var hasCq = setting.VideoSettingsOptions.Any(o => o.Key?.Trim() == "cq");
 
-            if (!hasPreset)
-            {
-                arguments.Add("-preset");
-                arguments.Add(isNvenc ? "p1" : "veryfast");  // NVENC: p1=fastest, QSV/AMF: veryfast
-            }
             if (!hasTune && isNvenc && fastEncoder)
             {
                 arguments.Add("-tune");
@@ -1011,6 +1318,14 @@ public static class FfmpegCommandBuilder
                 arguments.Add("-cq");
                 arguments.Add("23");   // Quality level for CQP modes
             }
+            // AMF pads a constant rate only when it is asked to; NVENC and QSV already hold it.
+            if (isAmf && profile is { ConstantBitrate: true }
+                && !setting.VideoSettingsOptions.Any(o => o.Key?.Trim() == "filler_data"))
+            {
+                arguments.Add("-filler_data");
+                arguments.Add("1");
+            }
+
             // NVENC: zero latency mode
             if (isNvenc && fastEncoder)
             {
@@ -1030,10 +1345,21 @@ public static class FfmpegCommandBuilder
                 continue;
             }
 
-            arguments.Add($"-{option.Key!.Trim()}");
+            var key = option.Key!.Trim();
+
+            // A decision of this application, read above: ffmpeg has no such option and would stop
+            // on it before the first frame.
+            if (VideoSettingQuality.InternalKeys.Contains(key))
+            {
+                continue;
+            }
+
+            arguments.Add($"-{key}");
             if (option.Value is not null)
             {
-                arguments.Add(option.Value);
+                arguments.Add(isLibX264 && key == "preset" ? CleanPreset(option.Value)
+                    : key == "x264-params" && required.Count > 0 ? MergeX264Params(option.Value, required)
+                    : option.Value);
             }
         }
 
@@ -1042,10 +1368,11 @@ public static class FfmpegCommandBuilder
             return;
         }
 
-        // A platform that requires sound gets AAC even from a setting that names no audio: a
-        // track that is mapped and not encoded is a command ffmpeg refuses.
+        // A platform that requires sound gets AAC even from a setting that names no audio, and so
+        // does a pass that always carries one: a track that is mapped and not encoded is a command
+        // ffmpeg refuses.
         var audio = setting.AudioSetting;
-        if (audio is null && profile is not { RequiresAudio: true })
+        if (audio is null && profile is not { RequiresAudio: true } && !alwaysSound)
         {
             return;
         }
@@ -1069,6 +1396,113 @@ public static class FfmpegCommandBuilder
             arguments.Add(channels.ToString(CultureInfo.InvariantCulture));
         }
     }
+
+    /// <summary>
+    /// The preset of every level for the encoders that have one, and nothing for the others.
+    /// <para>x264: superfast is the lightest preset that keeps the deblocking filter and adaptive
+    /// quantisation (ultrafast drops both, which is the mosaic on screen); veryfast is what the
+    /// streaming tools default to; faster is the step up for a CPU with room to spare.</para>
+    /// <para>NVENC, QSV and AMF encode on a block of the GPU made for it: a higher level costs that
+    /// block time per frame, not CPU, so it is only worth it on a GPU that still keeps up with it,
+    /// which is what <see cref="EncoderQuality.Auto"/> measures.</para>
+    /// </summary>
+    public static IReadOnlyList<string> PresetArguments(string codecName, EncoderQuality quality)
+    {
+        var level = Concrete(quality);
+        var name = codecName.Trim().ToLowerInvariant();
+        string? preset = name switch
+        {
+            "libx264" or "libx265" => level switch
+            {
+                EncoderQuality.Light => "superfast",
+                EncoderQuality.High => "faster",
+                _ => "veryfast"
+            },
+            _ when name.EndsWith("_nvenc", StringComparison.Ordinal) => level switch
+            {
+                EncoderQuality.Light => "p1",
+                EncoderQuality.High => "p6",
+                _ => "p4"
+            },
+            _ when name.EndsWith("_qsv", StringComparison.Ordinal) => level switch
+            {
+                EncoderQuality.Light => "veryfast",
+                EncoderQuality.High => "slower",
+                _ => "medium"
+            },
+            _ => null
+        };
+
+        if (preset is not null)
+        {
+            return ["-preset", preset];
+        }
+
+        // AMF names its levels quality, and calls them speed, balanced and quality.
+        if (name.EndsWith("_amf", StringComparison.Ordinal))
+        {
+            return ["-quality", level switch
+            {
+                EncoderQuality.Light => "speed",
+                EncoderQuality.High => "quality",
+                _ => "balanced"
+            }];
+        }
+
+        return [];
+    }
+
+    /// <summary>
+    /// The x264-params of a setting with the ones the platform requires added after it: a key the
+    /// setting names itself keeps the value the setting gave it.
+    /// </summary>
+    internal static string MergeX264Params(string value, IReadOnlyCollection<string> required)
+    {
+        var entries = value.Split(':', StringSplitOptions.RemoveEmptyEntries | StringSplitOptions.TrimEntries).ToList();
+        var named = entries.Select(KeyOf).ToHashSet(StringComparer.OrdinalIgnoreCase);
+        entries.AddRange(required.Where(entry => !named.Contains(KeyOf(entry))));
+        return string.Join(':', entries);
+
+        // x264 reads rc_lookahead and rc-lookahead as the same option.
+        static string KeyOf(string entry) => entry.Split('=', 2)[0].Trim().Replace('_', '-');
+    }
+
+    /// <summary>A level that is still automatic once nothing measured it is the balanced one.</summary>
+    private static EncoderQuality Concrete(EncoderQuality quality) =>
+        quality == EncoderQuality.Auto ? EncoderQuality.Balanced : quality;
+
+    /// <summary>
+    /// A few seconds of a synthetic picture at the size and rate of the live, encoded into nothing
+    /// with the encoder and the level being considered: how long it takes, against how long it
+    /// lasts, is how much headroom this machine has at that level. The picture moves and is full
+    /// of detail, so it costs the encoder what a real one does.
+    /// </summary>
+    public static IReadOnlyList<string> BuildEncoderTrial(
+        string codecName, EncoderQuality quality, int width, int height, double frameRate, int bitrate, TimeSpan duration)
+    {
+        List<string> arguments =
+        [
+            "-hide_banner", "-nostdin", "-loglevel", "error",
+            "-f", "lavfi",
+            "-i", string.Create(CultureInfo.InvariantCulture, $"testsrc2=size={Even(width)}x{Even(height)}:rate={Number(frameRate)}"),
+            "-t", Seconds(duration),
+            "-threads", Math.Max(1, Environment.ProcessorCount / 2).ToString(CultureInfo.InvariantCulture),
+            "-c:v", codecName,
+            "-pix_fmt", "yuv420p"
+        ];
+        arguments.AddRange(PresetArguments(codecName, quality));
+        arguments.AddRange(["-b:v", bitrate.ToString(CultureInfo.InvariantCulture), "-f", "null", "-"]);
+        return arguments;
+    }
+
+    /// <summary>
+    /// ultrafast is the one x264 preset that turns the deblocking filter and adaptive quantisation
+    /// off, and those two are what keep a frame from breaking into blocks: at a streaming bitrate
+    /// it is the mosaic a viewer sees on every movement. superfast keeps both for very little more
+    /// CPU, so a setting that asks for the lightest encode gets the lightest clean one.
+    /// </summary>
+    internal static string CleanPreset(string preset) =>
+        preset.Trim().Equals("ultrafast", StringComparison.OrdinalIgnoreCase) ? "superfast" : preset;
 
     /// <summary>
     /// Where the encoded stream goes: the ingest itself, or, with a relay, the standard output in
@@ -1103,7 +1537,7 @@ public static class FfmpegCommandBuilder
         ArgumentNullException.ThrowIfNull(outputUrl);
         ArgumentNullException.ThrowIfNull(profile);
 
-        return
+        List<string> arguments =
         [
             "-hide_banner",
             "-nostdin",
@@ -1121,7 +1555,23 @@ public static class FfmpegCommandBuilder
             "-probesize",
             "65536",
             "-analyzeduration",
-            "500000",
+            "500000"
+        ];
+
+        // A sender that keeps the time itself (YouTube) reads the relay at the rate the stream
+        // plays at, and the preroll at once: the ingest has that much in hand before the first
+        // frame is due, exactly the head start the relay gives when it is the one pacing.
+        if (profile.Pacing == RelayPacing.Sender)
+        {
+            arguments.AddRange(["-readrate", "1"]);
+            if (profile.Preroll > TimeSpan.Zero)
+            {
+                arguments.AddRange(["-readrate_initial_burst", Seconds(profile.Preroll)]);
+            }
+        }
+
+        arguments.AddRange(
+        [
             "-f",
             "flv",
             "-i",
@@ -1135,33 +1585,41 @@ public static class FfmpegCommandBuilder
             "-flvflags",
             "no_duration_filesize",
 
+            // Every tag leaves the moment it is read, as the relay hands them over. Left to its
+            // buffer, ffmpeg sends a 32 KB block at a time: the audio of a live goes out in lumps
+            // tens of milliseconds apart however evenly -readrate reads it.
+            "-flush_packets",
+            "1",
+
             // A connection that hangs - an ingest that never answers, a network that stopped
             // taking data - fails after this long instead of looking like a live for ever.
             "-rw_timeout",
             ((long)profile.ConnectTimeout.TotalMilliseconds * 1000).ToString(CultureInfo.InvariantCulture),
             outputUrl
-        ];
+        ]);
+
+        return arguments;
     }
 
-    /// <summary>Whether the platform needs a sound the source does not have.</summary>
-    private static bool NeedsSilence(StreamPlatformProfile? profile, bool hasAudio) =>
-        profile is { RequiresAudio: true } && !hasAudio;
+    /// <summary>Whether the platform, or the pass itself, needs a sound the source does not have.</summary>
+    private static bool NeedsSilence(StreamPlatformProfile? profile, bool hasAudio, bool always) =>
+        (always || profile is { RequiresAudio: true }) && !hasAudio;
 
     /// <summary>
     /// A silent stereo track at the rate of the platform. YouTube keeps a live with no audio
     /// stream off air - the connection is accepted, the broadcast never starts - and silence is
-    /// the cheapest audio there is.
+    /// the cheapest audio there is. Without a platform to ask, 48 kHz is what every one of them takes.
     /// </summary>
-    private static void AppendSilenceInput(List<string> arguments, StreamPlatformProfile profile)
+    private static void AppendSilenceInput(List<string> arguments, StreamPlatformProfile? profile)
     {
         arguments.Add("-f");
         arguments.Add("lavfi");
         arguments.Add("-i");
         arguments.Add(string.Create(
-            CultureInfo.InvariantCulture, $"anullsrc=channel_layout=stereo:sample_rate={profile.AudioSampleRate}"));
+            CultureInfo.InvariantCulture, $"anullsrc=channel_layout=stereo:sample_rate={profile?.AudioSampleRate ?? 48_000}"));
     }
 
-    private static int Even(int value) => value - (value % 2);
+    internal static int Even(int value) => value - (value % 2);
 
     private static string Number(double value) => value.ToString("0.######", CultureInfo.InvariantCulture);
 

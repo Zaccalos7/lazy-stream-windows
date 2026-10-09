@@ -45,6 +45,7 @@ public static class OrbisEndpoints
         MapTaskManager(app);
         MapPreview(app);
         MapScene(app);
+        MapSceneButtons(app);
         MapUpdates(app);
         return app;
     }
@@ -76,6 +77,8 @@ public static class OrbisEndpoints
                 statusCode: response.StatusCode);
         });
         group.MapDelete("/{pkid:long}", (long pkid, SceneService service) => AsResult(service.Delete(pkid)));
+
+        MapOverlays(group);
 
         app.MapGet("/preview/sources", (SourceCatalogService service) => Results.Ok(service.List()));
 
@@ -144,6 +147,67 @@ public static class OrbisEndpoints
         });
     }
 
+    /// <summary>
+    /// The overlay library of the layouts (see <see cref="OverlayLibrary"/>). The pictures come in
+    /// as uploads and go out by their name in the library, never by a path: these routes cannot
+    /// reach a file the user did not put there.
+    /// </summary>
+    private static void MapOverlays(RouteGroupBuilder group)
+    {
+        group.MapGet("/overlays", (OverlayLibrary library) => Results.Ok(library.List()));
+
+        group.MapPost("/overlays", async (
+            HttpRequest request,
+            OverlayLibrary library,
+            RequestValidator validator,
+            CancellationToken cancellationToken) =>
+        {
+            // Kestrel stops a body at 30 MB unless told otherwise, and an animated overlay can be
+            // bigger. The form around the file is a few hundred bytes more than the file itself.
+            if (request.HttpContext.Features.Get<Microsoft.AspNetCore.Http.Features.IHttpMaxRequestBodySizeFeature>() is { IsReadOnly: false } limit)
+            {
+                limit.MaxRequestBodySize = OverlayLibrary.MaxBytes + 1024 * 1024;
+            }
+
+            if (!request.HasFormContentType)
+            {
+                validator.RequireOverlay(null);
+            }
+
+            var form = await request.ReadFormAsync(cancellationToken).ConfigureAwait(false);
+            var file = form.Files["file"];
+            validator.RequireOverlay(file);
+
+            await using var content = file!.OpenReadStream();
+            var entry = await library.AddAsync(file.FileName, content, cancellationToken).ConfigureAwait(false);
+            return Results.Json(entry, statusCode: StatusCodes.Status201Created);
+        });
+
+        // The name of a file of the library is its content, so a name always answers with the same
+        // picture: the browser keeps it, and a layout opened again does not download it again.
+        group.MapGet("/overlays/{name}", (string name, HttpContext context, OverlayLibrary library) =>
+        {
+            if (library.Find(name) is not { } file)
+            {
+                return Results.NotFound();
+            }
+
+            context.Response.Headers.CacheControl = "public, max-age=31536000, immutable";
+            return Results.File(file.Path, file.ContentType, enableRangeProcessing: true);
+        });
+
+        group.MapGet("/overlays/{name}/still", async (
+            string name,
+            OverlayLibrary library,
+            CancellationToken cancellationToken) =>
+        {
+            var still = await library.StillAsync(name, cancellationToken).ConfigureAwait(false);
+            return still is null ? Results.NoContent() : Results.File(still, "image/png");
+        });
+
+        group.MapDelete("/overlays/{name}", (string name, OverlayLibrary library) => AsResult(library.Delete(name)));
+    }
+
     private static void MapLive(IEndpointRouteBuilder app)
     {
         var group = app.MapGroup("/live");
@@ -184,6 +248,68 @@ public static class OrbisEndpoints
             service.StopVideoStreamingByPkid(videoLivePkid);
             localizer.PrintMessage("live.stopped");
             return AsResult(responses.Build("live.stopped", StatusCodes.Status200OK));
+        });
+
+        // The scene deck of a running live: what is on air in place of its program, a button to put
+        // on air now, and the way back to the program. Any row of the live answers for all of it.
+        group.MapGet("/{pkid:int}/scene", (int pkid, StreamingService service) => Results.Ok(service.SceneStateOf(pkid)));
+
+        group.MapPost("/{pkid:int}/scene/resume", (int pkid, StreamingService service) => AsResult(service.ResumeProgram(pkid)));
+
+        group.MapPost("/{pkid:int}/scene/{button:long}", (int pkid, long button, StreamingService service) =>
+            AsResult(service.PlaySceneButton(pkid, button)));
+    }
+
+    /// <summary>
+    /// The buttons of the scene deck and the files they carry (see <see cref="SceneButtonService"/>).
+    /// A file comes in as the body of the request, the way the browser hands it over, and goes out
+    /// as a frame of it, by its name in the folder: never by a path.
+    /// </summary>
+    private static void MapSceneButtons(IEndpointRouteBuilder app)
+    {
+        var group = app.MapGroup("/scene-buttons");
+
+        group.MapGet("", (SceneButtonService service) => Results.Ok(service.List()));
+
+        group.MapPost("", (SceneButtonRequest? request, SceneButtonService service) =>
+            Results.Json(service.Create(request), statusCode: StatusCodes.Status201Created));
+
+        group.MapPut("/{pkid:long}", (long pkid, SceneButtonRequest? request, SceneButtonService service) =>
+            Results.Ok(service.Update(pkid, request)));
+
+        group.MapDelete("/{pkid:long}", (long pkid, SceneButtonService service) => AsResult(service.Delete(pkid)));
+
+        // The file is the whole body, and its name is in the query: a clip is too big for a form
+        // to be worth its parsing, and Kestrel would stop it at 30 MB unless told otherwise.
+        group.MapPost("/media", async (
+            HttpRequest request,
+            string? name,
+            SceneButtonService service,
+            CancellationToken cancellationToken) =>
+        {
+            if (request.HttpContext.Features.Get<Microsoft.AspNetCore.Http.Features.IHttpMaxRequestBodySizeFeature>() is { IsReadOnly: false } limit)
+            {
+                limit.MaxRequestBodySize = SceneButtonService.MaxBytes + 1024 * 1024;
+            }
+
+            var media = await service.AddMediaAsync(name, request.Body, cancellationToken).ConfigureAwait(false);
+            return Results.Json(media, statusCode: StatusCodes.Status201Created);
+        });
+
+        // The name of a file is its content, so a frame of it is the same frame for ever.
+        group.MapGet("/media/{name}/still", async (
+            string name,
+            HttpContext context,
+            SceneButtonService service,
+            CancellationToken cancellationToken) =>
+        {
+            if (await service.StillAsync(name, cancellationToken).ConfigureAwait(false) is not { } still)
+            {
+                return Results.NoContent();
+            }
+
+            context.Response.Headers.CacheControl = "public, max-age=31536000, immutable";
+            return Results.File(still.Bytes, still.ContentType);
         });
     }
 
@@ -340,6 +466,19 @@ public static class OrbisEndpoints
             return Results.Ok(new { embed = found.Embed, reason = found.Reason });
         });
 
+        // The user closed the YouTube warning of a live: it stays closed until the live is found on
+        // air. The live is its history, so the warning is closed for every video of it at once.
+        group.MapPost("/live/{pkid:int}/air/dismiss", (int pkid, VideoRepository videos, YouTubeAirWatch air) =>
+        {
+            if (videos.FindByPkid(pkid)?.VideoLiveHistoryId is not { } history)
+            {
+                return Results.NotFound();
+            }
+
+            air.Dismiss(history);
+            return Results.NoContent();
+        });
+
         group.MapGet("/live/{pkid:int}/video", (int pkid, LivePreviewService service) =>
         {
             var file = service.FileOf(pkid);
@@ -402,6 +541,17 @@ public static class OrbisEndpoints
         {
             validator.RequireLiveParameters(request);
             return AsResult(service.ApplyParameters(pkid, request!));
+        });
+
+        // The level of one source of a canvas in the mix of the live.
+        group.MapPut("/live/{pkid:int}/volume", (
+            int pkid,
+            LiveVolumeRequest? request,
+            LivePreviewService service,
+            RequestValidator validator) =>
+        {
+            validator.RequireLiveVolume(request);
+            return AsResult(service.ApplyVolume(pkid, request!));
         });
     }
 

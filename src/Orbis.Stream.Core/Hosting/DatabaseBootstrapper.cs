@@ -77,6 +77,157 @@ public sealed class DatabaseBootstrapper : IHostedService
         InitializeDefaultVideoSetting("Twitch", createHighQuality: false);
         InitializeDefaultVideoSetting("Youtube", createHighQuality: true);
         InitializeDefaultVideoSetting("Youtube", createHighQuality: false);
+        InitializeDefaultVideoSetting("Kick", createHighQuality: true);
+        InitializeDefaultVideoSetting("Kick", createHighQuality: false);
+        InitializeDefaultVideoSetting("Facebook Gaming", createHighQuality: true);
+        InitializeDefaultVideoSetting("Facebook Gaming", createHighQuality: false);
+        InitializeDefaultVideoSetting("TikTok", createHighQuality: true);
+        InitializeDefaultVideoSetting("TikTok", createHighQuality: false);
+        UpgradeLegacyYouTubeDefaults();
+    }
+
+    /// <summary>What a default setting is made of: everything the seed decides, per platform and level.</summary>
+    private sealed record DefaultSpec(
+        int Bitrate,
+        int AudioBitrate,
+        int? Width,
+        int? Height,
+        double? FrameRate,
+        (string Key, string Value)[] Options);
+
+    /// <summary>
+    /// YouTube, the setting it goes on air with. A fixed 1080p30 at a constant 6 Mbps: YouTube
+    /// judges a live against the resolution and the rate it announces, and "the size of the
+    /// source" made the live whatever the first file was - a 360p clip, and YouTube asked for
+    /// 400 Kbps and reported the 6 Mbps it got as not enough video. No x264-params of its own:
+    /// they used to replace the CBR parameters the YouTube profile adds to x264.
+    /// </summary>
+    private static readonly DefaultSpec YouTubeHigh = new(
+        6_000_000, 128_000, 1920, 1080, 30,
+        [("preset", "veryfast"), ("profile", "high")]);
+
+    /// <summary>YouTube on a light machine: 720p30 at 3 Mbps, the range YouTube gives that size.</summary>
+    private static readonly DefaultSpec YouTubeLow = new(
+        3_000_000, 128_000, 1280, 720, 30,
+        [("preset", "superfast"), ("profile", "main"), ("x264-params", "scenecut=0:rc_lookahead=0")]);
+
+    /// <summary>
+    /// Kick: a fixed 1080p30 at 6 Mbps, under the 8 Mbps its IVS ingest takes with the headroom a
+    /// home uplink needs, and the 160 Kbps of sound Kick asks for. The size is named because the
+    /// whole live keeps one format there (StreamPlatformProfile.Kick), like on YouTube, and the
+    /// first file of a playlist is no reason for all of it to go out small.
+    /// </summary>
+    private static readonly DefaultSpec KickHigh = new(
+        6_000_000, 160_000, 1920, 1080, 30,
+        [("preset", "veryfast"), ("profile", "high")]);
+
+    /// <summary>Kick on a light machine: 720p30 at 3 Mbps.</summary>
+    private static readonly DefaultSpec KickLow = new(
+        3_000_000, 128_000, 1280, 720, 30,
+        [("preset", "superfast"), ("profile", "main"), ("x264-params", "scenecut=0:rc_lookahead=0")]);
+
+    /// <summary>
+    /// Facebook Gaming: a fixed 1080p30 at 4.5 Mbps, the middle of the 3 to 6 Mbps Facebook takes
+    /// for that size and rate - its ingest keeps the settings of a broadcast from changing halfway
+    /// and checks them against what it announced, so the size is named - with the 128 Kbps of
+    /// sound it asks for, and the main profile OBS sends it.
+    /// </summary>
+    private static readonly DefaultSpec FacebookGamingHigh = new(
+        4_500_000, 128_000, 1920, 1080, 30,
+        [("preset", "veryfast"), ("profile", "main")]);
+
+    /// <summary>Facebook Gaming on a light machine: 720p30 at 3 Mbps, under the 4 Mbps of that size.</summary>
+    private static readonly DefaultSpec FacebookGamingLow = new(
+        3_000_000, 128_000, 1280, 720, 30,
+        [("preset", "superfast"), ("profile", "main"), ("x264-params", "scenecut=0:rc_lookahead=0")]);
+
+    /// <summary>
+    /// TikTok LIVE: 1080x1920, standing up, at 30 fps and 4.5 Mbps - the middle of what TikTok is
+    /// known to take for that size, which it transcodes for phones anyway, so more is upload spent
+    /// for nothing. A landscape file is fitted into the frame (StreamPlatformProfile.Portrait).
+    /// </summary>
+    private static readonly DefaultSpec TikTokHigh = new(
+        4_500_000, 128_000, 1080, 1920, 30,
+        [("preset", "veryfast"), ("profile", "high")]);
+
+    /// <summary>TikTok on a light machine: 720x1280 at 30 fps and 2.5 Mbps.</summary>
+    private static readonly DefaultSpec TikTokLow = new(
+        2_500_000, 128_000, 720, 1280, 30,
+        [("preset", "superfast"), ("profile", "main"), ("x264-params", "scenecut=0:rc_lookahead=0")]);
+
+    private static DefaultSpec SpecOf(string platform, bool highQuality) => (platform, highQuality) switch
+    {
+        ("Twitch", true) => new(6_000_000, 160_000, null, null, null,
+            [("preset", "veryfast"), ("tune", "zerolatency"), ("profile", "high"), ("x264-params", "rc_lookahead=20")]),
+        ("Youtube", true) => YouTubeHigh,
+        ("Kick", true) => KickHigh,
+        ("Facebook Gaming", true) => FacebookGamingHigh,
+        ("TikTok", true) => TikTokHigh,
+        (_, true) => new(5_000_000, 128_000, null, null, null,
+            [("preset", "veryfast"), ("tune", "zerolatency")]),
+
+        // Low CPU defaults - aggressive bitrate reduction for low-end hardware
+        ("Twitch", false) => new(3_000_000, 96_000, 1280, 720, 30,
+            [("preset", "ultrafast"), ("tune", "zerolatency"), ("profile", "main"), ("x264-params", "scenecut=0:rc_lookahead=0")]),
+        ("Youtube", false) => YouTubeLow,
+        ("Kick", false) => KickLow,
+        ("Facebook Gaming", false) => FacebookGamingLow,
+        ("TikTok", false) => TikTokLow,
+        _ => new(2_000_000, 64_000, 1280, 720, 30,
+            [("preset", "ultrafast"), ("tune", "zerolatency")])
+    };
+
+    /// <summary>
+    /// The YouTube defaults the earlier versions seeded - source resolution at 8 Mbps, 720p at
+    /// 2.5 Mbps with 96 Kbps of sound - are brought to the current ones. They are recognised by
+    /// their numbers and not by their options: EncoderTuningService rewrites the options of the
+    /// defaults at every start. A row with other numbers is one the user edited, and stays theirs.
+    /// </summary>
+    private void UpgradeLegacyYouTubeDefaults()
+    {
+        foreach (var setting in _videoSettingRepository.FindByIsDefaultConfigurationTrueAndDefaultPlatformConfiguration("Youtube"))
+        {
+            if (setting is { VideoWidth: null, VideoHeight: null, FrameRate: null, VideoBitrate: 8_000_000 })
+            {
+                Apply(setting, YouTubeHigh);
+            }
+        }
+
+        if (_videoSettingRepository.FindByTitleAndPlatform(LowTitleOf("Youtube"), "Youtube") is
+            { VideoWidth: 1280, VideoHeight: 720, VideoBitrate: 2_500_000, AudioSetting.AudioBitrate: 96_000 } low)
+        {
+            Apply(low, YouTubeLow);
+        }
+
+        void Apply(VideoSettingEntity setting, DefaultSpec spec)
+        {
+            Fill(setting, spec);
+            setting.LastModified = DateTime.Now;
+            _videoSettingRepository.Update(setting);
+            _logger.LogInformation("Default VideoSetting {Title} moved to the current YouTube settings", setting.Title);
+        }
+    }
+
+    /// <summary>Writes what the seed decides onto a setting, new or already there.</summary>
+    private static void Fill(VideoSettingEntity setting, DefaultSpec spec)
+    {
+        setting.VideoCodec = 27;
+        setting.VideoCodecName = "libx264";
+        setting.PixelFormat = 0;
+        setting.VideoBitrate = spec.Bitrate;
+        setting.VideoWidth = spec.Width;
+        setting.VideoHeight = spec.Height;
+        setting.FrameRate = spec.FrameRate;
+        setting.GopSize = 2;
+        setting.VideoFormat = "flv";
+        setting.VideoSettingsOptions = spec.Options
+            .Select(option => new VideoSettingsOptionEntity { Key = option.Key, Value = option.Value })
+            .ToList();
+
+        // The row of the sound is updated in place when there is one, so its id stays.
+        setting.AudioSetting ??= new AudioSettingEntity();
+        setting.AudioSetting.AudioCodec = 86018;
+        setting.AudioSetting.AudioBitrate = spec.AudioBitrate;
     }
 
     /// <summary>
@@ -136,103 +287,22 @@ public sealed class DatabaseBootstrapper : IHostedService
             return;
         }
 
-        if (createHighQuality)
+        var setting = new VideoSettingEntity
         {
-            // High quality defaults (original)
-            var (bitrate, audioBitrate, videoFormat, gopSize, extraOptions) = platform switch
-            {
-                "Twitch" => (6_000_000, 160_000, "flv", 2, new[]
-                {
-                    new VideoSettingsOptionEntity { Key = "preset", Value = "veryfast" },
-                    new VideoSettingsOptionEntity { Key = "tune", Value = "zerolatency" },
-                    new VideoSettingsOptionEntity { Key = "profile", Value = "high" },
-                    new VideoSettingsOptionEntity { Key = "x264-params", Value = "rc_lookahead=20" }
-                }),
-                "Youtube" => (8_000_000, 192_000, "flv", 2, new[]
-                {
-                    new VideoSettingsOptionEntity { Key = "preset", Value = "veryfast" },
-                    new VideoSettingsOptionEntity { Key = "tune", Value = "zerolatency" },
-                    new VideoSettingsOptionEntity { Key = "profile", Value = "high" },
-                    new VideoSettingsOptionEntity { Key = "x264-params", Value = "rc_lookahead=20" }
-                }),
-                _ => (5_000_000, 128_000, "flv", 2, new[]
-                {
-                    new VideoSettingsOptionEntity { Key = "preset", Value = "veryfast" },
-                    new VideoSettingsOptionEntity { Key = "tune", Value = "zerolatency" }
-                })
-            };
+            Title = title,
+            LastModified = null,
+            IsVideoAndAudioSettingActive = true,
+            // The low one is a second choice, not the primary default.
+            IsDefaultConfiguration = createHighQuality,
+            DefaultPlatformConfiguration = platform
+        };
+        Fill(setting, SpecOf(platform, createHighQuality));
 
-            var setting = new VideoSettingEntity
-            {
-                Title = title,
-                VideoCodec = 27,
-                VideoCodecName = "libx264",
-                PixelFormat = 0,
-                VideoBitrate = bitrate,
-                VideoWidth = null,      // Keep source resolution
-                VideoHeight = null,
-                FrameRate = null,       // Keep source frame rate
-                LastModified = null,
-                IsVideoAndAudioSettingActive = true,
-                GopSize = gopSize,
-                VideoSettingsOptions = extraOptions.ToList(),
-                VideoFormat = videoFormat,
-                AudioSetting = new AudioSettingEntity { AudioCodec = 86018, AudioBitrate = audioBitrate },
-                IsDefaultConfiguration = true,
-                DefaultPlatformConfiguration = platform
-            };
-
-            _videoSettingRepository.Insert(setting);
-            _logger.LogInformation("High quality VideoSetting initialized for {Platform}: {Title}", platform, title);
-        }
-        else
-        {
-            // Low CPU defaults (new) - aggressive bitrate reduction for low-end hardware
-            var (bitrate, audioBitrate, videoFormat, gopSize, extraOptions) = platform switch
-            {
-                "Twitch" => (3_000_000, 96_000, "flv", 2, new[]
-                {
-                    new VideoSettingsOptionEntity { Key = "preset", Value = "ultrafast" },
-                    new VideoSettingsOptionEntity { Key = "tune", Value = "zerolatency" },
-                    new VideoSettingsOptionEntity { Key = "profile", Value = "main" },
-                    new VideoSettingsOptionEntity { Key = "x264-params", Value = "scenecut=0:rc_lookahead=0" }
-                }),
-                "Youtube" => (2_500_000, 96_000, "flv", 2, new[]
-                {
-                    new VideoSettingsOptionEntity { Key = "preset", Value = "ultrafast" },
-                    new VideoSettingsOptionEntity { Key = "tune", Value = "zerolatency" },
-                    new VideoSettingsOptionEntity { Key = "profile", Value = "main" },
-                    new VideoSettingsOptionEntity { Key = "x264-params", Value = "scenecut=0:rc_lookahead=0" }
-                }),
-                _ => (2_000_000, 64_000, "flv", 2, new[]
-                {
-                    new VideoSettingsOptionEntity { Key = "preset", Value = "ultrafast" },
-                    new VideoSettingsOptionEntity { Key = "tune", Value = "zerolatency" }
-                })
-            };
-
-            var setting = new VideoSettingEntity
-            {
-                Title = title,
-                VideoCodec = 27,
-                VideoCodecName = "libx264",
-                PixelFormat = 0,
-                VideoBitrate = bitrate,
-                VideoWidth = 1280,
-                VideoHeight = 720,
-                FrameRate = 30,
-                LastModified = null,
-                IsVideoAndAudioSettingActive = true,
-                GopSize = gopSize,
-                VideoSettingsOptions = extraOptions.ToList(),
-                VideoFormat = videoFormat,
-                AudioSetting = new AudioSettingEntity { AudioCodec = 86018, AudioBitrate = audioBitrate },
-                IsDefaultConfiguration = false,  // Not the primary default
-                DefaultPlatformConfiguration = platform
-            };
-
-            _videoSettingRepository.Insert(setting);
-            _logger.LogInformation("Low CPU VideoSetting initialized for {Platform}: {Title}", platform, title);
-        }
+        _videoSettingRepository.Insert(setting);
+        _logger.LogInformation(
+            "{Level} VideoSetting initialized for {Platform}: {Title}",
+            createHighQuality ? "High quality" : "Low CPU",
+            platform,
+            title);
     }
 }

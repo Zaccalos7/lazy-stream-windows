@@ -67,6 +67,14 @@
   to { transform: translate(-50%, 0); opacity: 1; }
 }
 
+/* The picks of the table: a channel, a status and a word of the title. The first two are narrow,
+   the search is a sentence, so it is the one that takes the room that is left over rather than the
+   160px a pick gets, and grows with the page up to the width of a line of text. */
+.history-filters { align-items: end; }
+.history-filters .history-search { flex: 1 1 260px; min-width: 200px; }
+/* A search box draws its own cross, so the one the control inherits is not wanted here. */
+.history-filters input[type="search"]::-webkit-search-cancel-button { cursor: pointer; }
+
 /* The auto cleanup of the live history is one line in the header of the page, beside its title. */
 .auto-cleanup { margin-bottom: 0; }
 .auto-cleanup-fields { display: flex; gap: 10px; align-items: end; flex-wrap: wrap; }

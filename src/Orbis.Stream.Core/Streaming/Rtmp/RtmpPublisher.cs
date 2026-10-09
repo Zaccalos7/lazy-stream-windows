@@ -18,7 +18,7 @@ public sealed class RtmpException(string message) : IOException(message);
 /// is: the ingest answers <c>NetStream.Publish.Start</c> when it takes the stream, so "on air" is
 /// the server saying so rather than a byte count that only proves a socket was open. It is also
 /// the last point before the wire, so the pacing of the relay is the pacing of the network.</para>
-/// <para>The protocol is the subset every publisher (OBS, ffmpeg) speaks to Twitch and YouTube:
+/// <para>The protocol is the subset every publisher (OBS, ffmpeg) speaks to Twitch, YouTube and Kick:
 /// the plain handshake, <c>connect</c>, <c>releaseStream</c>, <c>FCPublish</c>,
 /// <c>createStream</c>, <c>publish</c>, then audio, video and <c>@setDataFrame</c> messages
 /// chunked at 4 KB, with the acknowledgements and pings the server asks for.</para>
@@ -28,6 +28,7 @@ public sealed class RtmpPublisher : IFlvSink, IDisposable
     private const int HandshakeSize = 1536;
     private const int OutChunkSize = 4096;
     private const uint ExtendedTimestamp = 0xFFFFFF;
+    private const int SendBuffer = 512 * 1024;
 
     private const int ControlChannel = 2;
     private const int CommandChannel = 3;
@@ -156,7 +157,14 @@ public sealed class RtmpPublisher : IFlvSink, IDisposable
             NoDelay = true,
 
             // A network that stopped taking data fails the write instead of hanging the live.
-            SendTimeout = (int)_sendTimeout.TotalMilliseconds
+            SendTimeout = (int)_sendTimeout.TotalMilliseconds,
+
+            // Room for a whole keyframe. A 1080p keyframe is a few hundred kilobytes, and with the
+            // default 64 KB the write of the pacing thread waits on the network for the rest of it,
+            // so every frame after it leaves late; here it is handed over at once and the frames
+            // that follow keep their time. Under a second of the live at streaming rates, so a
+            // network that stops is still noticed long before the stall timeout.
+            SendBufferSize = SendBuffer
         };
         _socket = socket;
         await socket.ConnectAsync(_host, _port, cancellationToken).ConfigureAwait(false);

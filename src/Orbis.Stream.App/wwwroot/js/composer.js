@@ -4,9 +4,12 @@
 // the layout on air whatever size the window is.
 //
 // It runs in two modes. The layout page draws skeletons: slots, rectangles with nothing in them,
-// saved to start lives from. The live wizard opens one of them as its empty slots, the sources are
-// dropped into them, and what is on the canvas when the live starts is saved as the scene of that
-// live alone: it is what the live restarts from, and it never joins the layouts.
+// saved to start lives from, and the overlays the layout is dressed with - pictures with clear
+// parts, laid over the slots the way an overlay of Streamlabs is. The live wizard opens one of
+// them as its empty slots and its overlays; the sources are dropped into the slots, more overlays
+// can be laid over them from the same library, and what is on the canvas when the live starts is
+// saved as the scene of that live alone: it is what the live restarts from, and it never joins
+// the layouts.
 (() => {
   const root = document.querySelector("[data-composer]");
   if (!root) return;
@@ -14,15 +17,30 @@
   const layoutMode = root.dataset.mode === "layout";
 
   // The kinds as the API numbers them (Orbis.Stream.Core.Domain.SourceKind).
-  const Kind = { File: 0, Screen: 1, Camera: 2, Microphone: 3 };
+  const Kind = { File: 0, Screen: 1, Camera: 2, Microphone: 3, Overlay: 4 };
   // A slot has no kind: it is a rectangle, so it takes room on the canvas like a picture does.
   const hasPicture = kind => kind !== Kind.Microphone;
   const isSlot = item => item.slot === true;
-  // A camera opened as video=… has no sound of its own and a screen never has any: the sound of a
-  // webcam is its microphone, which is a source of its own.
+  const isOverlay = item => item.kind === Kind.Overlay;
+  // An overlay the live wizard opened with its layout: as free as any other, and named for where
+  // it came from, so a frame moved by mistake is recognised as the layout's in the list of layers.
+  const fromLayout = item => isOverlay(item) && item.fromLayout === true && !layoutMode;
+  // A screen never has a sound. A camera opened as video=… has none of its own either: its sound
+  // is a microphone linked to it (item.mic), which goes on air in the same dshow input as the
+  // picture - video=…:audio=… - so the two stay in sync.
   const canCarrySound = kind => kind === Kind.File || kind === Kind.Microphone;
+  const carriesSound = item => canCarrySound(item.kind) || (item.kind === Kind.Camera && !!item.mic);
 
-  const glyphs = { [Kind.File]: "\uE714", [Kind.Screen]: "\uE7F4", [Kind.Camera]: "\uE960", [Kind.Microphone]: "\uE720" };
+  // The dshow target of a camera with its microphone, and back. The microphone is the part after
+  // ":audio=", which is how ffmpeg reads two devices of one input.
+  const MicSeparator = ":audio=";
+  const joinTarget = item => item.kind === Kind.Camera && item.mic ? item.target + ":" + item.mic : item.target;
+  const splitTarget = (kind, target) => {
+    const at = kind === Kind.Camera ? target.indexOf(MicSeparator) : -1;
+    return at < 0 ? { target, mic: null } : { target: target.slice(0, at), mic: target.slice(at + 1) };
+  };
+
+  const glyphs = { [Kind.File]: "\uE714", [Kind.Screen]: "\uE7F4", [Kind.Camera]: "\uE960", [Kind.Microphone]: "\uE720", [Kind.Overlay]: "\uEB9F" };
   const slotGlyph = "\uE80A";
   const groups = [
     { kind: Kind.Screen, word: "screens" },
@@ -46,6 +64,9 @@
   const saveButton = root.querySelector("[data-composer-save]");
   const startButton = root.querySelector("[data-composer-start]");
   const pathBox = root.querySelector("[data-composer-path]");
+  const libraryBox = root.querySelector("[data-composer-overlays]");
+  const libraryZone = root.querySelector("[data-composer-overlay-zone]");
+  const libraryFile = root.querySelector("[data-composer-overlay-file]");
   const guides = { x: stage.querySelector('[data-guide="x"]'), y: stage.querySelector('[data-guide="y"]') };
   // The live wizard sends this form once the layout is saved: the setting and the destination
   // were picked on the step before, so the start goes out with nothing else to ask.
@@ -74,11 +95,42 @@
   };
 
   const sameSource = (a, b) => a.kind === b.kind && a.target === b.target;
+
+  // Whether an item has a source of the catalog open: itself, or the microphone of a camera. A
+  // device cannot be opened twice, so a microphone linked to a camera is taken.
+  const usesSource = (item, option) =>
+    sameSource(item, option) || (option.kind === Kind.Microphone && item.mic === option.target);
+
+  // The microphone that goes with a camera, when the names say so: a webcam lists its microphone
+  // as "Microphone (HD Pro Webcam C920)" next to "HD Pro Webcam C920". Only a name contained in
+  // the other one counts - a laptop camera is not paired with whatever microphone the laptop has.
+  const simple = text => (text || "").toLowerCase().replace(/[^\p{L}\p{N}]+/gu, "");
+  const micFor = camera => {
+    const name = simple(camera.name || camera.label);
+    if (name.length < 4) return null;
+    const free = catalog.filter(option => option.kind === Kind.Microphone
+      && !scene.items.some(item => usesSource(item, option)));
+    return free.find(option => simple(option.name).includes(name))
+      || free.find(option => { const mic = simple(option.name); return mic.length >= 4 && name.includes(mic); })
+      || null;
+  };
   const clamp = (value, low, high) => Math.min(Math.max(value, low), Math.max(low, high));
   // Everything that takes room on the canvas, the empty slots included: what a tile snaps to.
   const pictures = () => scene.items.filter(item => hasPicture(item.kind));
+  // What the composition is made of, the overlays laid over it apart: a frame drawn over the whole
+  // canvas does not make the first slot or the first source anything less than the first.
+  const contents = () => pictures().filter(item => !isOverlay(item));
   const slots = () => scene.items.filter(isSlot);
+  const overlays = () => scene.items.filter(isOverlay);
   const sources = () => scene.items.filter(item => !isSlot(item));
+
+  // A new slot or source goes under the overlays at the top of the stack: they dress the layout,
+  // and a webcam added after its frame was drawn still belongs inside that frame, not over it.
+  const insertUnderOverlays = item => {
+    let index = scene.items.length;
+    while (index > 0 && isOverlay(scene.items[index - 1])) index--;
+    scene.items.splice(index, 0, item);
+  };
 
   // Only the layout page says so: in the live wizard the start button saves the scene itself.
   const markDirty = () => {
@@ -150,7 +202,8 @@
   // 3. Otherwise the full-frame sagoma takes it. A full-frame source that is not a sagoma is the
   //    backdrop of a free composition: a drop on it opens a new layer instead of replacing it.
   const dropTarget = point => {
-    const under = pictures().filter(item => covers(item, point) && (isShape(item) || !isFullFrame(item)));
+    // An overlay is never a target: nothing is dropped into a picture of the layout.
+    const under = contents().filter(item => covers(item, point) && (isShape(item) || !isFullFrame(item)));
     const inner = under.filter(item => !isFullFrame(item));
     return inner.filter(isSlot).pop() || inner.pop() || selectedShape() || under.pop() || null;
   };
@@ -162,7 +215,7 @@
   // there, starts as a third of the width. Drawn as a ghost while the drag is in the air, so the
   // drop lands where the picture said it would.
   const boxFor = (option, at, aspect) => {
-    const fills = pictures().length === 0 && option.kind !== Kind.Camera;
+    const fills = contents().length === 0 && option.kind !== Kind.Camera;
     if (fills) return fitted(aspect);
     const w = Math.round(scene.width / 3);
     const h = Math.round(w / aspect);
@@ -183,21 +236,26 @@
       sourceWidth: option.width || 0,
       sourceHeight: option.height || 0,
       // A file brings its sound along by default: that is what playing a video means. A
-      // microphone is only there to be heard.
+      // microphone is only there to be heard, and a camera is heard through its own microphone.
       audio: option.kind === Kind.File || option.kind === Kind.Microphone,
+      mic: null,
       // Until the user sizes it, a tile may still take the aspect of its still when it arrives.
       autoSized: !(option.width > 0),
       x: 0, y: 0, w: 0, h: 0
     };
 
     if (hasPicture(item.kind)) Object.assign(item, boxFor(option, at, aspectOf(item)));
+    if (item.kind === Kind.Camera) {
+      const mic = micFor(option);
+      if (mic) Object.assign(item, { mic: mic.target, audio: true });
+    }
     return item;
   };
 
   // A slot is a rectangle and a name: the first one fills the canvas, the next ones start as a
   // third of it, the way a source laid over another one does.
   const slotFrom = at => {
-    const first = pictures().length === 0;
+    const first = contents().length === 0;
     const item = {
       uid: nextUid++,
       slot: true,
@@ -221,11 +279,70 @@
 
   const addSlot = at => {
     const item = slotFrom(at);
+    insertUnderOverlays(item);
+    select(item.uid);
+    markDirty();
+    render();
+  };
+
+  // ---------- Overlays ----------
+
+  // The library answers with its files by name, and a layout stores the full path: the name is the
+  // last part of it. The name ends with a hash of the content, which the label leaves out.
+  const overlayName = target => (target || "").split(/[\\/]/).pop() || "";
+  const overlayUrl = target => `/scene/overlays/${encodeURIComponent(overlayName(target))}`;
+  const overlayLabel = target => overlayName(target).replace(/-[0-9a-f]{10}(\.[^.]+)$/, "$1");
+  const isVideoOverlay = target => /\.(webm|mp4|mov)$/i.test(target || "");
+
+  // An overlay lands at its own size, the way a picture lands in Streamlabs: a logo stays a logo.
+  // One drawn for the whole frame fills the canvas whatever resolution it was drawn at, and one
+  // bigger than the canvas is fitted into it. Until its picture has said what size it is, it is
+  // a third of the canvas, and it takes its real shape as soon as the picture arrives.
+  const overlayBox = (natural, at) => {
+    const centre = at || { x: scene.width / 2, y: scene.height / 2 };
+    if (!(natural.width > 0 && natural.height > 0)) {
+      const w = Math.round(scene.width / 3);
+      return keepInside({ x: centre.x - w / 2, y: centre.y - w * 9 / 32, w, h: Math.round(w * 9 / 16) });
+    }
+    const aspect = natural.width / natural.height;
+    const wholeFrame = Math.abs(aspect / (scene.width / scene.height) - 1) < 0.01;
+    if (wholeFrame || natural.width >= scene.width || natural.height >= scene.height) return fitted(aspect);
+    return keepInside({ x: centre.x - natural.width / 2, y: centre.y - natural.height / 2, w: natural.width, h: natural.height });
+  };
+
+  const overlayItem = (target, label) => ({
+    uid: nextUid++,
+    kind: Kind.Overlay,
+    target,
+    label: label || overlayLabel(target),
+    naturalWidth: 0,
+    naturalHeight: 0,
+    // An overlay never decides the resolution of the live: it is stretched to its rectangle.
+    sourceWidth: 0,
+    sourceHeight: 0,
+    audio: false,
+    mic: null,
+    autoSized: false,
+    x: 0, y: 0, w: 0, h: 0
+  });
+
+  // An entry of the library put on the canvas: on top of everything, which is what it is for.
+  const addOverlay = (entry, at) => {
+    const item = overlayItem(entry.path, entry.label);
+    Object.assign(item, { naturalWidth: entry.width || 0, naturalHeight: entry.height || 0, autoSized: !(entry.width > 0) });
+    Object.assign(item, overlayBox({ width: item.naturalWidth, height: item.naturalHeight }, at));
     scene.items.push(item);
     select(item.uid);
     markDirty();
     render();
   };
+
+  // The overlay of a saved layout or scene, where it was left.
+  const overlayOf = entry => Object.assign(overlayItem(entry.sourceTarget, entry.label), {
+    naturalWidth: entry.width,
+    naturalHeight: entry.height,
+    x: entry.x, y: entry.y, w: entry.width, h: entry.height
+  });
 
   // Something new on the canvas, or something gone: the tile is drawn, and the resolution follows
   // the biggest shape, once the real size of its video is known.
@@ -238,7 +355,7 @@
 
   // A source on bare canvas: a new layer where the pointer is.
   const addLayer = (option, at) => {
-    const existing = scene.items.find(item => sameSource(item, option));
+    const existing = scene.items.find(item => usesSource(item, option));
     if (existing) {
       // One device cannot be opened twice, and the same file twice is never what was meant.
       notify("warning", word("twice"));
@@ -247,7 +364,7 @@
     }
 
     const item = itemFrom(option, at);
-    scene.items.push(item);
+    insertUnderOverlays(item);
     select(item.uid);
     changed(item);
   };
@@ -432,6 +549,8 @@
       return tile;
     }
 
+    if (isOverlay(item)) return overlayTileOf(item, tile);
+
     // Filled, and still the rectangle of the layout: the outline and the name of the shape stay.
     if (isShape(item)) tile.classList.add("is-shape");
     prepare(item);
@@ -483,6 +602,99 @@
     return tile;
   };
 
+  // An overlay is drawn as itself and clear where it is clear: the slots under it show through, the
+  // way the sources will on air. A video the browser cannot play (a MOV with alpha) is drawn as its
+  // first frame, which the server makes with ffmpeg.
+  const overlayTileOf = (item, tile) => {
+    tile.classList.add("is-overlay");
+
+    const cover = document.createElement("div");
+    cover.className = "composer-tile-cover";
+    cover.append(iconOf(item.kind));
+
+    // The picture says what shape the overlay is: an overlay placed before it knew takes it now.
+    const learn = (width, height) => {
+      if (!(width > 0 && height > 0)) return;
+      cover.hidden = true;
+      item.naturalWidth = width;
+      item.naturalHeight = height;
+      if (!item.autoSized) return;
+      item.autoSized = false;
+      Object.assign(item, overlayBox({ width, height }, { x: item.x + item.w / 2, y: item.y + item.h / 2 }));
+      render();
+    };
+
+    const still = () => {
+      const image = document.createElement("img");
+      image.className = "composer-overlay-media";
+      image.alt = "";
+      image.draggable = false;
+      image.addEventListener("load", () => learn(image.naturalWidth, image.naturalHeight));
+      return image;
+    };
+
+    let media;
+    if (isVideoOverlay(item.target)) {
+      media = document.createElement("video");
+      media.className = "composer-overlay-media";
+      Object.assign(media, { muted: true, loop: true, autoplay: true, playsInline: true });
+      media.addEventListener("loadedmetadata", () => learn(media.videoWidth, media.videoHeight));
+      media.addEventListener("error", () => {
+        const frame = still();
+        frame.src = overlayUrl(item.target) + "/still";
+        media.replaceWith(frame);
+        tile.media = frame;
+      }, { once: true });
+    } else {
+      media = still();
+    }
+    media.src = overlayUrl(item.target);
+    tile.media = media;
+
+    const label = document.createElement("span");
+    label.className = "composer-tile-label";
+    label.append(iconOf(item.kind), document.createTextNode(item.label));
+
+    tile.append(cover, media, label);
+    appendHandles(tile, item);
+    return tile;
+  };
+
+  // One pixel of an overlay, read off the picture its tile is drawing. The pictures come from this
+  // server, so the canvas they are drawn into can be read back. A picture not drawn yet counts as
+  // solid: its rectangle is all there is to go by.
+  const probe = document.createElement("canvas");
+  probe.width = probe.height = 1;
+  const probeContext = probe.getContext("2d", { willReadFrequently: true });
+  const opaqueAt = (item, point) => {
+    const media = tiles.get(item.uid)?.media;
+    const width = media?.naturalWidth || media?.videoWidth || 0;
+    const height = media?.naturalHeight || media?.videoHeight || 0;
+    if (!width || !height || !probeContext) return true;
+    const u = clamp(Math.floor((point.x - item.x) / item.w * width), 0, width - 1);
+    const v = clamp(Math.floor((point.y - item.y) / item.h * height), 0, height - 1);
+    try {
+      probeContext.clearRect(0, 0, 1, 1);
+      probeContext.drawImage(media, u, v, 1, 1, 0, 0, 1, 1);
+      return probeContext.getImageData(0, 0, 1, 1).data[3] > 24;
+    } catch {
+      return true;
+    }
+  };
+
+  // What a press at that point is meant for: the topmost picture under it. An overlay is mostly
+  // clear, and a press on a clear part of it is meant for what shows through - the slot inside the
+  // frame of a webcam, not the frame drawn over the whole canvas.
+  const pickAt = point => {
+    for (let index = scene.items.length - 1; index >= 0; index--) {
+      const item = scene.items[index];
+      if (!hasPicture(item.kind) || !covers(item, point)) continue;
+      if (isOverlay(item) && !opaqueAt(item, point)) continue;
+      return item;
+    }
+    return null;
+  };
+
   const appendHandles = (tile, item) => {
     for (const corner of ["nw", "ne", "sw", "se"]) {
       const handle = document.createElement("span");
@@ -491,8 +703,25 @@
       tile.append(handle);
     }
 
-    tile.addEventListener("pointerdown", event => startGesture(event, item));
-    tile.addEventListener("dblclick", () => fill(item.uid));
+    // The tile under the pointer is the one the browser hands the press to, and it may be an
+    // overlay with nothing drawn there: the press goes to whatever the user sees instead. A corner
+    // is a corner of its own tile, whatever is drawn over it.
+    tile.addEventListener("pointerdown", event => {
+      if (event.target.dataset?.corner) {
+        startGesture(event, item, tile);
+        return;
+      }
+      const picked = pickAt(pointOnCanvas(event));
+      if (picked) {
+        startGesture(event, picked, tiles.get(picked.uid) || tile);
+      } else if (event.button === 0) {
+        select(null);
+      }
+    });
+    tile.addEventListener("dblclick", event => {
+      const picked = event.target.dataset?.corner ? item : pickAt(pointOnCanvas(event));
+      if (picked) fill(picked.uid);
+    });
     tiles.set(item.uid, tile);
   };
 
@@ -528,6 +757,32 @@
     return button;
   };
 
+  // The microphone of a camera, picked in its row: the ones nobody else has open, and its own.
+  const micPicker = item => {
+    const picker = document.createElement("select");
+    picker.className = "input composer-mic";
+    picker.title = word("camera-mic");
+    picker.setAttribute("aria-label", word("camera-mic"));
+    const none = new Option(word("no-mic"), "");
+    picker.append(none);
+    for (const option of catalog.filter(entry => entry.kind === Kind.Microphone)) {
+      if (option.target !== item.mic && scene.items.some(other => usesSource(other, option))) continue;
+      picker.append(new Option(option.name, option.target, false, option.target === item.mic));
+    }
+    // A saved microphone that is not plugged in now is kept, and said as it was saved.
+    if (item.mic && ![...picker.options].some(entry => entry.value === item.mic)) {
+      picker.append(new Option(item.mic.replace(/^audio=/, ""), item.mic, false, true));
+    }
+    picker.addEventListener("click", event => event.stopPropagation());
+    picker.addEventListener("change", () => {
+      item.mic = picker.value || null;
+      item.audio = !!item.mic;
+      markDirty();
+      render();
+    });
+    return picker;
+  };
+
   const renderLayers = () => {
     layersBox.replaceChildren();
 
@@ -541,6 +796,7 @@
       row.classList.toggle("is-audio", !hasPicture(item.kind));
       row.classList.toggle("is-slot", isSlot(item));
       row.classList.toggle("is-shape", isShape(item) && !isSlot(item));
+      row.classList.toggle("is-overlay", isOverlay(item));
 
       const text = document.createElement("span");
       text.className = "grow";
@@ -553,12 +809,14 @@
       const where = `${item.w}×${item.h} · ${item.x}, ${item.y}`;
       facts.textContent = !hasPicture(item.kind) ? word("audio-only")
         : isSlot(item) && !layoutMode ? `${word("slot-empty")} · ${where}`
+        : fromLayout(item) ? `${word("overlay-locked")} · ${where}`
         : where;
       text.append(name, facts);
+      if (item.kind === Kind.Camera) text.append(micPicker(item));
 
       const actions = document.createElement("span");
       actions.className = "composer-layer-actions";
-      if (!isSlot(item) && canCarrySound(item.kind)) {
+      if (!isSlot(item) && carriesSound(item)) {
         actions.append(layerButton(item.audio ? "\uE767" : "\uE74F", word("sound"), () => {
           item.audio = !item.audio;
           markDirty();
@@ -588,7 +846,7 @@
     const availableOptions = [];
 
     for (const option of catalog) {
-      const isUsed = scene.items.some(item => sameSource(item, option));
+      const isUsed = scene.items.some(item => usesSource(item, option));
       if (isUsed) {
         usedOptions.push(option);
       } else {
@@ -645,6 +903,9 @@
 
   const render = () => {
     stage.style.aspectRatio = `${scene.width} / ${scene.height}`;
+    // As wide as the column lets it, as long as it is no taller than the window: a canvas that
+    // stands up is bounded by its height, and its width follows it.
+    stage.style.maxWidth = `calc((100vh - 240px) * ${scene.width} / ${scene.height})`;
 
     // The DOM order of the tiles is their stacking order, the same one ffmpeg will use.
     for (const item of scene.items) {
@@ -700,7 +961,7 @@
     guide.style[axis === "x" ? "left" : "top"] = (line / size * 100) + "%";
   };
 
-  const startGesture = (event, item) => {
+  const startGesture = (event, item, tile) => {
     if (event.button !== 0) return;
     event.preventDefault();
     select(item.uid);
@@ -712,7 +973,7 @@
     const ratio = from.w / from.h;
     const unit = scale();
     const tolerance = snapDistance * unit;
-    const target = event.currentTarget;
+    const target = tile;
     target.setPointerCapture(event.pointerId);
     let moved = false;
 
@@ -867,7 +1128,7 @@
     }
     // Bare canvas. On a canvas with nothing on it yet the source takes the frame, and the ghost
     // says so rather than calling it a layer.
-    const fills = pictures().length === 0 && option.kind !== Kind.Camera;
+    const fills = contents().length === 0 && option.kind !== Kind.Camera;
     const shape = { kind: option.kind, w: 0, h: 0, naturalWidth: option.width || 0, naturalHeight: option.height || 0 };
     return { box: boxFor(shape, at, aspectOf(shape)), target: null, label: fills ? word("fill") : word("drop-as-layer") };
   };
@@ -902,6 +1163,14 @@
   ghostFrame.addEventListener("error", () => { ghostFrame.hidden = true; });
 
   stage.addEventListener("dragover", event => {
+    if (overlayDrag(event)) {
+      // An overlay: an entry of the library, or a picture from Explorer.
+      event.preventDefault();
+      event.dataTransfer.dropEffect = "copy";
+      stage.classList.add("is-over");
+      showOverlayDrop(carriedOverlay, pointOnCanvas(event));
+      return;
+    }
     if (layoutMode || !carriesSource(event)) return;
     event.preventDefault();
     event.dataTransfer.dropEffect = "copy";
@@ -918,10 +1187,22 @@
   // A drag let go outside the canvas, or on the catalog, still has to take its ghost with it.
   document.addEventListener("dragend", () => {
     carried = null;
+    carriedOverlay = null;
     clearDrop();
   });
 
   stage.addEventListener("drop", event => {
+    if (overlayDrag(event)) {
+      event.preventDefault();
+      const at = pointOnCanvas(event);
+      const name = event.dataTransfer.getData(overlayType);
+      const entry = name ? library.find(candidate => candidate.name === name) : null;
+      carriedOverlay = null;
+      clearDrop();
+      if (entry) addOverlay(entry, at);
+      else if (!name) uploadOverlays([...(event.dataTransfer.files || [])], at);
+      return;
+    }
     if (layoutMode) return;
 
     const id = event.dataTransfer?.getData(sourceType);
@@ -1053,8 +1334,16 @@
       entry.addEventListener("click", () => place(option));
     } else {
       entry.addEventListener("click", () => {
-        const item = scene.items.find(i => sameSource(i, option));
-        if (item) removeItem(item.uid);
+        const item = scene.items.find(i => usesSource(i, option));
+        if (!item) return;
+        // A microphone linked to a camera is unlinked, not the camera taken off the canvas.
+        if (!sameSource(item, option)) {
+          Object.assign(item, { mic: null, audio: false });
+          markDirty();
+          render();
+          return;
+        }
+        removeItem(item.uid);
       });
     }
 
@@ -1092,6 +1381,239 @@
     loadCatalog();
   });
 
+  // ---------- The overlay library ----------
+
+  // The pictures layouts are dressed with, uploaded once and kept by the server (see OverlayLibrary):
+  // a browser never hands over a path, and the server never reads one it was not given the file of.
+  const overlayType = "application/x-orbis-overlay";
+  const overlayExtensions = /\.(png|apng|jpe?g|gif|webp|bmp|webm|mp4|mov)$/i;
+  const overlayMaxBytes = Number(libraryBox?.dataset.maxBytes || 0);
+  let library = [];
+  let uploading = 0;
+  // The entry being dragged from the library: its size shapes the ghost while it is in the air.
+  let carriedOverlay = null;
+
+  const carriesOverlay = event => {
+    const types = [...(event.dataTransfer?.types || [])];
+    return types.includes(overlayType) || types.includes("Files");
+  };
+
+  // What a drag on the canvas is. On the layout page everything is an overlay. In the live wizard a
+  // file from Explorer is a source when it is a video and an overlay when it is a picture (a logo,
+  // a GIF): the browser tells the kind of a dragged file while it is in the air, not its name.
+  const overlayDrag = event => {
+    if (layoutMode) return carriesOverlay(event);
+    const transfer = event.dataTransfer;
+    if ([...(transfer?.types || [])].includes(overlayType)) return true;
+    const files = [...(transfer?.items || [])].filter(item => item.kind === "file");
+    return files.length > 0 && files.every(item => item.type.startsWith("image/"));
+  };
+
+  // Where the overlay will land, drawn while it is in the air. A picture from Explorer has no size
+  // until it is uploaded: the ghost is the third of the canvas it starts as.
+  const showOverlayDrop = (entry, at) => {
+    const box = overlayBox({ width: entry?.width || 0, height: entry?.height || 0 }, at);
+    ghost.style.left = (box.x / scene.width * 100) + "%";
+    ghost.style.top = (box.y / scene.height * 100) + "%";
+    ghost.style.width = (box.w / scene.width * 100) + "%";
+    ghost.style.height = (box.h / scene.height * 100) + "%";
+    ghostLabel.textContent = word("drop-overlay");
+    ghost.hidden = false;
+    const src = entry ? (entry.video ? entry.still : entry.url) : "";
+    if (src !== ghostSrc) {
+      ghostSrc = src;
+      ghostFrame.hidden = true;
+      if (src) ghostFrame.src = src;
+    }
+  };
+
+  const captionOf = text => {
+    const caption = document.createElement("p");
+    caption.className = "caption composer-none";
+    caption.textContent = text;
+    return caption;
+  };
+
+  const confirmThen = (text, action) => {
+    const dialog = document.getElementById("confirm-dialog");
+    if (!dialog) return;
+    dialog.querySelector("[data-text]").textContent = text;
+    dialog.returnValue = "";
+    dialog.onclose = () => { if (dialog.returnValue === "ok") action(); };
+    dialog.showModal();
+  };
+
+  const deleteOverlay = async entry => {
+    const response = await fetch(`/scene/overlays/${encodeURIComponent(entry.name)}`, { method: "DELETE" }).catch(() => null);
+    const payload = await response?.json().catch(() => ({}));
+    if (!response?.ok) {
+      notify("error", messageOf(payload) || word("ko"));
+      return;
+    }
+    library = library.filter(candidate => candidate.name !== entry.name);
+    drawLibrary();
+  };
+
+  // One entry: the picture on a checkerboard, so what is clear in it reads as clear, and its name.
+  // A video plays while the pointer is on it. A click lays it on the canvas, a drag lays it where
+  // it is let go.
+  const libraryEntry = entry => {
+    const card = document.createElement("div");
+    card.className = "composer-overlay";
+    card.draggable = true;
+    card.tabIndex = 0;
+    card.setAttribute("role", "button");
+    card.title = `${entry.label} · ${word("overlay-add")}`;
+
+    const frame = document.createElement("div");
+    frame.className = "composer-overlay-thumb";
+    const picture = document.createElement(entry.video ? "video" : "img");
+    picture.draggable = false;
+    if (entry.video) {
+      Object.assign(picture, { muted: true, loop: true, playsInline: true, preload: "auto" });
+      picture.addEventListener("loadedmetadata", () => Object.assign(entry, { width: picture.videoWidth, height: picture.videoHeight }));
+      picture.addEventListener("error", () => {
+        const still = document.createElement("img");
+        still.alt = "";
+        still.draggable = false;
+        still.addEventListener("load", () => Object.assign(entry, { width: still.naturalWidth, height: still.naturalHeight }));
+        still.src = entry.still;
+        picture.replaceWith(still);
+      }, { once: true });
+      card.addEventListener("pointerenter", () => picture.play?.().catch(() => {}));
+      card.addEventListener("pointerleave", () => picture.pause?.());
+    } else {
+      picture.alt = "";
+      picture.addEventListener("load", () => Object.assign(entry, { width: picture.naturalWidth, height: picture.naturalHeight }));
+    }
+    picture.src = entry.url;
+    frame.append(picture);
+
+    const name = document.createElement("span");
+    name.className = "composer-overlay-name truncate";
+    name.textContent = entry.label;
+
+    const remove = document.createElement("button");
+    remove.type = "button";
+    remove.className = "btn subtle icon-only danger composer-overlay-delete";
+    remove.title = word("overlay-delete");
+    remove.setAttribute("aria-label", word("overlay-delete"));
+    remove.append(glyphIcon("\uE74D"));
+    remove.addEventListener("click", event => {
+      event.stopPropagation();
+      confirmThen(word("overlay-delete-confirm").replace("{0}", entry.label), () => deleteOverlay(entry));
+    });
+
+    card.append(frame, name, remove);
+    card.addEventListener("click", () => addOverlay(entry));
+    card.addEventListener("keydown", event => {
+      if (event.key !== "Enter" && event.key !== " ") return;
+      event.preventDefault();
+      addOverlay(entry);
+    });
+    card.addEventListener("dragstart", event => {
+      event.dataTransfer.setData(overlayType, entry.name);
+      event.dataTransfer.effectAllowed = "copy";
+      carriedOverlay = entry;
+    });
+    return card;
+  };
+
+  const drawLibrary = () => {
+    if (!libraryBox) return;
+    delete libraryBox.dataset.state;
+    libraryBox.replaceChildren(...library.map(libraryEntry));
+    if (uploading > 0) {
+      const busy = document.createElement("div");
+      busy.className = "composer-loading";
+      const spinner = document.createElement("span");
+      spinner.className = "spinner";
+      const text = document.createElement("span");
+      text.className = "caption";
+      text.textContent = word("overlay-uploading");
+      busy.append(spinner, text);
+      libraryBox.prepend(busy);
+    } else if (library.length === 0) {
+      libraryBox.append(captionOf(word("overlay-empty")));
+    }
+  };
+
+  const loadLibrary = async () => {
+    if (!libraryBox) return;
+    libraryBox.dataset.state = "loading";
+    try {
+      const response = await fetch("/scene/overlays");
+      if (!response.ok) throw new Error(String(response.status));
+      library = await response.json();
+      drawLibrary();
+    } catch {
+      library = [];
+      libraryBox.dataset.state = "failed";
+      libraryBox.replaceChildren(captionOf(word("overlay-failed")));
+    }
+  };
+
+  // The files go up one after the other, and each joins the library as soon as it is there. Laid
+  // on the canvas too when they were dropped on it (where they were let go) or picked with the
+  // button (in the middle); a file dropped on the library only joins the library. What the server
+  // would refuse anyway - another kind of file, one too big - is refused here, before it is sent.
+  const uploadOverlays = async (files, at, { place = true } = {}) => {
+    for (const [index, file] of files.entries()) {
+      if (!overlayExtensions.test(file.name)) {
+        notify("error", word("overlay-invalid").replace("{0}", file.name));
+        continue;
+      }
+      if (overlayMaxBytes > 0 && file.size > overlayMaxBytes) {
+        notify("error", word("overlay-too-large").replace("{0}", file.name).replace("{1}", String(Math.round(overlayMaxBytes / 1048576))));
+        continue;
+      }
+
+      uploading++;
+      drawLibrary();
+      try {
+        const form = new FormData();
+        form.append("file", file, file.name);
+        const response = await fetch("/scene/overlays", { method: "POST", body: form });
+        const payload = await response.json().catch(() => ({}));
+        if (!response.ok) {
+          notify("error", messageOf(payload) || response.statusText);
+          continue;
+        }
+        library = [payload, ...library.filter(candidate => candidate.name !== payload.name)];
+        if (place) addOverlay(payload, at ? { x: at.x + 32 * index, y: at.y + 32 * index } : null);
+      } catch {
+        notify("error", word("ko"));
+      } finally {
+        uploading--;
+        drawLibrary();
+      }
+    }
+  };
+
+  root.querySelector("[data-composer-overlay-upload]")?.addEventListener("click", () => libraryFile?.click());
+  libraryFile?.addEventListener("change", () => {
+    const files = [...libraryFile.files];
+    libraryFile.value = "";
+    uploadOverlays(files, null);
+  });
+
+  libraryZone?.addEventListener("dragover", event => {
+    if (![...(event.dataTransfer?.types || [])].includes("Files")) return;
+    event.preventDefault();
+    event.dataTransfer.dropEffect = "copy";
+    libraryZone.classList.add("is-over");
+  });
+  libraryZone?.addEventListener("dragleave", event => {
+    if (!libraryZone.contains(event.relatedTarget)) libraryZone.classList.remove("is-over");
+  });
+  libraryZone?.addEventListener("drop", event => {
+    libraryZone.classList.remove("is-over");
+    const files = [...(event.dataTransfer?.files || [])];
+    if (files.length === 0) return;
+    event.preventDefault();
+    uploadOverlays(files, null, { place: false });
+  });
+
   // ---------- Scenes ----------
 
   const clearStage = () => {
@@ -1102,8 +1624,12 @@
 
   // ---------- Resolution ----------
 
-  // The outputs on offer, smallest first.
-  const sizes = [[1280, 720], [1920, 1080], [2560, 1440], [3840, 2160]];
+  // The outputs on offer, smallest first: lying down, and standing up for a live watched on a
+  // phone held upright (TikTok), where a canvas that lies down would go out between two bands.
+  const landscapeSizes = [[1280, 720], [1920, 1080], [2560, 1440], [3840, 2160]];
+  const portraitSizes = [[720, 1280], [1080, 1920]];
+  const isUpright = () => scene.height > scene.width;
+  const sizesOf = upright => upright ? portraitSizes : landscapeSizes;
 
   // The real resolution of a file, asked of ffprobe once per file: the catalog does not probe a
   // whole folder for it, and the still is scaled down so it cannot tell.
@@ -1143,14 +1669,17 @@
     .filter(item => hasPicture(item.kind) && item.sourceWidth > 0 && item.sourceHeight > 0)
     .sort((a, b) => b.w * b.h - a.w * a.h || a.uid - b.uid)[0] || null;
 
-  // Nothing above the video is offered: the live would only upscale it. A portrait video is
-  // measured on its long side the same way. A video smaller than every size still gets the first.
-  const allowedSizes = source => {
-    if (!source) return sizes;
+  // Nothing above the video is offered: the live would only upscale it. Sides are compared long
+  // to long and short to short, so a portrait video caps a portrait canvas and a landscape one the
+  // same way. A video smaller than every size still gets the first. The shape is the one of the
+  // canvas, unless the other one is asked for.
+  const allowedSizes = (source, upright = isUpright()) => {
+    const shaped = sizesOf(upright);
+    if (!source) return shaped;
     const long = Math.max(source.sourceWidth, source.sourceHeight);
     const short = Math.min(source.sourceWidth, source.sourceHeight);
-    const allowed = sizes.filter(([w, h]) => w <= long && h <= short);
-    return allowed.length ? allowed : sizes.slice(0, 1);
+    const allowed = shaped.filter(([w, h]) => Math.max(w, h) <= long && Math.min(w, h) <= short);
+    return allowed.length ? allowed : shaped.slice(0, 1);
   };
 
   // Every tile is scaled with the canvas, so a scene drawn for 1080p is the same scene in 720p.
@@ -1183,7 +1712,10 @@
     if (source && (key !== decidedBy || !offered)) resizeCanvas(...allowed[allowed.length - 1]);
     decidedBy = key;
 
-    sizeBox.replaceChildren(...allowed.map(([w, h]) => new Option(`${w} × ${h}`, `${w}x${h}`)));
+    // The sizes of the other shape come after, capped by the video the same way: picking one turns
+    // the canvas round.
+    const turned = allowedSizes(source, !isUpright());
+    sizeBox.replaceChildren(...[...allowed, ...turned].map(([w, h]) => new Option(`${w} × ${h}`, `${w}x${h}`)));
     // A layout drawn at a size that is not in the list keeps it until a video says otherwise.
     if (!allowed.some(([w, h]) => w === scene.width && h === scene.height)) {
       sizeBox.append(new Option(`${scene.width} × ${scene.height}`, `${scene.width}x${scene.height}`));
@@ -1203,12 +1735,14 @@
   });
 
   const sourceOf = entry => {
-    const option = catalog.find(candidate => candidate.kind === entry.sourceKind && candidate.target === entry.sourceTarget);
+    const { target, mic } = splitTarget(entry.sourceKind, entry.sourceTarget);
+    const option = catalog.find(candidate => candidate.kind === entry.sourceKind && candidate.target === target);
     return {
       uid: nextUid++,
       kind: entry.sourceKind,
-      target: entry.sourceTarget,
-      label: entry.label || option?.name || entry.sourceTarget,
+      target,
+      mic,
+      label: entry.label || option?.name || target,
       naturalWidth: option?.width || entry.width,
       naturalHeight: option?.height || entry.height,
       sourceWidth: option?.width || 0,
@@ -1228,13 +1762,16 @@
     // In layout mode, it's the layout being edited
     const asSlots = !!saved?.isLayout;
     const items = (saved?.items || []).filter(entry => !asSlots || (entry.width > 0 && entry.height > 0));
+    let slotIndex = 0;
     layoutPkid = asSlots ? saved.pkid : null;
     scene = {
       pkid: asSlots && !layoutMode ? null : saved?.pkid ?? null,
       name: saved?.name || "",
       width: saved?.width || 1920,
       height: saved?.height || 1080,
-      items: items.map((entry, index) => asSlots ? slotOf(entry, index) : sourceOf(entry))
+      items: items.map(entry => entry.sourceKind === Kind.Overlay ? Object.assign(overlayOf(entry), { fromLayout: asSlots })
+        : asSlots ? slotOf(entry, slotIndex++)
+        : sourceOf(entry))
     };
     nameBox.value = scene.name;
     if (scenesBox) scenesBox.value = layoutPkid === null ? "" : String(layoutPkid);
@@ -1281,11 +1818,30 @@
   // A new output size keeps the layout: every tile is scaled with the canvas.
   sizeBox.addEventListener("change", () => {
     resizeCanvas(...sizeBox.value.split("x").map(Number));
+    fitResolution();
     render();
   });
 
-  // A layout sends its slots and nothing else. The scene of a live sends its sources: a slot left
-  // empty is a rectangle with nothing in it, which on air is the black of the canvas anyway.
+  // The live wizard picks where the live goes before the canvas is drawn: a destination watched on
+  // a phone held upright (TikTok, data-portrait on its pick) gets a canvas that stands up, and the
+  // others one that lies down - as long as nothing was laid on the canvas yet.
+  if (!layoutMode) {
+    document.addEventListener("change", event => {
+      const pick = event.target;
+      if (!(pick instanceof HTMLInputElement) || pick.name !== "configurationId" || !pick.checked) return;
+      const upright = pick.dataset.portrait === "1";
+      if (upright === isUpright() || scene.items.length > 0 || layoutPkid !== null) return;
+      resizeCanvas(...(upright ? [1080, 1920] : [1920, 1080]));
+      decidedBy = "";
+      fitResolution();
+      render();
+      markClean();
+    });
+  }
+
+  // A layout sends its slots and its overlays, in the order they are stacked. The scene of a live
+  // sends its sources, the overlays among them: a slot left empty is a rectangle with nothing in
+  // it, which on air is the black of the canvas anyway.
   const requestOf = () => ({
     pkid: scene.pkid,
     name: scene.name.trim(),
@@ -1293,15 +1849,15 @@
     width: scene.width,
     height: scene.height,
     isLayout: layoutMode,
-    items: (layoutMode ? slots() : sources()).map(item => ({
+    items: (layoutMode ? scene.items.filter(item => isSlot(item) || isOverlay(item)) : sources()).map(item => ({
       sourceKind: isSlot(item) ? Kind.File : item.kind,
-      sourceTarget: item.target,
+      sourceTarget: joinTarget(item),
       label: item.label,
       x: hasPicture(item.kind) ? item.x : 0,
       y: hasPicture(item.kind) ? item.y : 0,
       width: hasPicture(item.kind) ? item.w : 0,
       height: hasPicture(item.kind) ? item.h : 0,
-      audioEnabled: !isSlot(item) && canCarrySound(item.kind) && item.audio
+      audioEnabled: !isSlot(item) && carriesSound(item) && item.audio
     }))
   });
 
@@ -1315,11 +1871,13 @@
   };
 
   const save = async () => {
-    if (layoutMode && slots().length === 0) {
+    if (layoutMode && slots().length === 0 && overlays().length === 0) {
       notify("error", word("needs-slot"));
       return false;
     }
-    if (!layoutMode && !sources().some(item => hasPicture(item.kind))) {
+    // A layout of overlays alone (a "starting soon" screen) goes on air as it is; a layout with
+    // slots goes on air once something is in one of them, or laid over it.
+    if (!layoutMode && contents().every(isSlot) && (slots().length > 0 || overlays().length === 0)) {
       notify("error", word("needs-picture"));
       return false;
     }
@@ -1427,7 +1985,7 @@
 
   const boot = async () => {
     render();
-    await Promise.all([layoutMode ? null : loadCatalog(), loadScenes()]);
+    await Promise.all([layoutMode ? Promise.resolve() : loadCatalog(), loadLibrary(), loadScenes()]);
     const saved = await wantedScene(Number(root.dataset.scene || 0));
     if (saved) loadScene(saved);
   };

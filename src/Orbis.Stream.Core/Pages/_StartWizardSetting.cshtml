@@ -1,0 +1,36 @@
+@model MainLiveModel
+
+@* The first step of both wizards: the video/audio setting that goes on air. *@
+<h3>@T["wizardStep1Title"]</h3>
+@if (Model.ActiveSettings.Count == 0)
+{
+    <div class="infobar warning section">
+        <i class="icon">&#xE7BA;</i>
+        <p><strong>@T["noActiveSetting"]</strong><br />@T["wizardNoActiveSettingsMessage"]</p>
+        <a class="btn" href="/orbis/mainVideoSetting">@T["activateVideoAudioSettings"]</a>
+    </div>
+}
+else
+{
+    <div class="choice-list section" style="margin-top: 8px;">
+        @foreach (var setting in Model.ActiveSettings)
+        {
+            var displayTitle = SettingTitleView.Of(setting.Title, T);
+            <label class="choice">
+                <input type="radio" name="settingId" value="@setting.Id" required />
+                <span class="grow">
+                    <strong>@displayTitle</strong>
+                    @if (setting.IsDefaultConfiguration == true || (!string.IsNullOrEmpty(setting.DefaultPlatformConfiguration) && setting.Title == "Default Low " + setting.DefaultPlatformConfiguration))
+                    {
+                        <span class="badge">@setting.DefaultPlatformConfiguration</span>
+                    }
+                    <span class="caption" style="display: block;">
+                        @setting.VideoCodecName · @VideoSettingForm.FormatBitrate(setting.VideoBitrate) ·
+                        @setting.VideoFormat?.ToUpperInvariant() · GOP @(setting.GopSize?.ToString() ?? "–") ·
+                        @T["audioBitrate"] @VideoSettingForm.FormatBitrate(setting.AudioSettingRecord?.AudioBitrate)
+                    </span>
+                </span>
+            </label>
+        }
+    </div>
+}

@@ -32,6 +32,12 @@ public sealed record LiveParameters(
     int? VideoHeight,
     double? FrameRate);
 
+/// <summary>
+/// A source of a canvas whose sound goes into the mix of the live, with how loud it is in it
+/// (percent, 100 being the sound as the source has it).
+/// </summary>
+public sealed record LiveSource(int Pkid, string Name, string Kind, int Volume);
+
 /// <summary>One of the running lives, for the picker when more than one channel is on air.</summary>
 public sealed record LiveOption(int VideoPkid, string ChannelName, string VideoName, bool IsWatching);
 
@@ -55,7 +61,16 @@ public sealed record LiveSnapshot(
     bool IsPlayable,
     LiveMedia Source,
     LiveMedia Output,
-    LiveParameters Parameters)
+    LiveParameters Parameters,
+    IReadOnlyList<LiveSource>? Sources = null,
+    bool PlatformOffAir = false,
+    bool PlatformUnverified = false,
+    /// <summary>The video YouTube broadcasts the live as, once it was seen on air (YouTubeAirWatch).</summary>
+    string? PlatformVideoId = null,
+    /// <summary>The live this is, which the scene deck is armed for (see LiveTakeovers).</summary>
+    long? History = null,
+    /// <summary>What is on air in place of the program, when something is: a spot or a scene button.</summary>
+    LiveScene? Scene = null)
 {
     public static LiveSnapshot Offline(IReadOnlyList<LiveOption> running) => new(
         false,
@@ -91,11 +106,12 @@ public sealed record LiveSnapshot(
 /// </summary>
 public sealed class LivePreviewService
 {
-    /// <summary>What a bitrate has to stay between, in bits per second.</summary>
-    private const int MinimumBitrate = 1;
+/// <summary>What a bitrate has to stay between, in bits per second.</summary>
+    public const int MinimumBitrate = 1;
 
-    private const int MaximumVideoBitrate = 1_000_000_000;
-    private const int MaximumAudioBitrate = 1_000_000;
+    public const int MaximumVideoBitrate = 1_000_000_000;
+
+    public const int MaximumAudioBitrate = 1_000_000;
 
     /// <summary>A frame no platform would accept is refused before it reaches ffmpeg.</summary>
     private const int MaximumWidth = 7680;
@@ -103,14 +119,19 @@ public sealed class LivePreviewService
     private const int MaximumHeight = 4320;
     private const double MaximumFrameRate = 240;
 
+    /// <summary>Twice the sound of the source is as loud as a source is let go in the mix.</summary>
+    public const int MaximumVolume = 200;
+
     private readonly StreamingSessionRegistry _sessions;
     private readonly VideoRepository _videoRepository;
     private readonly VideoSettingRepository _videoSettingRepository;
     private readonly VideoLiveHistoryRepository _historyRepository;
     private readonly LivePlatformEmbeds _embeds;
+    private readonly YouTubeAirWatch _air;
     private readonly ResponseFactory _responses;
     private readonly Localizer _localizer;
     private readonly LiveChangeNotifier _notifier;
+    private readonly LiveTakeovers _takeovers;
     private readonly ILogger<LivePreviewService> _logger;
 
     public LivePreviewService(
@@ -119,9 +140,11 @@ public sealed class LivePreviewService
         VideoSettingRepository videoSettingRepository,
         VideoLiveHistoryRepository historyRepository,
         LivePlatformEmbeds embeds,
+        YouTubeAirWatch air,
         ResponseFactory responses,
         Localizer localizer,
         LiveChangeNotifier notifier,
+        LiveTakeovers takeovers,
         ILogger<LivePreviewService> logger)
     {
         _sessions = sessions;
@@ -129,9 +152,11 @@ public sealed class LivePreviewService
         _videoSettingRepository = videoSettingRepository;
         _historyRepository = historyRepository;
         _embeds = embeds;
+        _air = air;
         _responses = responses;
         _localizer = localizer;
         _notifier = notifier;
+        _takeovers = takeovers;
         _logger = logger;
     }
 
@@ -224,7 +249,83 @@ public sealed class LivePreviewService
             video.ScenePkid is null && VideoExtensions.IsBrowserPlayable(video.Extension),
             new LiveMedia(probe.Width, probe.Height, probe.FrameRate, probe.HasAudio, probe.AudioChannels),
             new LiveMedia(session.Output.Width, session.Output.Height, session.Output.FrameRate, probe.HasAudio, probe.AudioChannels),
-            ParametersOf(setting, probe));
+            ParametersOf(setting, probe),
+            SourcesOf(video),
+            // The ingest takes the stream and YouTube shows no live: the page says so, because
+            // Studio rating the stream "excellent" is all the user would otherwise have to go by.
+            _air.IsOffAir(video.VideoLiveHistoryId),
+            _air.IsUnverified(video.VideoLiveHistoryId),
+            _air.OnAirVideoOf(video.VideoLiveHistoryId),
+            video.VideoLiveHistoryId,
+            LiveScene.Of(_takeovers.CurrentOf(video.VideoLiveHistoryId)));
+    }
+
+    /// <summary>
+    /// The sources of the canvas a live is streaming whose sound is in the mix: those are the ones
+    /// a volume means something for. A live of a single file has none.
+    /// </summary>
+    private IReadOnlyList<LiveSource> SourcesOf(VideoEntity video)
+    {
+        if (video.VideoLiveHistoryId is not { } historyId)
+        {
+            return [];
+        }
+
+        if (video.ScenePkid is { } scenePkid)
+        {
+            return _videoRepository.FindByLiveHistoryId(historyId)
+                .Where(row => row.ScenePkid == scenePkid && row.AudioEnabled)
+                .OrderBy(row => row.Pkid)
+                .Select(row => new LiveSource(row.Pkid, row.Name, row.SourceKind.ToString(), row.Volume))
+                .ToList();
+        }
+
+        return video.AudioEnabled ? [new LiveSource(video.Pkid, video.Name, video.SourceKind.ToString(), video.Volume)] : [];
+    }
+
+    /// <summary>
+    /// Sets how loud one source of a canvas is in the mix of the live, and starts the pass again
+    /// for the mix to take it. The pass goes out on the connection the live already has, so the
+    /// viewers hear the new level without the live going off air.
+    /// </summary>
+    public MessageResponse ApplyVolume(int videoPkid, LiveVolumeRequest request)
+    {
+        ArgumentNullException.ThrowIfNull(request);
+
+        if (!_sessions.TryGet(videoPkid, out var session) || session is null || session.HasExited)
+        {
+            _logger.LogWarning("{Message}", _localizer.PrintMessage("live.not.streaming"));
+            throw new NotFoundCustomException("live.not.streaming");
+        }
+
+        var video = _videoRepository.FindByPkid(videoPkid)
+            ?? throw new NotFoundCustomException("video.not.found");
+
+        // Only a source of the canvas this live is streaming: a pkid of any other row would
+        // change a live the page is not looking at.
+        var source = SourcesOf(video).FirstOrDefault(candidate => candidate.Pkid == request.SourcePkid)
+            ?? throw new NotFoundCustomException("video.not.found");
+
+        if (!InRange(request.Volume, 0, MaximumVolume))
+        {
+            throw new RequestValidationException(new Dictionary<string, string>(StringComparer.Ordinal)
+            {
+                ["volume"] = Message("live.parameter.range", "volume", Number(0), Number(MaximumVolume))
+            });
+        }
+
+        if (source.Volume == request.Volume)
+        {
+            return _responses.Build("live.parameters.unchanged", StatusCodes.Status200OK);
+        }
+
+        _videoRepository.SetVolume(source.Pkid, request.Volume);
+        _sessions.RequestRestart(videoPkid);
+        _notifier.Raise();
+
+        _logger.LogInformation(
+            "Live {Pkid}: volume of {Source} {Before}% -> {After}%", videoPkid, source.Name, source.Volume, request.Volume);
+        return _responses.Build("live.parameters.applied", StatusCodes.Status200OK);
     }
 
     /// <summary>

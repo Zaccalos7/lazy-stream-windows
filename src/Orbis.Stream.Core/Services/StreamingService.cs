@@ -28,6 +28,9 @@ public sealed class StreamingService
     private readonly LiveChangeNotifier _notifier;
     private readonly ILogger<StreamingService> _logger;
     private readonly FfmpegProbe _probe;
+    private readonly SettingRepository _settingRepository;
+    private readonly LiveTakeovers _takeovers;
+    private readonly SceneButtonService _sceneButtons;
 
     public StreamingService(
         VideoRepository videoRepository,
@@ -41,7 +44,10 @@ public sealed class StreamingService
         StreamingSessionRegistry sessions,
         LiveChangeNotifier notifier,
         ILogger<StreamingService> logger,
-        FfmpegProbe probe)
+        FfmpegProbe probe,
+        SettingRepository settingRepository,
+        LiveTakeovers takeovers,
+        SceneButtonService sceneButtons)
     {
         _videoRepository = videoRepository;
         _videoSettingRepository = videoSettingRepository;
@@ -55,6 +61,9 @@ public sealed class StreamingService
         _notifier = notifier;
         _logger = logger;
         _probe = probe;
+        _settingRepository = settingRepository;
+        _takeovers = takeovers;
+        _sceneButtons = sceneButtons;
     }
 
     public MessageResponse StartLive(StartLiveRequest request)
@@ -67,6 +76,7 @@ public sealed class StreamingService
         var streamKey = request.StreamKey!;
         var streamUrl = request.StreamUrl!;
 
+        RequireRealKey(streamKey);
         CheckIfALiveAlreadyStreamingForAChannel(channelName, platformStreamName);
 
         // Checked before any row is saved: ffprobe's own error on a missing file is unreadable.
@@ -116,14 +126,23 @@ public sealed class StreamingService
     /// Port of <c>startVideo</c>: replays or restarts a single video whose details and settings
     /// are already stored, so no video row is created here.
     /// </summary>
-    public MessageResponse StartVideo(VideoRequest videoRecord)
+    /// <param name="freshKey">
+    /// The key to go on air with in place of the one the live was started with: what a platform
+    /// that hands out a key for every live needs (TikTok, see LiveStreamKeys). Null keeps the old one.
+    /// </param>
+    public MessageResponse StartVideo(VideoRequest videoRecord, string? freshKey = null)
     {
         ArgumentNullException.ThrowIfNull(videoRecord);
 
         var startLiveRecord = MapToStartLiveRecord(videoRecord);
+        if (!string.IsNullOrWhiteSpace(freshKey))
+        {
+            startLiveRecord = startLiveRecord with { StreamKey = freshKey.Trim() };
+        }
 
         var channelName = startLiveRecord.ChannelName!;
         var platformStreamName = startLiveRecord.PlatformStreamName!;
+        RequireRealKey(startLiveRecord.StreamKey);
         CheckIfALiveAlreadyStreamingForAChannel(channelName, platformStreamName);
 
         var videoPathFolder = startLiveRecord.VideoPath!;
@@ -139,6 +158,147 @@ public sealed class StreamingService
 
         var streamingUrl = FfmpegCommandBuilder.BuildStreamingUrl(streamUrl, streamKey);
         return StreamingVideo(videoLiveHistory, streamingUrl);
+    }
+
+    /// <summary>
+    /// A spot for the live of a row: it waits for a clip already in place of the program to end,
+    /// then plays, and the program comes back after it (see <see cref="LiveTakeovers"/>).
+    /// </summary>
+    public void EnqueueSpot(string spotPath, int videoLivePkid)
+    {
+        var normalized = NormalizeUserPath(spotPath ?? string.Empty);
+        if (!File.Exists(normalized))
+        {
+            _logger.LogError("{Message} {Path}", _localizer.PrintMessage("file.not.found"), normalized);
+            throw new NotFoundCustomException("file.not.found", [normalized]);
+        }
+
+        var history = RunningHistoryOf(videoLivePkid);
+        _takeovers.Request(history, TakeoverKind.Video, Path.GetFullPath(normalized), Path.GetFileName(normalized), null, cut: false);
+        _logger.LogInformation("Spot {Path} queued on the live {History}", normalized, history);
+    }
+
+    /// <summary>
+    /// A button of the scene deck pressed for the live of a row: its file goes on air now, in place
+    /// of the program or of whatever stands in for it. A button already on air is left as it is,
+    /// so a second press of the key does not start a clip over.
+    /// </summary>
+    public MessageResponse PlaySceneButton(int videoLivePkid, long buttonPkid)
+    {
+        var history = RunningHistoryOf(videoLivePkid);
+        var button = _sceneButtons.Find(buttonPkid)
+            ?? throw new NotFoundCustomException("scene.button.not.found", [buttonPkid]);
+        var path = _sceneButtons.PathOf(button)
+            ?? throw new LiveException("scene.button.media.missing", [button.Label]);
+
+        if (string.Equals(button.DisplayMode, "in_scene", StringComparison.OrdinalIgnoreCase))
+        {
+            var active = _takeovers.ActiveOverlayOf(history);
+            if (active?.ButtonPkid == buttonPkid)
+            {
+                _takeovers.StopOverlay(history, buttonPkid);
+                _sessions.RequestRestart(videoLivePkid);
+                _notifier.Raise();
+                _logger.LogInformation("In-scene overlay {Label} toggled off on live {History}", button.Label, history);
+                return _responses.Build("scene.overlay.stopped", StatusCodes.Status200OK, [button.Label]);
+            }
+
+            var overlayKind = SceneButtonService.KindOf(path);
+            var overlay = _takeovers.RequestOverlay(
+                history,
+                buttonPkid,
+                path,
+                button.Label,
+                overlayKind,
+                button.Placement,
+                button.X,
+                button.Y,
+                button.Width,
+                button.Height,
+                button.DurationSeconds);
+
+            if (overlay is null)
+            {
+                throw new LiveException("live.not.streaming");
+            }
+
+            _sessions.RequestRestart(videoLivePkid);
+            _notifier.Raise();
+
+            if (button.DurationSeconds is > 0 and var duration)
+            {
+                _executor.Execute(async () =>
+                {
+                    await Task.Delay(TimeSpan.FromSeconds(duration)).ConfigureAwait(false);
+                    if (_takeovers.ActiveOverlayOf(history)?.ButtonPkid == buttonPkid)
+                    {
+                        _takeovers.StopOverlay(history, buttonPkid);
+                        _sessions.RequestRestart(videoLivePkid);
+                        _notifier.Raise();
+                        _logger.LogInformation("In-scene overlay {Label} expired after {Duration}s on live {History}", button.Label, duration, history);
+                    }
+                });
+            }
+
+            _logger.LogInformation("In-scene overlay {Label} started on live {History} at {Placement}", button.Label, history, button.Placement);
+            return _responses.Build("scene.overlay.started", StatusCodes.Status202Accepted, [button.Label]);
+        }
+
+        if (_takeovers.CurrentOf(history)?.ButtonPkid == buttonPkid && !_takeovers.HasPending(history))
+        {
+            return _responses.Build("scene.already.on.air", StatusCodes.Status200OK, [button.Label]);
+        }
+
+        var kind = SceneButtonService.KindOf(path) == SceneButtonKind.Image ? TakeoverKind.Image : TakeoverKind.Video;
+        if (_takeovers.Request(history, kind, path, button.Label, buttonPkid, cut: true) is null)
+        {
+            throw new LiveException("live.not.streaming");
+        }
+
+        _logger.LogInformation("Scene {Label} asked on the live {History}", button.Label, history);
+        return _responses.Build("scene.started", StatusCodes.Status202Accepted, [button.Label]);
+    }
+
+    /// <summary>"Resume live": what stands in for the program ends, and the program comes back where it was left.</summary>
+    public MessageResponse ResumeProgram(int videoLivePkid)
+    {
+        var history = RunningHistoryOf(videoLivePkid);
+        var resumedTakeover = _takeovers.Resume(history);
+        var stoppedOverlay = _takeovers.StopOverlay(history);
+        if (stoppedOverlay)
+        {
+            _sessions.RequestRestart(videoLivePkid);
+            _notifier.Raise();
+        }
+
+        return (resumedTakeover || stoppedOverlay)
+            ? _responses.Build("scene.resumed", StatusCodes.Status200OK)
+            : _responses.Build("scene.nothing.to.resume", StatusCodes.Status200OK);
+    }
+
+    /// <summary>Whether the live of a row is running, and what is on air in place of its program.</summary>
+    public LiveSceneState SceneStateOf(int videoLivePkid)
+    {
+        var history = CheckIfExistsAndReturnEntity(videoLivePkid).VideoLiveHistoryId;
+        if (history is { } pkid && _takeovers.IsOpen(pkid))
+        {
+            return new LiveSceneState(true, pkid, _takeovers.LiveSceneOf(pkid));
+        }
+
+        return new LiveSceneState(false, history, null);
+    }
+
+    /// <summary>The live a row belongs to, when it is running: a request for a live that is not would wait for its next play.</summary>
+    private long RunningHistoryOf(int videoLivePkid)
+    {
+        var video = CheckIfExistsAndReturnEntity(videoLivePkid);
+        if (video.VideoLiveHistoryId is not { } history || !_takeovers.IsOpen(history))
+        {
+            _logger.LogWarning("{Message}", _localizer.PrintMessage("live.not.streaming"));
+            throw new LiveException("live.not.streaming");
+        }
+
+        return history;
     }
 
     public void StopVideoStreamingByPkid(int videoLivePkid)
@@ -166,6 +326,20 @@ public sealed class StreamingService
         }
     }
 
+    /// <summary>
+    /// The same stop, asked by this application rather than by the user, with the reason the row
+    /// keeps instead of the plain "live stopped".
+    /// </summary>
+    public void StopBecause(int videoLivePkid, string reason)
+    {
+        if (_sessions.TryGet(videoLivePkid, out var session) && session is not null)
+        {
+            session.StopReason = reason;
+        }
+
+        StopVideoStreamingByPkid(videoLivePkid);
+    }
+
     public void ResetFlag(int videoLivePkid)
     {
         var video = CheckIfExistsAndReturnEntity(videoLivePkid);
@@ -186,10 +360,11 @@ public sealed class StreamingService
 
     /// <summary>
     /// The row the ffmpeg of a live is keyed on, the one whose flag the streaming loop polls. For a
-    /// canvas it is the first source with a picture, exactly as the composer put the live together.
+    /// canvas it is its base source (see <see cref="SceneRows.BaseOf"/>), exactly as the streamer
+    /// put the live together.
     /// </summary>
     private VideoEntity DrivingRowOf(VideoEntity video) =>
-        RowsOfComposition(video).FirstOrDefault(row => row.SourceKind.HasPicture()) ?? video;
+        SceneRows.BaseOf(RowsOfComposition(video)) ?? video;
 
     /// <summary>
     /// Forgets where every video of a live history was stopped, so the next play starts the
@@ -292,6 +467,21 @@ public sealed class StreamingService
         throw new LiveException("channel.has.already.a.live.active", [channelName]);
     }
 
+    /// <summary>
+    /// A live of a platform whose key is asked for at every live is only started with the key of
+    /// that live: the stand-in its configuration keeps (LiveStreamKeys) would be refused by the
+    /// ingest after a connection that reads as a live for a while, and the user would see nothing.
+    /// An empty key is left alone: a custom ingest may well carry everything in its address.
+    /// </summary>
+    private void RequireRealKey(string? streamKey)
+    {
+        if (LiveStreamKeys.IsStandIn(streamKey))
+        {
+            _logger.LogWarning("{Message}", _localizer.PrintMessage("stream.key.required"));
+            throw new LiveException("stream.key.required");
+        }
+    }
+
     private string GetPlatformStreamName(long videoLiveHistoryPkid) =>
         _videoLiveHistoryRepository.FindByPkid(videoLiveHistoryPkid)?.PlatformStreamName ?? string.Empty;
 
@@ -310,6 +500,7 @@ public sealed class StreamingService
         var streamKey = request.StreamKey!;
         var streamUrl = request.StreamUrl!;
 
+        RequireRealKey(streamKey);
         CheckIfALiveAlreadyStreamingForAChannel(channelName, platformStreamName);
 
         // A layout is only slots: what goes on air is the scene filled from it, saved on its own.
@@ -350,7 +541,10 @@ public sealed class StreamingService
     {
         foreach (var item in items)
         {
-            var videoPath = item.SourceKind == SourceKind.File
+            // An overlay is a file on disk too, and its row shows where it is. It is not probed: it
+            // has no length for the live to be measured with, and no sound to be mixed.
+            var onDisk = item.SourceKind is SourceKind.File or SourceKind.Overlay;
+            var videoPath = onDisk
                 ? Path.GetFullPath(StreamingService.NormalizeUserPath(item.SourceTarget))
                 : SceneReference.ItemPath(item.SourceKind, item.SourceTarget);
             var media = item.SourceKind == SourceKind.File ? ProbeFile(videoPath) : null;
@@ -362,7 +556,7 @@ public sealed class StreamingService
                 // has no path, so the tile carries the name the pages show and the target the
                 // command line opens.
                 VideoPath = videoPath,
-                Extension = item.SourceKind == SourceKind.File
+                Extension = onDisk
                     ? ExtractExtensionFile(Path.GetFileName(item.SourceTarget))
                     : item.SourceKind.ToWireValue().ToLowerInvariant(),
                 LastTimeStampBeforeStop = 0L,
@@ -379,7 +573,7 @@ public sealed class StreamingService
                 Y = item.Y,
                 Width = item.Width,
                 Height = item.Height,
-                AudioEnabled = item.AudioEnabled,
+                AudioEnabled = item.AudioEnabled && !item.SourceKind.IsOverlay(),
                 DurationMilliseconds = media?.DurationMilliseconds,
                 SourceWidth = media?.Width,
                 SourceHeight = media?.Height
@@ -394,7 +588,10 @@ public sealed class StreamingService
     private static string DescribeSource(SceneItemEntity item) => item.SourceKind switch
     {
         SourceKind.Screen => item.SourceTarget,
-        SourceKind.Camera => item.SourceTarget.Replace("video=", string.Empty, StringComparison.Ordinal),
+        // A camera heard through its microphone is named after both: "Webcam · Microphone (Webcam)".
+        SourceKind.Camera => item.SourceTarget
+            .Replace(":audio=", " · ", StringComparison.Ordinal)
+            .Replace("video=", string.Empty, StringComparison.Ordinal),
         SourceKind.Microphone => item.SourceTarget.Replace("audio=", string.Empty, StringComparison.Ordinal),
         _ => Path.GetFileName(item.SourceTarget)
     };
@@ -410,16 +607,36 @@ public sealed class StreamingService
             throw new NotFoundCustomException("video.streaming.not.found");
         }
 
-        _executor.Execute(() => _ = RunPlaylistAsync(videoList, streamingUrl, videoLiveHistoryId));
+        var transport = TransportOf(videoLiveHistory);
+        _executor.Execute(() => _ = RunPlaylistAsync(videoList, streamingUrl, videoLiveHistoryId, transport));
 
         return _responses.Build("live.started", StatusCodes.Status202Accepted);
     }
 
-    private async Task RunPlaylistAsync(IReadOnlyList<VideoEntity> videos, string streamingUrl, long videoLiveHistoryId)
+    /// <summary>
+    /// What publishes the live, as the configuration of its channel asks, on the platforms that let
+    /// it choose (YouTube): ffmpeg with the switch on, the publisher of this application with it
+    /// off. Elsewhere, and for a live with no configuration, the platform decides (null). The
+    /// history keeps the url and the key the live started with, which are what a configuration is
+    /// unique by.
+    /// </summary>
+    private RelayTransport? TransportOf(VideoLiveHistoryEntity history)
+    {
+        if (!StreamPlatformProfile.For(history.StreamUrl).ChoosableTransport
+            || _settingRepository.FindByStreamUrlAndStreamKey(history.StreamUrl, history.StreamKey) is not { } setting)
+        {
+            return null;
+        }
+
+        return setting.FfmpegSender ? RelayTransport.FfmpegSender : RelayTransport.NativeRtmp;
+    }
+
+    private async Task RunPlaylistAsync(
+        IReadOnlyList<VideoEntity> videos, string streamingUrl, long videoLiveHistoryId, RelayTransport? transport)
     {
         try
         {
-            await _streamer.StreamPlaylistAsync(videos, streamingUrl, videoLiveHistoryId, _shutdown.Token)
+            await _streamer.StreamPlaylistAsync(videos, streamingUrl, videoLiveHistoryId, transport, _shutdown.Token)
                 .ConfigureAwait(false);
         }
         catch (OperationCanceledException)

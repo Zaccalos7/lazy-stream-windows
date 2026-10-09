@@ -151,6 +151,19 @@ public sealed class FilterValueConverterTests
     }
 }
 
+public sealed class AutoCleanupServiceTests
+{
+    [Fact]
+    public async Task DelayAsync_TakesAnIntervalOfMonthsWithoutStoppingTheApplication()
+    {
+        // Two months: past what Task.Delay takes, which threw and stopped the host, live and all.
+        using var stop = new CancellationTokenSource(TimeSpan.FromMilliseconds(200));
+
+        await Assert.ThrowsAnyAsync<OperationCanceledException>(
+            () => AutoCleanupService.DelayAsync(TimeSpan.FromDays(60), stop.Token));
+    }
+}
+
 public sealed class DatabaseBootstrapperTests
 {
     [Fact]
@@ -175,6 +188,165 @@ public sealed class DatabaseBootstrapperTests
         var lowCpu = settings.FindByTitleAndPlatform("Default Low Twitch", "Twitch");
         Assert.NotNull(lowCpu);
         Assert.False(lowCpu.IsDefaultConfiguration);
+    }
+
+    [Fact]
+    public void StartAsync_SeedsKickAndFacebookGamingWithTheirOwnDefaults()
+    {
+        using var database = new TemporaryDatabase();
+        var settings = database.Repository<VideoSettingRepository>();
+
+        // Kick: 1080p30 at 6 Mbps with the 160 Kbps of sound it asks for.
+        var kick = Assert.Single(settings.FindByIsDefaultConfigurationTrueAndDefaultPlatformConfiguration("Kick"));
+        Assert.Equal("Default Kick", kick.Title);
+        Assert.Equal((1920, 1080, 30d), (kick.VideoWidth, kick.VideoHeight, kick.FrameRate));
+        Assert.Equal(6_000_000, kick.VideoBitrate);
+        Assert.Equal(160_000, kick.AudioSetting!.AudioBitrate);
+        Assert.Equal(2, kick.GopSize);
+
+        // Facebook Gaming: 1080p30 in the middle of the 3-6 Mbps Facebook takes for it, main profile.
+        var facebook = Assert.Single(settings.FindByIsDefaultConfigurationTrueAndDefaultPlatformConfiguration("Facebook Gaming"));
+        Assert.Equal("Default Facebook Gaming", facebook.Title);
+        Assert.Equal((1920, 1080, 30d), (facebook.VideoWidth, facebook.VideoHeight, facebook.FrameRate));
+        Assert.Equal(4_500_000, facebook.VideoBitrate);
+        Assert.Equal(128_000, facebook.AudioSetting!.AudioBitrate);
+        Assert.Contains(facebook.VideoSettingsOptions, option => option.Key == "profile" && option.Value == "main");
+
+        var lowKick = settings.FindByTitleAndPlatform("Default Low Kick", "Kick");
+        var lowFacebook = settings.FindByTitleAndPlatform("Default Low Facebook Gaming", "Facebook Gaming");
+        Assert.NotNull(lowKick);
+        Assert.NotNull(lowFacebook);
+        Assert.False(lowKick.IsDefaultConfiguration);
+        Assert.False(lowFacebook.IsDefaultConfiguration);
+        Assert.Equal((1280, 720, 3_000_000), (lowFacebook.VideoWidth, lowFacebook.VideoHeight, lowFacebook.VideoBitrate));
+    }
+
+    [Fact]
+    public void StartAsync_SeedsTikTokStandingUp()
+    {
+        using var database = new TemporaryDatabase();
+        var settings = database.Repository<VideoSettingRepository>();
+
+        // TikTok: 1080x1920 at 30 fps and 4.5 Mbps, upright as the phones it is watched on.
+        var tiktok = Assert.Single(settings.FindByIsDefaultConfigurationTrueAndDefaultPlatformConfiguration("TikTok"));
+        Assert.Equal("Default TikTok", tiktok.Title);
+        Assert.Equal((1080, 1920, 30d), (tiktok.VideoWidth, tiktok.VideoHeight, tiktok.FrameRate));
+        Assert.Equal(4_500_000, tiktok.VideoBitrate);
+
+        var low = settings.FindByTitleAndPlatform("Default Low TikTok", "TikTok");
+        Assert.NotNull(low);
+        Assert.False(low.IsDefaultConfiguration);
+        Assert.Equal((720, 1280, 2_500_000), (low.VideoWidth, low.VideoHeight, low.VideoBitrate));
+    }
+
+    [Fact]
+    public async Task StartAsync_AddsTheNewPlatformsOnceToAnInstallationThatHadTheOldOnes()
+    {
+        using var database = new TemporaryDatabase();
+        var settings = database.Repository<VideoSettingRepository>();
+
+        // A second start, as every start of the application after the first one is.
+        await new DatabaseBootstrapper(
+                database.ConnectionFactory,
+                settings,
+                database.Repository<VideoRepository>(),
+                NullLogger<DatabaseBootstrapper>.Instance)
+            .StartAsync(CancellationToken.None);
+
+        foreach (var platform in new[] { "Twitch", "Youtube", "Kick", "Facebook Gaming", "TikTok" })
+        {
+            Assert.Single(settings.FindByIsDefaultConfigurationTrueAndDefaultPlatformConfiguration(platform));
+        }
+    }
+
+    [Fact]
+    public void Schema_TurnsTheFfmpegDeliveryOnForYouTubeOnceAndOffForTwitch()
+    {
+        using var database = new TemporaryDatabase();
+        using var connection = database.ConnectionFactory.Open();
+        using (var insert = connection.CreateCommand())
+        {
+            insert.CommandText = """
+                INSERT INTO setting (stream_url, stream_key, platform_stream_name, description, video_folder, is_active, channel_name, ffmpeg_sender)
+                VALUES ('rtmps://a.rtmps.youtube.com/live2', 'yt', 'youtube', '', '', 1, 'yt', 0),
+                       ('rtmp://live.twitch.tv/app', 'tw', 'twitch', '', '', 1, 'tw', 1);
+                """;
+            insert.ExecuteNonQuery();
+        }
+
+        Assert.True(DatabaseSchema.PublishYouTubeWithFfmpeg(connection) >= 1);
+
+        var settings = database.Repository<SettingRepository>();
+        Assert.True(settings.FindByStreamUrlAndStreamKey("rtmps://a.rtmps.youtube.com/live2", "yt")!.FfmpegSender);
+        Assert.False(settings.FindByStreamUrlAndStreamKey("rtmp://live.twitch.tv/app", "tw")!.FfmpegSender);
+
+        // Once: the schema is already past it, so a YouTube channel turned off stays off.
+        using (var off = connection.CreateCommand())
+        {
+            off.CommandText = "UPDATE setting SET ffmpeg_sender = 0 WHERE stream_key = 'yt'";
+            off.ExecuteNonQuery();
+        }
+
+        DatabaseSchema.EnsureCreated(connection);
+        Assert.False(settings.FindByStreamUrlAndStreamKey("rtmps://a.rtmps.youtube.com/live2", "yt")!.FfmpegSender);
+    }
+
+    [Fact]
+    public void StartAsync_SeedsYouTubeAtAFixedPictureWithNothingThatReplacesTheConstantRate()
+    {
+        using var database = new TemporaryDatabase();
+        var settings = database.Repository<VideoSettingRepository>();
+
+        var youtube = Assert.Single(settings.FindByIsDefaultConfigurationTrueAndDefaultPlatformConfiguration("Youtube"));
+        Assert.Equal((1920, 1080, 30d), (youtube.VideoWidth, youtube.VideoHeight, youtube.FrameRate));
+        Assert.Equal(6_000_000, youtube.VideoBitrate);
+        Assert.Equal(128_000, youtube.AudioSetting!.AudioBitrate);
+        Assert.DoesNotContain(youtube.VideoSettingsOptions, option => option.Key is "tune" or "x264-params");
+
+        var low = settings.FindByTitleAndPlatform("Default Low Youtube", "Youtube")!;
+        Assert.Equal((1280, 720, 3_000_000), (low.VideoWidth, low.VideoHeight, low.VideoBitrate));
+    }
+
+    [Fact]
+    public async Task StartAsync_MovesTheLegacyYouTubeDefaultsButNotOnesTheUserEdited()
+    {
+        using var database = new TemporaryDatabase();
+        var settings = database.Repository<VideoSettingRepository>();
+
+        // The high default exactly as the earlier versions seeded it.
+        var high = Assert.Single(settings.FindByIsDefaultConfigurationTrueAndDefaultPlatformConfiguration("Youtube"));
+        high.VideoWidth = null;
+        high.VideoHeight = null;
+        high.FrameRate = null;
+        high.VideoBitrate = 8_000_000;
+        high.AudioSetting!.AudioBitrate = 192_000;
+        high.VideoSettingsOptions =
+        [
+            new VideoSettingsOptionEntity { Key = "preset", Value = "veryfast" },
+            new VideoSettingsOptionEntity { Key = "tune", Value = "zerolatency" },
+            new VideoSettingsOptionEntity { Key = "profile", Value = "high" },
+            new VideoSettingsOptionEntity { Key = "x264-params", Value = "rc_lookahead=20" }
+        ];
+        settings.Update(high);
+
+        // The low one, edited by the user: a bitrate of their own.
+        var low = settings.FindByTitleAndPlatform("Default Low Youtube", "Youtube")!;
+        low.VideoBitrate = 2_000_000;
+        settings.Update(low);
+
+        await new DatabaseBootstrapper(
+                database.ConnectionFactory,
+                settings,
+                database.Repository<VideoRepository>(),
+                NullLogger<DatabaseBootstrapper>.Instance)
+            .StartAsync(CancellationToken.None);
+
+        var moved = settings.FindById(high.Id!.Value)!;
+        Assert.Equal((1920, 1080, 6_000_000), (moved.VideoWidth, moved.VideoHeight, moved.VideoBitrate));
+        Assert.Equal(128_000, moved.AudioSetting!.AudioBitrate);
+        Assert.DoesNotContain(moved.VideoSettingsOptions, option => option.Key is "tune" or "x264-params");
+
+        Assert.Equal(2_000_000, settings.FindById(low.Id!.Value)!.VideoBitrate);
     }
 
     [Fact]
@@ -300,24 +472,33 @@ public sealed class LiveLinkTests
     }
 
     [Fact]
-    public void UrlOf_YouTubeIsThePageOfTheHandle()
+    public void UrlOf_YouTubeIsTheLiveControlRoomOfTheBroadcastOnAir()
+    {
+        Assert.Equal(
+            "https://studio.youtube.com/video/VlzeeXA0sHI/livestreaming",
+            LiveLinkView.UrlOf(YouTube, "madajeeita207", null, "VlzeeXA0sHI"));
+    }
+
+    [Fact]
+    public void UrlOf_YouTubeBeforeTheBroadcastIsSeenIsTheControlRoomOfTheChannel()
+    {
+        // A channel id is an address Studio takes; a handle is not, so Studio is asked for the
+        // channel of whoever is signed in.
+        Assert.Equal(
+            "https://studio.youtube.com/channel/UCuAXFkgsw1L7xaCfnd5JJOw/livestreaming",
+            LiveLinkView.UrlOf(YouTube, "UCuAXFkgsw1L7xaCfnd5JJOw", null));
+        Assert.Equal("https://studio.youtube.com/channel/UC/livestreaming", LiveLinkView.UrlOf(YouTube, "@madajeeita207", null));
+    }
+
+    [Fact]
+    public void YouTubeChannelUrl_IsThePageOfTheHandleOrOfTheId()
     {
         // The page of a handle is /@handle. /channel/ takes a channel id and nothing else, so
         // youtube.com/channel/madajeeita207 is not the channel of that handle: it is a page that is
         // not there, which is a link that looks right and goes nowhere.
-        Assert.Equal("https://www.youtube.com/@reproChannel", LiveLinkView.UrlOf(YouTube, "reproChannel", null));
-        Assert.Equal("https://www.youtube.com/@madajeeita207", LiveLinkView.UrlOf(YouTube, "madajeeita207", null));
-        Assert.Equal("https://www.youtube.com/@madajeeita207", LiveLinkView.UrlOf(YouTube, "@madajeeita207", null));
-    }
-
-    [Fact]
-    public void UrlOf_YouTubeTakesAChannelIdWhereThePageOfOneIs()
-    {
-        // A configuration is filled in with whatever the studio hands over, and the studio hands
-        // over the channel id as readily as the handle. The id is the one that goes in /channel/.
-        Assert.Equal(
-            "https://www.youtube.com/channel/UCuAXFkgsw1L7xaCfnd5JJOw",
-            LiveLinkView.UrlOf(YouTube, "UCuAXFkgsw1L7xaCfnd5JJOw", null));
+        Assert.Equal("https://www.youtube.com/@madajeeita207", LiveLinkView.YouTubeChannelUrl("madajeeita207"));
+        Assert.Equal("https://www.youtube.com/@madajeeita207", LiveLinkView.YouTubeChannelUrl("@madajeeita207"));
+        Assert.Equal("https://www.youtube.com/channel/UCuAXFkgsw1L7xaCfnd5JJOw", LiveLinkView.YouTubeChannelUrl("UCuAXFkgsw1L7xaCfnd5JJOw"));
     }
 
     [Fact]
@@ -338,7 +519,7 @@ public sealed class LiveLinkTests
         // The form of the configuration stores the platform in the field named platform stream
         // name, and the channel in the channel name: following the wrong one gave twitch.tv/twitch.
         Assert.Equal("https://www.twitch.tv/ciclovisione", LiveLinkView.UrlOf(Twitch, "ciclovisione", "twitch"));
-        Assert.Equal("https://www.youtube.com/@ciclovisione", LiveLinkView.UrlOf(YouTube, "ciclovisione", "youtube"));
+        Assert.Equal("https://studio.youtube.com/channel/UC/livestreaming", LiveLinkView.UrlOf(YouTube, "ciclovisione", "youtube"));
     }
 
     [Fact]
@@ -376,6 +557,115 @@ public sealed class LiveLinkTests
         Assert.Equal("platform-twitch", LiveLinkView.ClassOf("twitch"));
         Assert.Equal("platform-youtube", LiveLinkView.ClassOf("youtube"));
         Assert.Equal("platform-generic", LiveLinkView.ClassOf("anythingElse"));
+    }
+
+    private const string Kick = "rtmps://fa723fc1b171.global-contribute.live-video.net/app";
+    private const string Facebook = "rtmps://rtmp-api.facebook.com:443/rtmp";
+    private const string TikTok = "rtmp://push-rtmp-l11-va01.tiktokcdn.com/stage";
+
+    [Theory]
+    // The presets of the channel settings...
+    [InlineData(Kick, "kick")]
+    [InlineData(Facebook, "facebook")]
+    [InlineData(TikTok, "tiktok")]
+    // As the dashboards write them: with the slash at the end.
+    [InlineData(Facebook + "/", "facebook")]
+    [InlineData("rtmp://live.twitch.tv/app/", "twitch")]
+    // ...and the ingest an account or a live has of its own, which is never the preset.
+    [InlineData("rtmps://0123456789ab.global-contribute.live-video.net:443/app/", "kick")]
+    [InlineData("rtmps://live-api-s.facebook.com:443/rtmp/", "facebook")]
+    [InlineData("rtmp://push-rtmp-f5-tt02.tiktokcdn-eu.com/game/", "tiktok")]
+    public void PlatformOf_KnowsKickAndFacebookByTheDomainOfTheirIngest(string streamUrl, string platform) =>
+        Assert.Equal(platform, LiveLinkView.PlatformOf(streamUrl));
+
+    [Fact]
+    public void PlatformOf_StillWantsThePresetForTheIngestsThatAreTheSameForEverybody()
+    {
+        // A Twitch server of its own is not the address the configuration form fills in.
+        Assert.Null(LiveLinkView.PlatformOf("rtmps://fra05.contribute.live-video.net/app"));
+    }
+
+    [Fact]
+    public void UrlOf_KickIsTheChannelAndFacebookGamingThePage()
+    {
+        Assert.Equal("https://kick.com/reprochannel", LiveLinkView.UrlOf(Kick, "ReproChannel", "kick"));
+        Assert.Equal("https://www.facebook.com/ReproGaming", LiveLinkView.UrlOf(Facebook, "ReproGaming", "facebook"));
+        Assert.Equal("https://www.facebook.com/repro", LiveLinkView.UrlOf("rtmps://live-api-s.facebook.com:443/rtmp/", "@repro", null));
+    }
+
+    [Fact]
+    public void UrlOf_TikTokIsTheLiveOfTheAccount()
+    {
+        Assert.Equal("https://www.tiktok.com/@repro.channel/live", LiveLinkView.UrlOf(TikTok, "@repro.channel", "tiktok"));
+        Assert.Equal("https://www.tiktok.com/@repro/live", LiveLinkView.UrlOf("rtmp://push.tiktokcdn-us.com/live", "repro", null));
+    }
+
+    [Fact]
+    public void KickAndFacebookGamingHaveTheirNamesMarksAndColours()
+    {
+        Assert.Equal("Kick", LiveLinkView.LabelOf("kick"));
+        Assert.Equal("Facebook Gaming", LiveLinkView.LabelOf("facebook"));
+
+        // The K of blocks; the blue square of Facebook Gaming with its two pieces cut out of it, as
+        // the official logo draws it; the note of TikTok.
+        Assert.StartsWith("M1.333 0h8", LiveLinkView.MarkupOf("kick"), StringComparison.Ordinal);
+        Assert.StartsWith("M0 0h24v24H0zM3.75 3.75", LiveLinkView.MarkupOf("facebook"), StringComparison.Ordinal);
+        Assert.StartsWith("M12.525.02", LiveLinkView.MarkupOf("tiktok"), StringComparison.Ordinal);
+        var marks = new[] { "twitch", "youtube", "kick", "facebook", "tiktok", null }.Select(LiveLinkView.MarkupOf).ToList();
+        Assert.Equal(marks.Count, marks.Distinct().Count());
+
+        Assert.Equal("platform-kick", LiveLinkView.ClassOf("kick"));
+        Assert.Equal("platform-facebook", LiveLinkView.ClassOf("facebook"));
+        Assert.Equal("platform-tiktok", LiveLinkView.ClassOf("tiktok"));
+        Assert.Equal("TikTok", LiveLinkView.LabelOf("tiktok"));
+    }
+
+    [Fact]
+    public void TheChannelSettingsOfferTheFivePlatformsWithTheirIngest()
+    {
+        Assert.Equal(["twitch", "youtube", "kick", "facebook", "tiktok"], MainChannelSettingModel.Platforms.Select(platform => platform.Value));
+        Assert.All(MainChannelSettingModel.Platforms, platform =>
+        {
+            Assert.StartsWith("rtmp", platform.StreamUrl, StringComparison.Ordinal);
+            // The preset is an ingest of the platform it is offered for.
+            Assert.Equal(platform.Platform, Orbis.Stream.Core.Streaming.StreamPlatforms.Detect(platform.StreamUrl + "/key"));
+        });
+
+        // Kick and Facebook are the two whose address can be the account's or the live's own and
+        // whose dashboard the hint points at; TikTok, whose key is asked for at every live, has its own.
+        Assert.Equal("kick facebook", MainChannelSettingModel.PersonalIngests);
+        Assert.Equal("tiktok", MainChannelSettingModel.KeyEachLive);
+    }
+
+    [Fact]
+    public void ChoiceOf_ReadsTheNameThenTheIngestOfAConfiguration()
+    {
+        Assert.Equal("facebook", MainChannelSettingModel.ChoiceOf("Facebook")?.Value);
+        Assert.Equal("tiktok", MainChannelSettingModel.ChoiceOf("TikTok")?.Value);
+        Assert.Equal("tiktok", MainChannelSettingModel.ChoiceOf("my channel", "rtmp://push-rtmp-f5-tt02.tiktokcdn-eu.com/game/")?.Value);
+        Assert.Equal("kick", MainChannelSettingModel.ChoiceOf(" kick ")?.Value);
+        Assert.Equal("kick", MainChannelSettingModel.ChoiceOf("my channel", Kick + "/")?.Value);
+        Assert.Equal("youtube", MainChannelSettingModel.ChoiceOf(null, "rtmps://a.rtmps.youtube.com/live2")?.Value);
+        Assert.Null(MainChannelSettingModel.ChoiceOf("my channel", "rtmp://my.cdn.example/live"));
+    }
+
+    [Fact]
+    public void TheLowDefaultsAreShownInTheLanguageOfThePage()
+    {
+        var text = new Orbis.Stream.Core.I18n.UiText(new Orbis.Stream.Core.I18n.Localizer(
+            new Orbis.Stream.Core.I18n.MessageCatalog(
+                Path.Combine(AppContext.BaseDirectory, "Messages"), NullLogger<Orbis.Stream.Core.I18n.MessageCatalog>.Instance),
+            new HttpContextAccessor()));
+
+        Assert.Equal("Default Low Kick", SettingTitleView.Of("Default Low Kick", text));
+        // A name with a space is a key without it.
+        Assert.Equal("Default Low Facebook Gaming", SettingTitleView.Of("Default Low Facebook Gaming", text));
+        Assert.Equal(text["defaultLowFacebookGaming"], SettingTitleView.Of("default low facebook gaming", text));
+        // The seed spells YouTube the way it was stored, and is shown the way it is spelled.
+        Assert.Equal("Default Low YouTube", SettingTitleView.Of("Default Low Youtube", text));
+        Assert.Equal("Default Kick", SettingTitleView.Of("Default Kick", text));
+        Assert.Equal("Mine", SettingTitleView.Of("Mine", text));
+        Assert.Equal(text["untitled"], SettingTitleView.Of("  ", text));
     }
 }
 

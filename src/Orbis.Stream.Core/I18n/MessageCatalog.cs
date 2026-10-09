@@ -26,7 +26,13 @@ public sealed class MessageCatalog
 {
     public const string DefaultLanguage = "en";
 
-    private static readonly string[] KnownLanguages = ["en", "it", "de", "es", "fr", "pt", "ru", "zh", "ko", "ja", "la", "tlh", "hod"];
+    private static readonly string[] KnownLanguages = ["en", "it", "de", "es", "fr", "pt", "ru", "zh", "ko", "ja", "hi", "ar", "la", "tlh", "hod", "ro", "da", "nl", "fil"];
+
+    /// <summary>
+    /// Codes a browser sends for a language the catalogue knows by another one: Filipino is
+    /// standardised Tagalog, and many browsers in the Philippines still ask for "tl".
+    /// </summary>
+    private static readonly Dictionary<string, string> Aliases = new(StringComparer.OrdinalIgnoreCase) { ["tl"] = "fil" };
 
     private readonly Dictionary<string, PropertiesBundle> _bundles;
     private readonly ILogger<MessageCatalog> _logger;
@@ -72,6 +78,11 @@ public sealed class MessageCatalog
         }
 
         var primary = normalized.Split('_', StringSplitOptions.RemoveEmptyEntries).FirstOrDefault();
+        if (!string.IsNullOrEmpty(primary) && Aliases.TryGetValue(primary, out var alias))
+        {
+            primary = alias;
+        }
+
         if (!string.IsNullOrEmpty(primary) && _bundles.ContainsKey(primary))
         {
             return primary.ToLowerInvariant();

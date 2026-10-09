@@ -549,6 +549,91 @@ public sealed class VideoRepositoryTests
     }
 
     [Fact]
+    public void FindPaged_SearchesTheTitleAsAPartOfItAndNotAsAllOfIt()
+    {
+        using var database = new TemporaryDatabase();
+        var videos = database.Repository<VideoRepository>();
+        videos.Insert(Video(1, LiveStatus.Ended, "Saturday night live", database.LiveHistoryId));
+        videos.Insert(Video(2, LiveStatus.Ended, "Morning show", database.LiveHistoryId));
+
+        var page = videos.FindPaged(
+            new Dictionary<string, string> { [VideoRepository.TitleSearchFilter] = "night" },
+            PageRequest.Default(10, "pkid", false));
+
+        Assert.Equal(1, page.TotalElements);
+        Assert.Equal("Saturday night live", Assert.Single(page.Items).Name);
+    }
+
+    [Fact]
+    public void FindPaged_LooksTheWildcardsOfASearchForThemselves()
+    {
+        using var database = new TemporaryDatabase();
+        var videos = database.Repository<VideoRepository>();
+        videos.Insert(Video(1, LiveStatus.Ended, "100% live", database.LiveHistoryId));
+        videos.Insert(Video(2, LiveStatus.Ended, "clip_one", database.LiveHistoryId));
+        videos.Insert(Video(3, LiveStatus.Ended, "something else", database.LiveHistoryId));
+
+        // "%" and "_" are the wildcards of LIKE: unescaped they would match every row, and a
+        // search for "_" would narrow nothing at all while looking as if it had.
+        Assert.Equal(
+            "100% live",
+            Assert.Single(videos.FindPaged(
+                new Dictionary<string, string> { [VideoRepository.TitleSearchFilter] = "0% li" },
+                PageRequest.Default(10, "pkid", false)).Items).Name);
+
+        Assert.Equal(
+            "clip_one",
+            Assert.Single(videos.FindPaged(
+                new Dictionary<string, string> { [VideoRepository.TitleSearchFilter] = "_one" },
+                PageRequest.Default(10, "pkid", false)).Items).Name);
+    }
+
+    [Fact]
+    public void FindPaged_CombinesTheChannelTheStatusAndTheSearch()
+    {
+        using var database = new TemporaryDatabase();
+        var videos = database.Repository<VideoRepository>();
+        videos.Insert(Video(1, LiveStatus.Ended, "Launch party", database.LiveHistoryId));
+        videos.Insert(Video(2, LiveStatus.Error, "Launch party", database.LiveHistoryId));
+        videos.Insert(Video(3, LiveStatus.Ended, "Launch party", database.LiveHistoryId));
+
+        var second = videos.FindByPkid(2)!;
+        second.ChannelName = "another";
+        videos.Update(second);
+
+        // Each pick alone would keep all three rows: it is the three together that leave one.
+        var page = videos.FindPaged(
+            new Dictionary<string, string>
+            {
+                ["liveStatus"] = "ENDED",
+                ["channelName"] = "channel",
+                [VideoRepository.TitleSearchFilter] = "launch"
+            },
+            PageRequest.Default(10, "pkid", false));
+
+        Assert.Equal(2, page.TotalElements);
+        Assert.All(page.Items, video => Assert.Equal("Launch party", video.Name));
+    }
+
+    [Fact]
+    public void FindChannelNames_ListsEveryChannelOfTheVideosOnceAndInOrder()
+    {
+        using var database = new TemporaryDatabase();
+        var videos = database.Repository<VideoRepository>();
+        videos.Insert(Video(1, LiveStatus.Ended, "a", database.LiveHistoryId));
+        videos.Insert(Video(2, LiveStatus.Ended, "b", database.LiveHistoryId));
+        videos.Insert(Video(3, LiveStatus.Ended, "c", database.LiveHistoryId));
+
+        var third = videos.FindByPkid(3)!;
+        third.ChannelName = "alpha";
+        videos.Update(third);
+
+        // The filter of the history has to reach a channel the settings no longer list, so it is
+        // the videos that answer, not the settings.
+        Assert.Equal(["alpha", "channel"], videos.FindChannelNames());
+    }
+
+    [Fact]
     public void FindPaged_SupportsTheVideoLiveHistoryJoin()
     {
         using var database = new TemporaryDatabase();
@@ -581,6 +666,26 @@ public sealed class VideoRepositoryTests
         videos.SetStopFlag(1, true);
 
         Assert.True(videos.FindByPkid(1)!.ShouldBeStop);
+    }
+
+    [Fact]
+    public void SetVolume_SurvivesTheStreamerWritingTheRowItHolds()
+    {
+        using var database = new TemporaryDatabase();
+        var videos = database.Repository<VideoRepository>();
+        videos.Insert(Video(1, LiveStatus.Live, "a", database.LiveHistoryId));
+
+        // The streaming loop holds the row from before the change and writes it back on every status.
+        var held = videos.FindByPkid(1)!;
+        Assert.Equal(100, held.Volume);
+
+        videos.SetVolume(1, 40);
+        held.Message = "on air";
+        videos.Update(held);
+
+        var loaded = videos.FindByPkid(1)!;
+        Assert.Equal(40, loaded.Volume);
+        Assert.Equal("on air", loaded.Message);
     }
 
     [Fact]
@@ -699,5 +804,59 @@ public sealed class SettingRepositoryTests
         settings.Delete(id);
 
         Assert.Null(settings.FindById(id));
+    }
+}
+
+/// <summary>
+/// The platform filter of the live page: a live is listed under the platform it was started for,
+/// which its live history keeps, whatever the case it was stored in.
+/// </summary>
+public sealed class LivePagePlatformTests
+{
+    [Fact]
+    public void TheLivePageListsTheLivesOfOnePlatform()
+    {
+        using var database = new TemporaryDatabase();
+        var histories = database.Repository<VideoLiveHistoryRepository>();
+        var videos = database.Repository<VideoRepository>();
+
+        void Live(string platform, string channel)
+        {
+            var history = histories.Insert(new VideoLiveHistoryEntity
+            {
+                FolderOfVideoToStream = database.Directory,
+                LocalDateTimeStartLive = new DateTime(2026, 10, 8, 10, 0, 0, DateTimeKind.Local),
+                StreamUrl = "rtmp://ingest/live",
+                StreamKey = "key-" + channel,
+                PlatformStreamName = platform,
+                UserName = "orbis"
+            });
+            videos.Insert(new VideoEntity
+            {
+                Name = channel + ".mp4",
+                VideoPath = "/clips/" + channel + ".mp4",
+                Extension = "mp4",
+                ChannelName = channel,
+                VideoLiveHistoryId = history,
+                VideoSettingId = 1
+            });
+        }
+
+        Live("kick", "kick-channel");
+        Live("Facebook", "facebook-channel");
+        Live("twitch", "twitch-channel");
+
+        var kick = videos.FindLivePage(null, null, 0, 10, platform: "kick");
+        Assert.Equal("kick-channel", Assert.Single(kick.Items).Video.ChannelName);
+        Assert.Equal(1, kick.TotalElements);
+
+        // Stored as the form wrote it once, asked for as the filter spells it now.
+        Assert.Equal("facebook-channel", Assert.Single(videos.FindLivePage(null, null, 0, 10, platform: "facebook").Items).Video.ChannelName);
+        Assert.Empty(videos.FindLivePage(null, null, 0, 10, platform: "youtube").Items);
+
+        // With the other filters, and without any.
+        Assert.Single(videos.FindLivePage(LiveStatus.Offline, "twitch-channel", 0, 10, platform: "twitch").Items);
+        Assert.Empty(videos.FindLivePage(null, "twitch-channel", 0, 10, platform: "kick").Items);
+        Assert.Equal(3, videos.FindLivePage(null, null, 0, 10).Items.Count(row => row.Video.ChannelName.EndsWith("-channel", StringComparison.Ordinal)));
     }
 }

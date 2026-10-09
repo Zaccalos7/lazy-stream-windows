@@ -36,6 +36,7 @@ public static class OrbisServiceCollectionExtensions
         services.AddSingleton<SettingRepository>();
         services.AddSingleton<VideoLiveHistoryRepository>();
         services.AddSingleton<SceneRepository>();
+        services.AddSingleton<SceneButtonRepository>();
 
         var messagesDirectory = MessageCatalog.LocateMessagesDirectory(contentRoot: options.DataDirectory)
             ?? Path.Combine(AppContext.BaseDirectory, "Messages");
@@ -53,11 +54,14 @@ public static class OrbisServiceCollectionExtensions
         services.AddSingleton<FfmpegProbe>();
         services.AddSingleton<StreamingSessionRegistry>();
         services.AddSingleton<LivePreviewFrames>();
+        // What the scene deck and the spots put on air in place of the program of each live.
+        services.AddSingleton<LiveTakeovers>();
         services.AddSingleton(provider => new MediaProxyService(
             options,
             provider.GetRequiredService<FfmpegToolLocator>(),
             provider.GetRequiredService<FfmpegProbe>(),
             provider.GetRequiredService<Microsoft.Extensions.Logging.ILogger<MediaProxyService>>()));
+        services.AddSingleton<EncoderTuningService>();
         services.AddSingleton<FfmpegVideoPlaylistStreamer>();
         services.AddSingleton<IVideoPlaylistStreamer>(provider => (IVideoPlaylistStreamer)provider.GetRequiredService<FfmpegVideoPlaylistStreamer>());
 
@@ -85,6 +89,9 @@ public static class OrbisServiceCollectionExtensions
         services.AddSingleton(provider => new LivePlatformEmbeds(
             provider.GetRequiredService<IHttpClientFactory>().CreateClient(PlatformPlayerClient),
             provider.GetRequiredService<Microsoft.Extensions.Logging.ILogger<LivePlatformEmbeds>>()));
+        // Whether YouTube shows the lives it is sent: a publish the ingest took is not a broadcast on air.
+        services.AddSingleton<YouTubeAirWatch>();
+        services.AddHostedService(provider => provider.GetRequiredService<YouTubeAirWatch>());
         services.AddSingleton<LivePreviewService>();
         // What the canvas can be built from. The folders are read on every listing, so a folder
         // added in the channel settings shows its files without restarting the application.
@@ -94,11 +101,15 @@ public static class OrbisServiceCollectionExtensions
             new FileSourceProvider(ConfiguredFolders(provider.GetRequiredService<SettingRepository>())));
         services.AddSingleton<SourceCatalogService>();
         services.AddSingleton<SourceSnapshotService>();
+        services.AddSingleton<OverlayLibrary>();
+        services.AddSingleton<SceneButtonService>();
         services.AddSingleton<SceneService>();
 
         services.AddSingleton<DatabaseBootstrapper>();
         services.AddHostedService(provider => provider.GetRequiredService<DatabaseBootstrapper>());
         services.AddHostedService<AutoCleanupService>();
+        // After the bootstrapper, which is the one that makes sure the settings are there.
+        services.AddHostedService<EncoderTuningStartup>();
 
         return services;
     }

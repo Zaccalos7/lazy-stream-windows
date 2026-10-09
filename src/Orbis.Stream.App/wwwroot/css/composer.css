@@ -177,6 +177,56 @@
 .composer-slot .icon { font-size: clamp(14px, 3vw, 30px); color: rgba(255, 255, 255, 0.45); }
 .composer-layer.is-slot { border-style: dashed; }
 
+/* An overlay is drawn as itself, stretched to its rectangle the way ffmpeg stretches it, and clear
+   where it is clear: no backdrop and no outline until it is pointed at or picked. Its name is only
+   said when it is picked, since an overlay is usually the whole frame and would cover the names of
+   the slots under it. */
+.composer-tile.is-overlay { background: none; outline: none; }
+.composer-tile.is-overlay:hover { outline: 1px dashed rgba(255, 255, 255, 0.45); outline-offset: -1px; }
+.composer-tile.is-overlay.is-selected { outline: 2px solid var(--accent); outline-offset: -2px; }
+.composer-tile.is-overlay > .composer-tile-cover { background: rgba(255, 255, 255, 0.04); }
+.composer-tile.is-overlay > .composer-tile-label { display: none; }
+.composer-tile.is-overlay.is-selected > .composer-tile-label { display: inline-flex; }
+.composer-overlay-media { grid-area: 1 / 1; width: 100%; height: 100%; min-height: 0; object-fit: fill; pointer-events: none; }
+.composer-layer.is-overlay > .icon { color: var(--text-2); }
+
+/* The library: two columns of pictures on a checkerboard, which is how a clear part of a picture
+   reads as clear. */
+.composer-overlays.is-over { outline: 2px dashed var(--accent); outline-offset: -2px; }
+.composer-overlay-grid { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 6px; max-height: 35vh; overflow: auto; margin: 0 -4px; padding: 0 4px; }
+.composer-overlay-grid > .composer-loading,
+.composer-overlay-grid > .composer-none { grid-column: 1 / -1; }
+.composer-overlay {
+  position: relative;
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+  min-width: 0;
+  padding: 4px;
+  color: var(--text);
+  background: var(--control);
+  border: 1px solid var(--stroke);
+  border-radius: var(--radius);
+  cursor: grab;
+  transition: border-color 0.12s, background 0.12s;
+}
+.composer-overlay:hover { border-color: var(--stroke-strong); background: var(--control-hover); }
+.composer-overlay:active { cursor: grabbing; }
+.composer-overlay:focus-visible { outline: none; box-shadow: var(--glow); }
+.composer-overlay-thumb {
+  display: grid;
+  aspect-ratio: 16 / 9;
+  overflow: hidden;
+  border-radius: calc(var(--radius) - 2px);
+  background: repeating-conic-gradient(#2c2c30 0 25%, #1d1d20 0 50%) 0 0 / 12px 12px;
+}
+.composer-overlay-thumb > img,
+.composer-overlay-thumb > video { width: 100%; height: 100%; min-height: 0; object-fit: contain; pointer-events: none; }
+.composer-overlay-name { font-size: 11px; font-weight: 600; }
+.composer-overlay-delete { position: absolute; top: 6px; right: 6px; width: 24px; height: 24px; min-height: 24px; visibility: hidden; background: var(--card); }
+.composer-overlay:hover .composer-overlay-delete,
+.composer-overlay:focus-within .composer-overlay-delete { visibility: visible; }
+
 .composer-handle {
   position: absolute;
   width: 12px;
@@ -186,7 +236,9 @@
   border-radius: 3px;
   display: none;
 }
-.composer-tile.is-selected .composer-handle { display: block; }
+/* Above every tile that comes after it: the corners of a slot stay in reach under an overlay that
+   covers the whole canvas. */
+.composer-tile.is-selected .composer-handle { display: block; z-index: 4; }
 .composer-handle.nw { left: -6px; top: -6px; cursor: nwse-resize; }
 .composer-handle.ne { right: -6px; top: -6px; cursor: nesw-resize; }
 .composer-handle.sw { left: -6px; bottom: -6px; cursor: nesw-resize; }
@@ -268,6 +320,8 @@
 .composer-layer-actions .btn.icon-only { width: 24px; height: 24px; min-height: 24px; }
 .composer-layer-actions .btn[aria-pressed="false"] { color: var(--text-3); }
 .composer-layer-actions .btn[aria-pressed="true"] { color: var(--success); }
+/* The microphone of a camera, under its name: the sound the picture goes on air with. */
+.composer-layer .composer-mic { margin-top: 4px; min-height: 26px; padding: 2px 6px; font-size: 11px; }
 
 @media (max-width: 1300px) {
   .composer { grid-template-columns: 240px minmax(0, 1fr); }

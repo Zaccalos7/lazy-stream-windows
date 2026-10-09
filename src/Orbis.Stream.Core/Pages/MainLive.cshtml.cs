@@ -5,6 +5,7 @@ using Orbis.Stream.Core.Domain;
 using Orbis.Stream.Core.Hosting;
 using Orbis.Stream.Core.I18n;
 using Orbis.Stream.Core.Services;
+using Orbis.Stream.Core.Streaming;
 
 namespace Orbis.Stream.Core.Pages;
 
@@ -24,6 +25,10 @@ public sealed class MainLiveModel(
 
     [BindProperty(SupportsGet = true)]
     public string? ChannelName { get; set; }
+
+    /// <summary>The platform the lives were started for (<c>twitch</c>, <c>youtube</c>, <c>kick</c>, <c>facebook</c>).</summary>
+    [BindProperty(SupportsGet = true)]
+    public string? Platform { get; set; }
 
     /// <summary>Zero-based page (<c>page</c> is a reserved route value in Razor Pages).</summary>
     [BindProperty(SupportsGet = true, Name = "p")]
@@ -89,7 +94,7 @@ public sealed class MainLiveModel(
     /// <summary>What the details dialog shows; null when no dialog is asked for, or the playlist is gone.</summary>
     public PlaylistDetails? OpenedPlaylist { get; private set; }
 
-    public object Filters => new { LiveStatus, ChannelName, p = PageIndex, details = Details };
+    public object Filters => new { LiveStatus, ChannelName, Platform, p = PageIndex, details = Details };
 
     /// <summary>
     /// The filters (and, when the form acts on a row, its key) as route data, so every action
@@ -122,6 +127,7 @@ public sealed class MainLiveModel(
         {
             ["liveStatus"] = LiveStatus ?? string.Empty,
             ["channelName"] = ChannelName ?? string.Empty,
+            ["platform"] = Platform ?? string.Empty,
             ["p"] = PageIndex.ToString(System.Globalization.CultureInfo.InvariantCulture)
         };
 
@@ -194,22 +200,33 @@ public sealed class MainLiveModel(
         return RedirectToPage(Filters);
     }
 
+    public IActionResult OnPostSpot(int videoKey, string spotPath)
+    {
+        Try(() =>
+        {
+            streaming.EnqueueSpot(spotPath, videoKey);
+            SetNotice(NoticeKind.Success, localizer.PrintMessage("live.yielded") ?? "Spot iniziato");
+            return true;
+        });
+        return RedirectToPage(Filters);
+    }
+
     /// <summary>Play of a card: streams again the videos of the same live history, from where the
-    /// interrupted one was stopped.</summary>
-    public IActionResult OnPostReplay(int pkid)
+    /// interrupted one was stopped. A live to TikTok comes with the key of this live (LiveStreamKeys).</summary>
+    public IActionResult OnPostReplay(int pkid, string? streamKey)
     {
         Try(() =>
         {
             var video = videos.FindVideo(pkid);
             validator.RequireVideo(video);
-            return Run(() => streaming.StartVideo(video));
+            return Run(() => streaming.StartVideo(video, streamKey));
         });
         return RedirectToPage(Filters);
     }
 
     /// <summary>Restart of a card: the same playlist, but from the first video and not from where
     /// the last interruption left it.</summary>
-    public IActionResult OnPostRestart(int pkid)
+    public IActionResult OnPostRestart(int pkid, string? streamKey)
     {
         Try(() =>
         {
@@ -221,7 +238,7 @@ public sealed class MainLiveModel(
                 streaming.RestartFromBeginning(historyPkid);
             }
 
-            return Run(() => streaming.StartVideo(video));
+            return Run(() => streaming.StartVideo(video, streamKey));
         });
         return RedirectToPage(Filters);
     }
@@ -242,14 +259,14 @@ public sealed class MainLiveModel(
 
     /// <summary>"Start again from this video" of the playlist dialog: the ones before it count as
     /// streamed, and the playlist goes on air from it. The dialog stays open to watch it start.</summary>
-    public IActionResult OnPostReplayFrom(int pkid)
+    public IActionResult OnPostReplayFrom(int pkid, string? streamKey)
     {
         Try(() =>
         {
             streaming.PrepareStartFrom(pkid);
             var video = videos.FindVideo(pkid);
             validator.RequireVideo(video);
-            return Run(() => streaming.StartVideo(video));
+            return Run(() => streaming.StartVideo(video, streamKey));
         });
         return RedirectToPage(Filters);
     }
@@ -284,22 +301,27 @@ public sealed class MainLiveModel(
     /// composer has just saved. The rows of the live keep every source of it (kind, target, place
     /// on the canvas), so a play or a restart later needs nothing else.
     /// </summary>
-    public IActionResult OnPostStartScene(long scenePkid, int settingId, int configurationId)
+    public IActionResult OnPostStartScene(long scenePkid, int settingId, int configurationId, string? streamKey)
     {
         var setting = videoSettings.GetAllVideoSettings(new Dictionary<string, string> { ["id"] = settingId.ToString(System.Globalization.CultureInfo.InvariantCulture) }).FirstOrDefault();
         var configuration = settings.RetrieveSettings(new Dictionary<string, string> { ["id"] = configurationId.ToString(System.Globalization.CultureInfo.InvariantCulture) }).FirstOrDefault();
+        var key = configuration is null ? null : KeyFor(configuration, streamKey);
 
         var started = false;
         if (setting is null || configuration is null)
         {
             SetNotice(NoticeKind.Error, localizer.PrintMessage("not.valid.input"));
         }
+        else if (key is null)
+        {
+            SetNotice(NoticeKind.Error, localizer.PrintMessage("stream.key.required"));
+        }
         else
         {
             var request = new StartSceneLiveRequest(
                 scenePkid,
                 configuration.StreamUrl,
-                configuration.StreamKey,
+                key,
                 configuration.PlatformStreamName,
                 configuration.ChannelName,
                 setting);
@@ -313,13 +335,13 @@ public sealed class MainLiveModel(
 
         return started
             ? RedirectToPage(Filters)
-            : RedirectToPage(new { LiveStatus, ChannelName, p = PageIndex, compose = scenePkid, settingId, configurationId });
+            : RedirectToPage(new { LiveStatus, ChannelName, Platform, p = PageIndex, compose = scenePkid, settingId, configurationId });
     }
 
     /// <summary>The same wizard, with the folder picked here in place of the configuration's one.</summary>
-    public IActionResult OnPostPlaylist(int settingId, int configurationId, string? videoFolder)
+    public IActionResult OnPostPlaylist(int settingId, int configurationId, string? videoFolder, string? streamKey)
     {
-        var request = StartRequestOf(settingId, configurationId, videoFolder ?? string.Empty);
+        var request = StartRequestOf(settingId, configurationId, videoFolder ?? string.Empty, streamKey);
         var started = request is not null && Try(() =>
         {
             validator.RequireStartLive(request);
@@ -328,12 +350,12 @@ public sealed class MainLiveModel(
 
         return started
             ? RedirectToPage(Filters)
-            : RedirectToPage(new { LiveStatus, ChannelName, p = PageIndex, playlist = 1, folder = videoFolder });
+            : RedirectToPage(new { LiveStatus, ChannelName, Platform, p = PageIndex, playlist = 1, folder = videoFolder });
     }
 
     /// <summary>What the playlist wizard picked, as a start request; null (with the notice set) when
     /// either pick no longer exists.</summary>
-    private StartLiveRequest? StartRequestOf(int settingId, int configurationId, string folder)
+    private StartLiveRequest? StartRequestOf(int settingId, int configurationId, string folder, string? streamKey)
     {
         var setting = videoSettings.GetAllVideoSettings(new Dictionary<string, string> { ["id"] = settingId.ToString(System.Globalization.CultureInfo.InvariantCulture) }).FirstOrDefault();
         var configuration = settings.RetrieveSettings(new Dictionary<string, string> { ["id"] = configurationId.ToString(System.Globalization.CultureInfo.InvariantCulture) }).FirstOrDefault();
@@ -343,13 +365,35 @@ public sealed class MainLiveModel(
             return null;
         }
 
+        if (KeyFor(configuration, streamKey) is not { } key)
+        {
+            SetNotice(NoticeKind.Error, localizer.PrintMessage("stream.key.required"));
+            return null;
+        }
+
         return new StartLiveRequest(
             configuration.StreamUrl,
-            configuration.StreamKey,
+            key,
             folder,
             configuration.PlatformStreamName,
             configuration.ChannelName,
             setting);
+    }
+
+    /// <summary>
+    /// The key a live of this configuration goes on air with: the one typed in for this live when
+    /// its platform hands out a key for every live (TikTok, see LiveStreamKeys), the one the
+    /// configuration keeps otherwise. Null when the live needs its key and none was given.
+    /// </summary>
+    internal static string? KeyFor(SettingResponse configuration, string? streamKey)
+    {
+        ArgumentNullException.ThrowIfNull(configuration);
+        if (!LiveStreamKeys.IsAskedFor(configuration.PlatformStreamName, configuration.StreamUrl))
+        {
+            return configuration.StreamKey;
+        }
+
+        return string.IsNullOrWhiteSpace(streamKey) ? null : streamKey.Trim();
     }
 
     private void LoadVideos()
@@ -368,7 +412,8 @@ public sealed class MainLiveModel(
         Videos = videos.GetLivePage(
             LiveStatusExtensions.TryParseWireValue(LiveStatus, out var status) ? status : null,
             ChannelName,
-            new PageRequest(Math.Max(PageIndex, 0), PageSize, [new SortOrder("startDateLive", true)]));
+            new PageRequest(Math.Max(PageIndex, 0), PageSize, [new SortOrder("startDateLive", true)]),
+            Platform);
     }
 
     private void LoadDetails()

@@ -322,4 +322,19 @@ public sealed class SceneSwitchCommandTests
         Assert.Equal(expectedH, h);
     }
 
+    [Fact]
+    public void Overlay_timeline_enable_is_included_in_composition()
+    {
+        var baseItem = new FfmpegCompositionItem(
+            SourceKind.File, "/media/base.mp4", 0, 0, 1920, 1080, AudioEnabled: true);
+        var overlay = new FfmpegCompositionItem(
+            SourceKind.Overlay, "/media/cat.gif", 100, 100, 400, 300, AudioEnabled: false, Overlay: new OverlayMedia(true, null), TimelineEnable: "between(t,0,10)");
+
+        var arguments = FfmpegCommandBuilder.BuildComposition(new FfmpegCompositionRequest(
+            [baseItem, overlay], "rtmp://live.twitch.tv/app/key", Setting(audio: true), 1920, 1080, 30,
+            Profile: StreamPlatformProfile.Twitch));
+        var line = string.Join(' ', arguments);
+
+        Assert.Contains(":enable='between(t,0,10)'", line, StringComparison.Ordinal);
+    }
 }

@@ -13,6 +13,7 @@ dialog.dialog {
   box-shadow: var(--shadow-dialog);
 }
 dialog.dialog[open] { display: flex; flex-direction: column; max-height: calc(100vh - 32px); animation: pop 0.18s cubic-bezier(0.16, 1, 0.3, 1); }
+dialog.dialog > form { display: contents; }
 dialog.dialog::before { content: ""; display: block; flex: none; height: 3px; background: var(--accent); }
 dialog.dialog::backdrop { background: var(--smoke); backdrop-filter: blur(8px); -webkit-backdrop-filter: blur(8px); }
 dialog.dialog.wide { width: min(840px, calc(100vw - 32px)); }

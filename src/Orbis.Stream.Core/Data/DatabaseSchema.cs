@@ -127,6 +127,13 @@ public static class DatabaseSchema
                 Column("label", "VARCHAR(255)", "VARCHAR(255) NOT NULL", nullable: false),
                 Column("media_name", "VARCHAR(255)", "VARCHAR(255) NOT NULL", nullable: false),
                 Column("hotkey", "VARCHAR(64)", "VARCHAR(64)", nullable: true),
+                Column("display_mode", "VARCHAR(32)", "VARCHAR(32) DEFAULT 'fullscreen' NOT NULL", nullable: false),
+                Column("placement", "VARCHAR(32)", "VARCHAR(32) DEFAULT 'bottom-right' NOT NULL", nullable: false),
+                Column("duration_seconds", "INTEGER", "INTEGER", nullable: true),
+                Column("x", "INTEGER", "INTEGER", nullable: true),
+                Column("y", "INTEGER", "INTEGER", nullable: true),
+                Column("width", "INTEGER", "INTEGER", nullable: true),
+                Column("height", "INTEGER", "INTEGER", nullable: true),
                 Column("last_modified", "TIMESTAMP", "TIMESTAMP", nullable: true)
             ]
         };
@@ -252,6 +259,13 @@ public static class DatabaseSchema
             label VARCHAR(255) NOT NULL,
             media_name VARCHAR(255) NOT NULL,
             hotkey VARCHAR(64),
+            display_mode VARCHAR(32) DEFAULT 'fullscreen' NOT NULL,
+            placement VARCHAR(32) DEFAULT 'bottom-right' NOT NULL,
+            duration_seconds INTEGER,
+            x INTEGER,
+            y INTEGER,
+            width INTEGER,
+            height INTEGER,
             last_modified TIMESTAMP
         )
         """,

@@ -34,6 +34,20 @@ public sealed class SceneButtonEntity
     /// <summary>The key that asks for it, as <see cref="SceneHotkey"/> writes it; null when it has none.</summary>
     public string? Hotkey { get; set; }
 
+    /// <summary>How it goes on air: "fullscreen" (replaces the live) or "in_scene" (overlaid on the scene).</summary>
+    public string DisplayMode { get; set; } = "fullscreen";
+
+    /// <summary>Where on the canvas it appears when in_scene: "bottom-right", "bottom-left", "top-right", "top-left", "center", "custom".</summary>
+    public string Placement { get; set; } = "bottom-right";
+
+    /// <summary>How many seconds it stays in the scene; null or zero means forever until stopped.</summary>
+    public int? DurationSeconds { get; set; }
+
+    public int? X { get; set; }
+    public int? Y { get; set; }
+    public int? Width { get; set; }
+    public int? Height { get; set; }
+
     public DateTime? LastModified { get; set; }
 }
 

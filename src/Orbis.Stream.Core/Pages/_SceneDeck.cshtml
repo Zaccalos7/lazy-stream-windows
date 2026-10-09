@@ -9,9 +9,21 @@
         data-max-bytes="@SceneButtonService.MaxBytes"
         data-w-add="@T["sceneAdd"]" data-w-edit="@T["sceneEdit"]" data-w-delete="@T["sceneDelete"]"
         data-w-delete-confirm="@T["sceneDeleteConfirm"]" data-w-confirm="@T["sceneConfirm"]"
+        data-w-confirm-in-scene="@T["sceneConfirmInScene"]"
+        data-w-stop-overlay="@T["sceneStopOverlay"]"
+        data-w-resume="@T["sceneResume"]"
         data-w-video="@T["sceneKindVideo"]" data-w-image="@T["sceneKindImage"]"
         data-w-video-behaviour="@T["sceneVideoBehaviour"]" data-w-image-behaviour="@T["sceneImageBehaviour"]"
         data-w-on-air="@T["sceneOnAir"]" data-w-on-air-now="@T["sceneOnAirNow"]"
+        data-w-on-air-in-scene="@T["sceneOnAirInScene"]"
+        data-w-mode-fullscreen="@T["sceneModeFullscreen"]" data-w-mode-in-scene="@T["sceneModeInScene"]"
+        data-w-placement-bottom-right="@T["scenePlacementBottomRight"]"
+        data-w-placement-bottom-left="@T["scenePlacementBottomLeft"]"
+        data-w-placement-top-right="@T["scenePlacementTopRight"]"
+        data-w-placement-top-left="@T["scenePlacementTopLeft"]"
+        data-w-placement-center="@T["scenePlacementCenter"]"
+        data-w-placement-custom="@T["scenePlacementCustom"]"
+        data-w-duration-forever="@T["sceneDurationForever"]"
         data-w-empty="@T["sceneEmpty"]" data-w-limit="@T["sceneLimit"]"
         data-w-missing="@T["sceneMediaMissing"]" data-w-uploading="@T["sceneMediaUploading"]" data-w-upload-failed="@T["sceneMediaFailed"]"
         data-w-too-large="@T["sceneMediaTooLarge"]"
@@ -85,6 +97,46 @@
                     </span>
                     <small class="caption">@T["sceneKeyHint"]</small>
                     <small class="scene-error" data-scene-error="hotkey"></small>
+                </div>
+                <label class="field">
+                    <span>@T["sceneDisplayMode"]</span>
+                    <select class="input select" name="displayMode" data-scene-display-mode>
+                        <option value="fullscreen">@T["sceneModeFullscreen"]</option>
+                        <option value="in_scene">@T["sceneModeInScene"]</option>
+                    </select>
+                    <small class="scene-error" data-scene-error="displayMode"></small>
+                </label>
+                <label class="field" data-scene-placement-field hidden>
+                    <span>@T["scenePlacement"]</span>
+                    <select class="input select" name="placement" data-scene-placement>
+                        <option value="bottom-right">@T["scenePlacementBottomRight"]</option>
+                        <option value="bottom-left">@T["scenePlacementBottomLeft"]</option>
+                        <option value="top-right">@T["scenePlacementTopRight"]</option>
+                        <option value="top-left">@T["scenePlacementTopLeft"]</option>
+                        <option value="center">@T["scenePlacementCenter"]</option>
+                        <option value="custom">@T["scenePlacementCustom"]</option>
+                    </select>
+                    <small class="scene-error" data-scene-error="placement"></small>
+                </label>
+                <div class="field" data-scene-duration-field hidden>
+                    <span>@T["sceneDuration"]</span>
+                    <span class="scene-editor-row">
+                        <input class="input" type="number" name="durationSeconds" min="1" max="86400" placeholder="@T["sceneDurationSeconds"]" data-scene-duration style="width: 120px;" />
+                        <label class="checkbox-label" style="display:inline-flex;align-items:center;gap:6px;cursor:pointer;">
+                            <input type="checkbox" data-scene-duration-forever />
+                            <span>@T["sceneDurationForever"]</span>
+                        </label>
+                    </span>
+                    <small class="scene-error" data-scene-error="durationSeconds"></small>
+                </div>
+                <div class="field scene-custom-coords-field" data-scene-custom-coords hidden style="grid-column: 1 / -1;">
+                    <span>@T["sceneCustomCoords"]</span>
+                    <div style="display:flex;gap:12px;flex-wrap:wrap;align-items:center;margin-top:4px;">
+                        <label style="display:flex;align-items:center;gap:6px;"><span>X:</span><input class="input" type="number" name="x" min="0" max="7680" placeholder="0" data-scene-coord-x style="width:90px;" /></label>
+                        <label style="display:flex;align-items:center;gap:6px;"><span>Y:</span><input class="input" type="number" name="y" min="0" max="4320" placeholder="0" data-scene-coord-y style="width:90px;" /></label>
+                        <label style="display:flex;align-items:center;gap:6px;"><span>W:</span><input class="input" type="number" name="width" min="10" max="7680" placeholder="1920" data-scene-coord-w style="width:90px;" /></label>
+                        <label style="display:flex;align-items:center;gap:6px;"><span>H:</span><input class="input" type="number" name="height" min="10" max="4320" placeholder="1080" data-scene-coord-h style="width:90px;" /></label>
+                    </div>
                 </div>
             </div>
             <div class="scene-editor-actions">

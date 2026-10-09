@@ -352,12 +352,64 @@ public sealed class FfmpegVideoPlaylistStreamer : IVideoPlaylistStreamer
                     _logger.LogInformation("{Message}", resumed);
                 }
 
-                var quality = await QualityOfAsync(videoSetting, PictureOf(videoSetting, probe, output), output, cancellationToken)
-                    .ConfigureAwait(false);
-                var next = FfmpegStreamingSession.Start(
-                    _locator, videoKey, inputPath, outputUrl, videoSetting, probe, _logger, resumeFrom, _frames.PathOf(videoKey),
-                    output: output, quality: quality);
-                next.AdaptiveQuality = AdaptiveOf(videoSetting, quality);
+                var activeOverlay = _takeovers.ActiveOverlayOf(videoLiveHistoryPkid);
+                FfmpegStreamingSession next;
+                if (activeOverlay is not null)
+                {
+                    var canvasWidth = FfmpegCommandBuilder.Even(probe.Width);
+                    var canvasHeight = FfmpegCommandBuilder.Even(probe.Height);
+                    var overlayProbe = await _probe.ProbeAsync(activeOverlay.Path, cancellationToken).ConfigureAwait(false);
+                    var overlayMedia = OverlayMedia.Of(overlayProbe);
+                    var (ox, oy, ow, oh) = FfmpegCommandBuilder.CalculateOverlayPlacement(
+                        activeOverlay.Placement,
+                        activeOverlay.X,
+                        activeOverlay.Y,
+                        activeOverlay.Width,
+                        activeOverlay.Height,
+                        canvasWidth,
+                        canvasHeight,
+                        overlayProbe.Width,
+                        overlayProbe.Height);
+
+                    string? timelineEnable = activeOverlay.DurationSeconds is > 0
+                        ? string.Create(CultureInfo.InvariantCulture, $"between(t,0,{activeOverlay.DurationSeconds.Value})")
+                        : null;
+
+                    List<FfmpegCompositionItem> items =
+                    [
+                        new(SourceKind.File, inputPath, 0, 0, canvasWidth, canvasHeight, AudioEnabled: probe.HasAudio),
+                        new(SourceKind.Overlay, activeOverlay.Path, ox, oy, ow, oh, AudioEnabled: false, Overlay: overlayMedia, TimelineEnable: timelineEnable)
+                    ];
+
+                    var canvasRate = videoSetting.FrameRate is > 0 ? videoSetting.FrameRate.Value : probe.FrameRate;
+                    var quality = await QualityOfAsync(videoSetting, new MediaOutput(canvasWidth, canvasHeight, canvasRate), output, cancellationToken)
+                        .ConfigureAwait(false);
+                    next = FfmpegStreamingSession.StartComposition(
+                        _locator,
+                        videoKey,
+                        items,
+                        outputUrl,
+                        videoSetting,
+                        canvasWidth,
+                        canvasHeight,
+                        canvasRate,
+                        _logger,
+                        resumeFrom,
+                        duration: null,
+                        previewPath: _frames.PathOf(videoKey),
+                        output: output,
+                        quality: quality);
+                    next.AdaptiveQuality = AdaptiveOf(videoSetting, quality);
+                }
+                else
+                {
+                    var quality = await QualityOfAsync(videoSetting, PictureOf(videoSetting, probe, output), output, cancellationToken)
+                        .ConfigureAwait(false);
+                    next = FfmpegStreamingSession.Start(
+                        _locator, videoKey, inputPath, outputUrl, videoSetting, probe, _logger, resumeFrom, _frames.PathOf(videoKey),
+                        output: output, quality: quality);
+                    next.AdaptiveQuality = AdaptiveOf(videoSetting, quality);
+                }
 
                 var previous = session;
                 session = next;
@@ -817,6 +869,46 @@ public sealed class FfmpegVideoPlaylistStreamer : IVideoPlaylistStreamer
                         row.Volume,
                         overlays.GetValueOrDefault(row)))
                     .ToList();
+
+                if (_takeovers.ActiveOverlayOf(videoLiveHistoryPkid) is { } activeOverlay)
+                {
+                    try
+                    {
+                        var overlayProbe = await _probe.ProbeAsync(activeOverlay.Path, cancellationToken).ConfigureAwait(false);
+                        var overlayMedia = OverlayMedia.Of(overlayProbe);
+                        var (ox, oy, ow, oh) = FfmpegCommandBuilder.CalculateOverlayPlacement(
+                            activeOverlay.Placement,
+                            activeOverlay.X,
+                            activeOverlay.Y,
+                            activeOverlay.Width,
+                            activeOverlay.Height,
+                            canvasWidth,
+                            canvasHeight,
+                            overlayProbe.Width,
+                            overlayProbe.Height);
+
+                        string? timelineEnable = activeOverlay.DurationSeconds is > 0
+                            ? string.Create(CultureInfo.InvariantCulture, $"between(t,0,{activeOverlay.DurationSeconds.Value})")
+                            : null;
+
+                        items.Add(new FfmpegCompositionItem(
+                            SourceKind.Overlay,
+                            activeOverlay.Path,
+                            ox,
+                            oy,
+                            ow,
+                            oh,
+                            AudioEnabled: false,
+                            HardwareDecoding: false,
+                            Volume: 100,
+                            Overlay: overlayMedia,
+                            TimelineEnable: timelineEnable));
+                    }
+                    catch (Exception ex)
+                    {
+                        _logger.LogWarning(ex, "Failed to include in-scene overlay {Path}", activeOverlay.Path);
+                    }
+                }
 
                 var canvasRate = videoSetting.FrameRate is > 0 ? videoSetting.FrameRate.Value : DefaultCanvasFrameRate;
                 var quality = await QualityOfAsync(videoSetting, new MediaOutput(canvasWidth, canvasHeight, canvasRate), output, cancellationToken)

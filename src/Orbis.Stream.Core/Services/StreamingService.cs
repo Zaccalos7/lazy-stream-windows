@@ -191,6 +191,59 @@ public sealed class StreamingService
         var path = _sceneButtons.PathOf(button)
             ?? throw new LiveException("scene.button.media.missing", [button.Label]);
 
+        if (string.Equals(button.DisplayMode, "in_scene", StringComparison.OrdinalIgnoreCase))
+        {
+            var active = _takeovers.ActiveOverlayOf(history);
+            if (active?.ButtonPkid == buttonPkid)
+            {
+                _takeovers.StopOverlay(history, buttonPkid);
+                _sessions.RequestRestart(videoLivePkid);
+                _notifier.Raise();
+                _logger.LogInformation("In-scene overlay {Label} toggled off on live {History}", button.Label, history);
+                return _responses.Build("scene.overlay.stopped", StatusCodes.Status200OK, [button.Label]);
+            }
+
+            var overlayKind = SceneButtonService.KindOf(path);
+            var overlay = _takeovers.RequestOverlay(
+                history,
+                buttonPkid,
+                path,
+                button.Label,
+                overlayKind,
+                button.Placement,
+                button.X,
+                button.Y,
+                button.Width,
+                button.Height,
+                button.DurationSeconds);
+
+            if (overlay is null)
+            {
+                throw new LiveException("live.not.streaming");
+            }
+
+            _sessions.RequestRestart(videoLivePkid);
+            _notifier.Raise();
+
+            if (button.DurationSeconds is > 0 and var duration)
+            {
+                _executor.Execute(async () =>
+                {
+                    await Task.Delay(TimeSpan.FromSeconds(duration)).ConfigureAwait(false);
+                    if (_takeovers.ActiveOverlayOf(history)?.ButtonPkid == buttonPkid)
+                    {
+                        _takeovers.StopOverlay(history, buttonPkid);
+                        _sessions.RequestRestart(videoLivePkid);
+                        _notifier.Raise();
+                        _logger.LogInformation("In-scene overlay {Label} expired after {Duration}s on live {History}", button.Label, duration, history);
+                    }
+                });
+            }
+
+            _logger.LogInformation("In-scene overlay {Label} started on live {History} at {Placement}", button.Label, history, button.Placement);
+            return _responses.Build("scene.overlay.started", StatusCodes.Status202Accepted, [button.Label]);
+        }
+
         if (_takeovers.CurrentOf(history)?.ButtonPkid == buttonPkid && !_takeovers.HasPending(history))
         {
             return _responses.Build("scene.already.on.air", StatusCodes.Status200OK, [button.Label]);
@@ -210,7 +263,15 @@ public sealed class StreamingService
     public MessageResponse ResumeProgram(int videoLivePkid)
     {
         var history = RunningHistoryOf(videoLivePkid);
-        return _takeovers.Resume(history)
+        var resumedTakeover = _takeovers.Resume(history);
+        var stoppedOverlay = _takeovers.StopOverlay(history);
+        if (stoppedOverlay)
+        {
+            _sessions.RequestRestart(videoLivePkid);
+            _notifier.Raise();
+        }
+
+        return (resumedTakeover || stoppedOverlay)
             ? _responses.Build("scene.resumed", StatusCodes.Status200OK)
             : _responses.Build("scene.nothing.to.resume", StatusCodes.Status200OK);
     }
@@ -219,9 +280,12 @@ public sealed class StreamingService
     public LiveSceneState SceneStateOf(int videoLivePkid)
     {
         var history = CheckIfExistsAndReturnEntity(videoLivePkid).VideoLiveHistoryId;
-        return history is { } pkid && _takeovers.IsOpen(pkid)
-            ? new LiveSceneState(true, pkid, LiveScene.Of(_takeovers.CurrentOf(pkid)))
-            : new LiveSceneState(false, history, null);
+        if (history is { } pkid && _takeovers.IsOpen(pkid))
+        {
+            return new LiveSceneState(true, pkid, _takeovers.LiveSceneOf(pkid));
+        }
+
+        return new LiveSceneState(false, history, null);
     }
 
     /// <summary>The live a row belongs to, when it is running: a request for a live that is not would wait for its next play.</summary>

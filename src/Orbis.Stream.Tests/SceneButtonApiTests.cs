@@ -104,6 +104,64 @@ public sealed class SceneButtonApiTests : IAsyncLifetime
     }
 
     [Fact]
+    public async Task A_button_can_be_configured_as_in_scene_overlay()
+    {
+        var picture = TestPictures.Png(64, 36, (x, _) => (255, 255, 0, 255));
+        var media = await UploadAsync("overlay-logo.png", picture);
+
+        using (var created = await _host.Client.PostAsJsonAsync("/scene-buttons", new
+        {
+            label = "Logo Overlay",
+            mediaName = media.Name,
+            hotkey = "F10",
+            displayMode = "in_scene",
+            placement = "top-right",
+            durationSeconds = 15
+        }))
+        {
+            Assert.Equal(HttpStatusCode.Created, created.StatusCode);
+            var button = (await created.Content.ReadFromJsonAsync<SceneButtonResponse>(Web))!;
+            Assert.Equal("in_scene", button.DisplayMode);
+            Assert.Equal("top-right", button.Placement);
+            Assert.Equal(15, button.DurationSeconds);
+        }
+
+        var buttons = (await _host.Client.GetFromJsonAsync<List<SceneButtonResponse>>("/scene-buttons", Web))!;
+        var found = Assert.Single(buttons);
+        Assert.Equal("in_scene", found.DisplayMode);
+        Assert.Equal("top-right", found.Placement);
+        Assert.Equal(15, found.DurationSeconds);
+
+        // Edit to custom coordinates and forever duration
+        using (var edited = await _host.Client.PutAsJsonAsync($"/scene-buttons/{found.Pkid}", new
+        {
+            label = "Custom Overlay",
+            mediaName = media.Name,
+            hotkey = "F10",
+            displayMode = "in_scene",
+            placement = "custom",
+            durationSeconds = (int?)null,
+            x = 100,
+            y = 200,
+            width = 300,
+            height = 200
+        }))
+        {
+            Assert.Equal(HttpStatusCode.OK, edited.StatusCode);
+            var button = (await edited.Content.ReadFromJsonAsync<SceneButtonResponse>(Web))!;
+            Assert.Equal("in_scene", button.DisplayMode);
+            Assert.Equal("custom", button.Placement);
+            Assert.Null(button.DurationSeconds);
+            Assert.Equal((100, 200, 300, 200), (button.X, button.Y, button.Width, button.Height));
+        }
+
+        using (var deleted = await _host.Client.DeleteAsync($"/scene-buttons/{found.Pkid}"))
+        {
+            Assert.Equal(HttpStatusCode.OK, deleted.StatusCode);
+        }
+    }
+
+    [Fact]
     public async Task The_deck_refuses_what_it_could_not_put_on_air()
     {
         var media = await UploadAsync("brb.png", TestPictures.Png(16, 16, (_, _) => (0, 128, 255, 255)));

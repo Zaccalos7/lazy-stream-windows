@@ -45,6 +45,35 @@
   const keyLabel = editor.querySelector("[data-scene-key-label]");
   const deleteButton = editor.querySelector("[data-scene-delete]");
   const saveButton = editor.querySelector("[data-scene-save]");
+  const displayModeSelect = editor.querySelector("[data-scene-display-mode]");
+  const placementField = editor.querySelector("[data-scene-placement-field]");
+  const placementSelect = editor.querySelector("[data-scene-placement]");
+  const durationField = editor.querySelector("[data-scene-duration-field]");
+  const durationInput = editor.querySelector("[data-scene-duration]");
+  const durationForever = editor.querySelector("[data-scene-duration-forever]");
+  const customCoordsField = editor.querySelector("[data-scene-custom-coords]");
+  const coordX = editor.querySelector("[data-scene-coord-x]");
+  const coordY = editor.querySelector("[data-scene-coord-y]");
+  const coordW = editor.querySelector("[data-scene-coord-w]");
+  const coordH = editor.querySelector("[data-scene-coord-h]");
+
+  const syncEditorMode = () => {
+    if (!displayModeSelect) return;
+    const isOverlay = displayModeSelect.value === "in_scene";
+    if (placementField) placementField.hidden = !isOverlay;
+    if (durationField) durationField.hidden = !isOverlay;
+    if (customCoordsField) customCoordsField.hidden = !isOverlay || placementSelect?.value !== "custom";
+    if (durationInput && durationForever) durationInput.disabled = durationForever.checked;
+  };
+
+  displayModeSelect?.addEventListener("change", syncEditorMode);
+  placementSelect?.addEventListener("change", syncEditorMode);
+  durationForever?.addEventListener("change", () => {
+    if (durationInput && durationForever) {
+      durationInput.disabled = durationForever.checked;
+      if (durationForever.checked) durationInput.value = "";
+    }
+  });
 
   const strip = document.querySelector("[data-scene-strip]");
   const stripGrid = strip?.querySelector("[data-scene-strip-grid]");
@@ -197,7 +226,15 @@
       return;
     }
 
-    confirmThen(format(word("confirm"), button.label), async () => {
+    const currentScene = targetScene || stripScene;
+    const isOverlayOnAir = button.displayMode === "in_scene" && currentScene?.buttonPkid === button.pkid;
+    const confirmPrompt = isOverlayOnAir
+      ? format(word("stop-overlay") || word("confirm"), button.label)
+      : button.displayMode === "in_scene"
+        ? format(word("confirm-in-scene") || word("confirm"), button.label)
+        : format(word("confirm"), button.label);
+
+    confirmThen(confirmPrompt, async () => {
       pressed = button.pkid;
       paintAll();
       const response = await fetch(`/live/${video}/scene/${button.pkid}`, { method: "POST" }).catch(() => null);
@@ -271,6 +308,8 @@
 
   const tileOf = (button, options) => {
     const onAir = options.scene?.buttonPkid === button.pkid;
+    const isOverlay = button.displayMode === "in_scene";
+    const canToggleOff = isOverlay && onAir;
     const tile = document.createElement("div");
     tile.className = "scene-tile";
     tile.dataset.kind = String(button.kind).toLowerCase();
@@ -282,10 +321,16 @@
     const face = document.createElement("button");
     face.type = "button";
     face.className = "scene-tile-face";
-    face.disabled = !options.locked && (!options.live || !button.available || onAir);
+    face.disabled = !options.locked && (!options.live || !button.available || (onAir && !canToggleOff));
     face.title = !button.available
       ? word("missing")
-      : options.locked ? word("locked") : (button.kind === "IMAGE" ? word("image-behaviour") : word("video-behaviour"));
+      : options.locked
+        ? word("locked")
+        : (onAir && isOverlay)
+          ? word("stop-overlay")
+          : isOverlay
+            ? word("mode-in-scene")
+            : (button.kind === "IMAGE" ? word("image-behaviour") : word("video-behaviour"));
 
     const art = document.createElement("span");
     art.className = "scene-tile-art";
@@ -306,7 +351,13 @@
 
     const kind = document.createElement("span");
     kind.className = "scene-tile-kind";
-    kind.textContent = button.kind === "IMAGE" ? word("image") : word("video");
+    const kindLabel = button.kind === "IMAGE" ? word("image") : word("video");
+    if (isOverlay) {
+      const placeWord = word("placement-" + button.placement) || button.placement;
+      kind.textContent = `${kindLabel} · ${placeWord}`;
+    } else {
+      kind.textContent = kindLabel;
+    }
     art.append(kind);
 
     if (button.hotkey) {
@@ -319,7 +370,7 @@
     if (onAir) {
       const badge = document.createElement("span");
       badge.className = "scene-tile-badge";
-      badge.textContent = word("on-air");
+      badge.textContent = isOverlay ? word("stop-overlay") : word("on-air");
       art.append(badge);
     }
 
@@ -368,9 +419,16 @@
     offline.hidden = live || !target;
     onAirBar.hidden = !live || !targetScene;
     if (targetScene) {
-      onAirText.textContent = format(word("on-air-now"), targetScene.label);
-      onAirHint.textContent = targetScene.holds ? word("image-behaviour") : word("video-behaviour");
-      onAirResume.classList.toggle("is-pulsing", !!targetScene.holds);
+      const isOverlay = targetScene.mode === "in_scene";
+      onAirText.textContent = isOverlay
+        ? format(word("on-air-in-scene") || word("on-air-now"), targetScene.label)
+        : format(word("on-air-now"), targetScene.label);
+      onAirHint.textContent = isOverlay
+        ? (targetScene.durationSeconds ? `${targetScene.durationSeconds}s` : word("duration-forever"))
+        : (targetScene.holds ? word("image-behaviour") : word("video-behaviour"));
+      const resumeSpan = onAirResume.querySelector("span");
+      if (resumeSpan) resumeSpan.textContent = isOverlay ? word("stop-overlay") : word("resume");
+      onAirResume.classList.toggle("is-pulsing", !!targetScene.holds || isOverlay);
     }
 
     if (!editor.hidden) return;
@@ -439,11 +497,39 @@
       ? {
           pkid: button.pkid,
           media: { name: button.mediaName, label: button.mediaLabel, kind: button.kind, still: button.still, available: button.available },
-          hotkey: button.hotkey
+          hotkey: button.hotkey,
+          displayMode: button.displayMode || "fullscreen",
+          placement: button.placement || "bottom-right",
+          durationSeconds: button.durationSeconds,
+          x: button.x,
+          y: button.y,
+          width: button.width,
+          height: button.height
         }
-      : { pkid: null, media: null, hotkey: null };
+      : {
+          pkid: null,
+          media: null,
+          hotkey: null,
+          displayMode: "fullscreen",
+          placement: "bottom-right",
+          durationSeconds: null,
+          x: null,
+          y: null,
+          width: null,
+          height: null
+        };
     editorTitle.textContent = button ? word("edit") : word("add");
     labelField.value = button?.label || "";
+    if (displayModeSelect) displayModeSelect.value = editing.displayMode || "fullscreen";
+    if (placementSelect) placementSelect.value = editing.placement || "bottom-right";
+    const hasDuration = editing.durationSeconds != null && editing.durationSeconds > 0;
+    if (durationForever) durationForever.checked = !hasDuration;
+    if (durationInput) durationInput.value = hasDuration ? editing.durationSeconds : "";
+    if (coordX) coordX.value = editing.x ?? "";
+    if (coordY) coordY.value = editing.y ?? "";
+    if (coordW) coordW.value = editing.width ?? "";
+    if (coordH) coordH.value = editing.height ?? "";
+    syncEditorMode();
     deleteButton.hidden = !button;
     clearErrors();
     paintMedia();
@@ -615,7 +701,21 @@
     if (!editing) return;
     clearErrors();
     saveButton.disabled = true;
-    const body = { label: labelField.value.trim(), mediaName: editing.media?.name || "", hotkey: editing.hotkey || null };
+    const isOverlay = displayModeSelect?.value === "in_scene";
+    const placementVal = isOverlay ? (placementSelect?.value || "bottom-right") : "bottom-right";
+    const durationVal = (!isOverlay || durationForever?.checked) ? null : (parseInt(durationInput?.value, 10) || null);
+    const body = {
+      label: labelField.value.trim(),
+      mediaName: editing.media?.name || "",
+      hotkey: editing.hotkey || null,
+      displayMode: displayModeSelect?.value || "fullscreen",
+      placement: placementVal,
+      durationSeconds: durationVal,
+      x: isOverlay && placementVal === "custom" && coordX?.value !== "" ? parseInt(coordX.value, 10) : null,
+      y: isOverlay && placementVal === "custom" && coordY?.value !== "" ? parseInt(coordY.value, 10) : null,
+      width: isOverlay && placementVal === "custom" && coordW?.value !== "" ? parseInt(coordW.value, 10) : null,
+      height: isOverlay && placementVal === "custom" && coordH?.value !== "" ? parseInt(coordH.value, 10) : null
+    };
     const response = await fetch(editing.pkid ? `/scene-buttons/${editing.pkid}` : "/scene-buttons", {
       method: editing.pkid ? "PUT" : "POST",
       headers: { "Content-Type": "application/json" },
@@ -662,8 +762,13 @@
     const locked = !armedHere();
     strip.classList.toggle("is-locked", locked);
     if (stripLocked) stripLocked.hidden = !locked || !buttons.length;
-    stripResume.hidden = !stripLive || !stripScene?.holds;
-    stripState.textContent = stripLive && stripScene ? format(word("on-air-now"), stripScene.label) : "";
+    const isOverlay = stripScene?.mode === "in_scene";
+    stripResume.hidden = !stripLive || (!stripScene?.holds && !isOverlay);
+    const stripResumeSpan = stripResume?.querySelector("span");
+    if (stripResumeSpan) stripResumeSpan.textContent = isOverlay ? word("stop-overlay") : word("resume");
+    stripState.textContent = stripLive && stripScene
+      ? (isOverlay ? format(word("on-air-in-scene") || word("on-air-now"), stripScene.label) : format(word("on-air-now"), stripScene.label))
+      : "";
     stripState.hidden = !stripState.textContent;
 
     if (!stripGrid) return;

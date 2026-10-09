@@ -27,15 +27,49 @@ public sealed record Takeover(long Id, TakeoverKind Kind, string Path, string La
     public bool Holds => Kind == TakeoverKind.Image;
 }
 
-/// <summary>What is on air in place of the program, as the pages draw it.</summary>
+public sealed record ActiveSceneOverlay(
+    long Id,
+    long ButtonPkid,
+    string Path,
+    string Label,
+    Orbis.Stream.Core.Domain.SceneButtonKind Kind,
+    string Placement,
+    int? X,
+    int? Y,
+    int? Width,
+    int? Height,
+    int? DurationSeconds,
+    DateTime StartedAt);
+
+/// <summary>What is on air in place of the program or overlaid onto it, as the pages draw it.</summary>
 /// <param name="ButtonPkid">The scene button it came from; null for a spot.</param>
 /// <param name="Kind"><c>VIDEO</c> or <c>IMAGE</c>.</param>
-/// <param name="Holds">Whether it stays until the live is resumed: what the "Resume live" button is shown for.</param>
-public sealed record LiveScene(long? ButtonPkid, string Label, string Kind, bool Holds)
+/// <param name="Holds">Whether it stays until the live is resumed or toggled: what the "Resume live" button is shown for.</param>
+/// <param name="Mode">"fullscreen" or "in_scene".</param>
+/// <param name="Placement">Where it sits when in_scene: "bottom-right", etc.</param>
+/// <param name="DurationSeconds">How long it sits in scene; null when until stopped.</param>
+public sealed record LiveScene(
+    long? ButtonPkid,
+    string Label,
+    string Kind,
+    bool Holds,
+    string Mode = "fullscreen",
+    string? Placement = null,
+    int? DurationSeconds = null)
 {
     public static LiveScene? Of(Takeover? takeover) => takeover is null
         ? null
-        : new LiveScene(takeover.ButtonPkid, takeover.Label, takeover.Kind == TakeoverKind.Image ? "IMAGE" : "VIDEO", takeover.Holds);
+        : new LiveScene(takeover.ButtonPkid, takeover.Label, takeover.Kind == TakeoverKind.Image ? "IMAGE" : "VIDEO", takeover.Holds, "fullscreen");
+
+    public static LiveScene? OfOverlay(ActiveSceneOverlay? overlay) => overlay is null
+        ? null
+        : new(overlay.ButtonPkid,
+            overlay.Label,
+            overlay.Kind == Orbis.Stream.Core.Domain.SceneButtonKind.Image ? "IMAGE" : "VIDEO",
+            Holds: overlay.DurationSeconds is null or <= 0,
+            Mode: "in_scene",
+            Placement: overlay.Placement,
+            DurationSeconds: overlay.DurationSeconds);
 }
 
 /// <summary>Whether a live is running, and what is on air in place of its program right now.</summary>
@@ -90,7 +124,7 @@ public sealed class LiveTakeovers
             if (_lives.TryGetValue(history, out var live) && live.Lease == lease)
             {
                 _lives.Remove(history);
-                hadCurrent = live.Current is not null;
+                hadCurrent = live.Current is not null || live.ActiveOverlay is not null;
             }
         }
 
@@ -240,6 +274,111 @@ public sealed class LiveTakeovers
         }
     }
 
+    /// <summary>
+    /// Returns the live scene currently active (takeover or overlay) on the live; null if none.
+    /// </summary>
+    public LiveScene? LiveSceneOf(long? history)
+    {
+        var current = CurrentOf(history);
+        if (current is not null)
+        {
+            return LiveScene.Of(current);
+        }
+
+        var overlay = ActiveOverlayOf(history);
+        return LiveScene.OfOverlay(overlay);
+    }
+
+    /// <summary>
+    /// Sets an in-scene overlay (banner, GIF, video) over the live composition at the given placement.
+    /// </summary>
+    public ActiveSceneOverlay? RequestOverlay(
+        long history,
+        long buttonPkid,
+        string path,
+        string label,
+        Orbis.Stream.Core.Domain.SceneButtonKind kind,
+        string placement,
+        int? x,
+        int? y,
+        int? width,
+        int? height,
+        int? durationSeconds)
+    {
+        lock (_gate)
+        {
+            if (!_lives.TryGetValue(history, out var live))
+            {
+                return null;
+            }
+
+            var overlay = new ActiveSceneOverlay(
+                ++_lastId, buttonPkid, path, label, kind, placement, x, y, width, height, durationSeconds, DateTime.Now);
+            live.ActiveOverlay = overlay;
+            return overlay;
+        }
+    }
+
+    /// <summary>
+    /// Removes the in-scene overlay from the live composition.
+    /// </summary>
+    public bool StopOverlay(long history, long? buttonPkid = null)
+    {
+        bool changed;
+        lock (_gate)
+        {
+            if (!_lives.TryGetValue(history, out var live) || live.ActiveOverlay is null)
+            {
+                return false;
+            }
+
+            if (buttonPkid.HasValue && live.ActiveOverlay.ButtonPkid != buttonPkid.Value)
+            {
+                return false;
+            }
+
+            live.ActiveOverlay = null;
+            changed = true;
+        }
+
+        if (changed)
+        {
+            _notifier.Raise();
+        }
+
+        return changed;
+    }
+
+    /// <summary>
+    /// The active in-scene overlay on the live; null if none or if its duration has expired.
+    /// </summary>
+    public ActiveSceneOverlay? ActiveOverlayOf(long? history)
+    {
+        if (history is not { } pkid)
+        {
+            return null;
+        }
+
+        lock (_gate)
+        {
+            if (!_lives.TryGetValue(pkid, out var live) || live.ActiveOverlay is null)
+            {
+                return null;
+            }
+
+            if (live.ActiveOverlay.DurationSeconds is > 0 and var duration)
+            {
+                if (DateTime.Now >= live.ActiveOverlay.StartedAt.AddSeconds(duration))
+                {
+                    live.ActiveOverlay = null;
+                    return null;
+                }
+            }
+
+            return live.ActiveOverlay;
+        }
+    }
+
     /// <summary>Whether a file is on air, or waiting to be, on any live: it is not deleted from under it.</summary>
     public bool Uses(string path)
     {
@@ -247,6 +386,7 @@ public sealed class LiveTakeovers
         {
             return _lives.Values.Any(live =>
                 string.Equals(live.Current?.Path, path, StringComparison.Ordinal)
+                || string.Equals(live.ActiveOverlay?.Path, path, StringComparison.Ordinal)
                 || live.Pending.Any(next => string.Equals(next.Path, path, StringComparison.Ordinal)));
         }
     }
@@ -261,5 +401,7 @@ public sealed class LiveTakeovers
 
         /// <summary>The id of the takeover on air that was asked to end; zero when none was.</summary>
         public long Ended { get; set; }
+
+        public ActiveSceneOverlay? ActiveOverlay { get; set; }
     }
 }

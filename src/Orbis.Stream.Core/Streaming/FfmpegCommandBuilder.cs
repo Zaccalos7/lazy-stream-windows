@@ -56,7 +56,9 @@ public sealed record FfmpegCompositionItem(
     /// <summary>How loud the source is in the mix, in percent: 100 leaves its sound as it is.</summary>
     int Volume = 100,
     /// <summary>How an overlay is opened (see <see cref="OverlayMedia"/>); null for any other kind, and a still for an overlay.</summary>
-    OverlayMedia? Overlay = null);
+    OverlayMedia? Overlay = null,
+    /// <summary>Optional ffmpeg timeline enable expression (e.g. "between(t,0,10)"); null keeps it on air continuously.</summary>
+    string? TimelineEnable = null);
 
 /// <summary>
 /// What makes a light copy (see <see cref="FfmpegCommandBuilder.BuildProxy"/>): the GPU decoder or
@@ -823,6 +825,12 @@ public static class FfmpegCommandBuilder
             var placement = item.Kind.IsOverlay()
                 ? string.Create(CultureInfo.InvariantCulture, $"{Even(item.X)}:{Even(item.Y)}:format=auto:alpha=premultiplied")
                 : string.Create(CultureInfo.InvariantCulture, $"{Even(item.X)}+({Even(item.Width)}-w)/2:{Even(item.Y)}+({Even(item.Height)}-h)/2:format=auto");
+
+            if (!string.IsNullOrEmpty(item.TimelineEnable))
+            {
+                placement += $":enable='{item.TimelineEnable}'";
+            }
+
             graph.Append(CultureInfo.InvariantCulture,
                 $"[{composed}][{labels[index]}]overlay={placement}[{next}];");
             composed = next;
@@ -971,6 +979,80 @@ public static class FfmpegCommandBuilder
         var w = Math.Clamp(Even((int)Math.Round(width * scale)), 2, frameW);
         var h = Math.Clamp(Even((int)Math.Round(height * scale)), 2, frameH);
         return (Even((frameW - w) / 2), Even((frameH - h) / 2), w, h);
+    }
+
+    /// <summary>
+    /// Computes where an overlay (GIF, picture, video) sits on a canvas given a placement preset or custom coordinates.
+    /// </summary>
+    public static (int X, int Y, int Width, int Height) CalculateOverlayPlacement(
+        string? placement,
+        int? customX,
+        int? customY,
+        int? customWidth,
+        int? customHeight,
+        int canvasWidth,
+        int canvasHeight,
+        int mediaWidth,
+        int mediaHeight)
+    {
+        var cw = Even(canvasWidth);
+        var ch = Even(canvasHeight);
+        if (cw <= 0) cw = 1920;
+        if (ch <= 0) ch = 1080;
+
+        var mode = placement?.Trim().ToLowerInvariant() ?? "bottom-right";
+        if (mode == "fullscreen")
+        {
+            return Contain(mediaWidth, mediaHeight, cw, ch);
+        }
+
+        if (mode == "custom" && customWidth is > 0 && customHeight is > 0)
+        {
+            var w = Math.Clamp(Even(customWidth.Value), 2, cw);
+            var h = Math.Clamp(Even(customHeight.Value), 2, ch);
+            var x = Math.Clamp(Even(customX ?? (cw - w)), 0, Math.Max(0, cw - w));
+            var y = Math.Clamp(Even(customY ?? (ch - h)), 0, Math.Max(0, ch - h));
+            return (x, y, w, h);
+        }
+
+        var targetW = customWidth is > 0 ? customWidth.Value : Math.Max(120, (int)Math.Round(cw * 0.28));
+        int targetH;
+        if (customHeight is > 0)
+        {
+            targetH = customHeight.Value;
+        }
+        else if (mediaWidth > 0 && mediaHeight > 0)
+        {
+            var aspect = (double)mediaWidth / mediaHeight;
+            targetH = (int)Math.Round(targetW / aspect);
+            var maxH = (int)Math.Round(ch * 0.40);
+            if (targetH > maxH)
+            {
+                targetH = maxH;
+                targetW = (int)Math.Round(targetH * aspect);
+            }
+        }
+        else
+        {
+            targetH = (int)Math.Round(targetW * 9.0 / 16.0);
+        }
+
+        var overlayW = Math.Clamp(Even(targetW), 2, cw);
+        var overlayH = Math.Clamp(Even(targetH), 2, ch);
+        var margin = Even(Math.Max(16, (int)Math.Round(cw * 0.025)));
+
+        var (posX, posY) = mode switch
+        {
+            "bottom-left" => (margin, ch - overlayH - margin),
+            "top-right" => (cw - overlayW - margin, margin),
+            "top-left" => (margin, margin),
+            "center" => ((cw - overlayW) / 2, (ch - overlayH) / 2),
+            _ => (cw - overlayW - margin, ch - overlayH - margin)
+        };
+
+        var finalX = Math.Clamp(Even(posX), 0, Math.Max(0, cw - overlayW));
+        var finalY = Math.Clamp(Even(posY), 0, Math.Max(0, ch - overlayH));
+        return (finalX, finalY, overlayW, overlayH);
     }
 
     /// <summary>

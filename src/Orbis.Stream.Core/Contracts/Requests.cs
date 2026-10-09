@@ -170,7 +170,17 @@ public sealed record LiveVolumeRequest(int SourcePkid, int Volume);
 /// A button of the scene deck as the panel saves it: its name, the file it puts on air (a name of
 /// the scene media folder, uploaded beforehand) and the key that asks for it, if any.
 /// </summary>
-public sealed record SceneButtonRequest(string? Label, string? MediaName, string? Hotkey);
+public sealed record SceneButtonRequest(
+    string? Label,
+    string? MediaName,
+    string? Hotkey,
+    string? DisplayMode = "fullscreen",
+    string? Placement = "bottom-right",
+    int? DurationSeconds = null,
+    int? X = null,
+    int? Y = null,
+    int? Width = null,
+    int? Height = null);
 
 /// <summary>Port of <c>com.orbis.stream.record.VideoLiveHistoryRecord</c>.</summary>
 public sealed record VideoLiveHistoryRequest(

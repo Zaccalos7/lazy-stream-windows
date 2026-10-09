@@ -428,5 +428,15 @@
   "encoderQualityHint": "Automatique teste le PC et choisit seule : gardez-la en cas de doute.",
   "searchByTitle": "Rechercher par titre",
   "search": "Rechercher",
-  "clearFilters": "Effacer les filtres"
+  "clearFilters": "Effacer les filtres",
+  "manualTitle": "Manuel de l'utilisateur",
+  "manualDescription": "Documentation et instructions d'utilisation pour Orbis Stream.",
+  "manualPrintPdf": "Enregistrer sous PDF",
+  "manualDashboardDesc": "Le tableau de bord fournit un aperçu des principales fonctionnalités et des raccourcis pour naviguer rapidement dans l'application.",
+  "manualLiveAddDesc": "Utilisez le bouton Ajouter pour configurer et démarrer un nouveau flux en direct ou une tâche de traitement vidéo.",
+  "manualLiveFlowDesc": "Sélectionnez une source, configurez la destination, définissez les options et cliquez sur Démarrer.",
+  "manualPreviewDesc": "Surveillez les flux actifs en temps réel. Utilisez les commandes de mixage pour ajuster le son et afficher la mise en page composite.",
+  "manualLayoutsDesc": "Créez et gérez des dispositions de canevas et des scènes avec plusieurs emplacements pour la composition vidéo dynamique.",
+  "manualTaskManagerDesc": "Affichez et gérez les processus en arrière-plan et les tâches d'encodage actives.",
+  "manualSettingsDesc": "Configurez les paramètres d'application globaux, les valeurs par défaut vidéo / audio et les configurations de canal."
 }

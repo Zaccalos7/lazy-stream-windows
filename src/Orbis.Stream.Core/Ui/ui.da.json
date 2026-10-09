@@ -428,5 +428,15 @@
   "encoderQualityHint": "Automatisk tester pc'en og vælger selv: lad den stå, hvis du er i tvivl.",
   "searchByTitle": "Søg efter titel",
   "search": "Søg",
-  "clearFilters": "Ryd filtre"
+  "clearFilters": "Ryd filtre",
+  "manualTitle": "Brugermanual",
+  "manualDescription": "Dokumentation og brugsanvisning til Orbis Stream.",
+  "manualPrintPdf": "Gem som PDF",
+  "manualDashboardDesc": "Dashboardet giver et overblik over de vigtigste funktioner og genveje til hurtigt at navigere i programmet.",
+  "manualLiveAddDesc": "Brug knappen Tilføj til at konfigurere og starte en ny live stream eller videobehandlingsopgave.",
+  "manualLiveFlowDesc": "Vælg en kilde, konfigurer destinationen, indstil indstillinger, og klik på Start.",
+  "manualPreviewDesc": "Overvåg aktive streams i realtid. Brug mixerknapperne til at justere lyd og se det sammensatte layout.",
+  "manualLayoutsDesc": "Opret og administrer lærredslayouts og scener med flere slots til dynamisk videosammensætning.",
+  "manualTaskManagerDesc": "Få vist og administrer baggrundsprocesser og aktive kodningsopgaver.",
+  "manualSettingsDesc": "Konfigurer globale programindstillinger, video / lyd standarder og kanalkonfigurationer."
 }

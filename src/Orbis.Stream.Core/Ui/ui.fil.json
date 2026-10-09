@@ -428,5 +428,15 @@
   "encoderQualityHint": "Sinusubok ng Awtomatiko ang PC at kusa itong pumipili: hayaan ito kung hindi ka sigurado.",
   "searchByTitle": "Maghanap ayon sa pamagat",
   "search": "Maghanap",
-  "clearFilters": "I-clear ang mga filter"
+  "clearFilters": "I-clear ang mga filter",
+  "manualTitle": "Manwal ng Gumagamit",
+  "manualDescription": "Dokumentasyon at mga tagubilin sa paggamit para sa Orbis Stream.",
+  "manualPrintPdf": "I-save bilang PDF",
+  "manualDashboardDesc": "Nagbibigay ang dashboard ng pangkalahatang ideya ng mga pangunahing tampok at mga shortcut upang mabilis na mag-navigate sa application.",
+  "manualLiveAddDesc": "Gamitin ang pindutang Magdagdag upang i-configure at magsimula ng bagong live stream o gawain sa pagpoproseso ng video.",
+  "manualLiveFlowDesc": "Pumili ng mapagkukunan, i-configure ang patutunguhan, itakda ang mga pagpipilian, at i-click ang Simulan.",
+  "manualPreviewDesc": "Subaybayan ang mga aktibong stream sa real-time. Gamitin ang mga kontrol ng mixer upang ayusin ang audio at tingnan ang composite layout.",
+  "manualLayoutsDesc": "Lumikha at pamahalaan ang mga layout at eksena sa canvas na may maraming mga puwang para sa pabago-bagong komposisyon ng video.",
+  "manualTaskManagerDesc": "Tingnan at pamahalaan ang mga proseso sa background at aktibong mga gawain sa pag-encode.",
+  "manualSettingsDesc": "I-configure ang mga pandaigdigang setting ng application, mga default na video / audio, at mga configuration ng channel."
 }

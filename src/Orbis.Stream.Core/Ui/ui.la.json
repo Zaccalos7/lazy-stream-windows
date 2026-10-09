@@ -428,5 +428,15 @@
   "encoderQualityHint": "Automatica computatrum probat et ipsa eligit: si dubitas, relinque.",
   "searchByTitle": "Quaere titulum",
   "search": "Quaere",
-  "clearFilters": "Purgare selectiones"
+  "clearFilters": "Purgare selectiones",
+  "manualTitle": "Manuale Utentis",
+  "manualDescription": "Documentatio et praecepta ad Orbis Stream utendum.",
+  "manualPrintPdf": "Servare ut PDF",
+  "manualDashboardDesc": "Tabula principalis praebet conspectum praecipuarum functionum et vias compendiarias ad applicationem cito navigandum.",
+  "manualLiveAddDesc": "Utere puga Addere ad novum fluxum vivum vel negotium processualis video configurandum et incipiendum.",
+  "manualLiveFlowDesc": "Elige fontem, configura destinatum, pone optiones, et preme Incipere.",
+  "manualPreviewDesc": "Monitor flumina activa in tempore vero. Utere gubernatoribus mixtoris ad sonum accommodandum et ad visendum layout compositum.",
+  "manualLayoutsDesc": "Crea et administra layout canvi et scenas cum multiplicibus foraminibus pro compositione video dynamica.",
+  "manualTaskManagerDesc": "Vide et administra processus in curriculo et activa munera encodationis.",
+  "manualSettingsDesc": "Configura globales applicationis occasus, defectus video / audio, et configurationes canalis."
 }

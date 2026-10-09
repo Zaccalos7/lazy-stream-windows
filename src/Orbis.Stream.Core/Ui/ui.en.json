@@ -428,5 +428,15 @@
   "encoderQualityHint": "Automatic tests this PC and decides by itself: keep it if you are not sure.",
   "searchByTitle": "Search by title",
   "search": "Search",
-  "clearFilters": "Clear filters"
+  "clearFilters": "Clear filters",
+  "manualTitle": "User Manual",
+  "manualDescription": "Documentation and usage instructions for Orbis Stream.",
+  "manualPrintPdf": "Save as PDF",
+  "manualDashboardDesc": "The dashboard provides an overview of the main features and shortcuts to navigate the application quickly.",
+  "manualLiveAddDesc": "Use the Add button to configure and start a new live stream or video processing task.",
+  "manualLiveFlowDesc": "Select a source, configure the destination, set options, and click Start.",
+  "manualPreviewDesc": "Monitor active streams in real-time. Use the mixer controls to adjust audio and view the composite layout.",
+  "manualLayoutsDesc": "Create and manage canvas layouts and scenes with multiple slots for dynamic video composition.",
+  "manualTaskManagerDesc": "View and manage background processes and active encoding tasks.",
+  "manualSettingsDesc": "Configure global application settings, video/audio defaults, and channel configurations."
 }

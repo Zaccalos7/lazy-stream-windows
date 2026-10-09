@@ -428,5 +428,15 @@
   "encoderQualityHint": "Automatisch test deze pc en beslist zelf: laat het zo staan als je twijfelt.",
   "searchByTitle": "Zoeken op titel",
   "search": "Zoeken",
-  "clearFilters": "Filters wissen"
+  "clearFilters": "Filters wissen",
+  "manualTitle": "Gebruikershandleiding",
+  "manualDescription": "Documentatie en gebruiksinstructies voor Orbis Stream.",
+  "manualPrintPdf": "Opslaan als PDF",
+  "manualDashboardDesc": "Het dashboard biedt een overzicht van de belangrijkste functies en snelkoppelingen om snel door de applicatie te navigeren.",
+  "manualLiveAddDesc": "Gebruik de knop Toevoegen om een nieuwe livestream of videoverwerkingstaak te configureren en te starten.",
+  "manualLiveFlowDesc": "Selecteer een bron, configureer de bestemming, stel opties in en klik op Start.",
+  "manualPreviewDesc": "Bewaak actieve streams in realtime. Gebruik de mixerbediening om audio aan te passen en de samengestelde lay-out te bekijken.",
+  "manualLayoutsDesc": "Maak en beheer canvaslay-outs en scènes met meerdere slots voor dynamische videosamenstelling.",
+  "manualTaskManagerDesc": "Bekijk en beheer achtergrondprocessen en actieve coderingstaken.",
+  "manualSettingsDesc": "Configureer algemene applicatie-instellingen, video- / audiostandaarden en kanaalconfiguraties."
 }

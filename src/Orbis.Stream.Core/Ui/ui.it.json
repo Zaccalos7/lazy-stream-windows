@@ -428,5 +428,15 @@
   "encoderQualityHint": "Automatica prova il PC e sceglie da sola: lasciala se non sai cosa scegliere.",
   "searchByTitle": "Cerca per titolo",
   "search": "Cerca",
-  "clearFilters": "Azzera i filtri"
+  "clearFilters": "Azzera i filtri",
+  "manualTitle": "Manuale Utente",
+  "manualDescription": "Documentazione e istruzioni per l'uso di Orbis Stream.",
+  "manualPrintPdf": "Salva in PDF",
+  "manualDashboardDesc": "La dashboard fornisce una panoramica delle funzioni principali e scorciatoie per navigare rapidamente.",
+  "manualLiveAddDesc": "Usa il pulsante Aggiungi per configurare e avviare una nuova diretta o elaborazione video.",
+  "manualLiveFlowDesc": "Seleziona una sorgente, configura la destinazione, imposta le opzioni e clicca Avvia.",
+  "manualPreviewDesc": "Monitora le dirette attive in tempo reale. Usa il mixer per regolare l'audio e visualizzare il layout composito.",
+  "manualLayoutsDesc": "Crea e gestisci layout e scene con slot multipli per la composizione dinamica.",
+  "manualTaskManagerDesc": "Visualizza e gestisci i processi in background e i task di codifica attivi.",
+  "manualSettingsDesc": "Configura le impostazioni globali, i predefiniti video/audio e le configurazioni del canale."
 }

@@ -298,11 +298,11 @@ public sealed class SceneSwitchCommandTests
     }
 
     [Theory]
-    [InlineData("bottom-right", 1920, 1080, 400, 300, 1488, 756, 400, 300)]
-    [InlineData("bottom-left", 1920, 1080, 400, 300, 32, 756, 400, 300)]
-    [InlineData("top-right", 1920, 1080, 400, 300, 1488, 24, 400, 300)]
-    [InlineData("top-left", 1920, 1080, 400, 300, 32, 24, 400, 300)]
-    [InlineData("center", 1920, 1080, 400, 300, 760, 390, 400, 300)]
+    [InlineData("bottom-right", 1920, 1080, 400, 300, 1334, 628, 538, 404)]
+    [InlineData("bottom-left", 1920, 1080, 400, 300, 48, 628, 538, 404)]
+    [InlineData("top-right", 1920, 1080, 400, 300, 1334, 48, 538, 404)]
+    [InlineData("top-left", 1920, 1080, 400, 300, 48, 48, 538, 404)]
+    [InlineData("center", 1920, 1080, 400, 300, 690, 338, 538, 404)]
     [InlineData("custom", 1920, 1080, 400, 300, 100, 200, 500, 400)]
     public void Overlay_placement_calculation_computes_correct_coordinates(
         string placement, int canvasW, int canvasH, int mediaW, int mediaH,
@@ -327,11 +327,19 @@ public sealed class SceneSwitchCommandTests
     {
         var composition = new List<FfmpegCompositionItem>
         {
-            new(SourceKind.Direct, "/tmp/base.mp4", 0, 0, 1920, 1080, 1, 0),
-            new(SourceKind.Overlay, "/tmp/overlay.png", 100, 100, 400, 300, 1, 1, TimelineEnable: "between(t,0,10)")
+            new(SourceKind.File, "/tmp/base.mp4", 0, 0, 1920, 1080, true, false),
+            new(SourceKind.Overlay, "/tmp/overlay.png", 100, 100, 400, 300, true, true, TimelineEnable: "between(t,0,10)")
         };
 
-        var filter = FfmpegCommandBuilder.BuildFilterGraph(1920, 1080, composition, hasAudio: false, audioNormalized: false);
+        var request = new FfmpegCompositionRequest(
+            Items: composition,
+            OutputUrl: "rtmp://fake",
+            Setting: Setting(false),
+            CanvasWidth: 1920,
+            CanvasHeight: 1080,
+            CanvasFrameRate: 30.0
+        );
+        var filter = string.Join(" ", FfmpegCommandBuilder.BuildComposition(request));
         Assert.Contains(":enable='between(t,0,10)'", filter);
     }
 }

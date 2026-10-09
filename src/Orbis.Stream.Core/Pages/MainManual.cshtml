@@ -1,0 +1,120 @@
+@page "/orbis/mainManual"
+@model Orbis.Stream.Core.Pages.MainManual
+@{
+    ViewData["Title"] = T["manualTitle"];
+}
+@section Styles {
+    <link rel="stylesheet" href="/css/dashboard.css" />
+    <style>
+        @@media print {
+            .nav, .page-header .btn, .coffee-banner, .update-bell { display: none !important; }
+            .shell, .content, .page { padding: 0 !important; margin: 0 !important; overflow: visible !important; display: block !important; height: auto !important; }
+            .section { page-break-inside: avoid; }
+            body { background: white !important; color: black !important; }
+            .tile { border-color: #ccc !important; background: transparent !important; }
+        }
+        .manual-icon { font-size: 20px; vertical-align: middle; margin-right: 8px; color: var(--accent); }
+        .manual-step { display: flex; align-items: flex-start; gap: 12px; margin-bottom: 16px; }
+        .manual-step-content h4 { margin: 0 0 4px 0; font-size: 15px; }
+        .manual-step-content p { margin: 0; color: var(--text-2); font-size: 13px; line-height: 1.4; }
+        .grid .tile { cursor: default; }
+        .grid .tile:hover { background: var(--card); border-color: var(--stroke); }
+    </style>
+}
+
+<div class="page-header">
+    <div>
+        <h1>@T["manualTitle"]</h1>
+        <p class="subtitle">@T["manualDescription"]</p>
+    </div>
+    <button type="button" class="btn accent" onclick="window.print()">
+        <i class="icon">&#xE72D;</i> @T["manualPrintPdf"]
+    </button>
+</div>
+
+<div class="section">
+    <h3 class="section">
+        <i class="icon manual-icon">&#xE80F;</i> @T["dashboard"]
+    </h3>
+    <div class="grid" style="grid-template-columns: 1fr;">
+        <div class="tile">
+            <div>
+                <h4>@T["dashboard"]</h4>
+                <p>@T["manualDashboardDesc"]</p>
+            </div>
+        </div>
+    </div>
+</div>
+
+<div class="section">
+    <h3 class="section">
+        <i class="icon manual-icon">&#xE714;</i> Live
+    </h3>
+    <div class="grid" style="grid-template-columns: 1fr;">
+        <div class="tile">
+            <div>
+                <h4><i class="icon">&#xE710;</i> @T["add"]</h4>
+                <p>@T["manualLiveAddDesc"]</p>
+                <div style="margin-top: 10px; padding-top: 10px; border-top: 1px solid var(--stroke);">
+                    <strong>@T["flow"]:</strong> @T["manualLiveFlowDesc"]
+                </div>
+            </div>
+        </div>
+    </div>
+</div>
+
+<div class="section">
+    <h3 class="section">
+        <i class="icon manual-icon">&#xE7F4;</i> @T["livePreviewTitle"]
+    </h3>
+    <div class="grid" style="grid-template-columns: 1fr;">
+        <div class="tile">
+            <div>
+                <h4>@T["livePreviewTitle"]</h4>
+                <p>@T["manualPreviewDesc"]</p>
+            </div>
+        </div>
+    </div>
+</div>
+
+<div class="section">
+    <h3 class="section">
+        <i class="icon manual-icon">&#xE8B9;</i> @T["layouts"]
+    </h3>
+    <div class="grid" style="grid-template-columns: 1fr;">
+        <div class="tile">
+            <div>
+                <h4>@T["layouts"]</h4>
+                <p>@T["manualLayoutsDesc"]</p>
+            </div>
+        </div>
+    </div>
+</div>
+
+<div class="section">
+    <h3 class="section">
+        <i class="icon manual-icon">&#xE9D9;</i> @T["taskManager"]
+    </h3>
+    <div class="grid" style="grid-template-columns: 1fr;">
+        <div class="tile">
+            <div>
+                <h4>@T["taskManager"]</h4>
+                <p>@T["manualTaskManagerDesc"]</p>
+            </div>
+        </div>
+    </div>
+</div>
+
+<div class="section">
+    <h3 class="section">
+        <i class="icon manual-icon">&#xE713;</i> @T["settings"]
+    </h3>
+    <div class="grid" style="grid-template-columns: 1fr;">
+        <div class="tile">
+            <div>
+                <h4>@T["settings"]</h4>
+                <p>@T["manualSettingsDesc"]</p>
+            </div>
+        </div>
+    </div>
+</div>

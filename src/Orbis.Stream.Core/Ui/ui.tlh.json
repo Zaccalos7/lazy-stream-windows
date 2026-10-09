@@ -428,5 +428,15 @@
   "encoderQualityHint": "ra'Hom De'wI' tlhob 'ej wIv.",
   "searchByTitle": "titlh lunob",
   "search": "lunob",
-  "clearFilters": "cha' lunobmeH 'oH purghach"
+  "clearFilters": "cha' lunobmeH 'oH purghach",
+  "manualTitle": "lo'wI' mu'ghom",
+  "manualDescription": "Orbis Stream lo'meH poQ.",
+  "manualPrintPdf": "PDF chaw' pol",
+  "manualDashboardDesc": "Qu'vatlhmaj naQ 'echletHom vIHtaHbogh cha' 'ej nom yIghoSlI'.",
+  "manualLiveAddDesc": "chu' live stream pagh video qengmeH 'ej QapmeH Add SeHlaw yIlo'.",
+  "manualLiveFlowDesc": "Hal wIv, cha' pIm, SeH wIv, 'ej Start yIqIm.",
+  "manualPreviewDesc": "DaH live stream yIbej. wab choHmeH 'ej mut nger yIbejmeH mixer SeHlaw yIlo'.",
+  "manualLayoutsDesc": "video mutmeH law' slot ghajbogh canvas nger 'ej ghojmoH yIchenmoH 'ej yISeH.",
+  "manualTaskManagerDesc": "QaptaHbogh Qu' 'ej Qu' qengmeH yIbej 'ej yISeH.",
+  "manualSettingsDesc": "qo' app SeH, video/wab ngong, 'ej channel SeH yIcher."
 }

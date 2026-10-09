@@ -428,5 +428,15 @@
   "encoderQualityHint": "자동은 PC를 테스트해 스스로 고릅니다. 잘 모르겠다면 그대로 두세요.",
   "searchByTitle": "제목으로 검색",
   "search": "검색",
-  "clearFilters": "필터 지우기"
+  "clearFilters": "필터 지우기",
+  "manualTitle": "사용자 설명서",
+  "manualDescription": "Orbis Stream에 대한 설명서 및 사용 지침.",
+  "manualPrintPdf": "PDF로 저장",
+  "manualDashboardDesc": "대시보드는 애플리케이션을 빠르게 탐색할 수 있는 주요 기능과 바로 가기에 대한 개요를 제공합니다.",
+  "manualLiveAddDesc": "추가 버튼을 사용하여 새 라이브 스트림 또는 비디오 처리 작업을 구성하고 시작합니다.",
+  "manualLiveFlowDesc": "소스를 선택하고 대상을 구성하고 옵션을 설정한 다음 시작을 클릭합니다.",
+  "manualPreviewDesc": "활성 스트림을 실시간으로 모니터링합니다. 믹서 컨트롤을 사용하여 오디오를 조정하고 합성 레이아웃을 봅니다.",
+  "manualLayoutsDesc": "동적 비디오 구성을 위해 여러 슬롯이 있는 캔버스 레이아웃 및 장면을 만들고 관리합니다.",
+  "manualTaskManagerDesc": "백그라운드 프로세스 및 활성 인코딩 작업을 보고 관리합니다.",
+  "manualSettingsDesc": "글로벌 애플리케이션 설정, 비디오/오디오 기본값 및 채널 구성을 구성합니다."
 }

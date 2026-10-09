@@ -428,5 +428,15 @@
   "encoderQualityHint": "自动会测试电脑并自行选择：不确定时保持不变即可。",
   "searchByTitle": "按标题搜索",
   "search": "搜索",
-  "clearFilters": "清除筛选"
+  "clearFilters": "清除筛选",
+  "manualTitle": "用户手册",
+  "manualDescription": "Orbis Stream 的文档和使用说明。",
+  "manualPrintPdf": "另存为 PDF",
+  "manualDashboardDesc": "仪表板提供了主要功能和快捷方式的概述，以便快速导航应用程序。",
+  "manualLiveAddDesc": "使用添加按钮配置并开始新的直播或视频处理任务。",
+  "manualLiveFlowDesc": "选择来源，配置目标，设置选项，然后单击开始。",
+  "manualPreviewDesc": "实时监控活动流。使用混音器控件调整音频并查看复合布局。",
+  "manualLayoutsDesc": "创建和管理具有多个插槽的画布布局和场景，以进行动态视频合成。",
+  "manualTaskManagerDesc": "查看和管理后台进程和活动编码任务。",
+  "manualSettingsDesc": "配置全局应用程序设置、视频/音频默认值和通道配置。"
 }

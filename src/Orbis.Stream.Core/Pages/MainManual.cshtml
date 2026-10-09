@@ -12,109 +12,164 @@
             .section { page-break-inside: avoid; }
             body { background: white !important; color: black !important; }
             .tile { border-color: #ccc !important; background: transparent !important; }
+            .manual-hero, .manual-screenshot { max-width: 100% !important; height: auto !important; page-break-inside: avoid; }
         }
-        .manual-icon { font-size: 20px; vertical-align: middle; margin-right: 8px; color: var(--accent); }
-        .manual-step { display: flex; align-items: flex-start; gap: 12px; margin-bottom: 16px; }
-        .manual-step-content h4 { margin: 0 0 4px 0; font-size: 15px; }
-        .manual-step-content p { margin: 0; color: var(--text-2); font-size: 13px; line-height: 1.4; }
-        .grid .tile { cursor: default; }
-        .grid .tile:hover { background: var(--card); border-color: var(--stroke); }
+
+        .manual-hero {
+            text-align: center;
+            padding: 40px 20px;
+            background: var(--card);
+            border-radius: var(--radius-lg);
+            margin-bottom: 30px;
+            border: 1px solid var(--stroke);
+        }
+        .manual-hero h1 { font-size: 32px; font-weight: 600; margin-bottom: 12px; color: var(--text); }
+        .manual-hero p { font-size: 16px; color: var(--text-2); max-width: 600px; margin: 0 auto; line-height: 1.5; }
+
+        .manual-screenshot {
+            display: block;
+            width: 100%;
+            max-width: 800px;
+            margin: 24px auto;
+            border-radius: var(--radius-md);
+            border: 1px solid var(--stroke);
+            box-shadow: var(--shadow-card);
+            background: var(--panel);
+            min-height: 200px;
+            object-fit: cover;
+        }
+
+        .manual-screenshot-placeholder {
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            width: 100%;
+            max-width: 800px;
+            height: 400px;
+            margin: 24px auto;
+            border-radius: var(--radius-md);
+            border: 1px dashed var(--stroke);
+            background: var(--tint);
+            color: var(--text-3);
+            font-size: 14px;
+        }
+
+        .manual-icon { font-size: 24px; vertical-align: middle; margin-right: 12px; color: var(--accent); }
+        .feature-grid {
+            display: grid;
+            grid-template-columns: repeat(auto-fit, minmax(300px, 1fr));
+            gap: 20px;
+            margin-top: 16px;
+        }
+        .feature-block {
+            background: var(--card);
+            border: 1px solid var(--stroke);
+            border-radius: var(--radius-md);
+            padding: 20px;
+        }
+        .feature-block h4 {
+            display: flex;
+            align-items: center;
+            gap: 8px;
+            margin: 0 0 12px 0;
+            font-size: 16px;
+            color: var(--text);
+        }
+        .feature-block p {
+            margin: 0 0 12px 0;
+            color: var(--text-2);
+            font-size: 14px;
+            line-height: 1.5;
+        }
+        .feature-block ul {
+            margin: 0;
+            padding-left: 20px;
+            color: var(--text-2);
+            font-size: 14px;
+            line-height: 1.5;
+        }
+        .feature-block ul li { margin-bottom: 6px; }
     </style>
 }
 
 <div class="page-header">
     <div>
-        <h1>@T["manualTitle"]</h1>
-        <p class="subtitle">@T["manualDescription"]</p>
+        <button type="button" class="btn accent" onclick="window.print()">
+            <i class="icon">&#xE72D;</i> @T["manualPrintPdf"]
+        </button>
+        <button type="button" class="btn" onclick="window.print()">
+            <i class="icon">&#xE896;</i> @T["manualDownloadPdf"]
+        </button>
     </div>
-    <button type="button" class="btn accent" onclick="window.print()">
-        <i class="icon">&#xE72D;</i> @T["manualPrintPdf"]
-    </button>
+</div>
+
+<div class="manual-hero">
+    <h1>@T["manualTitle"]</h1>
+    <p>@T["manualDescription"]</p>
 </div>
 
 <div class="section">
     <h3 class="section">
-        <i class="icon manual-icon">&#xE80F;</i> @T["dashboard"]
+        <i class="icon manual-icon">&#xE714;</i> @T["liveManagement"]
     </h3>
-    <div class="grid" style="grid-template-columns: 1fr;">
-        <div class="tile">
-            <div>
-                <h4>@T["dashboard"]</h4>
-                <p>@T["manualDashboardDesc"]</p>
-            </div>
+    <p style="color: var(--text-2); line-height: 1.5; font-size: 15px;">@T["manualLiveIntro"]</p>
+
+    <img src="/img/manual-live.png" alt="Live Management Interface" class="manual-screenshot" onerror="this.outerHTML='<div class=\'manual-screenshot-placeholder\'><i class=\'icon\'>&#xE8B9;</i>&nbsp; @T["screenshotPlaceholder"]</div>'" />
+
+    <div class="feature-grid">
+        <div class="feature-block">
+            <h4><i class="icon">&#xE710;</i> @T["manualBtnAddSource"]</h4>
+            <p>@T["manualDescAddSource"]</p>
+            <ul>
+                <li><strong>@T["file"]:</strong> @T["manualSourceFile"]</li>
+                <li><strong>@T["screen"]:</strong> @T["manualSourceScreen"]</li>
+                <li><strong>@T["camera"]:</strong> @T["manualSourceCamera"]</li>
+            </ul>
+        </div>
+
+        <div class="feature-block">
+            <h4><i class="icon">&#xE93E;</i> @T["manualBtnDestination"]</h4>
+            <p>@T["manualDescDestination"]</p>
+            <ul>
+                <li><strong>YouTube:</strong> @T["manualDestYouTube"]</li>
+                <li><strong>Twitch:</strong> @T["manualDestTwitch"]</li>
+                <li><strong>RTMP:</strong> @T["manualDestRtmp"]</li>
+            </ul>
+        </div>
+
+        <div class="feature-block">
+            <h4><i class="icon">&#xE768;</i> @T["manualBtnStart"] &amp; <i class="icon">&#xE71A;</i> @T["manualBtnStop"]</h4>
+            <p>@T["manualDescStartStop"]</p>
+        </div>
+
+        <div class="feature-block">
+            <h4><i class="icon">&#xE890;</i> @T["manualTheFlow"]</h4>
+            <p>@T["manualDescFlow"]</p>
+            <ol style="margin: 0; padding-left: 20px; color: var(--text-2); font-size: 14px; line-height: 1.5;">
+                <li>@T["manualFlowStep1"]</li>
+                <li>@T["manualFlowStep2"]</li>
+                <li>@T["manualFlowStep3"]</li>
+            </ol>
         </div>
     </div>
 </div>
 
-<div class="section">
+<div class="section" style="margin-top: 40px;">
     <h3 class="section">
-        <i class="icon manual-icon">&#xE714;</i> Live
+        <i class="icon manual-icon">&#xE80F;</i> @T["manualOtherFeatures"]
     </h3>
-    <div class="grid" style="grid-template-columns: 1fr;">
-        <div class="tile">
-            <div>
-                <h4><i class="icon">&#xE710;</i> @T["add"]</h4>
-                <p>@T["manualLiveAddDesc"]</p>
-                <div style="margin-top: 10px; padding-top: 10px; border-top: 1px solid var(--stroke);">
-                    <strong>@T["flow"]:</strong> @T["manualLiveFlowDesc"]
-                </div>
-            </div>
+    <div class="feature-grid">
+        <div class="feature-block">
+            <h4><i class="icon">&#xE7F4;</i> @T["livePreviewTitle"]</h4>
+            <p>@T["manualPreviewDesc"]</p>
         </div>
-    </div>
-</div>
-
-<div class="section">
-    <h3 class="section">
-        <i class="icon manual-icon">&#xE7F4;</i> @T["livePreviewTitle"]
-    </h3>
-    <div class="grid" style="grid-template-columns: 1fr;">
-        <div class="tile">
-            <div>
-                <h4>@T["livePreviewTitle"]</h4>
-                <p>@T["manualPreviewDesc"]</p>
-            </div>
+        <div class="feature-block">
+            <h4><i class="icon">&#xE8B9;</i> @T["layouts"]</h4>
+            <p>@T["manualLayoutsDesc"]</p>
         </div>
-    </div>
-</div>
-
-<div class="section">
-    <h3 class="section">
-        <i class="icon manual-icon">&#xE8B9;</i> @T["layouts"]
-    </h3>
-    <div class="grid" style="grid-template-columns: 1fr;">
-        <div class="tile">
-            <div>
-                <h4>@T["layouts"]</h4>
-                <p>@T["manualLayoutsDesc"]</p>
-            </div>
-        </div>
-    </div>
-</div>
-
-<div class="section">
-    <h3 class="section">
-        <i class="icon manual-icon">&#xE9D9;</i> @T["taskManager"]
-    </h3>
-    <div class="grid" style="grid-template-columns: 1fr;">
-        <div class="tile">
-            <div>
-                <h4>@T["taskManager"]</h4>
-                <p>@T["manualTaskManagerDesc"]</p>
-            </div>
-        </div>
-    </div>
-</div>
-
-<div class="section">
-    <h3 class="section">
-        <i class="icon manual-icon">&#xE713;</i> @T["settings"]
-    </h3>
-    <div class="grid" style="grid-template-columns: 1fr;">
-        <div class="tile">
-            <div>
-                <h4>@T["settings"]</h4>
-                <p>@T["manualSettingsDesc"]</p>
-            </div>
+        <div class="feature-block">
+            <h4><i class="icon">&#xE713;</i> @T["settings"]</h4>
+            <p>@T["manualSettingsDesc"]</p>
         </div>
     </div>
 </div>

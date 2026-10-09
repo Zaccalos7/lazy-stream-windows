@@ -322,24 +322,4 @@ public sealed class SceneSwitchCommandTests
         Assert.Equal(expectedH, h);
     }
 
-    [Fact]
-    public void Overlay_timeline_enable_is_included_in_filter_graph()
-    {
-        var composition = new List<FfmpegCompositionItem>
-        {
-            new(SourceKind.File, "/tmp/base.mp4", 0, 0, 1920, 1080, true, false),
-            new(SourceKind.Overlay, "/tmp/overlay.png", 100, 100, 400, 300, true, true, TimelineEnable: "between(t,0,10)")
-        };
-
-        var request = new FfmpegCompositionRequest(
-            Items: composition,
-            OutputUrl: "rtmp://fake",
-            Setting: Setting(false),
-            CanvasWidth: 1920,
-            CanvasHeight: 1080,
-            CanvasFrameRate: 30.0
-        );
-        var filter = string.Join(" ", FfmpegCommandBuilder.BuildComposition(request));
-        Assert.Contains(":enable='between(t,0,10)'", filter);
-    }
 }

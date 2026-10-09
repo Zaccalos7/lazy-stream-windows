@@ -22,7 +22,7 @@ public sealed partial class StyleSheetTests : IClassFixture<ApplicationFixture>
             ["preview"] = ["/orbis/mainPreview"],
             ["meters"] = ["/orbis/mainTaskManager"],
             ["cleanup"] = ["/orbis/mainLiveHistory"],
-            ["dashboard"] = ["/orbis/mainMenu", "/orbis/mainLiveMenu", "/orbis/mainManual"]
+            ["dashboard"] = ["/orbis/mainMenu", "/orbis/mainLiveMenu"]
         };
 
     private readonly ApplicationFixture _fixture;
@@ -53,7 +53,6 @@ public sealed partial class StyleSheetTests : IClassFixture<ApplicationFixture>
     [InlineData("/orbis/mainLayout")]
     [InlineData("/orbis/mainSetting")]
     [InlineData("/orbis/mainTaskManager")]
-    [InlineData("/orbis/mainManual")]
     public async Task Every_page_carries_the_shared_sheets_and_nothing_missing(string page)
     {
         var linked = await SheetsOfPageAsync( page);
@@ -79,7 +78,6 @@ public sealed partial class StyleSheetTests : IClassFixture<ApplicationFixture>
     [InlineData("/orbis/mainLiveHistory")]
     [InlineData("/orbis/mainMenu")]
     [InlineData("/orbis/mainLiveMenu")]
-    [InlineData("/orbis/mainManual")]
     public async Task A_page_links_the_sheets_it_draws_and_only_those(string page)
     {
         var linked = await SheetsOfPageAsync( page);

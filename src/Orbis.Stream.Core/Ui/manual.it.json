@@ -1,0 +1,128 @@
+{
+  "sections": [
+    {
+      "id": "dashboard",
+      "title": "Il pannello",
+      "body": "La casa di Orbis Stream: da qui raggiungi la gestione delle dirette, l'anteprima, i layout, la cronologia e le impostazioni.",
+      "steps": [
+        "Apri una scheda per entrare in una sezione.",
+        "Le stesse aree sono sempre a un clic di distanza nella barra a sinistra."
+      ],
+      "figure": "dashboard",
+      "callout": "Apri una scheda per entrare in quell'area."
+    },
+    {
+      "id": "startLive",
+      "title": "Avviare una diretta",
+      "body": "Apri Live e premi Avvia diretta: Orbis chiede quale impostazione video/audio va in onda e su quale canale, poi apre il canvas per comporre la scena.",
+      "steps": [
+        "Il pulsante evidenziato apre il procedimento per una nuova diretta.",
+        "Conferma alla fine per andare in onda."
+      ],
+      "figure": "startLive",
+      "callout": "Premi Avvia diretta per cominciare."
+    },
+    {
+      "id": "wizard",
+      "title": "Il procedimento di avvio",
+      "body": "Due passi: il primo sceglie l'impostazione video e audio, il secondo il canale su cui trasmettere. Next va avanti, Indietro torna.",
+      "steps": [
+        "Scegli l'impostazione della diretta.",
+        "Scegli il canale (per TikTok digita anche la chiave della diretta).",
+        "Componi / Next apre il canvas."
+      ],
+      "figure": "wizard",
+      "callout": "Next passa al secondo passo."
+    },
+    {
+      "id": "playlist",
+      "title": "Trasmettere una cartella (playlist)",
+      "body": "Invece di una sola scena puoi trasmettere tutti i video di una cartella, uno dopo l'altro.",
+      "steps": [
+        "Premi Avvia playlist.",
+        "Scegli impostazione e canale, poi la cartella dei video.",
+        "Conferma per andare in onda."
+      ],
+      "figure": "playlist",
+      "callout": "Avvia playlist trasmette una cartella intera in sequenza."
+    },
+    {
+      "id": "scene",
+      "title": "Comporre la scena",
+      "body": "Il canvas è dove si monta una diretta: trascina le sorgenti (schermo, finestra, telecamera, audio) negli slot, poi aggiungi gli overlay sopra.",
+      "steps": [
+        "Aggiungi una sorgente a uno slot.",
+        "Aggiungi o trascina gli overlay e sistemali.",
+        "Conferma per avviare la diretta."
+      ],
+      "figure": "scene",
+      "callout": "Il canvas: sorgenti negli slot, overlay sopra."
+    },
+    {
+      "id": "sceneDeck",
+      "title": "Il scene deck",
+      "body": "Il scene deck manda in onda un video, una banner o un'immagine al posto della diretta, come si cambia scena in uno studio. Ogni pulsante può avere un nome e una scorciatoia da tastiera.",
+      "steps": [
+        "Apri il deck dalla riga di una diretta o dall'anteprima.",
+        "Premi un pulsante per mandarlo in onda; Riprendi diretta riporta la diretta."
+      ],
+      "figure": "sceneDeck",
+      "callout": "Il scene deck cambia quello che va in onda."
+    },
+    {
+      "id": "preview",
+      "title": "L'anteprima",
+      "body": "L'anteprima mostra quello che una diretta sta trasmettendo adesso, con la salute dello stream, il bitrate e il frame rate.",
+      "steps": [
+        "Guarda la diretta e i suoi dati.",
+        "Apri il scene deck o ferma la diretta da qui."
+      ],
+      "figure": "preview",
+      "callout": "La diretta in onda, mentre viene inviata."
+    },
+    {
+      "id": "layouts",
+      "title": "I layout",
+      "body": "Un layout è lo scheletro di una diretta: gli slot e gli overlay, salvati con un nome per riusarli. Il procedimento apre un layout come i suoi slot.",
+      "steps": [
+        "Premi Nuovo layout.",
+        "Disegna gli slot e gli overlay, poi salva."
+      ],
+      "figure": "layouts",
+      "callout": "Nuovo layout apre il canvas per disegnare una scena riutilizzabile."
+    },
+    {
+      "id": "history",
+      "title": "Cronologia delle dirette",
+      "body": "Ogni diretta che hai avviato resta qui con la piattaforma, il canale, la cartella ed esito.",
+      "steps": [
+        "Riavvia la stessa diretta, o apri i suoi dettagli.",
+        "Manda uno spot, collega un'impostazione, oppure elimina la riga."
+      ],
+      "figure": "history",
+      "callout": "Le dirette avviate, pronte a ripartire."
+    },
+    {
+      "id": "taskManager",
+      "title": "Gestione attività",
+      "body": "Come sta il PC: CPU, RAM, dischi, rete, GPU, le temperature e i processi FFmpeg della diretta.",
+      "steps": [
+        "Guarda i misuratori mentre una diretta è in corso.",
+        "Controlla che la macchina regga lo stream."
+      ],
+      "figure": "taskManager",
+      "callout": "Risorse e attività di FFmpeg, in tempo reale."
+    },
+    {
+      "id": "settings",
+      "title": "Impostazioni",
+      "body": "Sotto Impostazioni trovi le impostazioni video e audio, i canali, il tema, la lingua e questo manuale. La barra a sinistra ha tema, lingua e Info sempre a portata.",
+      "steps": [
+        "Video e audio: crea le impostazioni e attiva quelle ammesse in onda.",
+        "Canali: aggiungi le piattaforme e le loro chiavi di stream."
+      ],
+      "figure": "settings",
+      "callout": "Impostazioni raccoglie video/audio, canali e questo manuale."
+    }
+  ]
+}

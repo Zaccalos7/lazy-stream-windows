@@ -1,0 +1,128 @@
+{
+  "sections": [
+    {
+      "id": "dashboard",
+      "title": "Panoul",
+      "body": "Casa Orbis Stream: de aici ajungi la gestiunea directelor, previzualizare, machete, istoric și setări.",
+      "steps": [
+        "Deschide un card pentru a intra într-o secțiune.",
+        "Aceleleași zone sunt mereu la un clic în bara din stânga."
+      ],
+      "figure": "dashboard",
+      "callout": "Deschide un card pentru a intra în acea zonă."
+    },
+    {
+      "id": "startLive",
+      "title": "Pornește o directă",
+      "body": "Deschide Live și apasă Pornește directa: Orbis întreabă ce setare video/audio și ce canal merg pe aer, apoi deschide pânza pentru a compune scena.",
+      "steps": [
+        "Butonul evidențiat deschide vrăjitorul unei direcțe noi.",
+        "Confirmă la final pentru a merge pe aer."
+      ],
+      "figure": "startLive",
+      "callout": "Apasă Pornește directa pentru a începe."
+    },
+    {
+      "id": "wizard",
+      "title": "Vrăjitorul de pornire",
+      "body": "Doi pași: primul alege setarea video și audio, al doilea canalul. Înainte merge, Înapoi revine.",
+      "steps": [
+        "Alege setarea direcței.",
+        "Alege canalul (pentru TikTok scrie și cheia).",
+        "Compune / Înainte deschide pânza."
+      ],
+      "figure": "wizard",
+      "callout": "Înainte trece la al doilea pas."
+    },
+    {
+      "id": "playlist",
+      "title": "Transmite un folder (playlist)",
+      "body": "În loc de o singură scenă poți transmite toate videoclipurile dintr-un folder, pe rând.",
+      "steps": [
+        "Apasă Pornește playlistul.",
+        "Alege setarea și canalul, apoi folderul de videoclipuri.",
+        "Confirmă pentru a merge pe aer."
+      ],
+      "figure": "playlist",
+      "callout": "Pornește playlistul transmite un folder întreg pe rând."
+    },
+    {
+      "id": "scene",
+      "title": "Compune scena",
+      "body": "Pânza este locul unde se montează o directă: trage sursele (ecran, fereastră, cameră, audio) în sloturi, apoi adaugă suprapuneri deasupra.",
+      "steps": [
+        "Adaugă o sursă într-un slot.",
+        "Adaugă sau trage suprapuneri și aranjează-le.",
+        "Confirmă pentru a porni directa."
+      ],
+      "figure": "scene",
+      "callout": "Pânza: surse în sloturi, suprapuneri deasupra."
+    },
+    {
+      "id": "sceneDeck",
+      "title": "Scene deck",
+      "body": "Scene deck pune pe aer un videoclip, un banner sau o imagine în locul direcței, ca schimbarea scenei într-un studio. Fiecare buton poate avea un nume și o scurtătură.",
+      "steps": [
+        "Deschide deck-ul din rândul unei direcțe sau din previzualizare.",
+        "Apasă un buton pentru a-l pune pe aer; Reia directa readuce directa."
+      ],
+      "figure": "sceneDeck",
+      "callout": "Scene deck schimbă ce este pe aer."
+    },
+    {
+      "id": "preview",
+      "title": "Previzualizarea",
+      "body": "Previzualizarea arată ce transmite o directă acum, cu sănătatea fluxului, bitrate-ul și cadrele pe secundă.",
+      "steps": [
+        "Urmărește directa și datele ei.",
+        "Deschide deck-ul sau oprește directa de aici."
+      ],
+      "figure": "preview",
+      "callout": "Directa pe aer, așa cum este trimisă."
+    },
+    {
+      "id": "layouts",
+      "title": "Machetele",
+      "body": "O machetă este scheletul unei direcțe: sloturile și suprapunerile, salvate cu un nume. Vrăjitorul deschide o machetă ca sloturile ei.",
+      "steps": [
+        "Apasă Machetă nouă.",
+        "Desenează sloturile și suprapunerile, apoi salvează."
+      ],
+      "figure": "layouts",
+      "callout": "Machetă nouă deschide pânza pentru o scenă reutilizabilă."
+    },
+    {
+      "id": "history",
+      "title": "Istoricul directelor",
+      "body": "Fiecare directă pornită rămâne aici cu platforma, canalul, folderul și rezultatul.",
+      "steps": [
+        "Pornește aceeași directă din nou, sau deschide detaliile.",
+        "Rulează un spot, leagă o setare, sau șterge rândul."
+      ],
+      "figure": "history",
+      "callout": "Directele pornite, gata de repetat."
+    },
+    {
+      "id": "taskManager",
+      "title": "Manager de activități",
+      "body": "Cum stă PC-ul: CPU, RAM, discuri, rețea, GPU, temperaturile și procesele FFmpeg.",
+      "steps": [
+        "Urmărește indicatorii în timpul unei direcțe.",
+        "Verifică dacă mașina ține pasul."
+      ],
+      "figure": "taskManager",
+      "callout": "Resurse și activitate FFmpeg, în timp real."
+    },
+    {
+      "id": "settings",
+      "title": "Setări",
+      "body": "În Setări găsești video și audio, canalele, tema, limba și acest manual. Bara laterală are tema, limba și Despre oriunde.",
+      "steps": [
+        "Video și audio: creează setările și activează-le pe cele permise.",
+        "Canale: adaugă platformele și cheile lor."
+      ],
+      "figure": "settings",
+      "callout": "Setările adună video/audio, canalele și acest manual."
+    }
+  ]
+}

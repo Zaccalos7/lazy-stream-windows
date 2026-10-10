@@ -1,0 +1,77 @@
+@page "/orbis/manual"
+@{
+    ViewData["Title"] = T["manualTitle"];
+    var language = T.Language;
+    var parts = M.Sections(language).Select((part, index) => (part, number: index + 1)).ToList();
+}
+@section Styles {
+    <link rel="stylesheet" href="/css/manual.css" />
+}
+<article class="manual">
+    <header class="manual-hero">
+        <img src="/favicon.ico" alt="" class="manual-mark" width="72" height="72" />
+        <h1>@T["manualTitle"]</h1>
+        <p class="manual-lead">@T["manualIntro"]</p>
+        <div class="manual-actions">
+            <button type="button" class="btn accent" data-manual-print><i class="icon" aria-hidden="true">&#xE896;</i>@T["manualDownloadPdf"]</button>
+            <button type="button" class="btn" data-manual-print><i class="icon" aria-hidden="true">&#xE749;</i>@T["manualPrint"]</button>
+        </div>
+    </header>
+
+    <div class="manual-layout">
+        <nav class="manual-toc" aria-label="@T["manualToc"]">
+            <h2>@T["manualToc"]</h2>
+            <ol>
+                @foreach (var (part, number) in parts)
+                {
+                    <li>
+                        <a href="#@part.Id">
+                            <span class="manual-toc-number">@number</span>
+                            <span>@part.Title</span>
+                        </a>
+                    </li>
+                }
+            </ol>
+        </nav>
+
+        <div class="manual-body">
+            @foreach (var (part, number) in parts)
+            {
+                var headingId = $"{part.Id}-title";
+                <section class="manual-section" id="@part.Id" aria-labelledby="@headingId">
+                    <h2 id="@headingId">
+                        <span class="manual-number" aria-hidden="true">@number</span>
+                        @part.Title
+                    </h2>
+                    <p class="manual-text">@part.Body</p>
+                    @if (part.Steps.Count > 0)
+                    {
+                        <ol class="manual-steps">
+                            @foreach (var step in part.Steps)
+                            {
+                                <li>@step</li>
+                            }
+                        </ol>
+                    }
+                    @if (!string.IsNullOrWhiteSpace(part.Figure))
+                    {
+                        <figure class="manual-figure">
+                            <img src="/manual/@language/@(part.Figure).webp"
+                                 alt="@part.Title" loading="lazy" decoding="async" />
+                            @if (!string.IsNullOrWhiteSpace(part.Callout))
+                            {
+                                <figcaption>@part.Callout</figcaption>
+                            }
+                        </figure>
+                    }
+                </section>
+            }
+        </div>
+    </div>
+</article>
+
+<script>
+    document.querySelectorAll('[data-manual-print]').forEach(function (button) {
+        button.addEventListener('click', function () { window.print(); });
+    });
+</script>

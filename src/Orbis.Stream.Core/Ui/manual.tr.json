@@ -1,0 +1,128 @@
+{
+  "sections": [
+    {
+      "id": "dashboard",
+      "title": "Panel",
+      "body": "Orbis Stream'in evi: buradan yayın yönetimine, önizlemeye, düzenlere, geçmişe ve ayarlara ulaşırsınız.",
+      "steps": [
+        "Bir bölüme girmek için bir kart açın.",
+        "Aynı alanlar soldaki çubukta her zaman bir tık uzakta."
+      ],
+      "figure": "dashboard",
+      "callout": "O alana girmek için bir kart açın."
+    },
+    {
+      "id": "startLive",
+      "title": "Yayın başlat",
+      "body": "Live'ı açın ve Yayını başlat'a basın: Orbis hangi video/ses ayarının ve hangi kanalın yayına gideceğini sorar, sonra sahneyi kurmak için tuvali açar.",
+      "steps": [
+        "Vurgulu düğme yeni bir yayının sihirbazını açar.",
+        "Sonunda onaylayın, yayına çıkarsınız."
+      ],
+      "figure": "startLive",
+      "callout": "Başlamak için Yayını başlat'a basın."
+    },
+    {
+      "id": "wizard",
+      "title": "Başlatma sihirbazı",
+      "body": "İki adım: birincisi video ve ses ayarını, ikincisi kanalı seçer. İleri gider, Geri döner.",
+      "steps": [
+        "Yayının ayarını seçin.",
+        "Kanalı seçin (TikTok için anahtarı da yazın).",
+        "Oluştur / İleri tuvali açar."
+      ],
+      "figure": "wizard",
+      "callout": "İleri ikinci adıma geçer."
+    },
+    {
+      "id": "playlist",
+      "title": "Bir klasörü yayınla (oynatma listesi)",
+      "body": "Tek sahne yerine bir klasördeki tüm videoları sırayla yayınlayabilirsiniz.",
+      "steps": [
+        "Oynatma listesini başlat'a basın.",
+        "Ayarı ve kanalı, sonra video klasörünü seçin.",
+        "Yayına çıkmak için onaylayın."
+      ],
+      "figure": "playlist",
+      "callout": "Oynatma listesini başlat bir klasörün tamamını sırayla yayınlar."
+    },
+    {
+      "id": "scene",
+      "title": "Sahneyi oluştur",
+      "body": "Tuval, bir yayının kurulduğu yerdir: kaynaklarınızı (ekran, pencere, kamera, ses) bölmelere bırakın, sonra üstüne kaplamalar ekleyin.",
+      "steps": [
+        "Bir bölmeye kaynak ekleyin.",
+        "Kaplama ekleyin veya sürükleyin ve düzenleyin.",
+        "Yayını başlatmak için onaylayın."
+      ],
+      "figure": "scene",
+      "callout": "Tuval: bölmelerde kaynaklar, üstte kaplamalar."
+    },
+    {
+      "id": "sceneDeck",
+      "title": "Sahne destesi",
+      "body": "Sahne destesi yayın yerine bir video, afiş veya resim yayınlar; stüdyoda sahne değiştirmek gibi. Her düğmeye ad ve kısayol verilebilir.",
+      "steps": [
+        "Desteyi bir yayın satırından veya önizlemeden açın.",
+        "Yayına almak için düğmeye basın; Yayına dön yayını geri getirir."
+      ],
+      "figure": "sceneDeck",
+      "callout": "Sahne destesi yayındakini değiştirir."
+    },
+    {
+      "id": "preview",
+      "title": "Önizleme",
+      "body": "Önizleme, bir yayının şu an ne gönderdiğini; akış sağlığı, bit hızı ve kare hızıyla gösterir.",
+      "steps": [
+        "Yayını ve verilerini izleyin.",
+        "Buradan desteyi açın veya yayını durdurun."
+      ],
+      "figure": "preview",
+      "callout": "Yayındaki görüntü, gönderildiği haliyle."
+    },
+    {
+      "id": "layouts",
+      "title": "Düzenler",
+      "body": "Düzen bir yayının iskeletidir: bölmeler ve kaplamalar, bir adla saklanır. Sihirbaz bir düzeni bölmeleri olarak açar.",
+      "steps": [
+        "Yeni düzen'e basın.",
+        "Bölmeleri ve kaplamaları çizin, sonra kaydedin."
+      ],
+      "figure": "layouts",
+      "callout": "Yeni düzen, yeniden kullanılabilir bir sahne için tuvali açar."
+    },
+    {
+      "id": "history",
+      "title": "Yayın geçmişi",
+      "body": "Başlattığınız her yayın platformu, kanalı, klasörü ve sonucuyla burada kalır.",
+      "steps": [
+        "Aynı yayını yeniden başlatın veya ayrıntıları açın.",
+        "Bir spot oynatın, ayar bağlayın veya satırı silin."
+      ],
+      "figure": "history",
+      "callout": "Yayınlarınız, yeniden başlamaya hazır."
+    },
+    {
+      "id": "taskManager",
+      "title": "Görev yöneticisi",
+      "body": "PC nasıl: CPU, RAM, diskler, ağ, GPU, sıcaklıklar ve FFmpeg süreçleri.",
+      "steps": [
+        "Yayın sürerken göstergeleri izleyin.",
+        "Makinenin yetişip yetişmediğini kontrol edin."
+      ],
+      "figure": "taskManager",
+      "callout": "Kaynaklar ve FFmpeg etkinliği, gerçek zamanlı."
+    },
+    {
+      "id": "settings",
+      "title": "Ayarlar",
+      "body": "Ayarlar'da video ve ses, kanallar, tema, dil ve bu kılavuz var. Çubuk her yerde tema, dil ve Hakkında taşır.",
+      "steps": [
+        "Video ve ses: ayarları oluşturun ve izinlileri etkinleştirin.",
+        "Kanallar: platformları ve akış anahtarlarını ekleyin."
+      ],
+      "figure": "settings",
+      "callout": "Ayarlar video/ses, kanallar ve bu kılavuzu toplar."
+    }
+  ]
+}

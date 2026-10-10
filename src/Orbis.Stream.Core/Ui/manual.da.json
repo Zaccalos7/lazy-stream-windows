@@ -1,0 +1,128 @@
+{
+  "sections": [
+    {
+      "id": "dashboard",
+      "title": "Panelet",
+      "body": "Orbis Streams hjem: herfra når du live-styring, forhåndsvisning, layouts, historik og indstillinger.",
+      "steps": [
+        "Åbn et kort for at gå ind i en sektion.",
+        "De samme områder er altid ét klik væk i bjælken til venstre."
+      ],
+      "figure": "dashboard",
+      "callout": "Åbn et kort for at gå ind i området."
+    },
+    {
+      "id": "startLive",
+      "title": "Start en live",
+      "body": "Åbn Live og tryk Start live: Orbis spørger, hvilken video-/lydindstilling og hvilken kanal der går på luften, og åbner lærredet.",
+      "steps": [
+        "Den fremhævede knap åbner guiden til en ny live.",
+        "Bekræft til sidst for at gå på luften."
+      ],
+      "figure": "startLive",
+      "callout": "Tryk Start live for at begynde."
+    },
+    {
+      "id": "wizard",
+      "title": "Startguiden",
+      "body": "To trin: det første vælger video- og lydindstillingen, det andet kanalen. Næste går frem, Tilbage går tilbage.",
+      "steps": [
+        "Vælg liveens indstilling.",
+        "Vælg kanalen (til TikTok skriv også nøglen).",
+        "Komponér / Næste åbner lærredet."
+      ],
+      "figure": "wizard",
+      "callout": "Næste går til andet trin."
+    },
+    {
+      "id": "playlist",
+      "title": "Stream en mappe (playliste)",
+      "body": "I stedet for én scene kan du streame alle videoer i en mappe, én efter én.",
+      "steps": [
+        "Tryk Start playliste.",
+        "Vælg indstilling og kanal, derefter videomappen.",
+        "Bekræft for at gå på luften."
+      ],
+      "figure": "playlist",
+      "callout": "Start playliste streamer en hel mappe i rækkefølge."
+    },
+    {
+      "id": "scene",
+      "title": "Komponér scenen",
+      "body": "Lærredet er, hvor en live samles: træk dine kilder (skærm, vindue, kamera, lyd) ind i felterne, og læg overlejringer ovenpå.",
+      "steps": [
+        "Læg en kilde i et felt.",
+        "Tilføj eller træk overlejringer og arrangér dem.",
+        "Bekræft for at starte liveen."
+      ],
+      "figure": "scene",
+      "callout": "Lærredet: kilder i felterne, overlejringer ovenpå."
+    },
+    {
+      "id": "sceneDeck",
+      "title": "Scene deck",
+      "body": "Scene deck sender en video, et banner eller et billede på luften i stedet for liveen, som et studie skifter scene. Hver knap kan have et navn og en genvej.",
+      "steps": [
+        "Åbn decket fra en live-række eller forhåndsvisningen.",
+        "Tryk en knap for at sende den; Genoptag live bringer liveen tilbage."
+      ],
+      "figure": "sceneDeck",
+      "callout": "Scene deck skifter det, der er på luften."
+    },
+    {
+      "id": "preview",
+      "title": "Forhåndsvisningen",
+      "body": "Forhåndsvisningen viser, hvad en live sender lige nu, med streamens sundhed, bitrate og billedhastighed.",
+      "steps": [
+        "Se liveen og dens data.",
+        "Åbn decket eller stop liveen herfra."
+      ],
+      "figure": "preview",
+      "callout": "Liveen på luften, som den sendes."
+    },
+    {
+      "id": "layouts",
+      "title": "Layouts",
+      "body": "Et layout er skelettet af en live: felterne og overlejringerne, gemt med et navn. Guiden åbner et layout som dets felter.",
+      "steps": [
+        "Tryk Nyt layout.",
+        "Tegn felterne og overlejringerne, og gem."
+      ],
+      "figure": "layouts",
+      "callout": "Nyt layout åbner lærredet til en genbrugelig scene."
+    },
+    {
+      "id": "history",
+      "title": "Live-historik",
+      "body": "Hver live, du startede, gemmes her med platform, kanal, mappe og resultat.",
+      "steps": [
+        "Start den samme live igen, eller åbn detaljerne.",
+        "Afspil et spot, knyt en indstilling, eller slet rækken."
+      ],
+      "figure": "history",
+      "callout": "Dine lives, klar til at starte igen."
+    },
+    {
+      "id": "taskManager",
+      "title": "Jobliste",
+      "body": "Hvordan PC'en har det: CPU, RAM, diske, netværk, GPU, temperaturerne og FFmpeg-processerne.",
+      "steps": [
+        "Følg målerne, mens en live kører.",
+        "Tjek, at maskinen følger med."
+      ],
+      "figure": "taskManager",
+      "callout": "Ressourcer og FFmpeg-aktivitet i realtid."
+    },
+    {
+      "id": "settings",
+      "title": "Indstillinger",
+      "body": "Under Indstillinger finder du video og lyd, kanalerne, temaet, sproget og denne manual. Bjælken har tema, sprog og Om overalt.",
+      "steps": [
+        "Video og lyd: opret indstillingerne og aktivér de tilladte.",
+        "Kanaler: tilføj platformene og deres nøgler."
+      ],
+      "figure": "settings",
+      "callout": "Indstillinger samler video/lyd, kanaler og denne manual."
+    }
+  ]
+}

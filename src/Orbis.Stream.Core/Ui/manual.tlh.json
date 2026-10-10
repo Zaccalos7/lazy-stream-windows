@@ -1,0 +1,128 @@
+{
+  "sections": [
+    {
+      "id": "dashboard",
+      "title": "Do'wI'",
+      "body": "Orbis Stream juH: naDev Directa ghuH, preview, layouts, history, settings je wIv.",
+      "steps": [
+        "wIy ngaS 'ay' lutwI'",
+        "yIv leQ pa' naDev bIng 'en."
+      ],
+      "figure": "dashboard",
+      "callout": "wIy ngaS 'ay' lutwI'."
+    },
+    {
+      "id": "startLive",
+      "title": "Directa tagh",
+      "body": "Live poS 'ej 'In Directa tagh: Orbis tlhob video/audio 'ej channel, vaj 'echlet poS.",
+      "steps": [
+        "naghvaD paw leQ pomp tagh.",
+        "Qapla' naghvaD auras jaH."
+      ],
+      "figure": "startLive",
+      "callout": "'In Directa tagh. tagh."
+    },
+    {
+      "id": "wizard",
+      "title": "tagh targh",
+      "body": "cha': wa' video/audio wIv, cha' channel wIv. latlh par, DoS chegh.",
+      "steps": [
+        "Directa wIv.",
+        "Channel wIv (TikTok key je ghItlh).",
+        "Compose / latlh 'echlet poS."
+      ],
+      "figure": "wizard",
+      "callout": "latlh cha' Do'wI' jaH."
+    },
+    {
+      "id": "playlist",
+      "title": "Folder pong (playlist)",
+      "body": "wa' scene Hop, Hoch video folder pong.",
+      "steps": [
+        "'In playlist tagh.",
+        "Setting 'ej channel wIv, vaj video folder.",
+        "Qapla' auras jaH."
+      ],
+      "figure": "playlist",
+      "callout": "'In playlist Hoch folder pong."
+    },
+    {
+      "id": "scene",
+      "title": "Scene chenmoH",
+      "body": "echletDaq Directa chenmoH: source (jIH, window, mIwmey, audio) slotDaq, vaj overlay.",
+      "steps": [
+        "Source slotDaq.",
+        "Overlay 'ej organize.",
+        "Qapla' Directa tagh."
+      ],
+      "figure": "scene",
+      "callout": "echlet: slotDaq source, overlay."
+    },
+    {
+      "id": "sceneDeck",
+      "title": "Scene deck",
+      "body": "Scene deck video, banner pagh image pong Directa Hop, studio scene choH. Hoch button name 'ej key.",
+      "steps": [
+        "Deck poS row pagh preview.",
+        "Button pong; Resume Directa chegh."
+      ],
+      "figure": "sceneDeck",
+      "callout": "Scene deck choH 'Iv auras."
+    },
+    {
+      "id": "preview",
+      "title": "Preview",
+      "body": "Preview 'ang 'Iv Directa nIH, health, bitrate 'ej frame rate.",
+      "steps": [
+        "Directa 'ej De' legh.",
+        "Deck poS pagh Directa mev."
+      ],
+      "figure": "preview",
+      "callout": "Directa auras, ut nIH."
+    },
+    {
+      "id": "layouts",
+      "title": "Layouts",
+      "body": "Layout Directa ghom: slot 'ej overlay, pong pol. targh Layout slot poS.",
+      "steps": [
+        "'In chu' Layout.",
+        "Slot 'ej overlay, vaj pol."
+      ],
+      "figure": "layouts",
+      "callout": "Layout poS echlet reutilizable."
+    },
+    {
+      "id": "history",
+      "title": "Directa history",
+      "body": "Hoch Directa tagh naDev platform, channel, folder 'ej outcome.",
+      "steps": [
+        "rur Directa tagh, pagh details poS.",
+        "Spot, setting link, pagh row Qaw."
+      ],
+      "figure": "history",
+      "callout": "Directa, ready tagh je."
+    },
+    {
+      "id": "taskManager",
+      "title": "wanI' ghuH",
+      "body": "PC: CPU, RAM, disks, network, GPU, temperatura 'ej FFmpeg.",
+      "steps": [
+        "Meters legh Directa running.",
+        "Machina jonte."
+      ],
+      "figure": "taskManager",
+      "callout": "Resources 'ej FFmpeg, real time."
+    },
+    {
+      "id": "settings",
+      "title": "Settings",
+      "body": "SettingsDaq video/audio, channels, theme, language 'ej manual. Column theme, language 'ej About.",
+      "steps": [
+        "Video/audio: settings chenmoH 'ej active.",
+        "Channels: platforms 'ej keys."
+      ],
+      "figure": "settings",
+      "callout": "Settings video/audio, channels 'ej manual."
+    }
+  ]
+}

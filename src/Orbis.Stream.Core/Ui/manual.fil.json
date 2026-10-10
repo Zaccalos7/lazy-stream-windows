@@ -1,0 +1,128 @@
+{
+  "sections": [
+    {
+      "id": "dashboard",
+      "title": "Ang dashboard",
+      "body": "Ang tahanan ng Orbis Stream: dito mo maabot ang pamamahala ng live, preview, layouts, kasaysayan at mga setting.",
+      "steps": [
+        "Buksan ang isang card para pumasok sa isang seksyon.",
+        "Ang parehong mga lugar ay isang click lang sa bar sa kaliwa."
+      ],
+      "figure": "dashboard",
+      "callout": "Buksan ang card para pumasok sa lugar na iyon."
+    },
+    {
+      "id": "startLive",
+      "title": "Magsimula ng live",
+      "body": "Buksan ang Live at pindutin ang Simulan ang live: tatanungin ng Orbis kung aling setting ng video/audio at aling channel ang eere, at bubuksan ang canvas.",
+      "steps": [
+        "Binubuksan ng naka-highlight na button ang wizard ng bagong live.",
+        "Kumpirmahin sa dulo para umere."
+      ],
+      "figure": "startLive",
+      "callout": "Pindutin ang Simulan ang live para magsimula."
+    },
+    {
+      "id": "wizard",
+      "title": "Ang wizard ng pagsisimula",
+      "body": "Dalawang hakbang: pinipili ng una ang setting ng video at audio, ang pangalawa ang channel. Susunod ay pasulong, Bumalik ay paatras.",
+      "steps": [
+        "Piliin ang setting ng live.",
+        "Piliin ang channel (para sa TikTok i-type din ang key).",
+        "I-compose / Susunod ay bubukas ang canvas."
+      ],
+      "figure": "wizard",
+      "callout": "Ang Susunod ay pumupunta sa ikalawang hakbang."
+    },
+    {
+      "id": "playlist",
+      "title": "I-stream ang isang folder (playlist)",
+      "body": "Sa halip na isang eksena, maaari mong i-stream ang lahat ng video sa isang folder, isa-isa.",
+      "steps": [
+        "Pindutin ang Simulan ang playlist.",
+        "Piliin ang setting at channel, pagkatapos ang folder ng mga video.",
+        "Kumpirmahin para umere."
+      ],
+      "figure": "playlist",
+      "callout": "Ang Simulan ang playlist ay nagsi-stream ng buong folder nang sunod-sunod."
+    },
+    {
+      "id": "scene",
+      "title": "I-compose ang eksena",
+      "body": "Ang canvas ang pinagsasama-sama ng isang live: ilagay ang mga source (screen, window, camera, audio) sa mga slot, pagkatapos magdagdag ng overlay sa itaas.",
+      "steps": [
+        "Magdagdag ng source sa isang slot.",
+        "Magdagdag o maghila ng overlay at ayusin ang mga ito.",
+        "Kumpirmahin para simulan ang live."
+      ],
+      "figure": "scene",
+      "callout": "Ang canvas: mga source sa slot, overlay sa itaas."
+    },
+    {
+      "id": "sceneDeck",
+      "title": "Ang scene deck",
+      "body": "Ang scene deck ay nag-ere ng video, banner o larawan kapalit ng live, tulad ng pagpalit ng eksena sa studio. Bawat button ay may pangalan at shortcut.",
+      "steps": [
+        "Buksan ang deck mula sa row ng live o sa preview.",
+        "Pindutin ang button para iere; ang Ipagpatuloy ang live ay nagbabalik ng live."
+      ],
+      "figure": "sceneDeck",
+      "callout": "Binabago ng scene deck ang nakaere."
+    },
+    {
+      "id": "preview",
+      "title": "Ang preview",
+      "body": "Ipinapakita ng preview ang ipinapadala ng live ngayon, kasama ang kalusugan ng stream, bitrate at frame rate.",
+      "steps": [
+        "Panoorin ang live at ang datos nito.",
+        "Buksan ang deck o itigil ang live dito."
+      ],
+      "figure": "preview",
+      "callout": "Ang live na nakaere, habang ipinapadala."
+    },
+    {
+      "id": "layouts",
+      "title": "Mga layout",
+      "body": "Ang layout ay ang balangkas ng isang live: ang mga slot at overlay, na nakatago sa ilalim ng pangalan. Binubuksan ng wizard ang layout bilang mga slot nito.",
+      "steps": [
+        "Pindutin ang Bagong layout.",
+        "Gumuhit ng mga slot at overlay, pagkatapos i-save."
+      ],
+      "figure": "layouts",
+      "callout": "Ang Bagong layout ay nagbubukas ng canvas para sa magagamit muli na eksena."
+    },
+    {
+      "id": "history",
+      "title": "Kasaysayan ng live",
+      "body": "Bawat live na sinimulan mo ay nakatago dito kasama ang platform, channel, folder at resulta.",
+      "steps": [
+        "Simulan muli ang parehong live, o buksan ang detalye.",
+        "Magpatugtog ng spot, ikabit ang setting, o alisin ang row."
+      ],
+      "figure": "history",
+      "callout": "Ang mga live mo, handang simulan muli."
+    },
+    {
+      "id": "taskManager",
+      "title": "Task manager",
+      "body": "Kumusta ang PC: CPU, RAM, disk, network, GPU, ang temperatura at ang mga proseso ng FFmpeg.",
+      "steps": [
+        "Panoorin ang mga meter habang tumatakbo ang live.",
+        "Tiyakin na kaya ng makina ang stream."
+      ],
+      "figure": "taskManager",
+      "callout": "Mga resource at aktibidad ng FFmpeg, real time."
+    },
+    {
+      "id": "settings",
+      "title": "Mga setting",
+      "body": "Sa Mga setting makikita ang video at audio, ang mga channel, tema, wika at ang manwal na ito. Ang bar ay may tema, wika at About kahit saan.",
+      "steps": [
+        "Video at audio: gumawa ng setting at paganahin ang pinapayagan.",
+        "Mga channel: idagdag ang mga platform at ang kanilang mga key."
+      ],
+      "figure": "settings",
+      "callout": "Pinagsasama ng Mga setting ang video/audio, channel at manwal na ito."
+    }
+  ]
+}

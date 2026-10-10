@@ -161,6 +161,24 @@ does, and a lone one opens a quoted literal that is never printed. `UiTextTests`
 `MessageCatalogTests` fail on a missing or reordered key, a text left in English, a placeholder
 lost, a language without its flag or its messages, and a lone apostrophe.
 
+### User guide
+
+`/orbis/manual` is the user guide of the application: the dashboard and the sidebar both open it.
+It runs in every one of the 20 languages, one page per feature, and every page carries a real
+screenshot of the app in that language with a callout arrow drawn on the element it talks about
+(`wwwroot/manual/<lang>/<figure>.webp`). Two buttons print it or save it as a PDF through the
+browser print dialog; the print stylesheet turns the guide into one page per feature.
+
+- The text lives in `src/Orbis.Stream.Core/Ui/manual.<lang>.json`, an embedded bundle of the same
+  shape for every language, read by `ManualText` with the same fallback and ordering rules as
+  `UiText`; `ManualTextTests` fails on a section id, figure or step count that drifts from English
+  or on a bundle left in English.
+- `wwwroot/css/manual.css` holds the sheet of the page: the sticky table of contents, the
+  figures, and the print rules.
+- The screenshots are generated once from the running app with Puppeteer (the arrows are drawn on
+  the DOM boxes of the real elements) and checked into `wwwroot/manual/`, so a release always
+  ships the guide with them.
+
 ### Temperature sensors
 
 The two temperature meters are the only counters that depend on the hardware of the machine, and
@@ -243,7 +261,7 @@ samples/overlays          test overlays for the layouts page (PNG, animated WebM
 `wwwroot/css` holds one concern per file. The layout links the seven shared sheets in order
 (`tokens`, `base`, `layout`, `controls`, `surfaces`, `overlays`, `feedback`); a sheet of a single
 page travels with that page in its own `Styles` section (`composer.css` on the live management
-and the layouts page, `scenes.css` on the live management and the preview, `preview.css`, `meters.css`, `cleanup.css`, `dashboard.css`), and the
+and the layouts page, `scenes.css` on the live management and the preview, `preview.css`, `meters.css`, `cleanup.css`, `dashboard.css`), `manual.css` on the manual, and the
 countdown page stands outside the shell and carries `tokens`, `base` and `countdown` on its own.
 Colours, shadows and radii are declared once, in `tokens.css`: a sheet that needs a tone names a
 property, and `StyleSheetTests` fails the build if a sheet reads a property no sheet defines or if

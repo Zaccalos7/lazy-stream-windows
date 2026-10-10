@@ -428,5 +428,12 @@
   "encoderQualityHint": "Otomatik, bu bilgisayarı test eder ve kendi karar verir: emin değilseniz bu ayarı koruyun.",
   "searchByTitle": "Başlığa göre ara",
   "search": "Ara",
-  "clearFilters": "Filtreleri temizle"
+  "clearFilters": "Filtreleri temizle",
+  "manual": "Kılavuz",
+  "manualDescription": "Kılavuzu okuyun: her özellik, adım adım, uygulamanın gerçek görüntüleriyle.",
+  "manualTitle": "Kullanım Kılavuzu",
+  "manualIntro": "Orbis Stream'in yapabildiği her şey, her özellik için bir sayfa: uygulamanın bir görüntüsü ve basılacak düğmeyi gösteren bir ok. Bu kılavuzu PDF olarak indirip saklayabilir ya da yazdırabilirsiniz.",
+  "manualDownloadPdf": "PDF indir",
+  "manualPrint": "Yazdır",
+  "manualToc": "Bu kılavuzda"
 }

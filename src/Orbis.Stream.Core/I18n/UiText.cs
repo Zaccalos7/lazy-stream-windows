@@ -39,6 +39,7 @@ public sealed class UiText
         new("da", "Dansk", "dk.svg"),
         new("nl", "Nederlands", "nl.svg"),
         new("fil", "Filipino", "ph.svg"),
+        new("tr", "Türkçe", "tr.svg"),
         // No country answers to these three, so they carry no flag of their own either: the
         // banner is drawn here rather than taken from a nation it has nothing to do with.
         new("la", "Latina", "la.svg"),

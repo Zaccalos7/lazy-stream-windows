@@ -146,9 +146,9 @@ the `orbis-lang` cookie and also localizes the backend messages.
 
 ### Languages
 
-The interface ships in 19 languages: Italian, English, German, Spanish, French, Portuguese,
-Russian, Chinese, Korean, Japanese, Hindi, Arabic, Romanian, Danish, Dutch, Filipino, Latin,
-Klingon and Hodor. Each one is a pair of bundles:
+The interface ships in 20 languages: Italian, English, German, Spanish, French, Portuguese,
+Russian, Chinese, Korean, Japanese, Hindi, Arabic, Romanian, Danish, Dutch, Filipino, Turkish,
+Latin, Klingon and Hodor. Each one is a pair of bundles:
 
 - `src/Orbis.Stream.Core/Ui/ui.<lang>.json`, the strings of the pages, with the keys in the order
   of the English bundle;

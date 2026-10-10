@@ -1,5 +1,9 @@
 # Orbis Stream
 
+<a href="https://buymeacoffee.com/zaccalos" target="_blank">
+  <img src="https://cdn.buymeacoffee.com/buttons/v2/default-yellow.png" alt="Buy Me A Coffee" height="40">
+</a>
+
 Desktop application that streams local video files to Twitch, YouTube, Kick, Facebook Gaming,
 TikTok and any other RTMP-compatible platform.
 
@@ -69,7 +73,7 @@ Both publish the application and compile an NSIS setup in
   build; the installer then warns when neither FFmpeg nor FFprobe is on `PATH`;
 - warns when the Microsoft Edge WebView2 Evergreen Runtime is missing;
 - Start Menu and optional desktop shortcuts, an uninstaller registered in
-  *Settings → Apps → Installed apps*;
+  _Settings → Apps → Installed apps_;
 - supports silent installation (`setup.exe /S`) and silent uninstall.
 
 To build the small setup without the FFmpeg payload, where the FFmpeg component installs
@@ -88,44 +92,43 @@ wix extension add -g WixToolset.UI.wixext/5.0.2
 powershell -ExecutionPolicy Bypass -File Installer\build-msi.ps1
 ```
 
-
 ## Runtime data
 
 Directories are resolved in this order: `--data-dir`, `LAZY_STREAM_DATA_DIR`, the current
 working directory when writable, then `~/.orbis-stream`.
 
-| Path                      | Content                                        |
-| ------------------------- | ---------------------------------------------- |
-| `<data>/stream.db`        | SQLite database                                |
-| `<data>/logs/twitch.log`  | application log                                |
-| `<data>/webview2`         | WebView2 user data folder                      |
-| `<cwd>/images`            | images uploaded through `/image/upload`        |
-| `<data>/overlays`         | overlay library of the layouts and the live wizard |
-| `<data>/scene-media`      | files of the scene deck buttons                |
+| Path                     | Content                                            |
+| ------------------------ | -------------------------------------------------- |
+| `<data>/stream.db`       | SQLite database                                    |
+| `<data>/logs/twitch.log` | application log                                    |
+| `<data>/webview2`        | WebView2 user data folder                          |
+| `<cwd>/images`           | images uploaded through `/image/upload`            |
+| `<data>/overlays`        | overlay library of the layouts and the live wizard |
+| `<data>/scene-media`     | files of the scene deck buttons                    |
 
 ## Configuration
 
-| Variable                       | Command line          | Default                    |
-| ------------------------------ | --------------------- | -------------------------- |
-| `LAZY_STREAM_DATA_DIR`         | `--data-dir=`         | working directory / `~/.orbis-stream` |
-| `LAZY_STREAM_PORT`             | `--port=`             | `1200`                     |
-| `LAZY_STREAM_EMBEDDED_BROWSER` | `--browser` / `--no-browser` | `true`            |
-| `LAZY_STREAM_WEB_ROOT`         | `--web-root=`         | `wwwroot` beside the executable |
-| `FFMPEG_PATH`                  | –                     | `ffmpeg`                   |
-| `FFPROBE_PATH`                 | –                     | `ffprobe` beside `ffmpeg`  |
+| Variable                       | Command line                 | Default                               |
+| ------------------------------ | ---------------------------- | ------------------------------------- |
+| `LAZY_STREAM_DATA_DIR`         | `--data-dir=`                | working directory / `~/.orbis-stream` |
+| `LAZY_STREAM_PORT`             | `--port=`                    | `1200`                                |
+| `LAZY_STREAM_EMBEDDED_BROWSER` | `--browser` / `--no-browser` | `true`                                |
+| `LAZY_STREAM_WEB_ROOT`         | `--web-root=`                | `wwwroot` beside the executable       |
+| `FFMPEG_PATH`                  | –                            | `ffmpeg`                              |
+| `FFPROBE_PATH`                 | –                            | `ffprobe` beside `ffmpeg`             |
 
 ## API
 
-| Area          | Endpoints                                                                                    |
-| ------------- | -------------------------------------------------------------------------------------------- |
-| Live          | `POST /live/start-live`, `POST /live/start-video-live`, `PUT /live/stop-live?videoLivePkid=`    |
+| Area          | Endpoints                                                                                                                   |
+| ------------- | --------------------------------------------------------------------------------------------------------------------------- | --------------------------------------------------------------------------------------------------------------------------------------- | --------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- | ------------------------- |
+| Live          | `POST /live/start-live`, `POST /live/start-video-live`, `PUT /live/stop-live?videoLivePkid=`                                |
 | Video         | `GET /video/getAllVideo`, `GET /video/getPage`, `GET /video/getAllChannelWithVideoLive`, `PUT /video/unlockVideo?videoKey=` |
-| Settings      | `GET|POST /settings/retrive`, `POST /settings/save`, `PUT /settings/change?id=`, `DELETE /settings/delete`, `GET /settings/retrive-channels` |
-| Video setting | `GET|POST|PUT|DELETE /video-setting/*`                                                        |
-| System        | `GET /taskManager/statistics/{allInfo,cpu,ram,swap,cpu/temperature,gpu/temperature}`       |
-| Image         | `POST /image/upload`, `GET /image/loadimage`                                                   |
-| Scene deck    | `GET|POST /scene-buttons`, `PUT|DELETE /scene-buttons/{pkid}`, `POST /scene-buttons/media?name=`, `GET /scene-buttons/media/{name}/still`, `GET /live/{pkid}/scene`, `POST /live/{pkid}/scene/{button}`, `POST /live/{pkid}/scene/resume` |
-| Docs          | `GET /documentazione`, `GET /swagger-ui.html`                                                  |
+| Settings      | `GET                                                                                                                        | POST /settings/retrive`, `POST /settings/save`, `PUT /settings/change?id=`, `DELETE /settings/delete`, `GET /settings/retrive-channels` |
+| Video setting | `GET                                                                                                                        | POST                                                                                                                                    | PUT                                                                                                                                                                                                       | DELETE /video-setting/\*` |
+| System        | `GET /taskManager/statistics/{allInfo,cpu,ram,swap,cpu/temperature,gpu/temperature}`                                        |
+| Image         | `POST /image/upload`, `GET /image/loadimage`                                                                                |
+| Scene deck    | `GET                                                                                                                        | POST /scene-buttons`, `PUT                                                                                                              | DELETE /scene-buttons/{pkid}`, `POST /scene-buttons/media?name=`, `GET /scene-buttons/media/{name}/still`, `GET /live/{pkid}/scene`, `POST /live/{pkid}/scene/{button}`, `POST /live/{pkid}/scene/resume` |
+| Docs          | `GET /documentazione`, `GET /swagger-ui.html`                                                                               |
 
 Responses keep the conventions the frontend expects:
 
@@ -135,7 +138,7 @@ Responses keep the conventions the frontend expects:
 
 ```json
 {
-  "content": [ { "id": 1, "videoPath": "/home/user/clip.mp4" } ],
+  "content": [{ "id": 1, "videoPath": "/home/user/clip.mp4" }],
   "page": { "size": 25, "number": 0, "totalElements": 1, "totalPages": 1 }
 }
 ```
@@ -146,9 +149,9 @@ the `orbis-lang` cookie and also localizes the backend messages.
 
 ### Languages
 
-The interface ships in 19 languages: Italian, English, German, Spanish, French, Portuguese,
-Russian, Chinese, Korean, Japanese, Hindi, Arabic, Romanian, Danish, Dutch, Filipino, Latin,
-Klingon and Hodor. Each one is a pair of bundles:
+The interface ships in 20 languages: Italian, English, German, Spanish, French, Portuguese,
+Russian, Chinese, Korean, Japanese, Hindi, Arabic, Romanian, Danish, Dutch, Filipino, Turkish,
+Latin, Klingon and Hodor. Each one is a pair of bundles:
 
 - `src/Orbis.Stream.Core/Ui/ui.<lang>.json`, the strings of the pages, with the keys in the order
   of the English bundle;
@@ -161,15 +164,33 @@ does, and a lone one opens a quoted literal that is never printed. `UiTextTests`
 `MessageCatalogTests` fail on a missing or reordered key, a text left in English, a placeholder
 lost, a language without its flag or its messages, and a lone apostrophe.
 
+### User guide
+
+`/orbis/manual` is the user guide of the application: the dashboard and the sidebar both open it.
+It runs in every one of the 20 languages, one page per feature, and every page carries a real
+screenshot of the app in that language with a callout arrow drawn on the element it talks about
+(`wwwroot/manual/<lang>/<figure>.webp`). Two buttons print it or save it as a PDF through the
+browser print dialog; the print stylesheet turns the guide into one page per feature.
+
+- The text lives in `src/Orbis.Stream.Core/Ui/manual.<lang>.json`, an embedded bundle of the same
+  shape for every language, read by `ManualText` with the same fallback and ordering rules as
+  `UiText`; `ManualTextTests` fails on a section id, figure or step count that drifts from English
+  or on a bundle left in English.
+- `wwwroot/css/manual.css` holds the sheet of the page: the sticky table of contents, the
+  figures, and the print rules.
+- The screenshots are generated once from the running app with Puppeteer (the arrows are drawn on
+  the DOM boxes of the real elements) and checked into `wwwroot/manual/`, so a release always
+  ships the guide with them.
+
 ### Temperature sensors
 
 The two temperature meters are the only counters that depend on the hardware of the machine, and
 Windows has no API for either of them:
 
-| Meter  | Source                                                                                 | Without it |
-| ------ | -------------------------------------------------------------------------------------- | ---------- |
-| CPU    | `MSAcpi_ThermalZoneTemperature`, then the same sensors as the performance counters      | `-1`, and the card is left out of the page |
-| GPU    | `nvidia-smi`, the tool the NVIDIA driver installs, which answers from user space        | `-1`, and the card is left out of the page |
+| Meter | Source                                                                             | Without it                                 |
+| ----- | ---------------------------------------------------------------------------------- | ------------------------------------------ |
+| CPU   | `MSAcpi_ThermalZoneTemperature`, then the same sensors as the performance counters | `-1`, and the card is left out of the page |
+| GPU   | `nvidia-smi`, the tool the NVIDIA driver installs, which answers from user space   | `-1`, and the card is left out of the page |
 
 A desktop that does not publish a thermal zone named after the processor has no CPU sensor to
 read, which is why the graphics card is asked as well: whichever of the two answers, the page
@@ -198,7 +219,7 @@ panel has been opened for that live; every press asks for confirmation.
 - A request is queued per live (`LiveTakeovers`): the streaming loop hands the program over at the
   position it reached, on the same connection to the platform, and brings it back from there.
 - A video plays once and the live comes back by itself; an image (a still is decoded once, an
-  animation loops) stays until *Resume live*, which pulses in the live row and in the preview.
+  animation loops) stays until _Resume live_, which pulses in the live row and in the preview.
 - Spots go through the same queue: they wait for a video on air to end, and take the place of an
   image.
 - The files are uploaded into `<data>/scene-media` and served only as frames, by name, never by
@@ -243,7 +264,7 @@ samples/overlays          test overlays for the layouts page (PNG, animated WebM
 `wwwroot/css` holds one concern per file. The layout links the seven shared sheets in order
 (`tokens`, `base`, `layout`, `controls`, `surfaces`, `overlays`, `feedback`); a sheet of a single
 page travels with that page in its own `Styles` section (`composer.css` on the live management
-and the layouts page, `scenes.css` on the live management and the preview, `preview.css`, `meters.css`, `cleanup.css`, `dashboard.css`), and the
+and the layouts page, `scenes.css` on the live management and the preview, `preview.css`, `meters.css`, `cleanup.css`, `dashboard.css`), `manual.css` on the manual, and the
 countdown page stands outside the shell and carries `tokens`, `base` and `countdown` on its own.
 Colours, shadows and radii are declared once, in `tokens.css`: a sheet that needs a tone names a
 property, and `StyleSheetTests` fails the build if a sheet reads a property no sheet defines or if
@@ -257,12 +278,12 @@ tests are skipped when `ffmpeg`/`ffprobe` are not available.
 
 ## Third-party components
 
-| Component | Version | Licence | Origin |
-| --------- | ------- | ------- | ------ |
-| FFmpeg (bundled by the installer) | 8.1.3, win64 shared build | GPL v3 or later | [BtbN/FFmpeg-Builds](https://github.com/BtbN/FFmpeg-Builds), build `autobuild-2026-09-25-15-37`, SHA-256 `1b3f0a730b1a3d780cce438d2fe091c5b8473dad2a5dbf0c2d0625029b3e70b6` |
-| Microsoft.Data.Sqlite / SQLitePCLRaw | 10.0.12 | MIT | NuGet |
-| Swashbuckle.AspNetCore | 9.0.1 | MIT | NuGet |
-| Microsoft.Web.WebView2 | 1.0.4191.47 | redistributable | NuGet |
+| Component                            | Version                   | Licence         | Origin                                                                                                                                                                      |
+| ------------------------------------ | ------------------------- | --------------- | --------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| FFmpeg (bundled by the installer)    | 8.1.3, win64 shared build | GPL v3 or later | [BtbN/FFmpeg-Builds](https://github.com/BtbN/FFmpeg-Builds), build `autobuild-2026-09-25-15-37`, SHA-256 `1b3f0a730b1a3d780cce438d2fe091c5b8473dad2a5dbf0c2d0625029b3e70b6` |
+| Microsoft.Data.Sqlite / SQLitePCLRaw | 10.0.12                   | MIT             | NuGet                                                                                                                                                                       |
+| Swashbuckle.AspNetCore               | 9.0.1                     | MIT             | NuGet                                                                                                                                                                       |
+| Microsoft.Web.WebView2               | 1.0.4191.47               | redistributable | NuGet                                                                                                                                                                       |
 
 The installer deploys the FFmpeg licence as `ffmpeg/LICENSE-ffmpeg.txt` in the installation
 folder. FFmpeg is redistributed under the terms of the GPL v3 (or later), the corresponding

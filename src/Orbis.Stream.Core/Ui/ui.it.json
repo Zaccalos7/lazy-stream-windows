@@ -428,5 +428,12 @@
   "encoderQualityHint": "Automatica prova il PC e sceglie da sola: lasciala se non sai cosa scegliere.",
   "searchByTitle": "Cerca per titolo",
   "search": "Cerca",
-  "clearFilters": "Azzera i filtri"
+  "clearFilters": "Azzera i filtri",
+  "manual": "Manuale",
+  "manualDescription": "Leggi il manuale: ogni funzione, passo per passo, con immagini reali dell'app.",
+  "manualTitle": "Manuale d'uso",
+  "manualIntro": "Tutto quello che Orbis Stream sa fare, una pagina per funzione: un'immagine dell'app e una freccia sul pulsante da premere. Puoi scaricare questo manuale in PDF, per conservarlo o stamparlo.",
+  "manualDownloadPdf": "Scarica PDF",
+  "manualPrint": "Stampa",
+  "manualToc": "In questo manuale"
 }

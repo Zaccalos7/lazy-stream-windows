@@ -428,5 +428,12 @@
   "encoderQualityHint": "Sinusubok ng Awtomatiko ang PC at kusa itong pumipili: hayaan ito kung hindi ka sigurado.",
   "searchByTitle": "Maghanap ayon sa pamagat",
   "search": "Maghanap",
-  "clearFilters": "I-clear ang mga filter"
+  "clearFilters": "I-clear ang mga filter",
+  "manual": "Manwal",
+  "manualDescription": "Basahin ang manwal: bawat tampok, hakbang-hakbang, may totoong larawan ng app.",
+  "manualTitle": "Manwal ng paggamit",
+  "manualIntro": "Lahat ng kayang gawin ng Orbis Stream, isang pahina bawat tampok: isang larawan ng app at isang arrow sa button na dapat pindutin. Maaari mong i-download ang manwal na ito bilang PDF, upang itago o i-print.",
+  "manualDownloadPdf": "I-download ang PDF",
+  "manualPrint": "I-print",
+  "manualToc": "Sa manwal na ito"
 }

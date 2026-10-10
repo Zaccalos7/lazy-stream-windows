@@ -428,5 +428,12 @@
   "encoderQualityHint": "自動は PC をテストして自分で選びます。迷ったらそのままにしてください。",
   "searchByTitle": "タイトルで検索",
   "search": "検索",
-  "clearFilters": "フィルターをクリア"
+  "clearFilters": "フィルターをクリア",
+  "manual": "マニュアル",
+  "manualDescription": "マニュアルで、すべての機能を手順ごとに、実際のアプリ画像とともに確認できます。",
+  "manualTitle": "使用マニュアル",
+  "manualIntro": "Orbis Stream にできることすべてを、機能ごとに1ページで：アプリの画像と、押すボタンを指す矢印。このマニュアルは PDF としてダウンロードでき、保存や印刷ができます。",
+  "manualDownloadPdf": "PDF をダウンロード",
+  "manualPrint": "印刷",
+  "manualToc": "このマニュアルの内容"
 }

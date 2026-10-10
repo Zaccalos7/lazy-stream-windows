@@ -428,5 +428,12 @@
   "encoderQualityHint": "Automatisk tester pc'en og vælger selv: lad den stå, hvis du er i tvivl.",
   "searchByTitle": "Søg efter titel",
   "search": "Søg",
-  "clearFilters": "Ryd filtre"
+  "clearFilters": "Ryd filtre",
+  "manual": "Manual",
+  "manualDescription": "Læs manualen: hver funktion, trin for trin, med rigtige billeder af appen.",
+  "manualTitle": "Brugervejledning",
+  "manualIntro": "Alt, hvad Orbis Stream kan, en side pr. funktion: et billede af appen og en pil på den knap, du skal trykke på. Du kan downloade manualen som PDF for at gemme eller printe den.",
+  "manualDownloadPdf": "Download PDF",
+  "manualPrint": "Print",
+  "manualToc": "I denne manual"
 }

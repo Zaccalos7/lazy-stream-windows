@@ -428,5 +428,12 @@
   "encoderQualityHint": "自动会测试电脑并自行选择：不确定时保持不变即可。",
   "searchByTitle": "按标题搜索",
   "search": "搜索",
-  "clearFilters": "清除筛选"
+  "clearFilters": "清除筛选",
+  "manual": "使用手册",
+  "manualDescription": "阅读手册：每项功能，一步一步，配有应用的真实截图。",
+  "manualTitle": "用户手册",
+  "manualIntro": "Orbis Stream 能做的所有事情，每项功能一页：一张应用截图，以及指向要按的按钮的箭头。你可以把手册下载为 PDF，方便保存或打印。",
+  "manualDownloadPdf": "下载 PDF",
+  "manualPrint": "打印",
+  "manualToc": "本手册内容"
 }

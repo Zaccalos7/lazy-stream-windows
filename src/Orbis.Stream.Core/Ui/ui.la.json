@@ -428,5 +428,12 @@
   "encoderQualityHint": "Automatica computatrum probat et ipsa eligit: si dubitas, relinque.",
   "searchByTitle": "Quaere titulum",
   "search": "Quaere",
-  "clearFilters": "Purgare selectiones"
+  "clearFilters": "Purgare selectiones",
+  "manual": "Manuale",
+  "manualDescription": "Lege manuale: omnia munera, gradatim, cum veris imaginibus applicationis.",
+  "manualTitle": "Manuale usus",
+  "manualIntro": "Omnia quae Orbis Stream facere potest, una pagina pro quoque munere: imago applicationis et sagitta in bulla premenda. Hoc manuale ut PDF demittere potes, servandum vel imprimendum.",
+  "manualDownloadPdf": "PDF demittere",
+  "manualPrint": "Imprimere",
+  "manualToc": "In hoc manuali"
 }

@@ -428,5 +428,12 @@
   "encoderQualityHint": "Automatique teste le PC et choisit seule : gardez-la en cas de doute.",
   "searchByTitle": "Rechercher par titre",
   "search": "Rechercher",
-  "clearFilters": "Effacer les filtres"
+  "clearFilters": "Effacer les filtres",
+  "manual": "Manuel",
+  "manualDescription": "Lisez le manuel : chaque fonction, pas à pas, avec de vraies images de l'application.",
+  "manualTitle": "Manuel d'utilisation",
+  "manualIntro": "Tout ce qu'Orbis Stream sait faire, une page par fonction : une image de l'application et une flèche sur le bouton à presser. Vous pouvez télécharger ce manuel en PDF, pour le garder ou l'imprimer.",
+  "manualDownloadPdf": "Télécharger le PDF",
+  "manualPrint": "Imprimer",
+  "manualToc": "Dans ce manuel"
 }

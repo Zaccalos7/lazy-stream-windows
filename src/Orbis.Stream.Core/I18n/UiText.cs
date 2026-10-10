@@ -44,7 +44,8 @@ public sealed class UiText
         // banner is drawn here rather than taken from a nation it has nothing to do with.
         new("la", "Latina", "la.svg"),
         new("tlh", "tlhIngan Hol", "tlh.svg"),
-        new("hod", "Hodor", "hod.svg")
+        new("hod", "Hodor", "hod.svg"),
+        new("el", "Ελληνικά", "gr.svg")
     ];
 
     /// <summary>One row of the language selector: the bundle it picks, the name to show, the flag.</summary>

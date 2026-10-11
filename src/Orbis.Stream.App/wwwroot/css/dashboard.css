@@ -75,3 +75,24 @@
   position: relative;
   z-index: 1;
 }
+
+/* The banner and the small note that says where a slice of the coffee goes: the note sits under
+   the banner, hugged to the right of the dashboard header. */
+.coffee-ask {
+  display: flex;
+  flex-direction: column;
+  align-items: flex-end;
+  gap: 6px;
+}
+
+.coffee-ask .coffee-banner {
+  align-self: flex-end;
+  margin-top: 0;
+}
+
+.coffee-perla {
+  color: var(--text-3);
+  font-size: 0.72rem;
+  line-height: 1.3;
+  text-align: right;
+}

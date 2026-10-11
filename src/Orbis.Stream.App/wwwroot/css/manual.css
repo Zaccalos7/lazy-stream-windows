@@ -91,6 +91,18 @@
   color: var(--text);
 }
 
+/* The guide's own sidebar repeats the glyphs of the application sidebar, so a feature wears the
+   same mark in both places; the number stays beside it. */
+.manual-toc a .icon {
+  flex: none;
+  font-size: 1rem;
+  color: var(--text-3);
+}
+
+.manual-toc a:hover .icon {
+  color: var(--accent-text);
+}
+
 .manual-toc-number,
 .manual-number {
   display: inline-flex;

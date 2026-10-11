@@ -26,7 +26,7 @@ public sealed class MessageCatalog
 {
     public const string DefaultLanguage = "en";
 
-    private static readonly string[] KnownLanguages = ["en", "it", "de", "es", "fr", "pt", "ru", "zh", "ko", "ja", "hi", "ar", "la", "tlh", "hod", "ro", "da", "nl", "fil", "tr"];
+    private static readonly string[] KnownLanguages = ["en", "it", "de", "es", "fr", "pt", "ru", "zh", "ko", "ja", "hi", "ar", "la", "tlh", "hod", "ro", "da", "nl", "fil", "tr", "el"];
 
     /// <summary>
     /// Codes a browser sends for a language the catalogue knows by another one: Filipino is

@@ -1,0 +1,128 @@
+{
+  "sections": [
+    {
+      "id": "dashboard",
+      "title": "Das Dashboard",
+      "body": "Die Startseite von Orbis Stream: von hier erreichst du Live-Verwaltung, Vorschau, Layouts, Verlauf und Einstellungen.",
+      "steps": [
+        "Öffne eine Karte, um einen Bereich zu betreten.",
+        "Dieselben Bereiche sind in der Seitenleiste links immer einen Klick entfernt."
+      ],
+      "figure": "dashboard",
+      "callout": "Öffne eine Karte, um diesen Bereich zu betreten."
+    },
+    {
+      "id": "startLive",
+      "title": "Einen Livestream starten",
+      "body": "Öffne Live und drücke Livestream starten: Orbis fragt, welche Video-/Audio-Einstellung und welcher Kanal on air geht, und öffnet dann die Leinwand.",
+      "steps": [
+        "Die hervorgehobene Taste öffnet den Assistenten für einen neuen Stream.",
+        "Bestätige am Ende, um on air zu gehen."
+      ],
+      "figure": "startLive",
+      "callout": "Drücke Livestream starten, um zu beginnen."
+    },
+    {
+      "id": "wizard",
+      "title": "Der Start-Assistent",
+      "body": "Zwei Schritte: der erste wählt die Video- und Audio-Einstellung, der zweite den Kanal. Weiter geht vor, Zurück kehrt um.",
+      "steps": [
+        "Wähle die Einstellung des Streams.",
+        "Wähle den Kanal (für TikTok auch den Schlüssel eintippen).",
+        "Komponieren / Weiter öffnet die Leinwand."
+      ],
+      "figure": "wizard",
+      "callout": "Weiter geht zum zweiten Schritt."
+    },
+    {
+      "id": "playlist",
+      "title": "Einen Ordner streamen (Playlist)",
+      "body": "Statt einer einzelnen Szene kannst du alle Videos eines Ordners nacheinander streamen.",
+      "steps": [
+        "Drücke Playlist starten.",
+        "Wähle Einstellung und Kanal, dann den Videoordner.",
+        "Bestätige, um on air zu gehen."
+      ],
+      "figure": "playlist",
+      "callout": "Playlist starten sendet einen ganzen Ordner nacheinander."
+    },
+    {
+      "id": "scene",
+      "title": "Die Szene komponieren",
+      "body": "Die Leinwand ist, wo ein Stream zusammengesetzt wird: ziehe deine Quellen (Bildschirm, Fenster, Kamera, Audio) in die Slots und lege Overlays darüber.",
+      "steps": [
+        "Lege eine Quelle in einen Slot.",
+        "Füge Overlays hinzu oder ziehe sie hinein und ordne sie.",
+        "Bestätige, um den Stream zu starten."
+      ],
+      "figure": "scene",
+      "callout": "Die Leinwand: Quellen in den Slots, Overlays darüber."
+    },
+    {
+      "id": "sceneDeck",
+      "title": "Das Scene Deck",
+      "body": "Das Scene Deck sendet ein Video, ein Banner oder ein Bild anstelle des Streams, wie ein Studio die Szene wechselt. Jede Taste kann einen Namen und eine Tastenkürzel haben.",
+      "steps": [
+        "Öffne das Deck aus einer Live-Zeile oder der Vorschau.",
+        "Drücke eine Taste, um sie on air zu nehmen; Stream fortsetzen bringt den Stream zurück."
+      ],
+      "figure": "sceneDeck",
+      "callout": "Das Scene Deck wechselt, was on air ist."
+    },
+    {
+      "id": "preview",
+      "title": "Die Vorschau",
+      "body": "Die Vorschau zeigt, was ein Stream gerade sendet, mit Gesundheit, Bitrate und Bildrate.",
+      "steps": [
+        "Sieh den Stream und seine Daten.",
+        "Öffne das Scene Deck oder stoppe den Stream von hier."
+      ],
+      "figure": "preview",
+      "callout": "Der laufende Stream, wie er gesendet wird."
+    },
+    {
+      "id": "layouts",
+      "title": "Layouts",
+      "body": "Ein Layout ist das Gerüst eines Streams: die Slots und die Overlays, unter einem Namen gespeichert. Der Assistent öffnet ein Layout als seine Slots.",
+      "steps": [
+        "Drücke Neues Layout.",
+        "Zeichne Slots und Overlays und speichere."
+      ],
+      "figure": "layouts",
+      "callout": "Neues Layout öffnet die Leinwand für eine wiederverwendbare Szene."
+    },
+    {
+      "id": "history",
+      "title": "Live-Verlauf",
+      "body": "Jeder gestartete Stream bleibt hier mit Plattform, Kanal, Ordner und Ergebnis.",
+      "steps": [
+        "Starte denselben Stream erneut oder öffne die Details.",
+        "Spiele einen Spot, verknüpfe eine Einstellung oder lösche die Zeile."
+      ],
+      "figure": "history",
+      "callout": "Deine Streams, bereit zum erneuten Start."
+    },
+    {
+      "id": "taskManager",
+      "title": "Task-Manager",
+      "body": "Wie es dem PC geht: CPU, RAM, Datenträger, Netzwerk, GPU, die Temperaturen und die FFmpeg-Prozesse.",
+      "steps": [
+        "Beobachte die Messwerte während eines Streams.",
+        "Prüfe, ob der Rechner mitkommt."
+      ],
+      "figure": "taskManager",
+      "callout": "Ressourcen und FFmpeg-Aktivität in Echtzeit."
+    },
+    {
+      "id": "settings",
+      "title": "Einstellungen",
+      "body": "Unter Einstellungen findest du Video und Audio, die Kanäle, das Thema, die Sprache und dieses Handbuch. Die Seitenleiste hat Thema, Sprache und Info überall.",
+      "steps": [
+        "Video & Audio: Einstellungen anlegen und die erlaubten aktivieren.",
+        "Kanäle: Plattformen und ihre Stream-Schlüssel hinzufügen."
+      ],
+      "figure": "settings",
+      "callout": "Einstellungen bündelt Video/Audio, Kanäle und dieses Handbuch."
+    }
+  ]
+}

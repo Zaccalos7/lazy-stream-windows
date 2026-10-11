@@ -1,0 +1,128 @@
+{
+  "sections": [
+    {
+      "id": "dashboard",
+      "title": "Het dashboard",
+      "body": "Het huis van Orbis Stream: van hieruit bereik je livebeheer, voorbeeld, layouts, geschiedenis en instellingen.",
+      "steps": [
+        "Open een kaart om een sectie binnen te gaan.",
+        "Dezelfde gebieden zijn altijd één klik weg in de balk links."
+      ],
+      "figure": "dashboard",
+      "callout": "Open een kaart om dat gebied binnen te gaan."
+    },
+    {
+      "id": "startLive",
+      "title": "Een live starten",
+      "body": "Open Live en druk op Live starten: Orbis vraagt welke video-/audio-instelling en welk kanaal de lucht in gaan, en opent het canvas.",
+      "steps": [
+        "De gemarkeerde knop opent de wizard voor een nieuwe live.",
+        "Bevestig aan het eind om de lucht in te gaan."
+      ],
+      "figure": "startLive",
+      "callout": "Druk op Live starten om te beginnen."
+    },
+    {
+      "id": "wizard",
+      "title": "De startwizard",
+      "body": "Twee stappen: de eerste kiest de video- en audio-instelling, de tweede het kanaal. Volgende gaat verder, Terug keert terug.",
+      "steps": [
+        "Kies de instelling van de live.",
+        "Kies het kanaal (typ voor TikTok ook de sleutel).",
+        "Componeren / Volgende opent het canvas."
+      ],
+      "figure": "wizard",
+      "callout": "Volgende gaat naar de tweede stap."
+    },
+    {
+      "id": "playlist",
+      "title": "Een map streamen (afspeellijst)",
+      "body": "In plaats van één scène kun je alle video's van een map na elkaar streamen.",
+      "steps": [
+        "Druk op Afspeellijst starten.",
+        "Kies instelling en kanaal, dan de videomap.",
+        "Bevestig om de lucht in te gaan."
+      ],
+      "figure": "playlist",
+      "callout": "Afspeellijst starten streamt een hele map na elkaar."
+    },
+    {
+      "id": "scene",
+      "title": "De scène componeren",
+      "body": "Het canvas is waar een live wordt samengesteld: sleep je bronnen (scherm, venster, camera, audio) in de vakken en leg overlays erbovenop.",
+      "steps": [
+        "Voeg een bron aan een vak toe.",
+        "Voeg overlays toe of sleep ze en rangschik ze.",
+        "Bevestig om de live te starten."
+      ],
+      "figure": "scene",
+      "callout": "Het canvas: bronnen in de vakken, overlays erbovenop."
+    },
+    {
+      "id": "sceneDeck",
+      "title": "Het scene deck",
+      "body": "Het scene deck zet een video, banner of afbeelding in de plaats van de live, zoals een studio van scène wisselt. Elke knop kan een naam en een sneltoets hebben.",
+      "steps": [
+        "Open het deck vanuit een live-rij of het voorbeeld.",
+        "Druk op een knop om die de lucht in te sturen; Live hervatten brengt de live terug."
+      ],
+      "figure": "sceneDeck",
+      "callout": "Het scene deck wisselt wat de lucht in gaat."
+    },
+    {
+      "id": "preview",
+      "title": "Het voorbeeld",
+      "body": "Het voorbeeld toont wat een live nu uitzendt, met de gezondheid van de stream, de bitrate en de beeldsnelheid.",
+      "steps": [
+        "Bekijk de live en zijn gegevens.",
+        "Open het deck of stop de live vanaf hier."
+      ],
+      "figure": "preview",
+      "callout": "De live in de lucht, zoals hij wordt verzonden."
+    },
+    {
+      "id": "layouts",
+      "title": "Layouts",
+      "body": "Een layout is het skelet van een live: de vakken en de overlays, onder een naam bewaard. De wizard opent een layout als zijn vakken.",
+      "steps": [
+        "Druk op Nieuwe layout.",
+        "Teken de vakken en overlays en sla op."
+      ],
+      "figure": "layouts",
+      "callout": "Nieuwe layout opent het canvas voor een herbruikbare scène."
+    },
+    {
+      "id": "history",
+      "title": "Livegeschiedenis",
+      "body": "Elke live die je startte blijft hier met platform, kanaal, map en resultaat.",
+      "steps": [
+        "Start dezelfde live opnieuw, of open de details.",
+        "Speel een spot, koppel een instelling, of verwijder de rij."
+      ],
+      "figure": "history",
+      "callout": "Je lives, klaar om te herstarten."
+    },
+    {
+      "id": "taskManager",
+      "title": "Taakbeheer",
+      "body": "Hoe de pc ervoor staat: CPU, RAM, schijven, netwerk, GPU, de temperaturen en de FFmpeg-processen.",
+      "steps": [
+        "Bekijk de meters tijdens een live.",
+        "Controleer of de machine bijblijft."
+      ],
+      "figure": "taskManager",
+      "callout": "Bronnen en FFmpeg-activiteit, in realtime."
+    },
+    {
+      "id": "settings",
+      "title": "Instellingen",
+      "body": "Onder Instellingen vind je video en audio, de kanalen, het thema, de taal en deze handleiding. De balk heeft thema, taal en Overal.",
+      "steps": [
+        "Video en audio: maak de instellingen en activeer de toegestane.",
+        "Kanalen: voeg de platforms en hun sleutels toe."
+      ],
+      "figure": "settings",
+      "callout": "Instellingen bundelen video/audio, kanalen en deze handleiding."
+    }
+  ]
+}

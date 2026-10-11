@@ -1,0 +1,128 @@
+{
+  "sections": [
+    {
+      "id": "dashboard",
+      "title": "Hodor",
+      "body": "Hodor hodor Orbis Stream: hodor hodor, hodor, hodor, hodor hodor.",
+      "steps": [
+        "Hodor hodor hodor.",
+        "Hodor hodor hodor hodor hodor."
+      ],
+      "figure": "dashboard",
+      "callout": "Hodor hodor hodor."
+    },
+    {
+      "id": "startLive",
+      "title": "Hodor hodor",
+      "body": "Hodor Live hodor Hodor hodor: Orbis hodor video/audio hodor channel, hodor hodor.",
+      "steps": [
+        "Hodor hodor hodor hodor.",
+        "Hodor hodor hodor."
+      ],
+      "figure": "startLive",
+      "callout": "Hodor hodor Hodor."
+    },
+    {
+      "id": "wizard",
+      "title": "Hodor hodor",
+      "body": "Hodor: hodor video hodor audio, hodor channel. Hodor hodor, Hodor hodor.",
+      "steps": [
+        "Hodor hodor hodor.",
+        "Hodor channel (TikTok hodor hodor).",
+        "Hodor / Hodor hodor hodor."
+      ],
+      "figure": "wizard",
+      "callout": "Hodor hodor hodor."
+    },
+    {
+      "id": "playlist",
+      "title": "Hodor hodor (hodor)",
+      "body": "Hodor hodor hodor video hodor hodor.",
+      "steps": [
+        "Hodor hodor hodor.",
+        "Hodor hodor channel, hodor hodor video.",
+        "Hodor hodor."
+      ],
+      "figure": "playlist",
+      "callout": "Hodor hodor hodor hodor."
+    },
+    {
+      "id": "scene",
+      "title": "Hodor hodor",
+      "body": "Hodor hodor hodor: hodor (hodor, hodor, hodor, hodor) hodor hodor, hodor hodor hodor.",
+      "steps": [
+        "Hodor hodor hodor.",
+        "Hodor hodor hodor hodor.",
+        "Hodor hodor hodor."
+      ],
+      "figure": "scene",
+      "callout": "Hodor: hodor hodor, hodor hodor."
+    },
+    {
+      "id": "sceneDeck",
+      "title": "Hodor deck",
+      "body": "Hodor deck hodor video, hodor hodor image hodor hodor, hodor hodor hodor. Hodor hodor hodor hodor.",
+      "steps": [
+        "Hodor deck hodor hodor hodor.",
+        "Hodor hodor hodor; Hodor hodor hodor."
+      ],
+      "figure": "sceneDeck",
+      "callout": "Hodor deck hodor hodor hodor."
+    },
+    {
+      "id": "preview",
+      "title": "Hodor",
+      "body": "Hodor hodor hodor hodor hodor, hodor, hodor hodor hodor hodor.",
+      "steps": [
+        "Hodor hodor hodor hodor.",
+        "Hodor deck hodor hodor hodor."
+      ],
+      "figure": "preview",
+      "callout": "Hodor hodor hodor."
+    },
+    {
+      "id": "layouts",
+      "title": "Hodor",
+      "body": "Hodor layout hodor hodor: hodor hodor hodor, hodor hodor. Hodor layout hodor hodor.",
+      "steps": [
+        "Hodor Hodor layout.",
+        "Hodor hodor hodor, hodor hodor."
+      ],
+      "figure": "layouts",
+      "callout": "Hodor layout hodor hodor hodor."
+    },
+    {
+      "id": "history",
+      "title": "Hodor hodor",
+      "body": "Hodor hodor hodor hodor hodor, channel, hodor hodor hodor.",
+      "steps": [
+        "Hodor hodor hodor, hodor hodor hodor.",
+        "Hodor hodor, hodor hodor, hodor hodor hodor."
+      ],
+      "figure": "history",
+      "callout": "Hodor hodor, hodor hodor."
+    },
+    {
+      "id": "taskManager",
+      "title": "Hodor hodor",
+      "body": "Hodor PC: CPU, RAM, hodor, hodor, GPU, hodor hodor hodor FFmpeg.",
+      "steps": [
+        "Hodor hodor hodor hodor.",
+        "Hodor hodor hodor hodor."
+      ],
+      "figure": "taskManager",
+      "callout": "Hodor hodor FFmpeg, hodor hodor."
+    },
+    {
+      "id": "settings",
+      "title": "Hodor",
+      "body": "Hodor Hodor: video hodor audio, hodor, hodor, hodor hodor hodor hodor. Hodor hodor hodor hodor hodor.",
+      "steps": [
+        "Video/audio: hodor hodor hodor hodor hodor.",
+        "Hodor: hodor hodor hodor hodor."
+      ],
+      "figure": "settings",
+      "callout": "Hodor video/audio, hodor hodor hodor."
+    }
+  ]
+}

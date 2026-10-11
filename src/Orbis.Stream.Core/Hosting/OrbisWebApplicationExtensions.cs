@@ -44,6 +44,7 @@ public static class OrbisWebApplicationExtensions
         builder.Services.AddOrbisStream(options);
         builder.Services.AddSingleton<RequestValidator>();
         builder.Services.AddSingleton<UiText>();
+        builder.Services.AddSingleton(ManualText.Instance);
         // The pages live in this library, not in the entry assembly (the WPF shell or the tests).
         builder.Services.AddRazorPages().AddApplicationPart(typeof(Pages.OrbisPageModel).Assembly);
         builder.Services.AddEndpointsApiExplorer();

@@ -28,6 +28,7 @@
   "about": "De hoc",
   "aboutVersion": "Versio",
   "aboutAuthor": "Factum a",
+  "aboutLinkedIn": "Ad profīlum",
   "close": "Claudere",
   "liveHistory": "Historia directōrum",
   "invalidParameter": "Paramētrum iniurium",
@@ -121,6 +122,7 @@
   "connectAudioSetting": "Cōnfigūrātiō coniuncta",
   "addedSuccessfully": "Addita est",
   "payMeAWeasel": "Sī volēs, müstēlam mihi solvo",
+  "coffeeForPerla": "1% donationum ad propositum ad Perlam eunt",
   "next": "Deinde",
   "wizardStep1Title": "1. Cōnfigūrātiōnēs vīdeī et sonī ēligere",
   "wizardStep2Title": "2. Cōnfigūrātiōnem fundendi ēligere",
@@ -428,5 +430,12 @@
   "encoderQualityHint": "Automatica computatrum probat et ipsa eligit: si dubitas, relinque.",
   "searchByTitle": "Quaere titulum",
   "search": "Quaere",
-  "clearFilters": "Purgare selectiones"
+  "clearFilters": "Purgare selectiones",
+  "manual": "Manuale",
+  "manualDescription": "Lege manuale: omnia munera, gradatim, cum veris imaginibus applicationis.",
+  "manualTitle": "Manuale usus",
+  "manualIntro": "Omnia quae Orbis Stream facere potest, una pagina pro quoque munere: imago applicationis et sagitta in bulla premenda. Hoc manuale ut PDF demittere potes, servandum vel imprimendum.",
+  "manualDownloadPdf": "PDF demittere",
+  "manualPrint": "Imprimere",
+  "manualToc": "In hoc manuali"
 }

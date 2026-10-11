@@ -1,0 +1,128 @@
+{
+  "sections": [
+    {
+      "id": "dashboard",
+      "title": "O painel",
+      "body": "A casa do Orbis Stream: daqui chega à gestão de diretos, à pré-visualização, aos layouts, ao histórico e às definições.",
+      "steps": [
+        "Abra um cartão para entrar numa secção.",
+        "As mesmas áreas estão sempre a um clique na barra à esquerda."
+      ],
+      "figure": "dashboard",
+      "callout": "Abra um cartão para entrar nessa área."
+    },
+    {
+      "id": "startLive",
+      "title": "Iniciar um direto",
+      "body": "Abra Live e prima Iniciar direto: o Orbis pergunta que definição de vídeo/áudio vai para o ar e em que canal, e abre a tela.",
+      "steps": [
+        "O botão realçado abre o assistente de um novo direto.",
+        "Confirme no fim para ir para o ar."
+      ],
+      "figure": "startLive",
+      "callout": "Prima Iniciar direto para começar."
+    },
+    {
+      "id": "wizard",
+      "title": "O assistente de arranque",
+      "body": "Dois passos: o primeiro escolhe a definição de vídeo e áudio, o segundo o canal. Seguinte avança, Voltar recua.",
+      "steps": [
+        "Escolha a definição do direto.",
+        "Escolha o canal (para o TikTok, escreva também a chave).",
+        "Compor / Seguinte abre a tela."
+      ],
+      "figure": "wizard",
+      "callout": "Seguinte passa ao segundo passo."
+    },
+    {
+      "id": "playlist",
+      "title": "Transmitir uma pasta (playlist)",
+      "body": "Em vez de uma só cena pode transmitir todos os vídeos de uma pasta, um após o outro.",
+      "steps": [
+        "Prima Iniciar playlist.",
+        "Escolha definição e canal, depois a pasta de vídeos.",
+        "Confirme para ir para o ar."
+      ],
+      "figure": "playlist",
+      "callout": "Iniciar playlist transmite uma pasta inteira em sequência."
+    },
+    {
+      "id": "scene",
+      "title": "Compor a cena",
+      "body": "A tela é onde se monta um direto: arraste as suas fontes (ecrã, janela, câmara, áudio) para as ranhuras e adicione sobreposições por cima.",
+      "steps": [
+        "Adicione uma fonte a uma ranhura.",
+        "Adicione ou arraste sobreposições e ordene-as.",
+        "Confirme para iniciar o direto."
+      ],
+      "figure": "scene",
+      "callout": "A tela: fontes nas ranhuras, sobreposições por cima."
+    },
+    {
+      "id": "sceneDeck",
+      "title": "O scene deck",
+      "body": "O scene deck põe no ar um vídeo, um banner ou uma imagem em vez do direto, como um estúdio muda de cena. Cada botão pode ter um nome e um atalho de teclado.",
+      "steps": [
+        "Abra o deck da linha de um direto ou da pré-visualização.",
+        "Prima um botão para o pôr no ar; Retomar direto traz o direto de volta."
+      ],
+      "figure": "sceneDeck",
+      "callout": "O scene deck muda o que está no ar."
+    },
+    {
+      "id": "preview",
+      "title": "A pré-visualização",
+      "body": "A pré-visualização mostra o que um direto está a transmitir agora, com a saúde do fluxo, o bitrate e os fotogramas por segundo.",
+      "steps": [
+        "Veja o direto e os seus dados.",
+        "Abra o scene deck ou pare o direto daqui."
+      ],
+      "figure": "preview",
+      "callout": "O direto no ar, tal como está a ser enviado."
+    },
+    {
+      "id": "layouts",
+      "title": "Os layouts",
+      "body": "Um layout é o esqueleto de um direto: as ranhuras e as sobreposições, guardadas com um nome. O assistente abre um layout como as suas ranhuras.",
+      "steps": [
+        "Prima Novo layout.",
+        "Desenhe as ranhuras e as sobreposições e guarde."
+      ],
+      "figure": "layouts",
+      "callout": "Novo layout abre a tela para desenhar uma cena reutilizável."
+    },
+    {
+      "id": "history",
+      "title": "Histórico de diretos",
+      "body": "Cada direto iniciado fica aqui com a plataforma, o canal, a pasta e o resultado.",
+      "steps": [
+        "Inicie o mesmo direto outra vez, ou abra os detalhes.",
+        "Passe um spot, ligue uma definição, ou apague a linha."
+      ],
+      "figure": "history",
+      "callout": "Os diretos iniciados, prontos a repetir."
+    },
+    {
+      "id": "taskManager",
+      "title": "Gestor de tarefas",
+      "body": "Como está o PC: CPU, RAM, discos, rede, GPU, as temperaturas e os processos FFmpeg.",
+      "steps": [
+        "Veja os medidores enquanto um direto corre.",
+        "Confirme que a máquina acompanha."
+      ],
+      "figure": "taskManager",
+      "callout": "Recursos e atividade do FFmpeg, em tempo real."
+    },
+    {
+      "id": "settings",
+      "title": "Definições",
+      "body": "Em Definições: vídeo e áudio, os canais, o tema, o idioma e este manual. A barra lateral mantém tema, idioma e Acerca em todo o lado.",
+      "steps": [
+        "Vídeo e áudio: crie as definições e ative as permitidas.",
+        "Canais: adicione as plataformas e as suas chaves."
+      ],
+      "figure": "settings",
+      "callout": "Definições reúne vídeo/áudio, canais e este manual."
+    }
+  ]
+}

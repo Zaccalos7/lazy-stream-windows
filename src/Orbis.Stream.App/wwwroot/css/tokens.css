@@ -18,6 +18,7 @@
   --youtube: #ff3b30;
   --kick: #1e9e00;
   --facebook: #005fed;
+  --linkedin: #0a66c2;
   /* TikTok's pink, where the platform is a hue (the ring of a choice); its logo is black, cyan and red. */
   --tiktok: #fe2c55;
   --tiktok-cyan: #25f4ee;
@@ -94,6 +95,7 @@
     --youtube: #ff453a;
     --kick: #53fc18;
     --facebook: #3b82f6;
+    --linkedin: #4aa3ff;
 
     --success: #30d158;
     --success-bg: rgba(48, 209, 88, 0.15);

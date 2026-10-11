@@ -1,0 +1,128 @@
+{
+  "sections": [
+    {
+      "id": "dashboard",
+      "title": "El panel",
+      "body": "La casa de Orbis Stream: desde aquí llegas a la gestión de directos, la vista previa, los diseños, el historial y los ajustes.",
+      "steps": [
+        "Abre una tarjeta para entrar en una sección.",
+        "Las mismas áreas están siempre a un clic en la barra de la izquierda."
+      ],
+      "figure": "dashboard",
+      "callout": "Abre una tarjeta para entrar en esa área."
+    },
+    {
+      "id": "startLive",
+      "title": "Iniciar un directo",
+      "body": "Abre Live y pulsa Iniciar directo: Orbis pregunta qué ajuste de vídeo/audio sale al aire y en qué canal, y abre el lienzo para componer la escena.",
+      "steps": [
+        "El botón resaltado abre el asistente para un nuevo directo.",
+        "Confirma al final para salir al aire."
+      ],
+      "figure": "startLive",
+      "callout": "Pulsa Iniciar directo para comenzar."
+    },
+    {
+      "id": "wizard",
+      "title": "El asistente de inicio",
+      "body": "Dos pasos: el primero elige el ajuste de vídeo y audio, el segundo el canal. Siguiente avanza, Atrás vuelve.",
+      "steps": [
+        "Elige el ajuste del directo.",
+        "Elige el canal (para TikTok escribe también la clave).",
+        "Componer / Siguiente abre el lienzo."
+      ],
+      "figure": "wizard",
+      "callout": "Siguiente pasa al segundo paso."
+    },
+    {
+      "id": "playlist",
+      "title": "Emitir una carpeta (lista)",
+      "body": "En vez de una sola escena puedes emitir todos los vídeos de una carpeta, uno tras otro.",
+      "steps": [
+        "Pulsa Iniciar lista.",
+        "Elige ajuste y canal, luego la carpeta de vídeos.",
+        "Confirma para salir al aire."
+      ],
+      "figure": "playlist",
+      "callout": "Iniciar lista emite una carpeta entera en secuencia."
+    },
+    {
+      "id": "scene",
+      "title": "Componer la escena",
+      "body": "El lienzo es donde se monta un directo: arrastra tus fuentes (pantalla, ventana, cámara, audio) a las ranuras y añade superposiciones encima.",
+      "steps": [
+        "Añade una fuente a una ranura.",
+        "Añade o arrastra superposiciones y ordénalas.",
+        "Confirma para iniciar el directo."
+      ],
+      "figure": "scene",
+      "callout": "El lienzo: fuentes en las ranuras, superposiciones encima."
+    },
+    {
+      "id": "sceneDeck",
+      "title": "El scene deck",
+      "body": "El scene deck pone al aire un vídeo, un banner o una imagen en lugar del directo, como un estudio cambia de escena. Cada botón puede tener un nombre y un atajo de teclado.",
+      "steps": [
+        "Abre el deck desde una fila de directo o la vista previa.",
+        "Pulsa un botón para ponerlo al aire; Reanudar directo lo trae de vuelta."
+      ],
+      "figure": "sceneDeck",
+      "callout": "El scene deck cambia lo que está al aire."
+    },
+    {
+      "id": "preview",
+      "title": "La vista previa",
+      "body": "La vista previa muestra lo que un directo está emitiendo ahora, con la salud, el bitrate y los fotogramas por segundo.",
+      "steps": [
+        "Mira el directo y sus datos.",
+        "Abre el scene deck o detén el directo desde aquí."
+      ],
+      "figure": "preview",
+      "callout": "El directo al aire, mientras se envía."
+    },
+    {
+      "id": "layouts",
+      "title": "Los diseños",
+      "body": "Un diseño es el esqueleto de un directo: las ranuras y las superposiciones, guardadas con un nombre. El asistente abre un diseño como sus ranuras.",
+      "steps": [
+        "Pulsa Nuevo diseño.",
+        "Dibuja las ranuras y las superposiciones y guarda."
+      ],
+      "figure": "layouts",
+      "callout": "Nuevo diseño abre el lienzo para dibujar una escena reutilizable."
+    },
+    {
+      "id": "history",
+      "title": "Historial de directos",
+      "body": "Cada directo que iniciaste se guarda aquí con su plataforma, canal, carpeta y resultado.",
+      "steps": [
+        "Inicia el mismo directo otra vez, o abre sus detalles.",
+        "Pon un spot, enlaza un ajuste o elimina la fila."
+      ],
+      "figure": "history",
+      "callout": "Tus directos, listos para repetir."
+    },
+    {
+      "id": "taskManager",
+      "title": "Administrador de tareas",
+      "body": "Cómo va el PC: CPU, RAM, discos, red, GPU, las temperaturas y los procesos FFmpeg.",
+      "steps": [
+        "Mira los medidores mientras corre un directo.",
+        "Comprueba que la máquina aguanta."
+      ],
+      "figure": "taskManager",
+      "callout": "Recursos y actividad de FFmpeg, en tiempo real."
+    },
+    {
+      "id": "settings",
+      "title": "Ajustes",
+      "body": "En Ajustes encuentras vídeo y audio, los canales, el tema, el idioma y este manual. La barra tiene tema, idioma e Info en todas partes.",
+      "steps": [
+        "Vídeo y audio: crea los ajustes y activa los permitidos al aire.",
+        "Canales: añade las plataformas y sus claves."
+      ],
+      "figure": "settings",
+      "callout": "Ajustes reúne vídeo/audio, canales y este manual."
+    }
+  ]
+}

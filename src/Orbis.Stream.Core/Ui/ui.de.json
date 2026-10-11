@@ -28,6 +28,7 @@
   "about": "Über",
   "aboutVersion": "Version",
   "aboutAuthor": "Erstellt von",
+  "aboutLinkedIn": "Zum Profil",
   "close": "Schließen",
   "liveHistory": "Live-Verlauf",
   "invalidParameter": "Ungültiger Parameter",
@@ -121,6 +122,7 @@
   "connectAudioSetting": "Einstellung verbunden",
   "addedSuccessfully": "Erfolgreich hinzugefügt",
   "payMeAWeasel": "Zahl mir ein Wiesel, wenn du willst",
+  "coffeeForPerla": "1 % der Spenden für das Projekt gehen an Perla",
   "next": "Weiter",
   "wizardStep1Title": "1. Video- und Audioeinstellungen auswählen",
   "wizardStep2Title": "2. Streaming-Konfiguration auswählen",
@@ -428,5 +430,12 @@
   "encoderQualityHint": "Automatisch testet den PC und entscheidet selbst: im Zweifel so lassen.",
   "searchByTitle": "Nach Titel suchen",
   "search": "Suchen",
-  "clearFilters": "Filter zurücksetzen"
+  "clearFilters": "Filter zurücksetzen",
+  "manual": "Handbuch",
+  "manualDescription": "Lies das Handbuch: jede Funktion, Schritt für Schritt, mit echten Bildern der App.",
+  "manualTitle": "Benutzerhandbuch",
+  "manualIntro": "Alles, was Orbis Stream kann, eine Seite pro Funktion: ein Bild der App und ein Pfeil auf die Taste, die zu drücken ist. Du kannst dieses Handbuch als PDF herunterladen, zum Aufbewahren oder Drucken.",
+  "manualDownloadPdf": "PDF herunterladen",
+  "manualPrint": "Drucken",
+  "manualToc": "In diesem Handbuch"
 }

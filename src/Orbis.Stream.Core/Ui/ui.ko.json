@@ -28,6 +28,7 @@
   "about": "정보",
   "aboutVersion": "버전",
   "aboutAuthor": "제작",
+  "aboutLinkedIn": "프로필 보기",
   "close": "닫기",
   "liveHistory": "라이브 기록",
   "invalidParameter": "잘못된 매개변수",
@@ -121,6 +122,7 @@
   "connectAudioSetting": "설정 연결됨",
   "addedSuccessfully": "추가되었습니다",
   "payMeAWeasel": "원하시면 족제비 한 마리 드립니다",
+  "coffeeForPerla": "프로젝트 기부금의 1%는 Perla에게 전달됩니다",
   "next": "다음",
   "wizardStep1Title": "1. 동영상 및 오디오 설정 선택",
   "wizardStep2Title": "2. 스트리밍 구성 선택",
@@ -428,5 +430,12 @@
   "encoderQualityHint": "자동은 PC를 테스트해 스스로 고릅니다. 잘 모르겠다면 그대로 두세요.",
   "searchByTitle": "제목으로 검색",
   "search": "검색",
-  "clearFilters": "필터 지우기"
+  "clearFilters": "필터 지우기",
+  "manual": "사용 설명서",
+  "manualDescription": "설명서를 읽어 보세요: 모든 기능을 단계별로, 실제 앱 화면과 함께.",
+  "manualTitle": "사용 설명서",
+  "manualIntro": "Orbis Stream이 할 수 있는 모든 것, 기능마다 한 페이지: 앱 화면과 눌러야 할 버튼을 가리키는 화살표. 이 설명서를 PDF로 내려받아 보관하거나 인쇄할 수 있습니다.",
+  "manualDownloadPdf": "PDF 내려받기",
+  "manualPrint": "인쇄",
+  "manualToc": "이 설명서에서"
 }

@@ -28,6 +28,7 @@
   "about": "के बारे में",
   "aboutVersion": "संस्करण",
   "aboutAuthor": "निर्माता",
+  "aboutLinkedIn": "प्रोफ़ाइल देखें",
   "close": "बंद करें",
   "liveHistory": "लाइव इतिहास",
   "invalidParameter": "अमान्य पैरामीटर",
@@ -121,6 +122,7 @@
   "connectAudioSetting": "सेटिंग कनेक्टेड",
   "addedSuccessfully": "सफलतापूर्वक जोड़ा गया",
   "payMeAWeasel": "यदि तुम चाहो तो मुझे एक नेवला दे दो",
+  "coffeeForPerla": "परियोजना को दिए गए दान का 1% Perla को जाता है",
   "next": "अगला",
   "wizardStep1Title": "1. वीडियो और ऑडियो सेटिंग्स चुनें",
   "wizardStep2Title": "2. स्ट्रीमिंग कॉन्फ़िगरेशन का चयन करें",
@@ -428,5 +430,12 @@
   "encoderQualityHint": "स्वचालित पीसी की जाँच करके खुद चुनता है: यदि आप निश्चित नहीं हैं तो इसे ऐसे ही छोड़ दें।",
   "searchByTitle": "शीर्षक से खोजें",
   "search": "खोजें",
-  "clearFilters": "फ़िल्टर हटाएँ"
+  "clearFilters": "फ़िल्टर हटाएँ",
+  "manual": "उपयोग गाइड",
+  "manualDescription": "गाइड पढ़ें: हर सुविधा, एक-एक कदम, ऐप की असली तस्वीरों के साथ।",
+  "manualTitle": "उपयोग गाइड",
+  "manualIntro": "Orbis Stream जो कुछ भी कर सकता है, हर सुविधा के लिए एक पेज: ऐप की तस्वीर और दबाने वाले बटन पर एक तीर। आप इस गाइड को PDF में डाउनलोड कर सकते हैं, रखने या छापने के लिए।",
+  "manualDownloadPdf": "PDF डाउनलोड करें",
+  "manualPrint": "छापें",
+  "manualToc": "इस गाइड में"
 }

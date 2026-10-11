@@ -28,6 +28,7 @@
   "about": "Over",
   "aboutVersion": "Versie",
   "aboutAuthor": "Gemaakt door",
+  "aboutLinkedIn": "Naar profiel",
   "close": "Sluiten",
   "liveHistory": "Livegeschiedenis",
   "invalidParameter": "Ongeldige parameter",
@@ -121,6 +122,7 @@
   "connectAudioSetting": "Instelling gekoppeld",
   "addedSuccessfully": "Succesvol toegevoegd",
   "payMeAWeasel": "Trakteer me op een wezel als je wilt",
+  "coffeeForPerla": "1% van de donaties aan het project gaat naar Perla",
   "next": "Volgende",
   "wizardStep1Title": "1. Kies de video- en audio-instellingen",
   "wizardStep2Title": "2. Kies de streamingconfiguratie",
@@ -428,5 +430,12 @@
   "encoderQualityHint": "Automatisch test deze pc en beslist zelf: laat het zo staan als je twijfelt.",
   "searchByTitle": "Zoeken op titel",
   "search": "Zoeken",
-  "clearFilters": "Filters wissen"
+  "clearFilters": "Filters wissen",
+  "manual": "Handleiding",
+  "manualDescription": "Lees de handleiding: elke functie, stap voor stap, met echte beelden van de app.",
+  "manualTitle": "Gebruikershandleiding",
+  "manualIntro": "Alles wat Orbis Stream kan, één pagina per functie: een beeld van de app en een pijl naar de knop die je moet indrukken. Je kunt deze handleiding als PDF downloaden, om te bewaren of te printen.",
+  "manualDownloadPdf": "PDF downloaden",
+  "manualPrint": "Afdrukken",
+  "manualToc": "In deze handleiding"
 }

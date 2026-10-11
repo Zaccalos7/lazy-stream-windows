@@ -1,0 +1,128 @@
+{
+  "sections": [
+    {
+      "id": "dashboard",
+      "title": "The dashboard",
+      "body": "The home of Orbis Stream: from here you reach live management, the preview, the layouts, the history and the settings.",
+      "steps": [
+        "Open a card to enter a section.",
+        "The same areas are always one click away in the sidebar on the left."
+      ],
+      "figure": "dashboard",
+      "callout": "Open a card to enter that area."
+    },
+    {
+      "id": "startLive",
+      "title": "Start a live",
+      "body": "Open Live and press Start live: Orbis asks which video/audio setting goes on air and on which channel, then opens the canvas to compose the scene.",
+      "steps": [
+        "The highlighted button opens the wizard for a new live.",
+        "Confirm at the end to go on air."
+      ],
+      "figure": "startLive",
+      "callout": "Press Start live to begin."
+    },
+    {
+      "id": "wizard",
+      "title": "The start wizard",
+      "body": "Two steps: the first picks the video and audio setting, the second the channel to stream to. Next goes forward, Back returns.",
+      "steps": [
+        "Choose the setting of the live.",
+        "Choose the channel (for TikTok, type the key of the live too).",
+        "Compose / Next opens the canvas."
+      ],
+      "figure": "wizard",
+      "callout": "Next moves to the second step."
+    },
+    {
+      "id": "playlist",
+      "title": "Stream a folder (playlist)",
+      "body": "Instead of a single scene you can stream every video of a folder, one after another.",
+      "steps": [
+        "Press Start playlist.",
+        "Choose setting and channel, then the folder of videos.",
+        "Confirm to go on air."
+      ],
+      "figure": "playlist",
+      "callout": "Start playlist streams a whole folder in sequence."
+    },
+    {
+      "id": "scene",
+      "title": "Compose the scene",
+      "body": "The canvas is where a live is assembled: drop your sources (screen, window, camera, audio) into the slots, then add overlays on top.",
+      "steps": [
+        "Add a source to a slot.",
+        "Add or drop overlays and arrange them.",
+        "Confirm to start the live."
+      ],
+      "figure": "scene",
+      "callout": "The canvas: sources in the slots, overlays on top."
+    },
+    {
+      "id": "sceneDeck",
+      "title": "The scene deck",
+      "body": "The scene deck puts a video, a banner or an image on air in place of the live, the way a studio switches scene. Every button can carry a name and a keyboard shortcut.",
+      "steps": [
+        "Open the deck from a live row or the preview.",
+        "Press a button to take it on air; Resume live brings the live back."
+      ],
+      "figure": "sceneDeck",
+      "callout": "The scene deck switches what is on air."
+    },
+    {
+      "id": "preview",
+      "title": "The preview",
+      "body": "The preview shows what a live is broadcasting right now, with the health of the stream, the bitrate and the frame rate.",
+      "steps": [
+        "Watch the live and its data.",
+        "Open the scene deck or stop the live from here."
+      ],
+      "figure": "preview",
+      "callout": "The live on air, as it is being sent."
+    },
+    {
+      "id": "layouts",
+      "title": "Layouts",
+      "body": "A layout is the skeleton of a live: the slots and the overlays, saved under a name to be reused. The wizard opens a layout as its slots.",
+      "steps": [
+        "Press New layout.",
+        "Draw the slots and the overlays, then save it."
+      ],
+      "figure": "layouts",
+      "callout": "New layout opens the canvas to draw a reusable scene."
+    },
+    {
+      "id": "history",
+      "title": "Live history",
+      "body": "Every live you started is kept here with its platform, channel, folder and outcome.",
+      "steps": [
+        "Start the same live again, or open its details.",
+        "Play a spot, link a setting, or delete the row."
+      ],
+      "figure": "history",
+      "callout": "The lives you started, ready to start again."
+    },
+    {
+      "id": "taskManager",
+      "title": "Task manager",
+      "body": "How the PC is doing: CPU, RAM, disks, network, GPU, the temperatures and the FFmpeg processes of the live.",
+      "steps": [
+        "Watch the meters while a live runs.",
+        "Check that the machine keeps up with the stream."
+      ],
+      "figure": "taskManager",
+      "callout": "Resources and FFmpeg activity, in real time."
+    },
+    {
+      "id": "settings",
+      "title": "Settings",
+      "body": "Under Settings you find the video and audio settings, the channels, the theme, the language and this guide. The sidebar carries the theme, the language and About from anywhere.",
+      "steps": [
+        "Video & audio: create the settings and activate those allowed on air.",
+        "Channels: add the platforms and their stream keys."
+      ],
+      "figure": "settings",
+      "callout": "Settings groups video/audio, channels and this guide."
+    }
+  ]
+}

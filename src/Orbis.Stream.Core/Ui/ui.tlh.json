@@ -28,6 +28,7 @@
   "about": "QaSta'",
   "aboutVersion": "wej",
   "aboutAuthor": "ngev",
+  "aboutLinkedIn": "SovwI'Daq yIjaH",
   "close": "yI'",
   "liveHistory": "lIw hIstaj",
   "invalidParameter": "param swa'",
@@ -121,6 +122,7 @@
   "connectAudioSetting": "setInS 'ej",
   "addedSuccessfully": "cha' Qapla'",
   "payMeAWeasel": "wI' jIH Dalan ta' wIv",
+  "coffeeForPerla": "proyek nobmey 1% PerlaDaq jaH",
   "next": "wejDIch",
   "wizardStep1Title": "1. vIDo audio setInS mIq",
   "wizardStep2Title": "2. strIm kOnfiguraSon mIq",
@@ -428,5 +430,12 @@
   "encoderQualityHint": "ra'Hom De'wI' tlhob 'ej wIv.",
   "searchByTitle": "titlh lunob",
   "search": "lunob",
-  "clearFilters": "cha' lunobmeH 'oH purghach"
+  "clearFilters": "cha' lunobmeH 'oH purghach",
+  "manual": "ghojmeH",
+  "manualDescription": "ghojmeH laD: Hoch mIw, bong tIQ, De'wI' De' naDev je.",
+  "manualTitle": "lo'wI' ghojmeH",
+  "manualIntro": "Hoch 'e' Orbis Stream: wa' 'ay' mIw, De'wI' 'echlet 'ej naghvaD paw leQ. ghojmeH PDF pong, pol pagh print.",
+  "manualDownloadPdf": "PDF pong",
+  "manualPrint": "print",
+  "manualToc": "ghojmeH mIwDaq"
 }

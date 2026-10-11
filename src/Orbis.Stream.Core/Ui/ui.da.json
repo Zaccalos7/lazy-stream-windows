@@ -28,6 +28,7 @@
   "about": "Om",
   "aboutVersion": "Version",
   "aboutAuthor": "Lavet af",
+  "aboutLinkedIn": "Gå til profil",
   "close": "Luk",
   "liveHistory": "Livehistorik",
   "invalidParameter": "Ugyldig parameter",
@@ -121,6 +122,7 @@
   "connectAudioSetting": "Indstilling tilknyttet",
   "addedSuccessfully": "Tilføjet",
   "payMeAWeasel": "Giv mig en væsel, hvis du har lyst",
+  "coffeeForPerla": "1 % af donationerne til projektet går til Perla",
   "next": "Næste",
   "wizardStep1Title": "1. Vælg video- og lydindstillinger",
   "wizardStep2Title": "2. Vælg streamingkonfiguration",
@@ -428,5 +430,12 @@
   "encoderQualityHint": "Automatisk tester pc'en og vælger selv: lad den stå, hvis du er i tvivl.",
   "searchByTitle": "Søg efter titel",
   "search": "Søg",
-  "clearFilters": "Ryd filtre"
+  "clearFilters": "Ryd filtre",
+  "manual": "Manual",
+  "manualDescription": "Læs manualen: hver funktion, trin for trin, med rigtige billeder af appen.",
+  "manualTitle": "Brugervejledning",
+  "manualIntro": "Alt, hvad Orbis Stream kan, en side pr. funktion: et billede af appen og en pil på den knap, du skal trykke på. Du kan downloade manualen som PDF for at gemme eller printe den.",
+  "manualDownloadPdf": "Download PDF",
+  "manualPrint": "Print",
+  "manualToc": "I denne manual"
 }

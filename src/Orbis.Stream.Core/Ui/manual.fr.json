@@ -1,0 +1,128 @@
+{
+  "sections": [
+    {
+      "id": "dashboard",
+      "title": "Le tableau de bord",
+      "body": "La maison d'Orbis Stream : d'ici vous accédez à la gestion des directs, l'aperçu, les mises en page, l'historique et les paramètres.",
+      "steps": [
+        "Ouvrez une carte pour entrer dans une section.",
+        "Les mêmes zones sont toujours à un clic dans la barre de gauche."
+      ],
+      "figure": "dashboard",
+      "callout": "Ouvrez une carte pour entrer dans cette zone."
+    },
+    {
+      "id": "startLive",
+      "title": "Démarrer un direct",
+      "body": "Ouvrez Live et appuyez sur Démarrer le direct : Orbis demande quel réglage vidéo/audio et quel canal passent à l'antenne, puis ouvre le canevas.",
+      "steps": [
+        "Le bouton en surbrillance ouvre l'assistant d'un nouveau direct.",
+        "Confirmez à la fin pour passer à l'antenne."
+      ],
+      "figure": "startLive",
+      "callout": "Appuyez sur Démarrer le direct pour commencer."
+    },
+    {
+      "id": "wizard",
+      "title": "L'assistant de démarrage",
+      "body": "Deux étapes : la première choisit le réglage vidéo et audio, la seconde le canal. Suivant avance, Retour revient.",
+      "steps": [
+        "Choisissez le réglage du direct.",
+        "Choisissez le canal (pour TikTok, saisissez aussi la clé).",
+        "Composer / Suivant ouvre le canevas."
+      ],
+      "figure": "wizard",
+      "callout": "Suivant passe à la deuxième étape."
+    },
+    {
+      "id": "playlist",
+      "title": "Diffuser un dossier (playlist)",
+      "body": "Au lieu d'une seule scène, vous pouvez diffuser toutes les vidéos d'un dossier, l'une après l'autre.",
+      "steps": [
+        "Appuyez sur Démarrer la playlist.",
+        "Choisissez réglage et canal, puis le dossier de vidéos.",
+        "Confirmez pour passer à l'antenne."
+      ],
+      "figure": "playlist",
+      "callout": "Démarrer la playlist diffuse un dossier entier à la suite."
+    },
+    {
+      "id": "scene",
+      "title": "Composer la scène",
+      "body": "Le canevas assemble un direct : déposez vos sources (écran, fenêtre, caméra, audio) dans les emplacements, puis ajoutez des incrustations par-dessus.",
+      "steps": [
+        "Ajoutez une source à un emplacement.",
+        "Ajoutez ou déposez des incrustations et disposez-les.",
+        "Confirmez pour démarrer le direct."
+      ],
+      "figure": "scene",
+      "callout": "Le canevas : sources dans les emplacements, incrustations par-dessus."
+    },
+    {
+      "id": "sceneDeck",
+      "title": "Le scene deck",
+      "body": "Le scene deck met à l'antenne une vidéo, une bannière ou une image à la place du direct, comme un studio change de scène. Chaque bouton peut avoir un nom et un raccourci clavier.",
+      "steps": [
+        "Ouvrez le deck depuis une ligne de direct ou l'aperçu.",
+        "Appuyez sur un bouton pour le mettre à l'antenne ; Reprendre le direct le rétablit."
+      ],
+      "figure": "sceneDeck",
+      "callout": "Le scene deck change ce qui est à l'antenne."
+    },
+    {
+      "id": "preview",
+      "title": "L'aperçu",
+      "body": "L'aperçu montre ce qu'un direct diffuse en ce moment, avec la santé du flux, le débit et les images par seconde.",
+      "steps": [
+        "Regardez le direct et ses données.",
+        "Ouvrez le scene deck ou arrêtez le direct d'ici."
+      ],
+      "figure": "preview",
+      "callout": "Le direct à l'antenne, tel qu'il est envoyé."
+    },
+    {
+      "id": "layouts",
+      "title": "Les mises en page",
+      "body": "Une mise en page est le squelette d'un direct : les emplacements et les incrustations, enregistrés sous un nom. L'assistant ouvre une mise en page comme ses emplacements.",
+      "steps": [
+        "Appuyez sur Nouvelle mise en page.",
+        "Dessinez les emplacements et les incrustations, puis enregistrez."
+      ],
+      "figure": "layouts",
+      "callout": "Nouvelle mise en page ouvre le canevas pour une scène réutilisable."
+    },
+    {
+      "id": "history",
+      "title": "Historique des directs",
+      "body": "Chaque direct démarré reste ici avec sa plateforme, son canal, son dossier et son résultat.",
+      "steps": [
+        "Relancez le même direct, ou ouvrez ses détails.",
+        "Diffusez un spot, liez un réglage, ou supprimez la ligne."
+      ],
+      "figure": "history",
+      "callout": "Vos directs, prêts à repartir."
+    },
+    {
+      "id": "taskManager",
+      "title": "Gestionnaire des tâches",
+      "body": "Comment va le PC : CPU, RAM, disques, réseau, GPU, les températures et les processus FFmpeg.",
+      "steps": [
+        "Surveillez les indicateurs pendant un direct.",
+        "Vérifiez que la machine suit."
+      ],
+      "figure": "taskManager",
+      "callout": "Ressources et activité FFmpeg, en temps réel."
+    },
+    {
+      "id": "settings",
+      "title": "Paramètres",
+      "body": "Dans Paramètres : vidéo et audio, les canaux, le thème, la langue et ce manuel. La barre latérale garde thème, langue et À propos partout.",
+      "steps": [
+        "Vidéo et audio : créez les réglages et activez ceux autorisés.",
+        "Canaux : ajoutez les plateformes et leurs clés."
+      ],
+      "figure": "settings",
+      "callout": "Paramètres réunit vidéo/audio, canaux et ce manuel."
+    }
+  ]
+}

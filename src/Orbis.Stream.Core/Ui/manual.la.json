@@ -1,0 +1,128 @@
+{
+  "sections": [
+    {
+      "id": "dashboard",
+      "title": "Tabula",
+      "body": "Domus Orbis Stream: hinc ad gubernationem directarum, praevisionem, formas, historiam et optiones pervenis.",
+      "steps": [
+        "Aperi tessellam ut in partem ineas.",
+        "Eaedem partes semper uno ictu in columna sinistra sunt."
+      ],
+      "figure": "dashboard",
+      "callout": "Aperi tessellam ut in eam partem ineas."
+    },
+    {
+      "id": "startLive",
+      "title": "Directam incipere",
+      "body": "Aperi Live et preme Incipe directam: Orbis rogat quae optio imaginis et soni ac quis canalis in auras eat, deinde tabulam aperit.",
+      "steps": [
+        "Bulla notata magicum novae directae aperit.",
+        "Confirma in fine ut in auras eas."
+      ],
+      "figure": "startLive",
+      "callout": "Preme Incipe directam ut incipias."
+    },
+    {
+      "id": "wizard",
+      "title": "Magicus incipiendi",
+      "body": "Duo gradus: primus optionem imaginis et soni, secundus canalem eligit. Porro procedit, Retro redit.",
+      "steps": [
+        "Elige optionem directae.",
+        "Elige canalem (pro TikTok etiam clavem scribe).",
+        "Compone / Porro tabulam aperit."
+      ],
+      "figure": "wizard",
+      "callout": "Porro ad secundum gradum it."
+    },
+    {
+      "id": "playlist",
+      "title": "Fasciculum transmittere (playlist)",
+      "body": "Pro una scaena omnia videa fasciculi unum post aliud transmittere potes.",
+      "steps": [
+        "Preme Incipe playlist.",
+        "Elige optionem et canalem, deinde fasciculum videorum.",
+        "Confirma ut in auras eas."
+      ],
+      "figure": "playlist",
+      "callout": "Incipe playlist totum fasciculum ordine transmittit."
+    },
+    {
+      "id": "scene",
+      "title": "Scaenam componere",
+      "body": "Tabula est ubi directa componitur: fontes (scriniuM, fenestra, camera, sonus) in loculos trahe, deinde stratas insuper adde.",
+      "steps": [
+        "Fonte in loculum adde.",
+        "Stratas adde vel trahe easque ordina.",
+        "Confirma ut directam incipias."
+      ],
+      "figure": "scene",
+      "callout": "Tabula: fontes in loculis, strata insuper."
+    },
+    {
+      "id": "sceneDeck",
+      "title": "Scena deck",
+      "body": "Scena deck videum, vexillum vel imaginem in auras mittit pro directa, sicut studio scaenam mutat. Cuique bullae nomen et compendium dari potest.",
+      "steps": [
+        "Aperi deck e linea directae vel e praevisione.",
+        "Preme bullam ut eam in auras mittas; Resciscite directam reddit directam."
+      ],
+      "figure": "sceneDeck",
+      "callout": "Scena deck mutat quid in auris sit."
+    },
+    {
+      "id": "preview",
+      "title": "Praevisio",
+      "body": "Praevisio monstrat quid directa nunc transmittat, cum valetudine fluminis, bitrate et frequentia imaginum.",
+      "steps": [
+        "Specta directam eiusque datos.",
+        "Aperi deck aut siste directam hinc."
+      ],
+      "figure": "preview",
+      "callout": "Directa in auris, ut mittitur."
+    },
+    {
+      "id": "layouts",
+      "title": "Formae",
+      "body": "Forma est compages directae: loculi et strata, sub nomine servata. Magicus formam ut loculos eius aperit.",
+      "steps": [
+        "Preme Nova forma.",
+        "Delinea loculos et strata, deinde serva."
+      ],
+      "figure": "layouts",
+      "callout": "Nova forma tabulam aperit ad scaenam reutilizabilem."
+    },
+    {
+      "id": "history",
+      "title": "Historia directarum",
+      "body": "Quaeque directa quam incepisti hic manet cum platforma, canali, fasciculo et eventu.",
+      "steps": [
+        "Eandem directam rursus incipe, aut detalia aperi.",
+        "Spot mitte, optionem necte, aut versum dele."
+      ],
+      "figure": "history",
+      "callout": "Directae tuae, paratae ad rursus incipiendum."
+    },
+    {
+      "id": "taskManager",
+      "title": "Procurator operum",
+      "body": "Quomodo PC se habeat: CPU, RAM, disci, rete, GPU, temperaturae et processus FFmpeg.",
+      "steps": [
+        "Respice mensuras dum directa currit.",
+        "Vide num machina sufficiat."
+      ],
+      "figure": "taskManager",
+      "callout": "Opus et valetudo FFmpeg, in tempore reali."
+    },
+    {
+      "id": "settings",
+      "title": "Optiones",
+      "body": "In Optionibus invenis imaginem et sonum, canales, thema, linguam et hoc manuale. Columna ubique thema, linguam et De aperit.",
+      "steps": [
+        "Imago et sonus: optiones crea et licitas activa.",
+        "Canales: adde platformas earumque claves."
+      ],
+      "figure": "settings",
+      "callout": "Optiones imaginem/sonum, canales et hoc manuale colligunt."
+    }
+  ]
+}

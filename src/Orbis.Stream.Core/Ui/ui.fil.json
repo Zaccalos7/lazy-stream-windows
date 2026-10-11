@@ -28,6 +28,7 @@
   "about": "Tungkol dito",
   "aboutVersion": "Bersyon",
   "aboutAuthor": "Ginawa ni",
+  "aboutLinkedIn": "Pumunta sa profile",
   "close": "Isara",
   "liveHistory": "Kasaysayan ng live",
   "invalidParameter": "Hindi wastong parameter",
@@ -121,6 +122,7 @@
   "connectAudioSetting": "Nakakonekta ang setting",
   "addedSuccessfully": "Matagumpay na naidagdag",
   "payMeAWeasel": "Bayaran mo ako ng isang weasel kung gusto mo",
+  "coffeeForPerla": "1% ng mga donasyon sa proyekto ay napupunta kay Perla",
   "next": "Susunod",
   "wizardStep1Title": "1. Piliin ang mga setting ng video at audio",
   "wizardStep2Title": "2. Piliin ang configuration ng streaming",
@@ -428,5 +430,12 @@
   "encoderQualityHint": "Sinusubok ng Awtomatiko ang PC at kusa itong pumipili: hayaan ito kung hindi ka sigurado.",
   "searchByTitle": "Maghanap ayon sa pamagat",
   "search": "Maghanap",
-  "clearFilters": "I-clear ang mga filter"
+  "clearFilters": "I-clear ang mga filter",
+  "manual": "Manwal",
+  "manualDescription": "Basahin ang manwal: bawat tampok, hakbang-hakbang, may totoong larawan ng app.",
+  "manualTitle": "Manwal ng paggamit",
+  "manualIntro": "Lahat ng kayang gawin ng Orbis Stream, isang pahina bawat tampok: isang larawan ng app at isang arrow sa button na dapat pindutin. Maaari mong i-download ang manwal na ito bilang PDF, upang itago o i-print.",
+  "manualDownloadPdf": "I-download ang PDF",
+  "manualPrint": "I-print",
+  "manualToc": "Sa manwal na ito"
 }

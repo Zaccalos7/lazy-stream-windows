@@ -28,6 +28,7 @@
   "about": "关于",
   "aboutVersion": "版本",
   "aboutAuthor": "创建者",
+  "aboutLinkedIn": "查看个人资料",
   "close": "关闭",
   "liveHistory": "直播历史",
   "invalidParameter": "无效参数",
@@ -121,6 +122,7 @@
   "connectAudioSetting": "关联音频设置",
   "addedSuccessfully": "添加成功",
   "payMeAWeasel": "如果你愿意，请给我一只黄鼠狼",
+  "coffeeForPerla": "项目捐款的 1% 将捐给 Perla",
   "next": "下一步",
   "wizardStep1Title": "1. 选择音视频设置",
   "wizardStep2Title": "2. 选择直播配置",
@@ -428,5 +430,12 @@
   "encoderQualityHint": "自动会测试电脑并自行选择：不确定时保持不变即可。",
   "searchByTitle": "按标题搜索",
   "search": "搜索",
-  "clearFilters": "清除筛选"
+  "clearFilters": "清除筛选",
+  "manual": "使用手册",
+  "manualDescription": "阅读手册：每项功能，一步一步，配有应用的真实截图。",
+  "manualTitle": "用户手册",
+  "manualIntro": "Orbis Stream 能做的所有事情，每项功能一页：一张应用截图，以及指向要按的按钮的箭头。你可以把手册下载为 PDF，方便保存或打印。",
+  "manualDownloadPdf": "下载 PDF",
+  "manualPrint": "打印",
+  "manualToc": "本手册内容"
 }

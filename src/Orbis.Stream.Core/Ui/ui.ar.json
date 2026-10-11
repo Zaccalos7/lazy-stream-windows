@@ -28,6 +28,7 @@
   "about": "حول",
   "aboutVersion": "الإصدار",
   "aboutAuthor": "من تطوير",
+  "aboutLinkedIn": "الذهاب إلى الملف الشخصي",
   "close": "إغلاق",
   "liveHistory": "سجل البث المباشر",
   "invalidParameter": "معامل غير صالح",
@@ -121,6 +122,7 @@
   "connectAudioSetting": "تم ربط الإعداد",
   "addedSuccessfully": "تمت الإضافة بنجاح",
   "payMeAWeasel": "ادفع لي مسكاً إن أردت",
+  "coffeeForPerla": "1% من التبرعات للمشروع تذهب إلى بيرلا",
   "next": "التالي",
   "wizardStep1Title": "1. اختر إعدادات الفيديو والصوت",
   "wizardStep2Title": "2. اختر إعداد البث",
@@ -428,5 +430,12 @@
   "encoderQualityHint": "الخيار التلقائي يختبر هذا الجهاز ويقرر بنفسه: أبقِه إذا لم تكن متأكداً.",
   "searchByTitle": "البحث بالعنوان",
   "search": "بحث",
-  "clearFilters": "مسح عوامل التصفية"
+  "clearFilters": "مسح عوامل التصفية",
+  "manual": "دليل المستخدم",
+  "manualDescription": "اقرأ الدليل: كل ميزة خطوة بخطوة، مع صور حقيقية للتطبيق.",
+  "manualTitle": "دليل المستخدم",
+  "manualIntro": "كل ما يمكن أن يفعله Orbis Stream، صفحة لكل ميزة: صورة للتطبيق وسهم على الزر الذي يجب الضغط عليه. يمكنك تنزيل هذا الدليل بصيغة PDF لحفظه أو طباعته.",
+  "manualDownloadPdf": "تنزيل PDF",
+  "manualPrint": "طباعة",
+  "manualToc": "في هذا الدليل"
 }

@@ -28,6 +28,7 @@
   "about": "Hodor!",
   "aboutVersion": "Hodor version!",
   "aboutAuthor": "Hodor by",
+  "aboutLinkedIn": "Hodor hodor",
   "close": "Hodor!",
   "liveHistory": "Hodor",
   "invalidParameter": "HOO-DOR!",
@@ -121,6 +122,7 @@
   "connectAudioSetting": "Hodor!",
   "addedSuccessfully": "Hodor!",
   "payMeAWeasel": "Hodor",
+  "coffeeForPerla": "Hodor hodor 1% Perla.",
   "next": "Hodor",
   "wizardStep1Title": "Hodor",
   "wizardStep2Title": "Hodor",
@@ -428,5 +430,12 @@
   "encoderQualityHint": "Hodor hodor hodor.",
   "searchByTitle": "Hodor",
   "search": "Hodor",
-  "clearFilters": "Hodor"
+  "clearFilters": "Hodor",
+  "manual": "Hodor",
+  "manualDescription": "Hodor hodor: hodor hodor, hodor hodor, hodor hodor hodor.",
+  "manualTitle": "Hodor",
+  "manualIntro": "Hodor hodor Orbis Stream hodor, hodor hodor hodor: hodor hodor hodor hodor. Hodor hodor PDF hodor, hodor hodor hodor.",
+  "manualDownloadPdf": "Hodor PDF",
+  "manualPrint": "Hodor",
+  "manualToc": "Hodor hodor"
 }

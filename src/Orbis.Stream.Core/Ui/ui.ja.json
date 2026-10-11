@@ -28,6 +28,7 @@
   "about": "情報",
   "aboutVersion": "バージョン",
   "aboutAuthor": "作成者",
+  "aboutLinkedIn": "プロフィールを見る",
   "close": "閉じる",
   "liveHistory": "ライブ履歴",
   "invalidParameter": "無効なパラメータ",
@@ -121,6 +122,7 @@
   "connectAudioSetting": "設定を接続しました",
   "addedSuccessfully": "追加しました",
   "payMeAWeasel": "欲しいならイタチをあげますよ",
+  "coffeeForPerla": "プロジェクトへの寄付の1%はPerlaに贈られます",
   "next": "次へ",
   "wizardStep1Title": "1. 動画と音声の設定を選択",
   "wizardStep2Title": "2. 配信構成を選択",
@@ -428,5 +430,12 @@
   "encoderQualityHint": "自動は PC をテストして自分で選びます。迷ったらそのままにしてください。",
   "searchByTitle": "タイトルで検索",
   "search": "検索",
-  "clearFilters": "フィルターをクリア"
+  "clearFilters": "フィルターをクリア",
+  "manual": "マニュアル",
+  "manualDescription": "マニュアルで、すべての機能を手順ごとに、実際のアプリ画像とともに確認できます。",
+  "manualTitle": "使用マニュアル",
+  "manualIntro": "Orbis Stream にできることすべてを、機能ごとに1ページで：アプリの画像と、押すボタンを指す矢印。このマニュアルは PDF としてダウンロードでき、保存や印刷ができます。",
+  "manualDownloadPdf": "PDF をダウンロード",
+  "manualPrint": "印刷",
+  "manualToc": "このマニュアルの内容"
 }

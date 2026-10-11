@@ -3,6 +3,24 @@
     ViewData["Title"] = T["manualTitle"];
     var language = T.Language;
     var parts = M.Sections(language).Select((part, index) => (part, number: index + 1)).ToList();
+
+    // The sidebar of the guide repeats the glyphs of the application sidebar: the reader finds the
+    // same mark beside the feature here and beside its entry in the shell.
+    var sectionIcons = new Dictionary<string, string>
+    {
+        ["dashboard"] = "\uE80F",
+        ["startLive"] = "\uE714",
+        ["wizard"] = "\uE8FD",
+        ["playlist"] = "\uE768",
+        ["scene"] = "\uE710",
+        ["sceneDeck"] = "\uE765",
+        ["preview"] = "\uE7F4",
+        ["layouts"] = "\uE8B9",
+        ["history"] = "\uE81C",
+        ["taskManager"] = "\uE9D9",
+        ["settings"] = "\uE713"
+    };
+    string IconOf(string id) => sectionIcons.TryGetValue(id, out var glyph) ? glyph : "\uE736";
 }
 @section Styles {
     <link rel="stylesheet" href="/css/manual.css" />
@@ -26,6 +44,7 @@
                 {
                     <li>
                         <a href="#@part.Id">
+                            <i class="icon" aria-hidden="true">@IconOf(part.Id)</i>
                             <span class="manual-toc-number">@number</span>
                             <span>@part.Title</span>
                         </a>

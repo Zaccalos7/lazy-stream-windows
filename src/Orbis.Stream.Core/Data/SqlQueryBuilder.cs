@@ -133,6 +133,33 @@ public sealed class SqlQueryBuilder
 
     public SqlQueryBuilder WherePredicate(string clause) => WhereRaw(clause, null);
 
+    /// <summary>
+    /// A <c>column IN (…)</c> over bound parameters: the values come from the caller, so they are
+    /// not embedded in the SQL. An empty list matches nothing rather than breaking the query.
+    /// </summary>
+    public SqlQueryBuilder WhereIn(string column, IReadOnlyCollection<string> values)
+    {
+        if (values.Count == 0)
+        {
+            var never = $"@p{_counter++}";
+            _conditions.Add($"1 = {never}");
+            _parameters.Add((never, 0L));
+            return this;
+        }
+
+        var names = new string[values.Count];
+        var index = 0;
+        foreach (var value in values)
+        {
+            var name = $"@p{_counter++}";
+            names[index++] = name;
+            _parameters.Add((name, value));
+        }
+
+        _conditions.Add($"{column} IN ({string.Join(", ", names)})");
+        return this;
+    }
+
     public SqlQueryBuilder OrderBy(string column, bool descending)
     {
         _orderBy.Add($"{column} {(descending ? "DESC" : "ASC")}");

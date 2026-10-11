@@ -560,6 +560,92 @@ public sealed class EndToEndApiTests : IClassFixture<ApplicationFixture>
         Assert.DoesNotContain("clip-24", secondHtml, StringComparison.Ordinal);
     }
 
+    [Fact]
+    public async Task TheLiveHistory_LeavesTheImagesAndOtherOverlaysOut()
+    {
+        // A live is often built over overlays and images, and those rows land on the history as if
+        // they were streams of their own: the grid lists lives, so only rows whose container is a
+        // video are drawn, whatever filters (or their absence) the page came in with.
+        var history = _fixture.Services.GetRequiredService<VideoLiveHistoryRepository>();
+        var videos = _fixture.Services.GetRequiredService<VideoRepository>();
+
+        var historyPkid = history.Insert(new VideoLiveHistoryEntity
+        {
+            FolderOfVideoToStream = "/clips",
+            LocalDateTimeStartLive = new DateTime(2026, 2, 1, 10, 0, 0, DateTimeKind.Local),
+            StreamUrl = "rtmp://ingest/live",
+            StreamKey = "key",
+            PlatformStreamName = "channel-images",
+            UserName = "orbis"
+        });
+
+        videos.Insert(new VideoEntity
+        {
+            Name = "real clip",
+            VideoPath = "/clips/real-clip.mp4",
+            Extension = "mp4",
+            VideoLiveHistoryId = historyPkid,
+            LiveStatus = LiveStatus.Ended,
+            ShouldBeStop = false,
+            StartDateLive = new DateTime(2026, 2, 1, 10, 0, 0, DateTimeKind.Local),
+            ChannelName = "channel-images",
+            VideoSettingId = 1
+        });
+
+        var gif = new VideoEntity
+        {
+            Name = "animated overlay",
+            VideoPath = "/clips/overlay.gif",
+            Extension = "gif",
+            VideoLiveHistoryId = historyPkid,
+            LiveStatus = LiveStatus.Ended,
+            ShouldBeStop = false,
+            StartDateLive = new DateTime(2026, 2, 1, 10, 0, 0, DateTimeKind.Local),
+            ChannelName = "channel-images",
+            VideoSettingId = 1
+        };
+        videos.Insert(gif);
+        videos.Insert(new VideoEntity
+        {
+            Name = "static overlay",
+            VideoPath = "/clips/overlay.PNG",
+            Extension = "PNG",
+            VideoLiveHistoryId = historyPkid,
+            LiveStatus = LiveStatus.Ended,
+            ShouldBeStop = false,
+            StartDateLive = new DateTime(2026, 2, 1, 10, 0, 0, DateTimeKind.Local),
+            ChannelName = "channel-images",
+            VideoSettingId = 1
+        });
+
+        // A container ffmpeg reads but the video settings do not offer is left out too: the
+        // whitelist is the format select of the settings, not the wider set of ffmpeg containers.
+        videos.Insert(new VideoEntity
+        {
+            Name = "off-list clip",
+            VideoPath = "/clips/off-list.m2ts",
+            Extension = "m2ts",
+            VideoLiveHistoryId = historyPkid,
+            LiveStatus = LiveStatus.Ended,
+            ShouldBeStop = false,
+            StartDateLive = new DateTime(2026, 2, 1, 10, 0, 0, DateTimeKind.Local),
+            ChannelName = "channel-images",
+            VideoSettingId = 1
+        });
+
+        // The fixture's database is shared by the tests of the class, so the page is narrowed with
+        // the channel the rows were seeded under: only this test's rows can be on it, whatever lives
+        // the tests before it streamed.
+        using var page = await _fixture.Client.GetAsync("/orbis/mainLiveHistory?channelName=channel-images");
+        Assert.Equal(HttpStatusCode.OK, page.StatusCode);
+        var html = await page.Content.ReadAsStringAsync();
+
+        Assert.Contains("real clip", html, StringComparison.Ordinal);
+        Assert.DoesNotContain("animated overlay", html, StringComparison.Ordinal);
+        Assert.DoesNotContain("static overlay", html, StringComparison.Ordinal);
+        Assert.DoesNotContain("off-list clip", html, StringComparison.Ordinal);
+    }
+
     [Theory]
     [InlineData("/orbis/mainMenu")]
     [InlineData("/orbis/mainLive")]

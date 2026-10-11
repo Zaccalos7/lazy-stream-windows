@@ -2,127 +2,127 @@
   "sections": [
     {
       "id": "dashboard",
-      "title": "The dashboard (el)",
-      "body": "The home of Orbis Stream: from here you reach live management, the preview, the layouts, the history and the settings.",
+      "title": "Ο πίνακας ελέγχου",
+      "body": "Η αρχική σελίδα του Orbis Stream: από εδώ φτάνετε στη διαχείριση μετάδοσης, στην προεπισκόπηση, στις διατάξεις, στο ιστορικό και στις ρυθμίσεις.",
       "steps": [
-        "Open a card to enter a section. (el)",
-        "The same areas are always one click away in the sidebar on the left. (el)"
+        "Ανοίξτε μια κάρτα για να μπείτε σε μια ενότητα.",
+        "Οι ίδιες περιοχές είναι πάντα ένα κλικ μακριά στην πλαϊνή γραμμή στα αριστερά."
       ],
       "figure": "dashboard",
-      "callout": "Open a card to enter that area."
+      "callout": "Ανοίξτε μια κάρτα για να μπείτε σε αυτή την περιοχή."
     },
     {
       "id": "startLive",
-      "title": "Start a live (el)",
-      "body": "Open Live and press Start live: Orbis asks which video/audio setting goes on air and on which channel, then opens the canvas to compose the scene.",
+      "title": "Έναρξη ζωντανής μετάδοσης",
+      "body": "Ανοίξτε το «Ζωντανά» και πατήστε «Έναρξη μετάδοσης»: το Orbis ρωτά ποια ρύθμιση βίντεο/ήχου βγαίνει στον αέρα και σε ποιο κανάλι, μετά ανοίγει τον καμβά για να συνθέσετε τη σκηνή.",
       "steps": [
-        "The highlighted button opens the wizard for a new live. (el)",
-        "Confirm at the end to go on air. (el)"
+        "Το τονισμένο κουμπί ανοίγει τον οδηγό για μια νέα μετάδοση.",
+        "Επιβεβαιώστε στο τέλος για να βγείτε στον αέρα."
       ],
       "figure": "startLive",
-      "callout": "Press Start live to begin."
+      "callout": "Πατήστε «Έναρξη μετάδοσης» για να ξεκινήσετε."
     },
     {
       "id": "wizard",
-      "title": "The start wizard (el)",
-      "body": "Two steps: the first picks the video and audio setting, the second the channel to stream to. Next goes forward, Back returns.",
+      "title": "Ο οδηγός έναρξης",
+      "body": "Δύο βήματα: το πρώτο επιλέγει τη ρύθμιση βίντεο και ήχου, το δεύτερο το κανάλι στο οποίο θα μεταδοθεί. Το «Επόμενο» προχωρά, το «Πίσω» επιστρέφει.",
       "steps": [
-        "Choose the setting of the live. (el)",
-        "Choose the channel (for TikTok, type the key of the live too). (el)",
-        "Compose / Next opens the canvas. (el)"
+        "Επιλέξτε τη ρύθμιση της μετάδοσης.",
+        "Επιλέξτε το κανάλι (για το TikTok, πληκτρολογήστε και το κλειδί της μετάδοσης).",
+        "Το «Σύνθεση / Επόμενο» ανοίγει τον καμβά."
       ],
       "figure": "wizard",
-      "callout": "Next moves to the second step."
+      "callout": "Το «Επόμενο» μεταβαίνει στο δεύτερο βήμα."
     },
     {
       "id": "playlist",
-      "title": "Stream a folder (playlist) (el)",
-      "body": "Instead of a single scene you can stream every video of a folder, one after another.",
+      "title": "Μετάδοση φακέλου (λίστα αναπαραγωγής)",
+      "body": "Αντί για μία μεμονωμένη σκηνή μπορείτε να μεταδώσετε κάθε βίντεο ενός φακέλου, το ένα μετά το άλλο.",
       "steps": [
-        "Press Start playlist. (el)",
-        "Choose setting and channel, then the folder of videos. (el)",
-        "Confirm to go on air. (el)"
+        "Πατήστε «Έναρξη λίστας αναπαραγωγής».",
+        "Επιλέξτε ρύθμιση και κανάλι, μετά τον φάκελο με τα βίντεο.",
+        "Επιβεβαιώστε για να βγείτε στον αέρα."
       ],
       "figure": "playlist",
-      "callout": "Start playlist streams a whole folder in sequence."
+      "callout": "Η «Έναρξη λίστας αναπαραγωγής» μεταδίδει ολόκληρο τον φάκελο διαδοχικά."
     },
     {
       "id": "scene",
-      "title": "Compose the scene (el)",
-      "body": "The canvas is where a live is assembled: drop your sources (screen, window, camera, audio) into the slots, then add overlays on top.",
+      "title": "Σύνθεση της σκηνής",
+      "body": "Ο καμβάς είναι εκεί όπου συναρμολογείται μια μετάδοση: ρίξτε τις πηγές σας (οθόνη, παράθυρο, κάμερα, ήχο) στις υποδοχές και μετά προσθέστε επικαλύψεις από πάνω.",
       "steps": [
-        "Add a source to a slot. (el)",
-        "Add or drop overlays and arrange them. (el)",
-        "Confirm to start the live. (el)"
+        "Προσθέστε μια πηγή σε μια υποδοχή.",
+        "Προσθέστε ή ρίξτε επικαλύψεις και τακτοποιήστε τις.",
+        "Επιβεβαιώστε για να ξεκινήσει η μετάδοση."
       ],
       "figure": "scene",
-      "callout": "The canvas: sources in the slots, overlays on top."
+      "callout": "Ο καμβάς: οι πηγές στις υποδοχές, οι επικαλύψεις από πάνω."
     },
     {
       "id": "sceneDeck",
-      "title": "The scene deck (el)",
-      "body": "The scene deck puts a video, a banner or an image on air in place of the live, the way a studio switches scene. Every button can carry a name and a keyboard shortcut.",
+      "title": "Το πλαίσιο σκηνής",
+      "body": "Το πλαίσιο σκηνής βάζει ένα βίντεο, ένα πανό ή μια εικόνα στον αέρα στη θέση της μετάδοσης, όπως ένα στούντιο αλλάζει σκηνή. Κάθε κουμπί μπορεί να έχει όνομα και συντόμευση πληκτρολογίου.",
       "steps": [
-        "Open the deck from a live row or the preview. (el)",
-        "Press a button to take it on air; Resume live brings the live back. (el)"
+        "Ανοίξτε το πλαίσιο από μια γραμμή μετάδοσης ή την προεπισκόπηση.",
+        "Πατήστε ένα κουμπί για να το βάλετε στον αέρα· η «Συνέχιση μετάδοσης» επαναφέρει τη μετάδοση."
       ],
       "figure": "sceneDeck",
-      "callout": "The scene deck switches what is on air."
+      "callout": "Το πλαίσιο σκηνής αλλάζει αυτό που είναι στον αέρα."
     },
     {
       "id": "preview",
-      "title": "The preview (el)",
-      "body": "The preview shows what a live is broadcasting right now, with the health of the stream, the bitrate and the frame rate.",
+      "title": "Η προεπισκόπηση",
+      "body": "Η προεπισκόπηση δείχνει τι μεταδίδει μια μετάδοση αυτή τη στιγμή, με την υγεία της ροής, τον ρυθμό μετάδοσης και τον ρυθμό καρέ.",
       "steps": [
-        "Watch the live and its data. (el)",
-        "Open the scene deck or stop the live from here. (el)"
+        "Παρακολουθήστε τη μετάδοση και τα δεδομένα της.",
+        "Ανοίξτε το πλαίσιο σκηνής ή σταματήστε τη μετάδοση από εδώ."
       ],
       "figure": "preview",
-      "callout": "The live on air, as it is being sent."
+      "callout": "Η μετάδοση στον αέρα, όπως αποστέλλεται."
     },
     {
       "id": "layouts",
-      "title": "Layouts (el)",
-      "body": "A layout is the skeleton of a live: the slots and the overlays, saved under a name to be reused. The wizard opens a layout as its slots.",
+      "title": "Διατάξεις",
+      "body": "Μια διάταξη είναι ο σκελετός μιας μετάδοσης: οι υποδοχές και οι επικαλύψεις, αποθηκευμένες με ένα όνομα για επαναχρήση. Ο οδηγός ανοίγει μια διάταξη ως τις υποδοχές της.",
       "steps": [
-        "Press New layout. (el)",
-        "Draw the slots and the overlays, then save it. (el)"
+        "Πατήστε «Νέα διάταξη».",
+        "Σχεδιάστε τις υποδοχές και τις επικαλύψεις και μετά αποθηκεύστε τη."
       ],
       "figure": "layouts",
-      "callout": "New layout opens the canvas to draw a reusable scene."
+      "callout": "Η «Νέα διάταξη» ανοίγει τον καμβά για να σχεδιάσετε μια επαναχρησιμοποιήσιμη σκηνή."
     },
     {
       "id": "history",
-      "title": "Live history (el)",
-      "body": "Every live you started is kept here with its platform, channel, folder and outcome.",
+      "title": "Ιστορικό μεταδόσεων",
+      "body": "Κάθε μετάδοση που ξεκινήσατε φυλάσσεται εδώ με την πλατφόρμα, το κανάλι, τον φάκελο και το αποτέλεσμά της.",
       "steps": [
-        "Start the same live again, or open its details. (el)",
-        "Play a spot, link a setting, or delete the row. (el)"
+        "Ξεκινήστε ξανά την ίδια μετάδοση ή ανοίξτε τις λεπτομέρειές της.",
+        "Αναπαράγετε ένα σποτ, συνδέετε μια ρύθμιση ή διαγράφετε τη γραμμή."
       ],
       "figure": "history",
-      "callout": "The lives you started, ready to start again."
+      "callout": "Οι μεταδόσεις που ξεκινήσατε, έτοιμες να ξεκινήσουν ξανά."
     },
     {
       "id": "taskManager",
-      "title": "Task manager (el)",
-      "body": "How the PC is doing: CPU, RAM, disks, network, GPU, the temperatures and the FFmpeg processes of the live.",
+      "title": "Διαχείριση εργασιών",
+      "body": "Πώς τα πάει ο υπολογιστής: CPU, RAM, δίσκοι, δίκτυο, GPU, οι θερμοκρασίες και οι διεργασίες FFmpeg της μετάδοσης.",
       "steps": [
-        "Watch the meters while a live runs. (el)",
-        "Check that the machine keeps up with the stream. (el)"
+        "Παρακολουθήστε τα μετρητικά όσο τρέχει μια μετάδοση.",
+        "Ελέγξτε ότι το μηχάνημα ανταποκρίνεται στη ροή."
       ],
       "figure": "taskManager",
-      "callout": "Resources and FFmpeg activity, in real time."
+      "callout": "Πόροι και δραστηριότητα FFmpeg, σε πραγματικό χρόνο."
     },
     {
       "id": "settings",
-      "title": "Settings (el)",
-      "body": "Under Settings you find the video and audio settings, the channels, the theme, the language and this guide. The sidebar carries the theme, the language and About from anywhere.",
+      "title": "Ρυθμίσεις",
+      "body": "Στις Ρυθμίσεις βρίσκετε τις ρυθμίσεις βίντεο και ήχου, τα κανάλια, το θέμα, τη γλώσσα και αυτόν τον οδηγό. Η πλαϊνή γραμμή κουβαλά το θέμα, τη γλώσσα και το «Σχετικά» από παντού.",
       "steps": [
-        "Video & audio: create the settings and activate those allowed on air. (el)",
-        "Channels: add the platforms and their stream keys. (el)"
+        "Βίντεο και ήχος: δημιουργήστε τις ρυθμίσεις και ενεργοποιήστε αυτές που επιτρέπονται στον αέρα.",
+        "Κανάλια: προσθέστε τις πλατφόρμες και τα κλειδιά μετάδοσής τους."
       ],
       "figure": "settings",
-      "callout": "Settings groups video/audio, channels and this guide."
+      "callout": "Οι Ρυθμίσεις ομαδοποιούν βίντεο/ήχο, κανάλια και αυτόν τον οδηγό."
     }
   ]
 }

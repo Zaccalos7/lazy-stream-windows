@@ -149,9 +149,9 @@ the `orbis-lang` cookie and also localizes the backend messages.
 
 ### Languages
 
-The interface ships in 20 languages: Italian, English, German, Spanish, French, Portuguese,
+The interface ships in 21 languages: Italian, English, German, Spanish, French, Portuguese,
 Russian, Chinese, Korean, Japanese, Hindi, Arabic, Romanian, Danish, Dutch, Filipino, Turkish,
-Latin, Klingon and Hodor. Each one is a pair of bundles:
+Latin, Klingon, Hodor and Greek. Each one is a pair of bundles:
 
 - `src/Orbis.Stream.Core/Ui/ui.<lang>.json`, the strings of the pages, with the keys in the order
   of the English bundle;
@@ -167,7 +167,7 @@ lost, a language without its flag or its messages, and a lone apostrophe.
 ### User guide
 
 `/orbis/manual` is the user guide of the application: the dashboard and the sidebar both open it.
-It runs in every one of the 20 languages, one page per feature, and every page carries a real
+It runs in every one of the 21 languages, one page per feature, and every page carries a real
 screenshot of the app in that language with a callout arrow drawn on the element it talks about
 (`wwwroot/manual/<lang>/<figure>.webp`). Two buttons print it or save it as a PDF through the
 browser print dialog; the print stylesheet turns the guide into one page per feature.

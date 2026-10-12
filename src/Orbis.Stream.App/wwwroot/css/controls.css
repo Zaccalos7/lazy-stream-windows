@@ -67,6 +67,7 @@
   color: var(--linkedin);
   background: color-mix(in srgb, var(--linkedin) 16%, var(--control));
   border-color: color-mix(in srgb, var(--linkedin) 42%, var(--stroke-strong));
+  border-width: 2px;
 }
 .btn.brand.linkedin:hover {
   color: var(--linkedin);

@@ -1825,6 +1825,8 @@ public sealed class FfmpegVideoPlaylistStreamer : IVideoPlaylistStreamer
         StreamPlatform.Kick => "Kick",
         StreamPlatform.Facebook => "Facebook Gaming",
         StreamPlatform.TikTok => "TikTok",
+        StreamPlatform.Rumble => "Rumble",
+        StreamPlatform.X => "X",
         _ => "RTMP"
     };
 

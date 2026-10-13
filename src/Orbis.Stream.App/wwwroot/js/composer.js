@@ -1228,22 +1228,11 @@
   });
 
   window.chrome?.webview?.addEventListener("message", event => {
-    if (typeof event.data === "string") {
-      try {
-        const payload = JSON.parse(event.data);
-        if (payload.type === "browseVideo" && payload.path) {
-          addFile(payload.path, pendingDrop);
-          pendingDrop = null;
-          return;
-        }
-      } catch {
-        // Plain string from drop
-        if (!pendingDrop) return;
-        const at = pendingDrop;
-        pendingDrop = null;
-        addFile(event.data, at);
-      }
-    }
+    // Only the bare path the host answers a drop with: its JSON replies are for other pickers.
+    if (!pendingDrop || typeof event.data !== "string" || event.data.startsWith("{")) return;
+    const at = pendingDrop;
+    pendingDrop = null;
+    addFile(event.data, at);
   });
 
   const fileOption = path => ({
@@ -1267,7 +1256,8 @@
 
   root.querySelector("[data-composer-add-path]")?.addEventListener("click", () => {
     if (!pathBox.value.trim() && window.chrome?.webview) {
-      window.chrome.webview.postMessage("browseVideo");
+      // The picked path fills the box as a drop on it would (site.js), and the box adds it.
+      window.orbisPickVideo?.(pathBox);
     } else {
       addFile(pathBox.value);
       pathBox.value = "";

@@ -157,22 +157,23 @@ public partial class MainWindow : Window
             return;
         }
 
-        if (message is "\"browseVideo\"" or "\"browseFolder\"")
+        // A video file is picked by the page itself (site.js, orbisPickVideo), with the dialog of the
+        // browser: the one opened here froze blank on some machines while listing the folder.
+        if (message == "\"browseFolder\"")
         {
             // Not from inside this handler: WebView2 is still waiting for it to return, and a modal
             // dialog opened here runs a message loop of its own underneath that call - the dialog
             // is drawn blank and both windows stop answering ("Not responding"). Posted to the
             // dispatcher, the dialog opens once the handler has returned and WebView2 is free.
-            var type = message.Trim('"');
-            Dispatcher.InvokeAsync(() => Browse(type));
+            Dispatcher.InvokeAsync(BrowseFolder);
         }
     }
 
     /// <summary>Whether a picker is open: a second click while it is up opens nothing more.</summary>
     private bool _browsing;
 
-    /// <summary>The picker the page asked for (<c>browseVideo</c>, <c>browseFolder</c>); what was picked goes back to the page.</summary>
-    private void Browse(string type)
+    /// <summary>The folder picker the page asked for (<c>browseFolder</c>); what was picked goes back to the page.</summary>
+    private void BrowseFolder()
     {
         if (_browsing || Browser.CoreWebView2 is null)
         {
@@ -182,25 +183,12 @@ public partial class MainWindow : Window
         _browsing = true;
         try
         {
-            string? path = null;
-            if (type == "browseVideo")
-            {
-                var dialog = new OpenFileDialog
-                {
-                    Filter = "Video Files|*.mp4;*.mkv;*.avi;*.mov;*.wmv;*.flv;*.webm;*.m4v;*.mpeg;*.mpg|All Files|*.*"
-                };
-                path = dialog.ShowDialog(this) == true ? dialog.FileName : null;
-            }
-            else
-            {
-                var dialog = new OpenFolderDialog();
-                path = dialog.ShowDialog(this) == true ? dialog.FolderName : null;
-            }
-
-            if (path is not null)
+            var dialog = new OpenFolderDialog();
+            if (dialog.ShowDialog(this) == true)
             {
                 // Serialized rather than written by hand, so whatever the path holds the page reads JSON.
-                Browser.CoreWebView2.PostWebMessageAsString(JsonSerializer.Serialize(new { type, path }));
+                Browser.CoreWebView2.PostWebMessageAsString(
+                    JsonSerializer.Serialize(new { type = "browseFolder", path = dialog.FolderName }));
             }
         }
         finally

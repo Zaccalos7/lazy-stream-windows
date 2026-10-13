@@ -1280,6 +1280,36 @@ document.addEventListener("drop", event => {
   window.chrome.webview.postMessageWithAdditionalObjects("dropPath", files);
 });
 
+// The picker of a video file is the browser's own, the one the overlay upload uses, not a dialog
+// opened by the host: that one ran in the process of the application and on some machines froze
+// blank ("Not responding") while listing the folder, where the browser's, run by the WebView2
+// process, opens fine. Its File has no path either, so it takes the route of a drop to the host.
+const videoPicker = Object.assign(document.createElement("input"), {
+  type: "file",
+  hidden: true,
+  accept: ".mp4,.mkv,.avi,.mov,.wmv,.flv,.webm,.m4v,.mpeg,.mpg"
+});
+videoPicker.addEventListener("change", () => {
+  if (videoPicker.files?.length) window.chrome.webview.postMessageWithAdditionalObjects("dropPath", videoPicker.files);
+  // Emptied, so picking the same file again still reports a change.
+  videoPicker.value = "";
+});
+// Nothing picked: no path will come back, and a field left waiting would take the next one,
+// meant for someone else (a video dropped on the canvas of the composer).
+videoPicker.addEventListener("cancel", () => {
+  dropTarget = null;
+  dropZone = null;
+});
+document.body.append(videoPicker);
+
+/** Asks for a video file; its path fills the field as if the file had been dropped on it. */
+window.orbisPickVideo = field => {
+  if (!window.chrome?.webview) return;
+  dropTarget = field;
+  dropZone = field.closest(".dropzone");
+  videoPicker.click();
+};
+
 document.addEventListener("click", event => {
   const browseFolderBtn = event.target.closest?.("[data-playlist-browse-folder]");
   if (browseFolderBtn && window.chrome?.webview) {
@@ -1294,11 +1324,7 @@ document.addEventListener("click", event => {
   const browseVideoBtn = event.target.closest?.("[data-browse-video]");
   if (browseVideoBtn && window.chrome?.webview) {
     const field = browseVideoBtn.parentElement?.querySelector("[data-drop-path]") || browseVideoBtn.closest(".field")?.querySelector("input");
-    if (field) {
-      dropTarget = field;
-      dropZone = field.closest(".dropzone");
-      window.chrome.webview.postMessage("browseVideo");
-    }
+    if (field) window.orbisPickVideo(field);
   }
 });
 
@@ -1308,7 +1334,7 @@ window.chrome?.webview?.addEventListener("message", event => {
 
   try {
     const payload = JSON.parse(event.data);
-    if ((payload.type === "browseFolder" || payload.type === "browseVideo") && payload.path) {
+    if (payload.type === "browseFolder" && payload.path) {
       path = payload.path;
     } else {
       return; // Ignore other JSON messages we don't handle here

@@ -103,6 +103,11 @@ a.row-card:hover { transform: translateX(2px); box-shadow: var(--shadow-lift); b
 .row-card.tiktok > .icon.lead svg { filter: drop-shadow(-0.8px -0.8px 0 var(--tiktok-cyan)) drop-shadow(0.8px 0.8px 0 var(--tiktok)); }
 /* Kick's mark is black on its green, as on the brand buttons: white on that green cannot be read. */
 .row-card.kick > .icon.lead { color: #000000; }
+/* Rumble's mark is black on its green, for the same reason as Kick's. */
+.row-card.rumble { --hue: var(--rumble); }
+.row-card.rumble > .icon.lead { color: #000000; }
+/* X's lead is its white mark on black, as X draws itself. */
+.row-card.x { --hue: #000000; }
 .row-card > .icon:last-child:not(.lead) { color: var(--text-3); }
 a.row-card:hover > .icon:last-child { color: var(--hue); }
 
@@ -239,6 +244,10 @@ a:hover > .platform-mark { background: var(--tint); }
 .platform-tiktok { color: var(--text); }
 .platform-tiktok svg { filter: drop-shadow(-0.8px -0.8px 0 var(--tiktok-cyan)) drop-shadow(0.8px 0.8px 0 var(--tiktok)); }
 .btn.live-indicator .platform-tiktok { color: var(--on-accent); }
+.platform-rumble { color: var(--rumble); }
+/* X: its mark in the colour of the text, black on white and white on black. */
+.platform-x { color: var(--text); }
+.btn.live-indicator .platform-x { color: var(--on-accent); }
 .platform-generic { color: var(--text-2); }
 
 .toolbar { display: flex; gap: 10px; align-items: end; flex-wrap: wrap; margin-bottom: 14px; }

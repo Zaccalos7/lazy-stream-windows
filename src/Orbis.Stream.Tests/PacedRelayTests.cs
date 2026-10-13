@@ -34,6 +34,14 @@ public sealed class StreamPlatformTests
     [InlineData("rtmp://push-rtmp-f5-tt02.tiktokcdn-eu.com/game/stream-123", StreamPlatform.TikTok)]
     [InlineData("rtmp://push.tiktokcdn-us.com/live/stream-123", StreamPlatform.TikTok)]
     [InlineData("rtmp://nottiktokcdn.com/live/key", StreamPlatform.Generic)]
+    // Rumble: the universal server of a Static Stream Key, or the server and slot of one stream.
+    [InlineData("rtmp://rtmp.rumble.com/live/r-abcdefghijklmnopqrstuvw", StreamPlatform.Rumble)]
+    [InlineData("rtmp://ls8.live.rmbl.ws/slot-20/abcd-efgh-ijkl", StreamPlatform.Rumble)]
+    [InlineData("rtmp://notrmbl.ws/live/key", StreamPlatform.Generic)]
+    // X: one server per region, over RTMP on 80 or RTMPS on 443.
+    [InlineData("rtmps://de.pscp.tv:443/x/abcdefghijkl", StreamPlatform.X)]
+    [InlineData("rtmp://va.pscp.tv:80/x/abcdefghijkl", StreamPlatform.X)]
+    [InlineData("rtmp://notpscp.tv/x/key", StreamPlatform.Generic)]
     public void Detect_ReadsThePlatformOffTheHost(string? url, StreamPlatform expected) =>
         Assert.Equal(expected, StreamPlatforms.Detect(url));
 
@@ -73,6 +81,8 @@ public sealed class StreamPlatformTests
 
         Assert.Same(StreamPlatformProfile.Kick, StreamPlatformProfile.For("rtmps://fa723fc1b171.global-contribute.live-video.net/app/key"));
         Assert.Same(StreamPlatformProfile.Facebook, StreamPlatformProfile.For("rtmps://rtmp-api.facebook.com:443/rtmp/key"));
+        Assert.Same(StreamPlatformProfile.Rumble, StreamPlatformProfile.For("rtmp://ls8.live.rmbl.ws/slot-20/key"));
+        Assert.Same(StreamPlatformProfile.X, StreamPlatformProfile.For("rtmps://de.pscp.tv:443/x/key"));
     }
 
     [Fact]
@@ -120,11 +130,15 @@ public sealed class StreamPlatformTests
         // A custom ingest has no relay to measure the network on, and keeps the rate it always had.
         Assert.Null(StreamPlatformProfile.Generic.Adaptation);
         Assert.Equal(TimeSpan.Zero, StreamPlatformProfile.Generic.RateBuffer);
-        foreach (var profile in new[] { StreamPlatformProfile.Twitch, StreamPlatformProfile.YouTube, StreamPlatformProfile.Kick, StreamPlatformProfile.Facebook })
+        foreach (var profile in new[] { StreamPlatformProfile.Twitch, StreamPlatformProfile.YouTube, StreamPlatformProfile.Kick, StreamPlatformProfile.Facebook, StreamPlatformProfile.Rumble })
         {
             Assert.Equal(TimeSpan.FromSeconds(1), profile.RateBuffer);
             Assert.Equal(2, profile.KeyframeSeconds);
         }
+
+        // X asks for its keyframe every three seconds.
+        Assert.Equal(TimeSpan.FromSeconds(1), StreamPlatformProfile.X.RateBuffer);
+        Assert.Equal(3, StreamPlatformProfile.X.KeyframeSeconds);
     }
 }
 

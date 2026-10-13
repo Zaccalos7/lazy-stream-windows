@@ -55,7 +55,20 @@ public sealed class VideoService
 
     public SpringPage<VideoRequest> GetAllVideoList(IReadOnlyDictionary<string, string> filters, PageRequest page)
     {
-        var result = _videoRepository.FindPaged(filters, page);
+        // The history is a list of lives, and a live is made of videos: the gif, the cover and the
+        // other overlays a stream can be built of are sources a live used, not rows to book later.
+        // The whitelist of the video settings' format select always narrows the list, whatever
+        // filters the page or the compiled build sent, so the grid shows one row per video format
+        // the application offers.
+        var historyFilters = new Dictionary<string, string>(StringComparer.Ordinal);
+        foreach (var (property, value) in filters)
+        {
+            historyFilters[property] = value;
+        }
+
+        historyFilters[VideoRepository.VideoExtensionsFilter] = bool.TrueString;
+
+        var result = _videoRepository.FindPaged(historyFilters, page);
         _logger.LogInformation("{Message}", _localizer.PrintMessage("recovered.video"));
         return SpringPageFactory.Create(Map(result, WithRelations), page.Sorts);
     }

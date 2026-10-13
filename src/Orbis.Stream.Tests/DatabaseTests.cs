@@ -657,6 +657,61 @@ public sealed class VideoRepositoryTests
     }
 
     [Fact]
+    public void FindPaged_KeepsOnlyTheRowsWhoseContainerIsAVideo()
+    {
+        using var database = new TemporaryDatabase();
+        var videos = database.Repository<VideoRepository>();
+        videos.Insert(Video(1, LiveStatus.Ended, "clip a", database.LiveHistoryId));
+
+        var webm = Video(2, LiveStatus.Ended, "clip b", database.LiveHistoryId);
+        webm.VideoPath = "/videos/clip-b.webm";
+        webm.Extension = "webm";
+        videos.Insert(webm);
+
+        var gif = Video(3, LiveStatus.Ended, "overlay gif", database.LiveHistoryId);
+        gif.VideoPath = "/videos/overlay.gif";
+        gif.Extension = "gif";
+        videos.Insert(gif);
+
+        var png = Video(4, LiveStatus.Ended, "overlay png", database.LiveHistoryId);
+        png.VideoPath = "/videos/overlay.PNG";
+        png.Extension = "PNG";
+        videos.Insert(png);
+
+        // m2ts is a container ffmpeg reads, but it is not one of the formats the video settings
+        // offer: the whitelist is that select, not the wider set of containers.
+        var m2ts = Video(5, LiveStatus.Ended, "off-list clip", database.LiveHistoryId);
+        m2ts.VideoPath = "/videos/off-list.m2ts";
+        m2ts.Extension = "m2ts";
+        videos.Insert(m2ts);
+
+        var page = videos.FindPaged(
+            new Dictionary<string, string> { [VideoRepository.VideoExtensionsFilter] = "true" },
+            PageRequest.Default(10, "pkid", false));
+
+        // An uppercase image is kept out as much as a lower-case one: the whitelist is case-blind.
+        Assert.Equal(2, page.TotalElements);
+        Assert.Equal(["clip a", "clip b"], page.Items.Select(video => video.Name));
+    }
+
+    [Fact]
+    public void FindPaged_WithoutTheWhitelistStillAnswerEveryRow()
+    {
+        using var database = new TemporaryDatabase();
+        var videos = database.Repository<VideoRepository>();
+        videos.Insert(Video(1, LiveStatus.Ended, "clip a", database.LiveHistoryId));
+
+        var gif = Video(2, LiveStatus.Ended, "overlay gif", database.LiveHistoryId);
+        gif.VideoPath = "/videos/overlay.gif";
+        gif.Extension = "gif";
+        videos.Insert(gif);
+
+        // The whitelist is a pick of the caller: the plain list still carries the images, so the
+        // other pages of the app keep the behavior they had.
+        Assert.Equal(2, videos.FindPaged(new Dictionary<string, string>(), PageRequest.Default(10, "pkid", false)).TotalElements);
+    }
+
+    [Fact]
     public void SetStopFlag_UpdatesThePollingFlagOfTheStreamer()
     {
         using var database = new TemporaryDatabase();

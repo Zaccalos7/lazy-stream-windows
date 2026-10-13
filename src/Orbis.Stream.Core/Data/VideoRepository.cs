@@ -22,6 +22,15 @@ public sealed class VideoRepository
     /// </summary>
     public const string TitleSearchFilter = "titleSearch";
 
+    /// <summary>
+    /// The filter that keeps the list to rows whose container is one of the video formats the video
+    /// settings offer in their select. A live is often built over overlays and images (gif, png, …),
+    /// and those rows end up on the history as if they were streams of their own: the history lists
+    /// lives, so the alias that says "the list wants the video formats only" is sent by the only
+    /// caller that shows it. Not a column of the entity, as <see cref="TitleSearchFilter"/> is not.
+    /// </summary>
+    public const string VideoExtensionsFilter = "videoExtensions";
+
     private const string LikeEscape = "\\";
 
     private readonly SqliteConnectionFactory _connectionFactory;
@@ -52,9 +61,17 @@ public sealed class VideoRepository
 
         var builder = new SqlQueryBuilder { TableAlias = "t" };
         var needsHistoryJoin = false;
+        var wantsVideoFormatsOnly = filters.ContainsKey(VideoExtensionsFilter);
 
         foreach (var (property, value) in filters)
         {
+            if (property.Equals(VideoExtensionsFilter, StringComparison.Ordinal))
+            {
+                // The format whitelist is a kind of filter, but not a column: it is applied after
+                // the loop, where it can widen to more than an equality.
+                continue;
+            }
+
             if (property.Equals("platform", StringComparison.Ordinal))
             {
                 // The compiled React build sends "platform" as filter of this endpoint; it maps to
@@ -92,6 +109,16 @@ public sealed class VideoRepository
             }
 
             builder.OrderBy(builder.Column(field), sort.Descending);
+        }
+
+        if (wantsVideoFormatsOnly)
+        {
+            // The whitelist is the one the video settings offer in their format select, not the
+            // wider set of containers ffmpeg happens to read: the history keeps the formats the
+            // application streams, and a file ffmpeg could open but the form cannot pick is not one
+            // of them. The extensions are stored as the file leaves them, so "MP4" and "mp4" coexist;
+            // the column is lowered, and the whitelist is already lower case.
+            builder.WhereIn($"LOWER({builder.Qualified("extension")})", FfmpegCodecCatalog.VideoFormats);
         }
 
         var where = builder.WhereClause;

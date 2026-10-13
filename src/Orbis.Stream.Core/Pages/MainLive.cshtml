@@ -70,12 +70,17 @@
 </div>
 
 @* Start a new live: the video/audio setting first, then where it goes, a step at a time. What goes
-   on air is chosen next, on the canvas: this form is never sent, its two picks travel on. *@
-<dialog class="dialog wide" id="start-dialog" data-open="@(Model.OpenStart ? "" : "0")" data-wizard-step="1">
+   on air is chosen next, on the canvas: this form is never sent, its two picks travel on. The sheet
+   takes nearly the whole window and lays the choices of a step out in columns: every platform
+   brings two settings of its own, and one row each made a list the eye had to travel down. The
+   head and the foot stay where they are while the choices scroll between them. *@
+<dialog class="dialog wizard" id="start-dialog" data-open="@(Model.OpenStart ? "" : "0")" data-wizard-step="1">
     <form>
+        <div class="dialog-head">
+            <h2 class="grow">@T["startNewLiveTitle"]</h2>
+            <button class="btn subtle icon-only" type="button" commandfor="start-dialog" command="close" title="@T["cancel"]" aria-label="@T["cancel"]"><i class="icon">&#xE711;</i></button>
+        </div>
         <div class="dialog-body">
-            <h2>@T["startNewLiveTitle"]</h2>
-
             <div data-wizard-panel="1">
                 <partial name="_StartWizardSetting" model="Model" />
             </div>
@@ -130,10 +135,15 @@
     </div>
 </dialog>
 
-<dialog class="dialog wide" id="playlist-dialog" data-busy-host data-open="@(Model.OpenPlaylist ? "" : "0")">
+@* The wizard of a playlist: the same two lists as the live one, both on the same sheet with the
+   folder under them, laid out the same way (see start-dialog). *@
+<dialog class="dialog wizard" id="playlist-dialog" data-busy-host data-open="@(Model.OpenPlaylist ? "" : "0")">
     <form method="post" asp-page-handler="Playlist" asp-all-route-data="Model.FilterRoute">
+        <div class="dialog-head">
+            <h2 class="grow">@T["startPlaylistTitle"]</h2>
+            <button class="btn subtle icon-only" type="button" commandfor="playlist-dialog" command="close" title="@T["cancel"]" aria-label="@T["cancel"]"><i class="icon">&#xE711;</i></button>
+        </div>
         <div class="dialog-body">
-            <h2>@T["startPlaylistTitle"]</h2>
             @* Reopened after a refused folder: the reason goes where the user is looking, not under the backdrop. *@
             @if (Model.OpenPlaylist && Model.Notice is NoticeKind.Error && !string.IsNullOrEmpty(Model.NoticeText))
             {

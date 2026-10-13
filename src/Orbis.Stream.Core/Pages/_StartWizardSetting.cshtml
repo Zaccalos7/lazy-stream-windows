@@ -1,6 +1,8 @@
 @model MainLiveModel
 
-@* The first step of both wizards: the video/audio setting that goes on air. *@
+@* The first step of both wizards: the video/audio setting that goes on air. The settings are laid
+   out in columns (.choice-list.grid), each with the mark of the platform it was seeded for, so the
+   two of a platform are found by its colour before their names are read. *@
 <h3>@T["wizardStep1Title"]</h3>
 @if (Model.ActiveSettings.Count == 0)
 {
@@ -12,23 +14,44 @@
 }
 else
 {
-    <div class="choice-list section" style="margin-top: 8px;">
+    <div class="choice-list grid section" role="radiogroup" aria-label="@T["wizardStep1Title"]" style="margin-top: 8px;">
         @foreach (var setting in Model.ActiveSettings)
         {
             var displayTitle = SettingTitleView.Of(setting.Title, T);
-            <label class="choice">
+            var platform = MainChannelSettingModel.ChoiceOfSetting(setting.DefaultPlatformConfiguration);
+
+            // The size and the rate are said when the setting names them: TikTok stands up, and a
+            // setting without them goes out at the size of what it streams.
+            var details = new List<string> { setting.VideoCodecName ?? "–" };
+            if (setting.VideoWidth is > 0 && setting.VideoHeight is > 0)
+            {
+                details.Add($"{setting.VideoWidth}×{setting.VideoHeight}");
+            }
+
+            if (setting.FrameRate is > 0)
+            {
+                details.Add(setting.FrameRate.Value.ToString("0.##", System.Globalization.CultureInfo.InvariantCulture) + " fps");
+            }
+
+            details.Add(VideoSettingForm.FormatBitrate(setting.VideoBitrate));
+            details.Add(setting.VideoFormat?.ToUpperInvariant() ?? "–");
+            details.Add("GOP " + (setting.GopSize?.ToString(System.Globalization.CultureInfo.InvariantCulture) ?? "–"));
+            details.Add(T["audioBitrate"] + " " + VideoSettingForm.FormatBitrate(setting.AudioSettingRecord?.AudioBitrate));
+
+            <label class="choice @(platform?.Value)">
                 <input type="radio" name="settingId" value="@setting.Id" required />
+                @if (platform is not null)
+                {
+                    <svg class="choice-mark" viewBox="0 0 24 24" aria-hidden="true"><path d="@LiveLinkView.MarkupOf(platform.Value)" /></svg>
+                }
+                else
+                {
+                    @* A setting of the user's own, made for no platform in particular. *@
+                    <i class="icon" aria-hidden="true">&#xE713;</i>
+                }
                 <span class="grow">
                     <strong>@displayTitle</strong>
-                    @if (setting.IsDefaultConfiguration == true || (!string.IsNullOrEmpty(setting.DefaultPlatformConfiguration) && setting.Title == "Default Low " + setting.DefaultPlatformConfiguration))
-                    {
-                        <span class="badge">@setting.DefaultPlatformConfiguration</span>
-                    }
-                    <span class="caption" style="display: block;">
-                        @setting.VideoCodecName · @VideoSettingForm.FormatBitrate(setting.VideoBitrate) ·
-                        @setting.VideoFormat?.ToUpperInvariant() · GOP @(setting.GopSize?.ToString() ?? "–") ·
-                        @T["audioBitrate"] @VideoSettingForm.FormatBitrate(setting.AudioSettingRecord?.AudioBitrate)
-                    </span>
+                    <span class="caption" style="display: block;">@string.Join(" · ", details)</span>
                 </span>
             </label>
         }

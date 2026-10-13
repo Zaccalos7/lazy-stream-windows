@@ -5,7 +5,7 @@
 </a>
 
 Desktop application that streams local video files to Twitch, YouTube, Kick, Facebook Gaming,
-TikTok and any other RTMP-compatible platform.
+TikTok, Rumble, X and any other RTMP-compatible platform.
 
 The application is a native rewrite of the original Java Spring Boot + JCEF project:
 
@@ -240,6 +240,29 @@ picked, the `Default TikTok` and `Default Low TikTok` presets are 1080 × 1920 a
 the platform profile turns the frame of a live that would lie down (`StreamPlatformProfile.Orient`),
 so a landscape file or canvas is fitted into 9:16 with bands instead of being stretched. Delivery
 is the one of YouTube: ffmpeg publishes at real time with a short head start, with AAC at 48 kHz.
+
+### Rumble and X
+
+Both go out the way YouTube does: ffmpeg publishes at real time with a short head start, with AAC
+at 44.1 kHz and one picture format for the whole live. On top of that each gets what its ingest asks
+for (`StreamPlatformProfile.Rumble`, `StreamPlatformProfile.X`):
+
+|                        | Rumble                                                                                         | X                                                              |
+| ---------------------- | ---------------------------------------------------------------------------------------------- | -------------------------------------------------------------- |
+| Ingest                 | `rtmp://rtmp.rumble.com/live` (Static Stream Key) or `ls<N>.live.rmbl.ws/slot-<M>`, RTMP only  | `rtmps://<region>.pscp.tv:443/x`, region picked in the form    |
+| Stream key             | the Static Stream Key never changes, the key of a single stream does                           | persistent, one per source of Media Studio Producer            |
+| Rate control           | CBR, no B-frames, one reference frame                                                          | capped VBR                                                     |
+| Keyframe interval      | 2 s                                                                                            | 3 s                                                            |
+| `Default …` preset     | 1080p30 at 4.5 Mbps, AAC 128 kbit/s                                                            | 1080p30 at 9 Mbps, AAC 128 kbit/s                              |
+| `Default Low …` preset | 720p30 at 2.5 Mbps                                                                             | 720p30 at 4 Mbps                                               |
+
+Rumble is best set up with a Static Stream Key (_Account → Static stream key_), which keeps the same
+address and key from one live to the next. The channel form asks X for the region of its source
+instead of an address (`XIngestRegions`): a source belongs to the region it was made in, and the
+configuration keeps the RTMPS address of that server. A live to X reaches its source only: it goes
+on air once a broadcast is started on that source in Media Studio Producer, and a broadcast whose
+source stops sending times out for good. Neither platform has a player addressed by channel, so the
+preview keeps the local picture, and the icon of a live opens the channel (Rumble) or the profile (X).
 
 ### Scenes and overlays
 

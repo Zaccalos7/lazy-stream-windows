@@ -83,17 +83,26 @@ public sealed class DatabaseBootstrapper : IHostedService
         InitializeDefaultVideoSetting("Facebook Gaming", createHighQuality: false);
         InitializeDefaultVideoSetting("TikTok", createHighQuality: true);
         InitializeDefaultVideoSetting("TikTok", createHighQuality: false);
+        InitializeDefaultVideoSetting("Rumble", createHighQuality: true);
+        InitializeDefaultVideoSetting("Rumble", createHighQuality: false);
+        InitializeDefaultVideoSetting("X", createHighQuality: true);
+        InitializeDefaultVideoSetting("X", createHighQuality: false);
         UpgradeLegacyYouTubeDefaults();
     }
 
     /// <summary>What a default setting is made of: everything the seed decides, per platform and level.</summary>
+    /// <param name="KeyframeSeconds">
+    /// The keyframe interval (the GOP size of the setting, in seconds): the two seconds every
+    /// platform takes, unless its own ingest asks for another one.
+    /// </param>
     private sealed record DefaultSpec(
         int Bitrate,
         int AudioBitrate,
         int? Width,
         int? Height,
         double? FrameRate,
-        (string Key, string Value)[] Options);
+        (string Key, string Value)[] Options,
+        int KeyframeSeconds = 2);
 
     /// <summary>
     /// YouTube, the setting it goes on air with. A fixed 1080p30 at a constant 6 Mbps: YouTube
@@ -155,6 +164,37 @@ public sealed class DatabaseBootstrapper : IHostedService
         2_500_000, 128_000, 720, 1280, 30,
         [("preset", "superfast"), ("profile", "main"), ("x264-params", "scenecut=0:rc_lookahead=0")]);
 
+    /// <summary>
+    /// Rumble: a fixed 1080p30 at 4.5 Mbps, the top of the 2.5 to 4.5 Mbps its settings page gives
+    /// that size and rate (8 Mbps is the most it takes at all), with the 128 Kbps of sound it asks
+    /// for. The constant rate, the B-frames it takes none of and its single reference frame are
+    /// the profile's (StreamPlatformProfile.Rumble), so they hold for any setting sent there.
+    /// </summary>
+    private static readonly DefaultSpec RumbleHigh = new(
+        4_500_000, 128_000, 1920, 1080, 30,
+        [("preset", "veryfast"), ("profile", "high")]);
+
+    /// <summary>Rumble on a light machine: 720p30 at 2.5 Mbps, the middle of the 2 to 3 Mbps it gives that size.</summary>
+    private static readonly DefaultSpec RumbleLow = new(
+        2_500_000, 128_000, 1280, 720, 30,
+        [("preset", "superfast"), ("profile", "main"), ("x264-params", "scenecut=0:rc_lookahead=0")]);
+
+    /// <summary>
+    /// X: a fixed 1080p30 at 9 Mbps, the bitrate Media Studio Producer recommends, under the 12 Mbps
+    /// its sources take, with the 128 Kbps of sound that is both what X recommends and the most it
+    /// takes. The keyframe comes every three seconds, the interval X asks for (StreamPlatformProfile.X).
+    /// </summary>
+    private static readonly DefaultSpec XHigh = new(
+        9_000_000, 128_000, 1920, 1080, 30,
+        [("preset", "veryfast"), ("profile", "high")],
+        KeyframeSeconds: 3);
+
+    /// <summary>X on a light machine: the configuration X recommends for a new source, 720p30 at 4 Mbps.</summary>
+    private static readonly DefaultSpec XLow = new(
+        4_000_000, 128_000, 1280, 720, 30,
+        [("preset", "superfast"), ("profile", "main"), ("x264-params", "scenecut=0:rc_lookahead=0")],
+        KeyframeSeconds: 3);
+
     private static DefaultSpec SpecOf(string platform, bool highQuality) => (platform, highQuality) switch
     {
         ("Twitch", true) => new(6_000_000, 160_000, null, null, null,
@@ -163,6 +203,8 @@ public sealed class DatabaseBootstrapper : IHostedService
         ("Kick", true) => KickHigh,
         ("Facebook Gaming", true) => FacebookGamingHigh,
         ("TikTok", true) => TikTokHigh,
+        ("Rumble", true) => RumbleHigh,
+        ("X", true) => XHigh,
         (_, true) => new(5_000_000, 128_000, null, null, null,
             [("preset", "veryfast"), ("tune", "zerolatency")]),
 
@@ -173,6 +215,8 @@ public sealed class DatabaseBootstrapper : IHostedService
         ("Kick", false) => KickLow,
         ("Facebook Gaming", false) => FacebookGamingLow,
         ("TikTok", false) => TikTokLow,
+        ("Rumble", false) => RumbleLow,
+        ("X", false) => XLow,
         _ => new(2_000_000, 64_000, 1280, 720, 30,
             [("preset", "ultrafast"), ("tune", "zerolatency")])
     };
@@ -218,7 +262,7 @@ public sealed class DatabaseBootstrapper : IHostedService
         setting.VideoWidth = spec.Width;
         setting.VideoHeight = spec.Height;
         setting.FrameRate = spec.FrameRate;
-        setting.GopSize = 2;
+        setting.GopSize = spec.KeyframeSeconds;
         setting.VideoFormat = "flv";
         setting.VideoSettingsOptions = spec.Options
             .Select(option => new VideoSettingsOptionEntity { Key = option.Key, Value = option.Value })

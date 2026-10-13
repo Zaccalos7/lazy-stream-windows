@@ -1363,6 +1363,15 @@ public static class FfmpegCommandBuilder
             }
         }
 
+        // What the ingest takes of the structure of the stream, like the constant rate above: no
+        // B-frames and one reference frame on Rumble (StreamPlatformProfile.SingleReference). After
+        // the options of the setting, so that one of them saying otherwise does not undo it; the
+        // two are options of every encoder, the GPU ones as much as x264.
+        if (profile is { SingleReference: true })
+        {
+            arguments.AddRange(["-bf", "0", "-refs", "1"]);
+        }
+
         if (!hasAudio)
         {
             return;

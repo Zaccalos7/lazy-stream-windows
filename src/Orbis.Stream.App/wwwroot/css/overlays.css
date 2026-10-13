@@ -21,6 +21,12 @@ dialog.dialog.x-wide { width: min(1140px, calc(100vw - 32px)); }
 /* A video setting, in both the places it is edited (the settings page and the live management): wide
    enough for five fields a row, and tall enough that the whole setting is read without a scroll. */
 dialog.dialog.settings { width: min(1280px, calc(100vw - 32px)); max-height: calc(100vh - 32px); }
+/* The wizards of a live and of a playlist: nearly the whole window, because every platform brings
+   two settings of its own and the choices of a step are laid out in columns that take the width
+   (.choice-list.grid). Its height is fixed, so the head and the foot stay where they are and only
+   the choices scroll between them. */
+dialog.dialog.wizard { width: calc(100vw - 48px); height: calc(100vh - 48px); }
+dialog.dialog.wizard[open] { max-height: calc(100vh - 48px); }
 /* The scene composer of the live wizard: nearly the whole window, because the canvas is the step. */
 dialog.dialog.compose { width: 100vw; height: 100vh; max-width: 100vw; max-height: 100vh; margin: 0; border-radius: 0; }
 .dialog-head { display: flex; flex: none; align-items: center; gap: 10px; padding: 14px 24px; border-bottom: 1px solid var(--stroke); }

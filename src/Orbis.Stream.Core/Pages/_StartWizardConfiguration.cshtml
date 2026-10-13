@@ -1,6 +1,7 @@
 @model MainLiveModel
 
-@* The second step of both wizards: where the live goes, and for the playlist, what is streamed. *@
+@* The second step of both wizards: where the live goes, and for the playlist, what is streamed. The
+   configurations are laid out in columns like the settings, each with the mark of its platform. *@
 <h3 class="section">@T["wizardStep2Title"]</h3>
 @if (Model.ActiveConfigurations.Count == 0)
 {
@@ -12,18 +13,20 @@
 }
 else
 {
-    <div class="choice-list section" style="margin-top: 8px;">
+    <div class="choice-list grid section" role="radiogroup" aria-label="@T["wizardStep2Title"]" style="margin-top: 8px;">
         @foreach (var configuration in Model.ActiveConfigurations)
         {
             // TikTok: its key is asked for below, and its live stands up (the canvas does too).
             var keyEachLive = Orbis.Stream.Core.Streaming.LiveStreamKeys.IsAskedFor(configuration.PlatformStreamName, configuration.StreamUrl);
             var upright = Orbis.Stream.Core.Streaming.StreamPlatformProfile.For(configuration.StreamUrl).Portrait || keyEachLive;
-            <label class="choice @(MainChannelSettingModel.ChoiceOf(configuration.PlatformStreamName, configuration.StreamUrl)?.Value)">
+            var choice = MainChannelSettingModel.ChoiceOf(configuration.PlatformStreamName, configuration.StreamUrl);
+            <label class="choice @(choice?.Value)">
                 <input type="radio" name="configurationId" value="@configuration.Id" required
                        data-key-each-live="@(keyEachLive ? "1" : null)" data-portrait="@(upright ? "1" : null)" />
+                <svg class="choice-mark" viewBox="0 0 24 24" aria-hidden="true"><path d="@LiveLinkView.MarkupOf(choice?.Value)" /></svg>
                 <span class="grow">
-                    <strong>@configuration.ChannelName</strong> · @(MainChannelSettingModel.ChoiceOf(configuration.PlatformStreamName, configuration.StreamUrl)?.Label ?? configuration.PlatformStreamName)
-                    <span class="caption" style="display: block;">@configuration.StreamUrl</span>
+                    <strong>@configuration.ChannelName</strong> · @(choice?.Label ?? configuration.PlatformStreamName)
+                    <span class="caption truncate" style="display: block;" title="@configuration.StreamUrl">@configuration.StreamUrl</span>
                     @if (!string.IsNullOrWhiteSpace(configuration.Description))
                     {
                         <span class="caption" style="display: block;">@configuration.Description</span>

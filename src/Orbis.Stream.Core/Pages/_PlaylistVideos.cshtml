@@ -20,13 +20,14 @@
             <tbody>
             @{
                 // One playlist is on air at a time: while it is, the start points wait for a stop.
-                var playlistLive = playlist.Status == LiveStatus.Live;
+                var playlistLive = playlist.Status.IsActive();
             }
             @for (var index = 0; index < playlist.Videos.Count; index++)
             {
                 var video = playlist.Videos[index];
                 var status = video.LiveStatus;
                 var live = status == LiveStatus.Live;
+                var active = status.IsActive();
                 var current = video.Pkid == playlist.CurrentPkid;
                 var position = video.LastTimeStampBeforeStop ?? 0;
                 <tr class="@(current ? "is-current" : null)" aria-current="@(current ? "true" : null)">
@@ -73,7 +74,7 @@
                                     <partial name="_SpotIcon" />
                                 </button>
                                 <form method="post" asp-page="/MainLive" asp-page-handler="Stop" asp-all-route-data="Model.DetailsRowRoute(video.Pkid)" data-confirm="@T["stopLive"]">
-                                    <button class="btn subtle icon-only danger" disabled="@(!live)" title="@T["stopLiveIconLabel"]" aria-label="@T["stopLiveIconLabel"]"><i class="icon">&#xE71A;</i></button>
+                                    <button class="btn subtle icon-only danger" disabled="@(!active)" title="@T["stopLiveIconLabel"]" aria-label="@T["stopLiveIconLabel"]"><i class="icon">&#xE71A;</i></button>
                                 </form>
                                 <form method="post" asp-page="/MainLive" asp-page-handler="ReplayFrom" asp-all-route-data="Model.DetailsRowRoute(video.Pkid)"
                                       data-confirm="@(askKey ? null : string.Format(T["playlistStartFromConfirm"], index + 1))" data-ask-key="@(askKey ? string.Format(T["playlistStartFromConfirm"], index + 1) : null)">

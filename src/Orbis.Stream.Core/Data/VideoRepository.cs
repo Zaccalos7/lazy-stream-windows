@@ -187,6 +187,22 @@ public sealed class VideoRepository
         return ReadAll(command);
     }
 
+    public List<VideoEntity> FindActive(string? channelName = null)
+    {
+        using var connection = _connectionFactory.Open();
+        using var command = connection.CreateCommand();
+        command.CommandText = $"SELECT {BaseColumns} FROM video t WHERE t.live_status IN (@live, @connecting, @reconnecting)"
+            + (channelName is null ? string.Empty : " AND t.channel_name = @channel") + " ORDER BY t.pkid;";
+        command.Parameters.AddWithValue("@live", LiveStatus.Live.ToStorageValue());
+        command.Parameters.AddWithValue("@connecting", LiveStatus.Connecting.ToStorageValue());
+        command.Parameters.AddWithValue("@reconnecting", LiveStatus.Reconnecting.ToStorageValue());
+        if (channelName is not null)
+        {
+            command.Parameters.AddWithValue("@channel", channelName);
+        }
+        return ReadAll(command);
+    }
+
     public List<VideoEntity> FindByLiveStatusAndChannelName(LiveStatus liveStatus, string channelName)
     {
         using var connection = _connectionFactory.Open();
@@ -335,11 +351,13 @@ public sealed class VideoRepository
                    COUNT(*) OVER (PARTITION BY v.grp) AS total,
                    ROW_NUMBER() OVER (PARTITION BY v.grp ORDER BY
                        CASE WHEN v.scene_pkid IS NOT NULL THEN (CASE WHEN v.source_kind = @microphone THEN 2 WHEN v.source_kind = @overlay THEN 1 ELSE 0 END)
-                            WHEN v.live_status = @live THEN 0 WHEN v.live_status = @offline THEN 2 ELSE 1 END,
+                            WHEN v.live_status IN (@live, @connecting, @reconnecting) THEN 0 WHEN v.live_status = @offline THEN 2 ELSE 1 END,
                        CASE WHEN v.scene_pkid IS NOT NULL OR v.live_status = @offline THEN NULL ELSE v.start_date_live END DESC,
                        CASE WHEN v.scene_pkid IS NOT NULL OR v.live_status = @offline THEN v.pkid ELSE -v.pkid END) AS pick,
                    CASE
                        WHEN MAX(CASE WHEN v.live_status = @live THEN 1 ELSE 0 END) OVER (PARTITION BY v.grp) = 1 THEN @live
+                       WHEN MAX(CASE WHEN v.live_status = @reconnecting THEN 1 ELSE 0 END) OVER (PARTITION BY v.grp) = 1 THEN @reconnecting
+                       WHEN MAX(CASE WHEN v.live_status = @connecting THEN 1 ELSE 0 END) OVER (PARTITION BY v.grp) = 1 THEN @connecting
                        WHEN FIRST_VALUE(v.live_status) OVER (PARTITION BY v.grp ORDER BY v.pkid DESC) = @ended THEN @ended
                    END AS group_status
             FROM (SELECT x.*,
@@ -359,6 +377,8 @@ public sealed class VideoRepository
         void Bind(SqliteCommand command)
         {
             command.Parameters.AddWithValue("@live", LiveStatus.Live.ToStorageValue());
+            command.Parameters.AddWithValue("@connecting", LiveStatus.Connecting.ToStorageValue());
+            command.Parameters.AddWithValue("@reconnecting", LiveStatus.Reconnecting.ToStorageValue());
             command.Parameters.AddWithValue("@offline", LiveStatus.Offline.ToStorageValue());
             command.Parameters.AddWithValue("@ended", LiveStatus.Ended.ToStorageValue());
             command.Parameters.AddWithValue("@microphone", (int)SourceKind.Microphone);

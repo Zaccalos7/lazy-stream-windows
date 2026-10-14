@@ -161,7 +161,7 @@ public sealed class LiveHistoryCleanupService
     public void DeleteLive(long historyPkid)
     {
         var videos = _videoRepository.FindByLiveHistoryId(historyPkid);
-        if (videos.Any(video => video.LiveStatus == LiveStatus.Live))
+        if (videos.Any(video => video.LiveStatus.IsActive()))
         {
             throw new LiveException("video.delete.live");
         }
@@ -200,7 +200,7 @@ public sealed class LiveHistoryCleanupService
         var lives = new List<VideoLiveHistoryEntity>();
         foreach (var life in _videoLiveHistoryRepository.FindOlderThan(threshold))
         {
-            if (_videoRepository.FindByLiveHistoryId(life.Pkid).Any(video => video.LiveStatus == LiveStatus.Live))
+            if (_videoRepository.FindByLiveHistoryId(life.Pkid).Any(video => video.LiveStatus.IsActive()))
             {
                 _logger.LogInformation("Live history {Pkid} is on air and was left out of the cleanup", life.Pkid);
                 continue;

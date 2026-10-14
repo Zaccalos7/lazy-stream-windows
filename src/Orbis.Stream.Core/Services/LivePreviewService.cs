@@ -70,7 +70,8 @@ public sealed record LiveSnapshot(
     /// <summary>The live this is, which the scene deck is armed for (see LiveTakeovers).</summary>
     long? History = null,
     /// <summary>What is on air in place of the program, when something is: a spot or a scene button.</summary>
-    LiveScene? Scene = null)
+    LiveScene? Scene = null,
+    LiveStatus? Status = null)
 {
     public static LiveSnapshot Offline(IReadOnlyList<LiveOption> running) => new(
         false,
@@ -208,7 +209,8 @@ public sealed class LivePreviewService
                         isPlayable,
                         new LiveMedia(0, 0, 0, false, 0),
                         new LiveMedia(0, 0, 0, false, 0),
-                        new LiveParameters(null, null, null, null, null, null, null, null, null, null, null, null, null));
+                        new LiveParameters(null, null, null, null, null, null, null, null, null, null, null, null, null),
+                        Status: vid.LiveStatus);
                 }
             }
             return LiveSnapshot.Offline(Running(null));
@@ -233,7 +235,7 @@ public sealed class LivePreviewService
         }
 
         return new LiveSnapshot(
-            true,
+            session.IsPublishing,
             session.RestartRequested,
             Running(session.VideoPkid),
             video.Pkid,
@@ -257,7 +259,8 @@ public sealed class LivePreviewService
             _air.IsUnverified(video.VideoLiveHistoryId),
             _air.OnAirVideoOf(video.VideoLiveHistoryId),
             video.VideoLiveHistoryId,
-            LiveScene.Of(_takeovers.CurrentOf(video.VideoLiveHistoryId)));
+            LiveScene.Of(_takeovers.CurrentOf(video.VideoLiveHistoryId)),
+            session.IsPublishing ? LiveStatus.Live : video.LiveStatus);
     }
 
     /// <summary>
@@ -398,7 +401,7 @@ public sealed class LivePreviewService
         var options = new List<LiveOption>();
         foreach (var session in _sessions.Running)
         {
-            if (session.HasExited)
+            if (!session.IsPublishing)
             {
                 continue;
             }

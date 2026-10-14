@@ -27,6 +27,10 @@ public sealed class LiveOutput : IAsyncDisposable
     private readonly object _gate = new();
     private FlvPacedRelay? _relay;
     private Process? _sender;
+    private Task<string>? _senderErrors;
+    private long _publishedMilliseconds;
+    private long _lastPublishAdvanceTicks = Environment.TickCount64;
+    private int _senderGeneration;
     private MediaOutput? _frame;
     private EncoderQuality? _qualityCap;
 
@@ -48,10 +52,12 @@ public sealed class LiveOutput : IAsyncDisposable
     /// something other than the transport of the platform; null keeps the one of the platform. A
     /// platform paced by its sender (YouTube) keeps the sender whatever is asked.
     /// </param>
-    public static LiveOutput? For(string outputUrl, FfmpegToolLocator locator, ILogger logger, RelayTransport? transport = null)
+    /// <param name="profile">A known ingest profile when publishing through another endpoint.</param>
+    public static LiveOutput? For(string outputUrl, FfmpegToolLocator locator, ILogger logger, RelayTransport? transport = null,
+        StreamPlatformProfile? profile = null)
     {
         ArgumentNullException.ThrowIfNull(outputUrl);
-        var profile = StreamPlatformProfile.For(outputUrl);
+        profile ??= StreamPlatformProfile.For(outputUrl);
         if (!profile.UsesRelay)
         {
             return null;
@@ -61,6 +67,32 @@ public sealed class LiveOutput : IAsyncDisposable
     }
 
     public string OutputUrl { get; }
+
+    // A write to the sender's stdin only fills a local pipe. Its output progress is the
+    // evidence that data was written to the ingest.
+    public long PublishedMilliseconds => Interlocked.Read(ref _publishedMilliseconds);
+    public long LastPublishAdvanceTicks => Interlocked.Read(ref _lastPublishAdvanceTicks);
+    public bool SenderHasExited
+    {
+        get
+        {
+            lock (_gate)
+            {
+                return Profile.Transport == RelayTransport.FfmpegSender
+                    && (_sender is null || _sender.HasExited);
+            }
+        }
+    }
+
+    public async Task<string> ReadSenderErrorAsync()
+    {
+        Task<string>? errors;
+        lock (_gate)
+        {
+            errors = _sender is null or { HasExited: true } ? _senderErrors : null;
+        }
+        return errors is null ? string.Empty : await errors.ConfigureAwait(false);
+    }
 
     /// <summary>
     /// The picture of the live, fixed by the first encoder that asks: every video, spot and pass
@@ -272,7 +304,7 @@ public sealed class LiveOutput : IAsyncDisposable
         var relay = new FlvPacedRelay(sink, Profile, _logger);
         relay.Start();
         _logger.LogInformation(
-            "Connection to {Platform} opened for the whole live, published by {Transport}, paced by {Pacing}: {OutputUrl}",
+            "Publisher to {Platform} started for the whole live, using {Transport}, paced by {Pacing}; waiting for the ingest: {OutputUrl}",
             Profile.Platform,
             Profile.Transport == RelayTransport.NativeRtmp ? "the native RTMP publisher" : "ffmpeg",
             Profile.Pacing == RelayPacing.Sender ? "ffmpeg" : "the relay",
@@ -290,15 +322,51 @@ public sealed class LiveOutput : IAsyncDisposable
             throw new InvalidOperationException("Unable to start the ffmpeg sender");
         }
 
-        // Nobody reads the progress of the sender here, and a pipe nobody reads is a process that
-        // blocks on its next write. Its errors are kept: the sender is the one that talks to the
-        // ingest, so when the connection breaks its last words are the only account of why.
-        _ = process.StandardOutput.BaseStream.CopyToAsync(System.IO.Stream.Null);
-        _ = ReportSenderErrorsAsync(process);
+        // Drain the sender's progress and use it to measure publication, keeping its errors
+        // for the live history as well as the log.
+        Interlocked.Exchange(ref _publishedMilliseconds, 0);
+        Interlocked.Exchange(ref _lastPublishAdvanceTicks, Environment.TickCount64);
+        _ = FollowSenderProgressAsync(process, Interlocked.Increment(ref _senderGeneration));
+        _senderErrors = ReportSenderErrorsAsync(process);
         return process;
     }
 
-    private async Task ReportSenderErrorsAsync(Process process)
+    private async Task FollowSenderProgressAsync(Process process, int generation)
+    {
+        long bytes = 0;
+        long microseconds = 0;
+        try
+        {
+            while (await process.StandardOutput.ReadLineAsync().ConfigureAwait(false) is { } line)
+            {
+                if (line.StartsWith("total_size=", StringComparison.Ordinal))
+                {
+                    long.TryParse(line.AsSpan("total_size=".Length), out bytes);
+                }
+                else if (line.StartsWith("out_time_us=", StringComparison.Ordinal))
+                {
+                    long.TryParse(line.AsSpan("out_time_us=".Length), out microseconds);
+                }
+                else if (line.StartsWith("progress=", StringComparison.Ordinal) && bytes > 0 && microseconds > 0)
+                {
+                    var position = microseconds / 1000;
+                    lock (_gate)
+                    {
+                        if (generation == _senderGeneration && position > Interlocked.Read(ref _publishedMilliseconds))
+                        {
+                            Interlocked.Exchange(ref _publishedMilliseconds, position);
+                            Interlocked.Exchange(ref _lastPublishAdvanceTicks, Environment.TickCount64);
+                        }
+                    }
+                }
+            }
+        }
+        catch (Exception exception) when (exception is IOException or ObjectDisposedException or InvalidOperationException)
+        {
+        }
+    }
+
+    private async Task<string> ReportSenderErrorsAsync(Process process)
     {
         try
         {
@@ -311,9 +379,11 @@ public sealed class LiveOutput : IAsyncDisposable
                     Profile.Platform,
                     FfmpegStreamingSession.RedactStreamKey(errors.Length > 2000 ? errors[^2000..] : errors, OutputUrl));
             }
+            return FfmpegStreamingSession.RedactStreamKey(errors, OutputUrl);
         }
         catch (Exception exception) when (exception is IOException or ObjectDisposedException or InvalidOperationException)
         {
+            return string.Empty;
         }
     }
 

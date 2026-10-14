@@ -108,6 +108,11 @@ public sealed class FfmpegStreamingSession : IAsyncDisposable
     /// </summary>
     public bool IsOnAir => OnAirSinceTicks != 0;
 
+    // X must keep receiving through its first GOP; a publish that closes immediately
+    // after the first packets must not flash LIVE in the grid and preview.
+    public bool IsPublishing => IsOnAir && !HasExited && SinceLastAdvance <= Profile.StallTimeout
+        && (Profile.Platform != StreamPlatform.X || OnAirFor >= TimeSpan.FromSeconds(Profile.KeyframeSeconds));
+
     /// <summary>How long the live has been on air; zero when it is not.</summary>
     public TimeSpan OnAirFor
     {
@@ -175,17 +180,33 @@ public sealed class FfmpegStreamingSession : IAsyncDisposable
 
     /// <summary>How long ago the position on air last moved forward.</summary>
     public TimeSpan SinceLastAdvance => TimeSpan.FromMilliseconds(
-        Environment.TickCount64 - (SharesOutput
-            ? _segment!.LastAdvanceTicks
+        Environment.TickCount64 - (UsesSharedSender
+            ? _output!.LastPublishAdvanceTicks
+            : SharesOutput ? _segment!.LastAdvanceTicks
             : IsNative ? _relay!.LastAdvanceTicks : Interlocked.Read(ref _lastAdvanceTicks)));
+
+    private bool UsesSharedSender => SharesOutput && _output?.Profile.Transport == RelayTransport.FfmpegSender;
 
     /// <summary>
     /// Natively, on air is the ingest having accepted the publish and taken a first frame; through
     /// ffmpeg it is bytes on the connection and a clock that moved.
     /// </summary>
-    private long OnAirSinceTicks => SharesOutput
-        ? _segment!.OnAirSinceTicks
-        : IsNative ? _relay!.OnAirSinceTicks : Interlocked.Read(ref _onAirSinceTicks);
+    private long OnAirSinceTicks
+    {
+        get
+        {
+            if (UsesSharedSender)
+            {
+                if (_segment!.FirstSentTimestamp is var first && first >= 0 && _output!.PublishedMilliseconds > first)
+                {
+                    Interlocked.CompareExchange(ref _onAirSinceTicks, Environment.TickCount64, 0);
+                }
+                return Interlocked.Read(ref _onAirSinceTicks);
+            }
+            return SharesOutput ? _segment!.OnAirSinceTicks
+                : IsNative ? _relay!.OnAirSinceTicks : Interlocked.Read(ref _onAirSinceTicks);
+        }
+    }
 
     public int VideoPkid { get; }
 
@@ -207,8 +228,10 @@ public sealed class FfmpegStreamingSession : IAsyncDisposable
     public DateTimeOffset StartedAt { get; } = DateTimeOffset.UtcNow;
 
     /// <summary>How far the transcode got, as ffmpeg last reported it. Zero until the first report.</summary>
-    public long PositionMilliseconds => SharesOutput
-        ? _resumedFromMilliseconds + _segment!.SentPositionMilliseconds
+    public long PositionMilliseconds => UsesSharedSender
+        ? _resumedFromMilliseconds + (_segment!.FirstSentTimestamp < 0 ? 0
+            : Math.Clamp(_output!.PublishedMilliseconds - _segment.FirstSentTimestamp, 0, _segment.SentPositionMilliseconds))
+        : SharesOutput ? _resumedFromMilliseconds + _segment!.SentPositionMilliseconds
         : IsNative
             ? _resumedFromMilliseconds + _relay!.PositionMilliseconds
             : Interlocked.Read(ref _positionMilliseconds);
@@ -256,7 +279,7 @@ public sealed class FfmpegStreamingSession : IAsyncDisposable
     /// encoder is still doing (it is cleaned up after it).
     /// </summary>
     public bool HasExited => SharesOutput
-        ? _segment!.Ended
+        ? _segment!.Ended || (UsesSharedSender && _output!.SenderHasExited)
         : IsNative ? _relay!.Completion.IsCompleted : Exited(_sender ?? _process);
 
     private static bool Exited(Process process)
@@ -666,8 +689,9 @@ public sealed class FfmpegStreamingSession : IAsyncDisposable
             // The ingest's own words (a refused publish, a dropped connection) come first.
             var connection = SharesOutput ? _segment!.Relay : _relay!;
             var relay = connection.Completion.Exception?.GetBaseException().Message ?? string.Empty;
+            var sharedSender = _output is null ? string.Empty : await _output.ReadSenderErrorAsync().ConfigureAwait(false);
             return RedactStreamKey(
-                string.Join("\n", new[] { relay.Trim(), encoder.Trim() }.Where(text => text.Length > 0)), _outputUrl);
+                string.Join("\n", new[] { sharedSender.Trim(), relay.Trim(), encoder.Trim() }.Where(text => text.Length > 0)), _outputUrl);
         }
 
         if (_senderError is null)
@@ -869,12 +893,12 @@ public sealed class StreamingSessionRegistry
         _sessions.TryGetValue(videoPkid, out session);
 
     /// <summary>
-    /// The session a preview is about: the one asked for when it is still running, otherwise the
-    /// transcode that started last. Null when nothing is being sent.
+    /// The session a preview is about: the requested one, or the latest when none was requested.
+    /// A requested live that ended never switches the preview to another channel.
     /// </summary>
     public FfmpegStreamingSession? Watched(int? videoPkid) =>
-        videoPkid is { } wanted && _sessions.TryGetValue(wanted, out var asked) && !asked.HasExited
-            ? asked
+        videoPkid is { } wanted
+            ? _sessions.TryGetValue(wanted, out var asked) && !asked.HasExited ? asked : null
             : _sessions.Values.Where(session => !session.HasExited)
                 .OrderByDescending(session => session.StartedAt)
                 .FirstOrDefault();

@@ -83,6 +83,7 @@
 <div data-preview
      data-pkid="@live.VideoPkid"
      data-live="@(live.IsLive ? "1" : "0")"
+     data-status="@(live.Status?.ToWireValue())"
      data-position="@live.PositionMilliseconds"
      data-playable="@(live.IsPlayable ? "1" : "0")"
      data-platform="@(LiveLinkView.PlatformOf(live.StreamUrl))">
@@ -91,8 +92,16 @@
 {
     <div class="card empty">
         <i class="icon">&#xE7F4;</i>
-        <p>@T["noLiveRunning"]</p>
-        <a class="btn accent" href="/orbis/mainLive?start=1"><i class="icon">&#xE768;</i>@T["startLiveButton"]</a>
+        @if (live.Status is LiveStatus.Connecting or LiveStatus.Reconnecting)
+        {
+            <p>@T[LiveStatusView.Key(live.Status)] · @live.ChannelName</p>
+            <a class="btn accent" href="/orbis/mainLive"><i class="icon">&#xE7F4;</i>@T["manageLiveButton"]</a>
+        }
+        else
+        {
+            <p>@T["noLiveRunning"]</p>
+            <a class="btn accent" href="/orbis/mainLive?start=1"><i class="icon">&#xE768;</i>@T["startLiveButton"]</a>
+        }
     </div>
 }
 else

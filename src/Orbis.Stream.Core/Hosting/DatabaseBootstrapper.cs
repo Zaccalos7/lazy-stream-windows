@@ -51,7 +51,7 @@ public sealed class DatabaseBootstrapper : IHostedService
     /// </summary>
     private void ReleaseLivesLeftRunning()
     {
-        foreach (var video in _videoRepository.FindByLiveStatus(LiveStatus.Live))
+        foreach (var video in _videoRepository.FindActive())
         {
             _logger.LogInformation("Video {Name} was still marked live at startup and is released", video.Name);
 

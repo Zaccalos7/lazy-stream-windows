@@ -29,6 +29,8 @@ public static class LiveStatusView
     public static string Key(LiveStatus? status) => status switch
     {
         LiveStatus.Live => "liveStatusLive",
+        LiveStatus.Connecting => "liveStatusConnecting",
+        LiveStatus.Reconnecting => "liveStatusReconnecting",
         LiveStatus.Ended => "liveStatusEnded",
         LiveStatus.Error => "liveStatusError",
         LiveStatus.Stopped => "liveStatusStopped",
@@ -38,6 +40,8 @@ public static class LiveStatusView
     public static string Css(LiveStatus? status) => status switch
     {
         LiveStatus.Live => "live",
+        LiveStatus.Connecting => "connecting",
+        LiveStatus.Reconnecting => "connecting",
         LiveStatus.Ended => "ended",
         LiveStatus.Error => "error",
         LiveStatus.Stopped => "stopped",

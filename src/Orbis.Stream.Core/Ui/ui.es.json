@@ -106,6 +106,8 @@
   "data": "Fecha",
   "outcome": "Resultado",
   "liveStatusLive": "En vivo",
+  "liveStatusConnecting": "Conectando",
+  "liveStatusReconnecting": "Reconectando",
   "liveStatusOffline": "Desconectado",
   "liveStatusEnded": "Finalizado",
   "liveStatusError": "Error",

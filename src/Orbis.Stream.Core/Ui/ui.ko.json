@@ -106,6 +106,8 @@
   "data": "날짜",
   "outcome": "결과",
   "liveStatusLive": "방송 중",
+  "liveStatusConnecting": "연결 중",
+  "liveStatusReconnecting": "재연결 중",
   "liveStatusOffline": "오프라인",
   "liveStatusEnded": "종료됨",
   "liveStatusError": "오류",

@@ -106,6 +106,8 @@
   "data": "Datum",
   "outcome": "Resultaat",
   "liveStatusLive": "Live",
+  "liveStatusConnecting": "Verbinden",
+  "liveStatusReconnecting": "Opnieuw verbinden",
   "liveStatusOffline": "Offline",
   "liveStatusEnded": "Beëindigd",
   "liveStatusError": "Fout",

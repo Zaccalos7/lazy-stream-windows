@@ -245,6 +245,7 @@ public sealed class SceneLiveTests : IAsyncLifetime
         var folder = Path.Combine(_host.DataDirectory, "sources");
         Directory.CreateDirectory(folder);
         var lonely = Path.Combine(folder, "lonely.mp4");
+        Directory.CreateDirectory(Path.Combine(_host.DataDirectory, "output"));
         await RunAsync(ffmpeg, $"-y -f lavfi -i testsrc=size=320x180:rate=15 -t 30 -pix_fmt yuv420p \"{lonely}\"");
 
         var (_, scenePkid) = _host.Services.GetRequiredService<SceneService>().Save(new SceneRequest(

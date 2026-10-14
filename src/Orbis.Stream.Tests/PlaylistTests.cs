@@ -166,7 +166,7 @@ public sealed class PlaylistTests : IAsyncLifetime
 
         var folder = Path.Combine(_host.DataDirectory, "spot-test");
         Directory.CreateDirectory(folder);
-        Directory.CreateDirectory(Path.Combine(_host.DataDirectory, "output-spot"));
+        Directory.CreateDirectory(Path.Combine(_host.DataDirectory, "output"));
 
         var mainVideo = Path.Combine(folder, "main.mp4");
         var spotVideo = Path.Combine(folder, "spot.mp4");

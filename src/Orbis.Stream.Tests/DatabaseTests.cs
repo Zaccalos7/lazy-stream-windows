@@ -95,8 +95,11 @@ public sealed class DatabaseSchemaTests
     /// at startup: left alone, the grid shows a live that stopped weeks ago next to the one that is
     /// really on air, and a start on that channel is refused over it.
     /// </summary>
-    [Fact]
-    public async Task StartAsync_ReleasesTheLivesLeftRunning()
+    [Theory]
+    [InlineData(LiveStatus.Live)]
+    [InlineData(LiveStatus.Connecting)]
+    [InlineData(LiveStatus.Reconnecting)]
+    public async Task StartAsync_ReleasesTheLivesLeftRunning(LiveStatus status)
     {
         using var database = new TemporaryDatabase();
         var videos = database.Repository<VideoRepository>();
@@ -105,7 +108,7 @@ public sealed class DatabaseSchemaTests
             Name = "left-running.mp4",
             VideoPath = "/clips/left-running.mp4",
             Extension = "mp4",
-            LiveStatus = LiveStatus.Live,
+            LiveStatus = status,
             ShouldBeStop = true,
             StartDateLive = new DateTime(2026, 2, 1, 10, 0, 0, DateTimeKind.Local),
             ChannelName = "channel",
@@ -480,6 +483,25 @@ public sealed class VideoRepositoryTests
     };
 
     private const int TwitchVideoSettingId = 1;
+
+    [Theory]
+    [InlineData(LiveStatus.Connecting)]
+    [InlineData(LiveStatus.Reconnecting)]
+    public void PendingPublishIsActiveButDoesNotAppearInTheLiveFilter(LiveStatus status)
+    {
+        using var database = new TemporaryDatabase();
+        var videos = database.Repository<VideoRepository>();
+        videos.Insert(Video(1, LiveStatus.Ended, "first", database.LiveHistoryId));
+        videos.Insert(Video(2, status, "current", database.LiveHistoryId));
+        videos.Insert(Video(3, LiveStatus.Offline, "next", database.LiveHistoryId));
+
+        var current = Assert.Single(videos.FindLivePage(status, "channel", 0, 10).Items);
+        Assert.Equal(status, current.Status);
+        Assert.Equal("current", current.Video.Name);
+        Assert.Empty(videos.FindLivePage(LiveStatus.Live, "channel", 0, 10).Items);
+        Assert.Equal("current", Assert.Single(videos.FindActive("channel")).Name);
+        Assert.Empty(videos.FindActive("another-channel"));
+    }
 
     [Fact]
     public void InsertAndFind_RoundTripsEveryColumn()

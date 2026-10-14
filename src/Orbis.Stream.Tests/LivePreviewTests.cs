@@ -237,9 +237,14 @@ public sealed class LivePreviewTests : IAsyncLifetime
         while (DateTime.UtcNow < deadline)
         {
             var current = await SnapshotAsync();
-            // The page reloads when the snapshot says nothing is running, and a moment where the two
-            // ffmpeg processes overlap into "no live" would reload it on every change.
-            Assert.True(current.GetProperty("isLive").GetBoolean(), "the live went missing while it restarted");
+            // The replacement publisher must report progress before the preview calls it live.
+            // Keep watching this video while it connects, then verify the applied output below.
+            Assert.Equal(_pkid, current.GetProperty("videoPkid").GetInt32());
+            if (!current.GetProperty("isLive").GetBoolean())
+            {
+                await Task.Delay(250);
+                continue;
+            }
 
             var at = current.GetProperty("positionMilliseconds").GetInt64();
             var width = current.GetProperty("output").GetProperty("width").GetInt32();

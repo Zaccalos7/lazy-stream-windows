@@ -28,6 +28,8 @@ public sealed class LiveStatusTests
     [InlineData(2, LiveStatus.Ended)]
     [InlineData(3, LiveStatus.Error)]
     [InlineData(4, LiveStatus.Stopped)]
+    [InlineData(5, LiveStatus.Connecting)]
+    [InlineData(6, LiveStatus.Reconnecting)]
     public void FromStorage_ReadsTheHibernateOrdinal(object value, LiveStatus expected)
     {
         Assert.Equal(expected, LiveStatusExtensions.FromStorage(value));
@@ -37,6 +39,8 @@ public sealed class LiveStatusTests
     [InlineData("LIVE", LiveStatus.Live)]
     [InlineData("stopped", LiveStatus.Stopped)]
     [InlineData("2", LiveStatus.Ended)]
+    [InlineData("CONNECTING", LiveStatus.Connecting)]
+    [InlineData("reconnecting", LiveStatus.Reconnecting)]
     public void FromStorage_AlsoReadsTheWireNameAndTheOrdinalAsText(string value, LiveStatus expected)
     {
         Assert.Equal(expected, LiveStatusExtensions.FromStorage(value));

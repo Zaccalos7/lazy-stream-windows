@@ -34,10 +34,6 @@ public sealed class StreamPlatformTests
     [InlineData("rtmp://push-rtmp-f5-tt02.tiktokcdn-eu.com/game/stream-123", StreamPlatform.TikTok)]
     [InlineData("rtmp://push.tiktokcdn-us.com/live/stream-123", StreamPlatform.TikTok)]
     [InlineData("rtmp://nottiktokcdn.com/live/key", StreamPlatform.Generic)]
-    // Rumble: the universal server of a Static Stream Key, or the server and slot of one stream.
-    [InlineData("rtmp://rtmp.rumble.com/live/r-abcdefghijklmnopqrstuvw", StreamPlatform.Rumble)]
-    [InlineData("rtmp://ls8.live.rmbl.ws/slot-20/abcd-efgh-ijkl", StreamPlatform.Rumble)]
-    [InlineData("rtmp://notrmbl.ws/live/key", StreamPlatform.Generic)]
     // X: one server per region, over RTMP on 80 or RTMPS on 443.
     [InlineData("rtmps://de.pscp.tv:443/x/abcdefghijkl", StreamPlatform.X)]
     [InlineData("rtmp://va.pscp.tv:80/x/abcdefghijkl", StreamPlatform.X)]
@@ -81,7 +77,6 @@ public sealed class StreamPlatformTests
 
         Assert.Same(StreamPlatformProfile.Kick, StreamPlatformProfile.For("rtmps://fa723fc1b171.global-contribute.live-video.net/app/key"));
         Assert.Same(StreamPlatformProfile.Facebook, StreamPlatformProfile.For("rtmps://rtmp-api.facebook.com:443/rtmp/key"));
-        Assert.Same(StreamPlatformProfile.Rumble, StreamPlatformProfile.For("rtmp://ls8.live.rmbl.ws/slot-20/key"));
         Assert.Same(StreamPlatformProfile.X, StreamPlatformProfile.For("rtmps://de.pscp.tv:443/x/key"));
     }
 
@@ -110,6 +105,10 @@ public sealed class StreamPlatformTests
         Assert.Equal(StreamPlatformProfile.YouTube.Preroll, facebook.Preroll);
         Assert.Equal(StreamPlatformProfile.YouTube.MaxLead, facebook.MaxLead);
         Assert.Same(StreamPlatformProfile.YouTube.Adaptation, facebook.Adaptation);
+        // The header of the publish is read before the broadcast goes up, as YouTube's is, and
+        // what ffmpeg makes of the stream is reported line by line, as it is on YouTube.
+        Assert.Equal(StreamPlatformProfile.YouTube.CompleteHeaders, facebook.CompleteHeaders);
+        Assert.Equal(StreamPlatformProfile.YouTube.Diagnostics, facebook.Diagnostics);
         // Facebook ends a broadcast without sound, or one that changes its settings, and wants CBR.
         Assert.True(facebook.RequiresAudio);
         Assert.Equal(48_000, facebook.AudioSampleRate);
@@ -130,7 +129,7 @@ public sealed class StreamPlatformTests
         // A custom ingest has no relay to measure the network on, and keeps the rate it always had.
         Assert.Null(StreamPlatformProfile.Generic.Adaptation);
         Assert.Equal(TimeSpan.Zero, StreamPlatformProfile.Generic.RateBuffer);
-        foreach (var profile in new[] { StreamPlatformProfile.Twitch, StreamPlatformProfile.YouTube, StreamPlatformProfile.Kick, StreamPlatformProfile.Facebook, StreamPlatformProfile.Rumble })
+        foreach (var profile in new[] { StreamPlatformProfile.Twitch, StreamPlatformProfile.YouTube, StreamPlatformProfile.Kick, StreamPlatformProfile.Facebook })
         {
             Assert.Equal(TimeSpan.FromSeconds(1), profile.RateBuffer);
             Assert.Equal(2, profile.KeyframeSeconds);

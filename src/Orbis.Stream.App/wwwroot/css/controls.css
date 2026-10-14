@@ -60,8 +60,6 @@
 /* TikTok is its note on black, with the cyan and the red copies of it off its edges. */
 .btn.brand.tiktok { --hue: #000000; border-color: var(--stroke-strong); }
 .btn.brand.tiktok svg { filter: drop-shadow(-0.8px -0.8px 0 var(--tiktok-cyan)) drop-shadow(0.8px 0.8px 0 var(--tiktok)); }
-/* Rumble is black on its green, like Kick: white on that green cannot be read in the dark theme. */
-.btn.brand.rumble { --hue: var(--rumble); color: #000000; }
 /* X is its white mark on black, as X draws itself in either theme. */
 .btn.brand.x { --hue: #000000; border-color: var(--stroke-strong); }
 /* LinkedIn wears its blue on a tint of itself rather than a solid fill, so the button stands off
@@ -310,7 +308,6 @@ form:has(input[name="platformStreamName"][value="youtube"]:checked) .option-card
 .choice.kick { --hue: var(--kick); }
 .choice.facebook { --hue: var(--facebook); }
 .choice.tiktok { --hue: var(--tiktok); }
-.choice.rumble { --hue: var(--rumble); }
 .choice.x { --hue: var(--x); }
 .choice > .icon { color: var(--text); font-size: 16px; }
 .choice:hover { border-color: var(--text-3); }

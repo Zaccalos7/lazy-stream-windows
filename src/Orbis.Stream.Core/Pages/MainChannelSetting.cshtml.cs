@@ -51,11 +51,6 @@ public sealed class MainChannelSettingModel(SettingService settings, RequestVali
         // A TikTok LIVE server as LIVE Producer shows it. The key that goes with it is good for one
         // live only, so it is not kept here: it is asked for whenever a live starts (LiveStreamKeys).
         new("tiktok", "TikTok", "rtmp://push-rtmp-l11-va01.tiktokcdn.com/stage", StreamPlatform.TikTok, PersonalIngest: true),
-        // The universal server of a Rumble Static Stream Key, which keeps the same address and key
-        // from one live to the next. A stream created on its own gets a server and a slot of its own
-        // instead (ls8.live.rmbl.ws/slot-20) and a key for that stream only, which is why Rumble is
-        // read off the domain. Plain RTMP: Rumble serves no RTMPS.
-        new("rumble", "Rumble", "rtmp://rtmp.rumble.com/live", StreamPlatform.Rumble, PersonalIngest: true, IngestHint: "ingestFromRumble"),
         // A source of X in the region of Germany, over the RTMPS X asks for in production. A source
         // belongs to the region it was made in, so X is asked for its region rather than for an
         // address (RegionalIngest), and read off the domain of the server of any region.

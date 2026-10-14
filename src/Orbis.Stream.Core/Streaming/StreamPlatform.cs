@@ -29,17 +29,11 @@ public enum StreamPlatform
     TikTok,
 
     /// <summary>
-    /// Rumble, which takes plain RTMP only: a server and a key for every stream created on its Go
-    /// Live page, or the ones of a Static Stream Key, which do not change from one live to the next.
-    /// </summary>
-    Rumble,
-
-    /// <summary>
     /// X (formerly Twitter), whose lives are fed through the sources of Media Studio Producer: a
     /// persistent key per source, on one ingest server per region under the network Periscope left
     /// it, and a broadcast started on the source to go on air.
     /// </summary>
-    X
+    X = 7
 }
 
 /// <summary>What carries the paced stream from the relay to the ingest.</summary>
@@ -86,7 +80,7 @@ public enum RelayPacing
 /// <para>Those are the two deliveries there are, and they stay two: the relay keeping the time
 /// over the native RTMP for a low latency player (Twitch), the ffmpeg sender keeping it with a
 /// head start for a player that buffers (YouTube). Kick is an ingest of the first kind - Amazon
-/// IVS, the network the Twitch ingest itself runs on - and Facebook Gaming, TikTok LIVE, Rumble and
+/// IVS, the network the Twitch ingest itself runs on - and Facebook Gaming, TikTok LIVE and
 /// X of the second, so each of them is the delivery of its kind with the needs of its own platform
 /// on top.</para>
 /// </summary>
@@ -192,13 +186,38 @@ public sealed record StreamPlatformProfile(
     RateAdaptation? Adaptation = null,
 
     /// <summary>
-    /// Whether every frame is a keyframe or predicted from the one frame before it: no B-frames and
-    /// a single reference frame, asked of every encoder whatever the setting says. Rumble asks that
-    /// of a stream, and calls a stream outside its settings one that "may result in an unstable and
-    /// disrupted stream and recording".
+    /// Whether the ingest is handed the stream only once the parameters of both codecs are known:
+    /// the ffmpeg sender analyses the FLV far enough to name the size of the picture and the
+    /// sampling rate of the sound before it publishes the header of the publish. YouTube and
+    /// Facebook Gaming set their broadcast up from that header and keep it off air when it
+    /// describes a stream they cannot decode; a 64 KiB probe finishes on a large first keyframe,
+    /// before the first AAC packet, and the header then carries the 44.1 kHz fallback of AAC - or
+    /// no parameters at all. A platform that reads the tags as they come is left with the small
+    /// probe, which connects sooner.
     /// </summary>
-    bool SingleReference = false)
+    bool CompleteHeaders = false,
+
+    /// <summary>
+    /// Whether the encoder and the sender of a live to this platform report line by line, at their
+    /// own severity, instead of staying quiet until something goes wrong (see
+    /// <see cref="FfmpegProcessLog"/>). The ingests whose header and rhythm are strict, where a
+    /// warning kept below the error level is the only sign of why a broadcast never went up:
+    /// YouTube and Facebook Gaming.
+    /// </summary>
+    bool Diagnostics = false)
 {
+    /// <summary>The name the platform goes by, as the interface and the log write it.</summary>
+    public string Name => Platform switch
+    {
+        StreamPlatform.Twitch => "Twitch",
+        StreamPlatform.YouTube => "YouTube",
+        StreamPlatform.Kick => "Kick",
+        StreamPlatform.Facebook => "Facebook Gaming",
+        StreamPlatform.TikTok => "TikTok",
+        StreamPlatform.X => "X",
+        _ => "RTMP"
+    };
+
     /// <summary>
     /// Twitch: no head start, and a short jitter buffer so the preview stays next to what is on
     /// air. The buffer is the whole margin there is, which is why the relay wins a slow moment
@@ -245,7 +264,9 @@ public sealed record StreamPlatformProfile(
         UniformFormat: true,
         ChoosableTransport: true,
         RateBuffer: TimeSpan.FromSeconds(1),
-        Adaptation: RateAdaptation.Buffered);
+        Adaptation: RateAdaptation.Buffered,
+        CompleteHeaders: true,
+        Diagnostics: true);
 
     /// <summary>
     /// Kick: the delivery of Twitch - the relay keeps the time, over the native RTMP, which speaks
@@ -294,7 +315,9 @@ public sealed record StreamPlatformProfile(
         Pacing: RelayPacing.Sender,
         UniformFormat: true,
         RateBuffer: TimeSpan.FromSeconds(1),
-        Adaptation: RateAdaptation.Buffered);
+        Adaptation: RateAdaptation.Buffered,
+        CompleteHeaders: true,
+        Diagnostics: true);
 
     /// <summary>
     /// TikTok LIVE: the delivery of YouTube - the ffmpeg sender keeps the time with a head start,
@@ -321,32 +344,6 @@ public sealed record StreamPlatformProfile(
         RateBuffer: TimeSpan.FromSeconds(1),
         Portrait: true,
         Adaptation: RateAdaptation.Buffered);
-
-    /// <summary>
-    /// Rumble: the delivery of YouTube - the ffmpeg sender keeps the time with a head start, the way
-    /// the ffmpeg recipes for Rumble publish, over the plain RTMP its ingest speaks (it serves no
-    /// RTMPS) - with what its settings page asks of a stream on top: a constant bitrate, a keyframe
-    /// every two seconds, no B-frames and one reference frame, AAC at 44.1 kHz. One format for the
-    /// whole live and a silent track for a source with no sound, like every ingest of its kind.
-    /// </summary>
-    public static readonly StreamPlatformProfile Rumble = new(
-        StreamPlatform.Rumble,
-        UsesRelay: true,
-        Preroll: TimeSpan.FromSeconds(2),
-        MaxLead: TimeSpan.FromSeconds(4),
-        ConnectTimeout: TimeSpan.FromSeconds(30),
-        StallTimeout: TimeSpan.FromSeconds(20),
-        ReconnectAttempts: 5,
-        RequiresAudio: true,
-        AudioSampleRate: 44_100,
-        Transport: RelayTransport.FfmpegSender,
-        KeyframeSeconds: 2,
-        ConstantBitrate: true,
-        Pacing: RelayPacing.Sender,
-        UniformFormat: true,
-        RateBuffer: TimeSpan.FromSeconds(1),
-        Adaptation: RateAdaptation.Buffered,
-        SingleReference: true);
 
     /// <summary>
     /// X: a delivery of its own, next to the one of YouTube. The ffmpeg sender keeps the time, over
@@ -397,7 +394,6 @@ public sealed record StreamPlatformProfile(
         StreamPlatform.Kick => Kick,
         StreamPlatform.Facebook => Facebook,
         StreamPlatform.TikTok => TikTok,
-        StreamPlatform.Rumble => Rumble,
         StreamPlatform.X => X,
         _ => Generic
     };
@@ -461,9 +457,6 @@ public static class StreamPlatforms
     private static readonly string[] TikTokDomains =
         ["tiktokcdn.com", "tiktokcdn-eu.com", "tiktokcdn-us.com", "tiktokv.com", "tiktok.com"];
 
-    /// <summary>The domain of the servers Rumble hands its streams out on (<c>ls8.live.rmbl.ws</c>).</summary>
-    private const string RumbleIngestDomain = "rmbl.ws";
-
     /// <summary>
     /// The domain of the ingest servers of X, one per region (<c>va.pscp.tv</c>, <c>de.pscp.tv</c>,
     /// see <see cref="XIngestRegions"/>): the network of Periscope, which X kept for the sources of
@@ -513,14 +506,6 @@ public static class StreamPlatforms
             {
                 return StreamPlatform.TikTok;
             }
-        }
-
-        // Rumble gives every stream created on its Go Live page a server and a slot of its own
-        // (ls8.live.rmbl.ws/slot-20), and a Static Stream Key one server under its own name
-        // (rtmp.rumble.com): the domains are what they share.
-        if (IsOrUnder(host, RumbleIngestDomain) || IsOrUnder(host, "rumble.com"))
-        {
-            return StreamPlatform.Rumble;
         }
 
         // X ingests on one server per region (va.pscp.tv, de.pscp.tv...), every one of them under

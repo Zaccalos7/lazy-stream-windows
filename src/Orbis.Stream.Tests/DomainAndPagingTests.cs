@@ -244,24 +244,10 @@ public sealed class DatabaseBootstrapperTests
     }
 
     [Fact]
-    public void StartAsync_SeedsRumbleAndXWithWhatTheirIngestsAskFor()
+    public void StartAsync_SeedsXWithWhatItsIngestAsksFor()
     {
         using var database = new TemporaryDatabase();
         var settings = database.Repository<VideoSettingRepository>();
-
-        // Rumble: 1080p30 at the top of the 2.5-4.5 Mbps it gives that size, 128 Kbps of sound,
-        // a keyframe every two seconds.
-        var rumble = Assert.Single(settings.FindByIsDefaultConfigurationTrueAndDefaultPlatformConfiguration("Rumble"));
-        Assert.Equal("Default Rumble", rumble.Title);
-        Assert.Equal((1920, 1080, 30d), (rumble.VideoWidth, rumble.VideoHeight, rumble.FrameRate));
-        Assert.Equal(4_500_000, rumble.VideoBitrate);
-        Assert.Equal(128_000, rumble.AudioSetting!.AudioBitrate);
-        Assert.Equal(2, rumble.GopSize);
-
-        var lowRumble = settings.FindByTitleAndPlatform("Default Low Rumble", "Rumble");
-        Assert.NotNull(lowRumble);
-        Assert.False(lowRumble.IsDefaultConfiguration);
-        Assert.Equal((1280, 720, 2_500_000), (lowRumble.VideoWidth, lowRumble.VideoHeight, lowRumble.VideoBitrate));
 
         // X: 1080p30 at the 9 Mbps Media Studio Producer recommends, and its keyframe every three
         // seconds; the light one is the configuration X recommends for a source, 720p30 at 4 Mbps.
@@ -293,7 +279,7 @@ public sealed class DatabaseBootstrapperTests
                 NullLogger<DatabaseBootstrapper>.Instance)
             .StartAsync(CancellationToken.None);
 
-        foreach (var platform in new[] { "Twitch", "Youtube", "Kick", "Facebook Gaming", "TikTok", "Rumble", "X" })
+        foreach (var platform in new[] { "Twitch", "Youtube", "Kick", "Facebook Gaming", "TikTok", "X" })
         {
             Assert.Single(settings.FindByIsDefaultConfigurationTrueAndDefaultPlatformConfiguration(platform));
         }
@@ -615,9 +601,7 @@ public sealed class LiveLinkTests
     [InlineData("rtmps://0123456789ab.global-contribute.live-video.net:443/app/", "kick")]
     [InlineData("rtmps://live-api-s.facebook.com:443/rtmp/", "facebook")]
     [InlineData("rtmp://push-rtmp-f5-tt02.tiktokcdn-eu.com/game/", "tiktok")]
-    // The server and the slot of a single Rumble stream, and the source of X of another region.
-    [InlineData("rtmp://rtmp.rumble.com/live", "rumble")]
-    [InlineData("rtmp://ls8.live.rmbl.ws/slot-20", "rumble")]
+    // The source of X in another region.
     [InlineData("rtmps://de.pscp.tv:443/x", "x")]
     [InlineData("rtmp://va.pscp.tv:80/x/", "x")]
     public void PlatformOf_KnowsKickAndFacebookByTheDomainOfTheirIngest(string streamUrl, string platform) =>
@@ -646,25 +630,20 @@ public sealed class LiveLinkTests
     }
 
     [Fact]
-    public void UrlOf_RumbleIsTheChannelAndXTheProfileOfTheAccount()
+    public void UrlOf_XIsTheProfileOfTheAccount()
     {
-        Assert.Equal("https://rumble.com/c/ReproChannel", LiveLinkView.UrlOf("rtmp://rtmp.rumble.com/live", "ReproChannel", "rumble"));
-        Assert.Equal("https://rumble.com/c/ReproChannel", LiveLinkView.UrlOf("rtmp://ls24.live.rmbl.ws/slot-155", "@ReproChannel", null));
         Assert.Equal("https://x.com/repro_live", LiveLinkView.UrlOf("rtmps://de.pscp.tv:443/x", "@repro_live", "x"));
         Assert.Equal("https://x.com/repro_live", LiveLinkView.UrlOf("rtmp://sg.pscp.tv:80/x", "repro_live", null));
     }
 
     [Fact]
-    public void RumbleAndXHaveTheirNamesMarksAndColours()
+    public void XHasItsNameMarkAndColour()
     {
-        Assert.Equal("Rumble", LiveLinkView.LabelOf("rumble"));
         Assert.Equal("X", LiveLinkView.LabelOf("x"));
 
-        // The play button of Rumble; the X of X.
-        Assert.StartsWith("M14.4528 13.5458", LiveLinkView.MarkupOf("rumble"), StringComparison.Ordinal);
+        // The X of X.
         Assert.StartsWith("M14.234 10.162", LiveLinkView.MarkupOf("x"), StringComparison.Ordinal);
 
-        Assert.Equal("platform-rumble", LiveLinkView.ClassOf("rumble"));
         Assert.Equal("platform-x", LiveLinkView.ClassOf("x"));
     }
 
@@ -679,7 +658,7 @@ public sealed class LiveLinkTests
         Assert.StartsWith("M1.333 0h8", LiveLinkView.MarkupOf("kick"), StringComparison.Ordinal);
         Assert.StartsWith("M0 0h24v24H0zM3.75 3.75", LiveLinkView.MarkupOf("facebook"), StringComparison.Ordinal);
         Assert.StartsWith("M12.525.02", LiveLinkView.MarkupOf("tiktok"), StringComparison.Ordinal);
-        var marks = new[] { "twitch", "youtube", "kick", "facebook", "tiktok", "rumble", "x", null }.Select(LiveLinkView.MarkupOf).ToList();
+        var marks = new[] { "twitch", "youtube", "kick", "facebook", "tiktok", "x", null }.Select(LiveLinkView.MarkupOf).ToList();
         Assert.Equal(marks.Count, marks.Distinct().Count());
 
         Assert.Equal("platform-kick", LiveLinkView.ClassOf("kick"));
@@ -689,9 +668,9 @@ public sealed class LiveLinkTests
     }
 
     [Fact]
-    public void TheChannelSettingsOfferTheSevenPlatformsWithTheirIngest()
+    public void TheChannelSettingsOfferTheSixPlatformsWithTheirIngest()
     {
-        Assert.Equal(["twitch", "youtube", "kick", "facebook", "tiktok", "rumble", "x"], MainChannelSettingModel.Platforms.Select(platform => platform.Value));
+        Assert.Equal(["twitch", "youtube", "kick", "facebook", "tiktok", "x"], MainChannelSettingModel.Platforms.Select(platform => platform.Value));
         Assert.All(MainChannelSettingModel.Platforms, platform =>
         {
             Assert.StartsWith("rtmp", platform.StreamUrl, StringComparison.Ordinal);
@@ -699,17 +678,16 @@ public sealed class LiveLinkTests
             Assert.Equal(platform.Platform, Orbis.Stream.Core.Streaming.StreamPlatforms.Detect(platform.StreamUrl + "/key"));
         });
 
-        // Kick and Facebook share the hint about their dashboard; Rumble says where its own shows
-        // the address. TikTok, whose key is asked for at every live, has a hint of its own, and X is
+        // Kick and Facebook share the hint about their dashboard. TikTok, whose key is asked
+        // for at every live, has a hint of its own, and X is
         // asked for the region of its source instead of an address.
         Assert.Equal(
-            [("ingestFromDashboard", "kick facebook"), ("ingestFromRumble", "rumble")],
+            [("ingestFromDashboard", "kick facebook")],
             MainChannelSettingModel.IngestHints);
         Assert.Equal("tiktok", MainChannelSettingModel.KeyEachLive);
         Assert.Equal("x", MainChannelSettingModel.RegionalIngest);
 
-        // Rumble takes plain RTMP only; X is fed over RTMPS.
-        Assert.StartsWith("rtmp://", MainChannelSettingModel.ChoiceOf("rumble")!.StreamUrl, StringComparison.Ordinal);
+        // X is fed over RTMPS.
         Assert.StartsWith("rtmps://", MainChannelSettingModel.ChoiceOf("x")!.StreamUrl, StringComparison.Ordinal);
     }
 
@@ -733,7 +711,6 @@ public sealed class LiveLinkTests
         Assert.Equal("youtube", MainChannelSettingModel.ChoiceOfSetting("Youtube")?.Value);
         Assert.Equal("facebook", MainChannelSettingModel.ChoiceOfSetting("Facebook Gaming")?.Value);
         Assert.Equal("tiktok", MainChannelSettingModel.ChoiceOfSetting(" TikTok ")?.Value);
-        Assert.Equal("rumble", MainChannelSettingModel.ChoiceOfSetting("Rumble")?.Value);
         Assert.Equal("x", MainChannelSettingModel.ChoiceOfSetting("X")?.Value);
 
         // A setting of the user's own was made for no platform.
@@ -757,7 +734,6 @@ public sealed class LiveLinkTests
         // The seed spells YouTube the way it was stored, and is shown the way it is spelled.
         Assert.Equal("Default Low YouTube", SettingTitleView.Of("Default Low Youtube", text));
         Assert.Equal("Default Kick", SettingTitleView.Of("Default Kick", text));
-        Assert.Equal(text["defaultLowRumble"], SettingTitleView.Of("default low rumble", text));
         Assert.Equal(text["defaultLowX"], SettingTitleView.Of("Default Low X", text));
         Assert.Equal("Mine", SettingTitleView.Of("Mine", text));
         Assert.Equal(text["untitled"], SettingTitleView.Of("  ", text));

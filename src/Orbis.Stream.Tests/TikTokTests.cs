@@ -60,7 +60,7 @@ public sealed class TikTokDeliveryTests
         Assert.Equal(2, tiktok.KeyframeSeconds);
 
         // Every other platform lies down.
-        foreach (var other in new[] { StreamPlatformProfile.Twitch, StreamPlatformProfile.YouTube, StreamPlatformProfile.Kick, StreamPlatformProfile.Facebook, StreamPlatformProfile.Rumble, StreamPlatformProfile.X, StreamPlatformProfile.Generic })
+        foreach (var other in new[] { StreamPlatformProfile.Twitch, StreamPlatformProfile.YouTube, StreamPlatformProfile.Kick, StreamPlatformProfile.Facebook, StreamPlatformProfile.X, StreamPlatformProfile.Generic })
         {
             Assert.False(other.Portrait);
         }

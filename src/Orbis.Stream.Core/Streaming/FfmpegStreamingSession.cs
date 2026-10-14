@@ -78,11 +78,11 @@ public sealed class FfmpegStreamingSession : IAsyncDisposable
         InputPath = inputPath;
         Probe = probe;
         Output = output;
-        _standardError = profile.Platform == StreamPlatform.YouTube
-            ? FfmpegProcessLog.ReadAsync(process.StandardError, logger, "encoder", outputUrl)
+        _standardError = profile.Diagnostics
+            ? FfmpegProcessLog.ReadAsync(process.StandardError, logger, profile.Name, "encoder", outputUrl)
             : ReadToEndAsync(process.StandardError);
-        _senderError = sender is null ? null : profile.Platform == StreamPlatform.YouTube
-            ? FfmpegProcessLog.ReadAsync(sender.StandardError, logger, "sender", outputUrl)
+        _senderError = sender is null ? null : profile.Diagnostics
+            ? FfmpegProcessLog.ReadAsync(sender.StandardError, logger, profile.Name, "sender", outputUrl)
             : ReadToEndAsync(sender.StandardError);
 
         // Nothing else reads what ffmpeg writes on its standard output, and the pipe it writes

@@ -9,7 +9,7 @@ internal static class FfmpegProcessLog
     private const int TailLimit = 16_384;
     private const int LineLimit = 4_096;
 
-    public static async Task<string> ReadAsync(StreamReader reader, ILogger logger, string role, string outputUrl)
+    public static async Task<string> ReadAsync(StreamReader reader, ILogger logger, string platform, string role, string outputUrl)
     {
         var tail = new StringBuilder();
         try
@@ -32,7 +32,7 @@ internal static class FfmpegProcessLog
                     || safe.Contains("[fatal]", StringComparison.OrdinalIgnoreCase) ? LogLevel.Error
                     : safe.Contains("[warning]", StringComparison.OrdinalIgnoreCase) ? LogLevel.Warning
                     : LogLevel.Information;
-                logger.Log(level, "YouTube ffmpeg {Role}: {Diagnostic}", role,
+                logger.Log(level, "{Platform} ffmpeg {Role}: {Diagnostic}", platform, role,
                     safe.Length > LineLimit ? safe[..LineLimit] + "…" : safe);
             }
         }

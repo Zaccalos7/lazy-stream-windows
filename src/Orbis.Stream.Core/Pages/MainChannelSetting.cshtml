@@ -105,7 +105,7 @@
                     <label class="field" data-hide-when="@MainChannelSettingModel.RegionalIngest">
                         <span>@T["url"]</span>
                         <input class="input" name="streamUrl" value="@editing.StreamUrl" placeholder="rtmp://…" />
-                        @* Kick, Facebook Gaming and Rumble fill in where their ingest usually is, and the
+                        @* Kick and Facebook Gaming fill in where their ingest usually is, and the
                            address to use is the one their dashboard shows: said where the address is typed,
                            with where each of them shows it. *@
                         @foreach (var hint in MainChannelSettingModel.IngestHints)

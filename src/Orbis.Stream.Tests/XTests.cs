@@ -2,6 +2,7 @@ using System.Net;
 using System.Text.RegularExpressions;
 using Microsoft.Extensions.DependencyInjection;
 using Microsoft.Extensions.Logging.Abstractions;
+using Orbis.Stream.Core.Contracts;
 using Orbis.Stream.Core.Data;
 using Orbis.Stream.Core.Domain;
 using Orbis.Stream.Core.Pages;
@@ -9,17 +10,10 @@ using Orbis.Stream.Core.Streaming;
 
 namespace Orbis.Stream.Tests;
 
-/// <summary>
-/// Rumble and X go out the way YouTube does - the ffmpeg sender keeps the time with a head start -
-/// with what their ingests ask of a stream on top: on Rumble a constant rate, no B-frames and one
-/// reference frame over plain RTMP; on X a keyframe every three seconds over RTMPS. Both take AAC
-/// at 44.1 kHz.
-/// </summary>
-public sealed class RumbleAndXDeliveryTests
+/// <summary>The delivery and encoder settings of a live sent to X.</summary>
+public sealed class XDeliveryTests
 {
-    private const string Rumble = "rtmp://rtmp.rumble.com/live/r-abcdefghijklmnopqrstuvw";
 
-    private const string RumbleStream = "rtmp://ls8.live.rmbl.ws/slot-20/abcd-efgh-ijkl";
 
     private const string X = "rtmps://de.pscp.tv:443/x/abcdefghijkl";
 
@@ -46,31 +40,6 @@ public sealed class RumbleAndXDeliveryTests
             "/videos/clip.mp4", ingest, FullHdFile, setting, Profile: profile)));
 
     [Fact]
-    public void RumbleIsDeliveredTheWayYouTubeIsWithWhatItsIngestAsksFor()
-    {
-        var rumble = StreamPlatformProfile.Rumble;
-
-        Assert.Same(rumble, StreamPlatformProfile.For(Rumble));
-        Assert.Same(rumble, StreamPlatformProfile.For(RumbleStream));
-        Assert.Equal(StreamPlatform.Rumble, rumble.Platform);
-        Assert.Equal(RelayPacing.Sender, rumble.Pacing);
-        Assert.Equal(RelayTransport.FfmpegSender, rumble.Transport);
-        Assert.Equal(StreamPlatformProfile.YouTube.Preroll, rumble.Preroll);
-        Assert.Same(StreamPlatformProfile.YouTube.Adaptation, rumble.Adaptation);
-        Assert.True(rumble.UniformFormat);
-        Assert.True(rumble.RequiresAudio);
-        Assert.False(rumble.ChoosableTransport);
-        Assert.False(rumble.Portrait);
-
-        // The settings page of Rumble: CBR, a keyframe every 2 s, 0 B-frames, 1 reference frame,
-        // AAC at 44.1 kHz.
-        Assert.True(rumble.ConstantBitrate);
-        Assert.Equal(2, rumble.KeyframeSeconds);
-        Assert.True(rumble.SingleReference);
-        Assert.Equal(44_100, rumble.AudioSampleRate);
-    }
-
-    [Fact]
     public void XHasADeliveryOfItsOwnWithNoBurstAndAKeyframeEveryThreeSeconds()
     {
         var x = StreamPlatformProfile.X;
@@ -86,64 +55,8 @@ public sealed class RumbleAndXDeliveryTests
         Assert.True(x.UniformFormat);
         Assert.True(x.RequiresAudio);
         Assert.False(x.ChoosableTransport);
-        Assert.False(x.SingleReference);
         Assert.Equal(3, x.KeyframeSeconds);
         Assert.Equal(44_100, x.AudioSampleRate);
-    }
-
-    [Fact]
-    public void ALiveToRumbleHasNoBFramesOneReferenceAndAConstantRate()
-    {
-        var command = Command(Rumble, StreamPlatformProfile.Rumble, Setting());
-
-        Assert.Contains("-bf 0 -refs 1", command, StringComparison.Ordinal);
-        Assert.Contains("-b:v 4500000 -maxrate 4500000 -minrate 4500000 -bufsize 4500000", command, StringComparison.Ordinal);
-        Assert.Contains("nal-hrd=cbr", command, StringComparison.Ordinal);
-        Assert.Contains("-force_key_frames expr:gte(t,n_forced*2)", command, StringComparison.Ordinal);
-        Assert.Contains("-ar 44100", command, StringComparison.Ordinal);
-    }
-
-    [Fact]
-    public void TheBFramesRumbleRefusesStayOutWhateverTheSettingSays()
-    {
-        var command = Command(Rumble, StreamPlatformProfile.Rumble, Setting(2, ("bf", "3"), ("refs", "4")));
-
-        // The setting is asked first and the platform last: the last one ffmpeg reads is the one it keeps.
-        Assert.True(
-            command.LastIndexOf("-bf 0", StringComparison.Ordinal) > command.LastIndexOf("-bf 3", StringComparison.Ordinal),
-            command);
-        Assert.True(
-            command.LastIndexOf("-refs 1", StringComparison.Ordinal) > command.LastIndexOf("-refs 4", StringComparison.Ordinal),
-            command);
-    }
-
-    [Fact]
-    public void ACanvasToRumbleHasNoBFramesEither()
-    {
-        var command = string.Join(' ', FfmpegCommandBuilder.BuildComposition(new FfmpegCompositionRequest(
-            [new FfmpegCompositionItem(SourceKind.Camera, "video=Cam", 0, 0, 1920, 1080, false)],
-            RumbleStream,
-            Setting(),
-            1920,
-            1080,
-            30d,
-            Profile: StreamPlatformProfile.Rumble)));
-
-        Assert.Contains("-bf 0 -refs 1", command, StringComparison.Ordinal);
-    }
-
-    [Fact]
-    public void EveryOtherPlatformKeepsTheBFramesOfItsEncoder()
-    {
-        foreach (var (ingest, profile) in new[]
-                 {
-                     ("rtmp://live.twitch.tv/app/key", StreamPlatformProfile.Twitch),
-                     ("rtmps://a.rtmps.youtube.com/live2/key", StreamPlatformProfile.YouTube),
-                     (X, StreamPlatformProfile.X)
-                 })
-        {
-            Assert.DoesNotContain("-bf 0", Command(ingest, profile, Setting()), StringComparison.Ordinal);
-        }
     }
 
     [Fact]
@@ -159,18 +72,6 @@ public sealed class RumbleAndXDeliveryTests
 
         // A setting that names no interval gets the one of the platform.
         Assert.Contains("-force_key_frames expr:gte(t,n_forced*3)", Command(X, StreamPlatformProfile.X, Setting(gopSize: null)), StringComparison.Ordinal);
-    }
-
-    [Fact]
-    public void RumbleGoesOutThroughAnFfmpegSenderThatReadsAtRealTimeWithItsBurst()
-    {
-        var output = LiveOutput.For(Rumble, new FfmpegToolLocator("ffmpeg", "ffprobe"), NullLogger.Instance, RelayTransport.NativeRtmp);
-
-        // The channel asks for nothing: it goes out the way its kind does.
-        Assert.Equal(StreamPlatformProfile.Rumble, output!.Profile);
-        var arguments = string.Join(' ', FfmpegCommandBuilder.BuildSender(Rumble, output.Profile));
-        Assert.Contains("-readrate 1 -readrate_initial_burst 2 -f flv -i pipe:0", arguments, StringComparison.Ordinal);
-        Assert.EndsWith(Rumble, arguments, StringComparison.Ordinal);
     }
 
     [Fact]
@@ -244,31 +145,29 @@ public sealed class XIngestRegionTests
             new Microsoft.AspNetCore.Http.HttpContextAccessor()));
 
         Assert.All(XIngestRegions.All, region => Assert.NotEqual(region.Key, text[region.Key]));
-        Assert.Equal("Germany", text["xRegionDe"]);
+        Assert.Equal("Germany (Frankfurt)", text["xRegionDe"]);
         Assert.NotEqual("xRegion", text["xRegion"]);
     }
 }
 
 /// <summary>
-/// The pages offer Rumble and X wherever they offer a platform: the channel settings with where each
-/// shows its address, the templates of a video setting, and the live wizard, whose choices are laid
+/// The pages offer X in the channel settings, the templates of a video setting, and the live
+/// wizard, whose choices are laid
 /// out in columns with the mark of their platform.
 /// </summary>
-public sealed class RumbleAndXPageTests : IClassFixture<ApplicationFixture>
+public sealed class XPageTests : IClassFixture<ApplicationFixture>
 {
     private readonly ApplicationFixture _fixture;
 
-    public RumbleAndXPageTests(ApplicationFixture fixture) => _fixture = fixture;
+    public XPageTests(ApplicationFixture fixture) => _fixture = fixture;
 
     [Fact]
-    public async Task The_channel_settings_offer_Rumble_and_X_with_where_they_show_their_address()
+    public async Task The_channel_settings_offer_X_and_its_source_region()
     {
         var html = await _fixture.Client.GetStringAsync("/orbis/mainChannelSetting?edit=new");
 
-        Assert.Contains("value=\"rumble\" data-stream-url=\"rtmp://rtmp.rumble.com/live\"", html, StringComparison.Ordinal);
         Assert.Contains("value=\"x\" data-stream-url=\"rtmps://de.pscp.tv:443/x\"", html, StringComparison.Ordinal);
         Assert.Contains("data-show-when=\"kick facebook\"", html, StringComparison.Ordinal);
-        Assert.Contains("data-show-when=\"rumble\"", html, StringComparison.Ordinal);
     }
 
     [Fact]
@@ -283,7 +182,7 @@ public sealed class RumbleAndXPageTests : IClassFixture<ApplicationFixture>
         Assert.Equal(XIngestRegions.All.Count, Regex.Matches(html, "<option value=\"[a-z]{2}\"[^>]*>[^<]+ · [a-z]{2}\\.pscp\\.tv</option>").Count);
 
         // A new configuration starts on the region of the preset, each region says its server.
-        Assert.Contains("<option value=\"de\" selected=\"selected\">Germany · de.pscp.tv</option>", html, StringComparison.Ordinal);
+        Assert.Contains("<option value=\"de\" selected=\"selected\">Germany (Frankfurt) · de.pscp.tv</option>", html, StringComparison.Ordinal);
         Assert.Contains("<option value=\"va\">US East (Virginia) · va.pscp.tv</option>", html, StringComparison.Ordinal);
     }
 
@@ -324,9 +223,9 @@ public sealed class RumbleAndXPageTests : IClassFixture<ApplicationFixture>
         using var saved = await _fixture.NoRedirectClient.PostAsync("/orbis/mainChannelSetting?handler=Save", new FormUrlEncodedContent(new Dictionary<string, string>
         {
             ["__RequestVerificationToken"] = token,
-            ["platformStreamName"] = "rumble",
-            ["channelName"] = "rumble.region.account",
-            ["streamUrl"] = "rtmp://ls8.live.rmbl.ws/slot-20",
+            ["platformStreamName"] = "facebook",
+            ["channelName"] = "facebook.region.account",
+            ["streamUrl"] = "rtmps://live-api-s.facebook.com:443/rtmp",
             // Sent with the form whatever is picked, and meaningless away from X.
             ["xRegion"] = "sg",
             ["streamKey"] = "abcd-efgh-ijkl",
@@ -338,8 +237,8 @@ public sealed class RumbleAndXPageTests : IClassFixture<ApplicationFixture>
         Assert.Equal(HttpStatusCode.Redirect, saved.StatusCode);
 
         var configuration = Assert.Single(_fixture.Services.GetRequiredService<SettingRepository>()
-            .FindAll(new Dictionary<string, string> { ["channelName"] = "rumble.region.account" }));
-        Assert.Equal("rtmp://ls8.live.rmbl.ws/slot-20", configuration.StreamUrl);
+            .FindAll(new Dictionary<string, string> { ["channelName"] = "facebook.region.account" }));
+        Assert.Equal("rtmps://live-api-s.facebook.com:443/rtmp", configuration.StreamUrl);
     }
 
     /// <summary>The antiforgery token of a page, for a post from the client that drew it.</summary>
@@ -353,12 +252,50 @@ public sealed class RumbleAndXPageTests : IClassFixture<ApplicationFixture>
     }
 
     [Fact]
-    public async Task The_video_settings_offer_the_templates_of_Rumble_and_X()
+    public async Task The_video_settings_offer_the_template_of_X()
     {
         var html = WebUtility.HtmlDecode(await _fixture.Client.GetStringAsync("/orbis/mainVideoSetting?edit=new"));
 
-        Assert.Contains("class=\"btn brand rumble\" href=\"?edit=new&preset=Rumble\"", html, StringComparison.Ordinal);
         Assert.Contains("class=\"btn brand x\" href=\"?edit=new&preset=X\"", html, StringComparison.Ordinal);
+    }
+
+    [Fact]
+    public async Task Presets_of_a_retired_platform_are_hidden_and_cannot_prefill_the_editor()
+    {
+        var repository = _fixture.Services.GetRequiredService<VideoSettingRepository>();
+        var original = Assert.Single(repository.FindByIsDefaultConfigurationTrueAndDefaultPlatformConfiguration("Twitch"));
+        var inserted = new List<int>();
+        try
+        {
+            foreach (var title in new[] { "Default Retired service", "Default Low Retired service" })
+            {
+                var preset = VideoSettingsRequest.FromEntity(original).ToEntity();
+                preset.Id = null;
+                preset.Title = title;
+                preset.DefaultPlatformConfiguration = "Retired service";
+                preset.IsDefaultConfiguration = title == "Default Retired service";
+                preset.IsVideoAndAudioSettingActive = true;
+                inserted.Add(repository.Insert(preset));
+            }
+
+            var wizard = WebUtility.HtmlDecode(await _fixture.Client.GetStringAsync("/orbis/mainLive?start=1"));
+            Assert.DoesNotContain("Default Retired service", wizard, StringComparison.Ordinal);
+            Assert.DoesNotContain("Default Low Retired service", wizard, StringComparison.Ordinal);
+            Assert.Contains("<label class=\"choice x\">", wizard, StringComparison.Ordinal);
+
+            var editor = WebUtility.HtmlDecode(await _fixture.Client.GetStringAsync("/orbis/mainVideoSetting?edit=new&preset=Retired%20service"));
+            Assert.DoesNotContain("value=\"Default Retired service\"", editor, StringComparison.Ordinal);
+
+            // Historical settings remain available to the rows that used them.
+            Assert.All(inserted, id => Assert.NotNull(repository.FindById(id)));
+        }
+        finally
+        {
+            foreach (var id in inserted)
+            {
+                repository.Delete(id);
+            }
+        }
     }
 
     [Fact]
@@ -378,10 +315,8 @@ public sealed class RumbleAndXPageTests : IClassFixture<ApplicationFixture>
         Assert.Contains("class=\"dialog wizard\" id=\"playlist-dialog\"", html, StringComparison.Ordinal);
         Assert.Contains("class=\"choice-list grid section\"", html, StringComparison.Ordinal);
 
-        // The seeded settings of the two platforms, each with the colour and the mark of its own.
-        Assert.Contains("<label class=\"choice rumble\">", html, StringComparison.Ordinal);
+        // The seeded settings of X carry its colour and mark.
         Assert.Contains("<label class=\"choice x\">", html, StringComparison.Ordinal);
-        Assert.Contains(LiveLinkView.MarkupOf("rumble"), html, StringComparison.Ordinal);
         Assert.Contains(LiveLinkView.MarkupOf("x"), html, StringComparison.Ordinal);
         Assert.Contains("1920×1080 · 30 fps · 9 Mbit/s", html, StringComparison.Ordinal);
     }

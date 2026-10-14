@@ -89,7 +89,7 @@ public static class SettingTitleView
 /// </summary>
 public static class LiveLinkView
 {
-    /// <summary>Platform of an ingest URL (<c>twitch</c>, <c>youtube</c>, <c>kick</c>, <c>facebook</c>, <c>tiktok</c>, <c>rumble</c>, <c>x</c>), or null if unknown.</summary>
+    /// <summary>Platform of an ingest URL (<c>twitch</c>, <c>youtube</c>, <c>kick</c>, <c>facebook</c>, <c>tiktok</c>, <c>x</c>), or null if unknown.</summary>
     public static string? PlatformOf(string? streamUrl)
     {
         if (string.IsNullOrWhiteSpace(streamUrl))
@@ -109,8 +109,7 @@ public static class LiveLinkView
         }
 
         // An ingest of the account or of the live is not always the preset (a Kick endpoint of its
-        // own, a Facebook host of the broadcast, a TikTok or X server of another region, the server
-        // of a single Rumble stream): those platforms are recognised by their domain.
+        // own, a Facebook host of the broadcast, a TikTok or X server of another region): those platforms are recognised by their domain.
         var detected = StreamPlatforms.Detect(normalized);
         return MainChannelSettingModel.Platforms
             .FirstOrDefault(known => known.PersonalIngest && known.Platform == detected)?.Value;
@@ -128,7 +127,6 @@ public static class LiveLinkView
         "kick" => KickMark,
         "facebook" => FacebookGamingMark,
         "tiktok" => TikTokMark,
-        "rumble" => RumbleMark,
         "x" => XMark,
         _ => PlayMark
     };
@@ -141,7 +139,6 @@ public static class LiveLinkView
         "kick" => "platform-kick",
         "facebook" => "platform-facebook",
         "tiktok" => "platform-tiktok",
-        "rumble" => "platform-rumble",
         "x" => "platform-x",
         _ => "platform-generic"
     };
@@ -174,10 +171,6 @@ public static class LiveLinkView
     private const string TikTokMark =
         "M12.525.02c1.31-.02 2.61-.01 3.91-.02.08 1.53.63 3.09 1.75 4.17 1.12 1.11 2.7 1.62 4.24 1.79v4.03c-1.44-.05-2.89-.35-4.2-.97-.57-.26-1.1-.59-1.62-.93-.01 2.92.01 5.84-.02 8.75-.08 1.4-.54 2.79-1.35 3.94-1.31 1.92-3.58 3.17-5.91 3.21-1.43.08-2.86-.31-4.08-1.03-2.02-1.19-3.44-3.37-3.65-5.71-.02-.5-.03-1-.01-1.49.18-1.9 1.12-3.72 2.58-4.96 1.66-1.44 3.98-2.13 6.15-1.72.02 1.48-.04 2.96-.04 4.44-.99-.32-2.15-.23-3.02.37-.63.41-1.11 1.04-1.36 1.75-.21.51-.15 1.07-.14 1.61.24 1.64 1.82 3.02 3.5 2.87 1.12-.01 2.19-.66 2.77-1.61.19-.33.4-.67.41-1.06.1-1.79.06-3.57.07-5.36.01-4.03-.01-8.05.02-12.07z";
 
-    /// <summary>The play button of Rumble, as its logo draws it (simple-icons).</summary>
-    private const string RumbleMark =
-        "M14.4528 13.5458c.8064-.6542.9297-1.8381.2756-2.6445a1.8802 1.8802 0 0 0-.2756-.2756 21.2127 21.2127 0 0 0-4.3121-2.776c-1.066-.51-2.256.2-2.4261 1.414a23.5226 23.5226 0 0 0-.14 5.5021c.116 1.23 1.292 1.964 2.372 1.492a19.6285 19.6285 0 0 0 4.5062-2.704v-.008zm6.9322-5.4002c2.0335 2.228 2.0396 5.637.014 7.8723A26.1487 26.1487 0 0 1 8.2946 23.846c-2.6848.6713-5.4168-.914-6.1662-3.5781-1.524-5.2002-1.3-11.0803.17-16.3045.772-2.744 3.3521-4.4661 6.0102-3.832 4.9242 1.174 9.5443 4.196 13.0764 8.0121v.002z";
-
     /// <summary>
     /// The X of X (simple-icons). Black on white and white on black, as X draws it: the page gives it
     /// the colour of its text (surfaces.css), so the mark stays one path like the others.
@@ -188,13 +181,13 @@ public static class LiveLinkView
     /// <summary>The play mark of a platform this application does not know.</summary>
     private const string PlayMark = "M8 5v14l11-7z";
 
-    /// <summary>Name the platform shows in its own interface (Twitch, YouTube, Kick, Facebook Gaming, TikTok, Rumble, X).</summary>
+    /// <summary>Name the platform shows in its own interface (Twitch, YouTube, Kick, Facebook Gaming, TikTok, X).</summary>
     public static string? LabelOf(string? platform) =>
         MainChannelSettingModel.Platforms
             .FirstOrDefault(known => known.Value == platform)?.Label;
 
     /// <summary>
-    /// Where the icon of a live leads: on Twitch, Kick and Rumble the channel, on Facebook Gaming the
+    /// Where the icon of a live leads: on Twitch and Kick the channel, on Facebook Gaming the
     /// page, on TikTok the live of the account, on X the profile of the account, on YouTube the live
     /// control room of YouTube Studio (<see cref="YouTubeStudioUrl"/>), which is where a live there
     /// is managed.
@@ -226,8 +219,6 @@ public static class LiveLinkView
             "facebook" => "https://www.facebook.com/" + Uri.EscapeDataString(name.TrimStart('@')),
             // A TikTok account is addressed by its handle, and its live has a page of its own.
             "tiktok" => "https://www.tiktok.com/@" + Uri.EscapeDataString(name.TrimStart('@')) + "/live",
-            // A Rumble channel is /c/ and its name: the address its own pages give as theirs.
-            "rumble" => "https://rumble.com/c/" + Uri.EscapeDataString(name.TrimStart('@')),
             // X addresses a live by the id of its broadcast only, which a configuration does not
             // know: the profile of the account is where the live shows while it is on air.
             "x" => "https://x.com/" + Uri.EscapeDataString(name.TrimStart('@')),

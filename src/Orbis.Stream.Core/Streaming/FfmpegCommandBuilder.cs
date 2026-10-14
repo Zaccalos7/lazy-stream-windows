@@ -190,7 +190,7 @@ public static class FfmpegCommandBuilder
             ? Letterbox(frame.Width, frame.Height)
             : request.Frame is null ? ScaleFilter(setting) : null;
 
-        var arguments = GlobalArguments(relay, diagnostics: profile?.Platform == StreamPlatform.YouTube);
+        var arguments = GlobalArguments(relay, diagnostics: profile is { Diagnostics: true });
 
         // Where to carry on from, before the input: as an input option ffmpeg seeks there and starts
         // reading immediately, where an output option would decode and throw the frames away.
@@ -325,7 +325,7 @@ public static class FfmpegCommandBuilder
 
         var profile = request.Profile;
         var relay = profile is { UsesRelay: true };
-        var arguments = GlobalArguments(relay, diagnostics: profile?.Platform == StreamPlatform.YouTube);
+        var arguments = GlobalArguments(relay, diagnostics: profile is { Diagnostics: true });
 
         // Who keeps the time of the canvas. A capture device does, whenever there is one: it
         // produces frames in real time, and the files are read at their own rate to stay in step
@@ -1378,15 +1378,6 @@ public static class FfmpegCommandBuilder
             }
         }
 
-        // What the ingest takes of the structure of the stream, like the constant rate above: no
-        // B-frames and one reference frame on Rumble (StreamPlatformProfile.SingleReference). After
-        // the options of the setting, so that one of them saying otherwise does not undo it; the
-        // two are options of every encoder, the GPU ones as much as x264.
-        if (profile is { SingleReference: true })
-        {
-            arguments.AddRange(["-bf", "0", "-refs", "1"]);
-        }
-
         if (!hasAudio)
         {
             return;
@@ -1568,10 +1559,12 @@ public static class FfmpegCommandBuilder
             "-loglevel",
             // X closes a publish it refuses without an RTMP error: only the verbose log of the
             // handshake and of the onStatus it answered with says what it made of the stream.
+            // The ingests that report (see StreamPlatformProfile.Diagnostics) name what they made
+            // of the stream at info level too, which is where a header they could not read shows.
             profile.Platform switch
             {
                 StreamPlatform.X => "verbose",
-                StreamPlatform.YouTube => "level+info",
+                _ when profile.Diagnostics => "level+info",
                 _ => "error"
             },
             "-progress",
@@ -1580,15 +1573,16 @@ public static class FfmpegCommandBuilder
             "-stats_period",
             "0.2",
 
-            // YouTube needs complete H.264/AAC parameters before its FLV header is published.
-            // A 64 KiB probe can finish on a large first keyframe before the first AAC packet,
-            // leaving an unspecified picture size or AAC's FLV fallback rate of 44.1 kHz.
-            // Two seconds fit in this profile's four-second relay buffer; this is an analysis
-            // ceiling, not an unconditional delay when the parameters are available sooner.
+            // The ingests whose profile asks for it (see StreamPlatformProfile.CompleteHeaders)
+            // need complete H.264/AAC parameters before their FLV header is published. A 64 KiB
+            // probe can finish on a large first keyframe before the first AAC packet, leaving an
+            // unspecified picture size or AAC's FLV fallback rate of 44.1 kHz. Two seconds fit in
+            // the four-second relay buffer those profiles keep; this is an analysis ceiling, not an
+            // unconditional delay when the parameters are available sooner.
             "-probesize",
-            profile.Platform == StreamPlatform.YouTube ? "4194304" : "65536",
+            profile.CompleteHeaders ? "4194304" : "65536",
             "-analyzeduration",
-            profile.Platform == StreamPlatform.YouTube ? "2000000" : "500000"
+            profile.CompleteHeaders ? "2000000" : "500000"
         ];
 
         // A sender that keeps the time itself (YouTube) reads the relay at the rate the stream

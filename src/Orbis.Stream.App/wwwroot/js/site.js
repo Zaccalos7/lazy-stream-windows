@@ -688,6 +688,11 @@ const paintPreview = state => {
     return;
   }
 
+  if (!state.isLive && (state.status || "") !== (preview.dataset.status || "")) {
+    location.reload();
+    return;
+  }
+
   previewMismatch = 0;
 
   paintLivePicker(state.running || []);

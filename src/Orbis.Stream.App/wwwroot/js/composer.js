@@ -683,16 +683,26 @@
   };
 
   // What a press at that point is meant for: the topmost picture under it. An overlay is mostly
-  // clear, and a press on a clear part of it is meant for what shows through - the slot inside the
-  // frame of a webcam, not the frame drawn over the whole canvas.
+  // clear, but its whole rectangle is grabbable: a press on a clear part still takes the overlay,
+  // so a logo is moved by its square and not only by the ink that happens to be in it. The one
+  // thing a clear part still lets through is an empty slot: filling the slots a layout's frame is
+  // drawn around is what a clear part is for, and it is not the overlay's to keep.
   const pickAt = point => {
+    // The first overlay the press lands on but does not touch: kept for the case where nothing
+    // under it is a slot, so the overlay's rectangle answers for it anyway.
+    let clear = null;
     for (let index = scene.items.length - 1; index >= 0; index--) {
       const item = scene.items[index];
       if (!hasPicture(item.kind) || !covers(item, point)) continue;
-      if (isOverlay(item) && !opaqueAt(item, point)) continue;
-      return item;
+      if (!isOverlay(item)) {
+        // A slot showing through is reached; any other picture stays under the overlay.
+        if (clear && isSlot(item)) return item;
+        return clear || item;
+      }
+      if (opaqueAt(item, point)) return item;
+      if (!clear) clear = item;
     }
-    return null;
+    return clear;
   };
 
   const appendHandles = (tile, item) => {

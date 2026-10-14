@@ -28,12 +28,6 @@ public enum StreamPlatform
     /// </summary>
     TikTok,
 
-    /// <summary>
-    /// X (formerly Twitter), whose lives are fed through the sources of Media Studio Producer: a
-    /// persistent key per source, on one ingest server per region under the network Periscope left
-    /// it, and a broadcast started on the source to go on air.
-    /// </summary>
-    X = 7
 }
 
 /// <summary>What carries the paced stream from the relay to the ingest.</summary>
@@ -80,8 +74,8 @@ public enum RelayPacing
 /// <para>Those are the two deliveries there are, and they stay two: the relay keeping the time
 /// over the native RTMP for a low latency player (Twitch), the ffmpeg sender keeping it with a
 /// head start for a player that buffers (YouTube). Kick is an ingest of the first kind - Amazon
-/// IVS, the network the Twitch ingest itself runs on - and Facebook Gaming, TikTok LIVE and
-/// X of the second, so each of them is the delivery of its kind with the needs of its own platform
+/// IVS, the network the Twitch ingest itself runs on - and Facebook Gaming and TikTok LIVE
+/// of the second, so each of them is the delivery of its kind with the needs of its own platform
 /// on top.</para>
 /// </summary>
 public sealed record StreamPlatformProfile(
@@ -214,7 +208,6 @@ public sealed record StreamPlatformProfile(
         StreamPlatform.Kick => "Kick",
         StreamPlatform.Facebook => "Facebook Gaming",
         StreamPlatform.TikTok => "TikTok",
-        StreamPlatform.X => "X",
         _ => "RTMP"
     };
 
@@ -345,33 +338,6 @@ public sealed record StreamPlatformProfile(
         Portrait: true,
         Adaptation: RateAdaptation.Buffered);
 
-    /// <summary>
-    /// X: a delivery of its own, next to the one of YouTube. The ffmpeg sender keeps the time, over
-    /// the RTMPS X asks its sources to be fed with, but with no head start: the ingest of X (the
-    /// Periscope network) was seen closing a publish a second after the burst of the YouTube
-    /// delivery, so the stream leaves at the rate it plays from the first frame, the way OBS sends
-    /// it. The jitter buffer stays on this side of the sender. On top of it what X asks of a source:
-    /// a keyframe every three seconds (90 frames at 30 fps), AAC at 44.1 kHz, one format for the
-    /// whole live and a silent track for a source with no sound. Going quiet costs the
-    /// broadcast on X: one whose source stops sending times out, and cannot be started again.
-    /// </summary>
-    public static readonly StreamPlatformProfile X = new(
-        StreamPlatform.X,
-        UsesRelay: true,
-        Preroll: TimeSpan.Zero,
-        MaxLead: TimeSpan.FromSeconds(4),
-        ConnectTimeout: TimeSpan.FromSeconds(30),
-        StallTimeout: TimeSpan.FromSeconds(20),
-        ReconnectAttempts: 5,
-        RequiresAudio: true,
-        AudioSampleRate: 44_100,
-        Transport: RelayTransport.FfmpegSender,
-        KeyframeSeconds: 3,
-        Pacing: RelayPacing.Sender,
-        UniformFormat: true,
-        RateBuffer: TimeSpan.FromSeconds(1),
-        Adaptation: RateAdaptation.Buffered);
-
     /// <summary>A destination this application does not know: one ffmpeg, as before.</summary>
     public static readonly StreamPlatformProfile Generic = new(
         StreamPlatform.Generic,
@@ -394,7 +360,6 @@ public sealed record StreamPlatformProfile(
         StreamPlatform.Kick => Kick,
         StreamPlatform.Facebook => Facebook,
         StreamPlatform.TikTok => TikTok,
-        StreamPlatform.X => X,
         _ => Generic
     };
 
@@ -457,13 +422,6 @@ public static class StreamPlatforms
     private static readonly string[] TikTokDomains =
         ["tiktokcdn.com", "tiktokcdn-eu.com", "tiktokcdn-us.com", "tiktokv.com", "tiktok.com"];
 
-    /// <summary>
-    /// The domain of the ingest servers of X, one per region (<c>va.pscp.tv</c>, <c>de.pscp.tv</c>,
-    /// see <see cref="XIngestRegions"/>): the network of Periscope, which X kept for the sources of
-    /// Media Studio Producer.
-    /// </summary>
-    internal const string XIngestDomain = "pscp.tv";
-
     /// <summary>The platform an ingest url belongs to, from its host; Generic when it is not known.</summary>
     public static StreamPlatform Detect(string? outputUrl)
     {
@@ -506,13 +464,6 @@ public static class StreamPlatforms
             {
                 return StreamPlatform.TikTok;
             }
-        }
-
-        // X ingests on one server per region (va.pscp.tv, de.pscp.tv...), every one of them under
-        // the domain Periscope left it.
-        if (IsOrUnder(host, XIngestDomain))
-        {
-            return StreamPlatform.X;
         }
 
         return StreamPlatform.Generic;

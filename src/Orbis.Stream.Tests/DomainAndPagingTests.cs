@@ -243,27 +243,6 @@ public sealed class DatabaseBootstrapperTests
         Assert.Equal((720, 1280, 2_500_000), (low.VideoWidth, low.VideoHeight, low.VideoBitrate));
     }
 
-    [Fact]
-    public void StartAsync_SeedsXWithWhatItsIngestAsksFor()
-    {
-        using var database = new TemporaryDatabase();
-        var settings = database.Repository<VideoSettingRepository>();
-
-        // X: 1080p30 at the 9 Mbps Media Studio Producer recommends, and its keyframe every three
-        // seconds; the light one is the configuration X recommends for a source, 720p30 at 4 Mbps.
-        var x = Assert.Single(settings.FindByIsDefaultConfigurationTrueAndDefaultPlatformConfiguration("X"));
-        Assert.Equal("Default X", x.Title);
-        Assert.Equal((1920, 1080, 30d), (x.VideoWidth, x.VideoHeight, x.FrameRate));
-        Assert.Equal(9_000_000, x.VideoBitrate);
-        Assert.Equal(128_000, x.AudioSetting!.AudioBitrate);
-        Assert.Equal(3, x.GopSize);
-
-        var lowX = settings.FindByTitleAndPlatform("Default Low X", "X");
-        Assert.NotNull(lowX);
-        Assert.False(lowX.IsDefaultConfiguration);
-        Assert.Equal((1280, 720, 4_000_000), (lowX.VideoWidth, lowX.VideoHeight, lowX.VideoBitrate));
-        Assert.Equal(3, lowX.GopSize);
-    }
 
     [Fact]
     public async Task StartAsync_AddsTheNewPlatformsOnceToAnInstallationThatHadTheOldOnes()
@@ -279,7 +258,7 @@ public sealed class DatabaseBootstrapperTests
                 NullLogger<DatabaseBootstrapper>.Instance)
             .StartAsync(CancellationToken.None);
 
-        foreach (var platform in new[] { "Twitch", "Youtube", "Kick", "Facebook Gaming", "TikTok", "X" })
+        foreach (var platform in new[] { "Twitch", "Youtube", "Kick", "Facebook Gaming", "TikTok" })
         {
             Assert.Single(settings.FindByIsDefaultConfigurationTrueAndDefaultPlatformConfiguration(platform));
         }
@@ -601,9 +580,6 @@ public sealed class LiveLinkTests
     [InlineData("rtmps://0123456789ab.global-contribute.live-video.net:443/app/", "kick")]
     [InlineData("rtmps://live-api-s.facebook.com:443/rtmp/", "facebook")]
     [InlineData("rtmp://push-rtmp-f5-tt02.tiktokcdn-eu.com/game/", "tiktok")]
-    // The source of X in another region.
-    [InlineData("rtmps://de.pscp.tv:443/x", "x")]
-    [InlineData("rtmp://va.pscp.tv:80/x/", "x")]
     public void PlatformOf_KnowsKickAndFacebookByTheDomainOfTheirIngest(string streamUrl, string platform) =>
         Assert.Equal(platform, LiveLinkView.PlatformOf(streamUrl));
 
@@ -629,23 +605,7 @@ public sealed class LiveLinkTests
         Assert.Equal("https://www.tiktok.com/@repro/live", LiveLinkView.UrlOf("rtmp://push.tiktokcdn-us.com/live", "repro", null));
     }
 
-    [Fact]
-    public void UrlOf_XIsTheProfileOfTheAccount()
-    {
-        Assert.Equal("https://x.com/repro_live", LiveLinkView.UrlOf("rtmps://de.pscp.tv:443/x", "@repro_live", "x"));
-        Assert.Equal("https://x.com/repro_live", LiveLinkView.UrlOf("rtmp://sg.pscp.tv:80/x", "repro_live", null));
-    }
 
-    [Fact]
-    public void XHasItsNameMarkAndColour()
-    {
-        Assert.Equal("X", LiveLinkView.LabelOf("x"));
-
-        // The X of X.
-        Assert.StartsWith("M14.234 10.162", LiveLinkView.MarkupOf("x"), StringComparison.Ordinal);
-
-        Assert.Equal("platform-x", LiveLinkView.ClassOf("x"));
-    }
 
     [Fact]
     public void KickAndFacebookGamingHaveTheirNamesMarksAndColours()
@@ -658,7 +618,7 @@ public sealed class LiveLinkTests
         Assert.StartsWith("M1.333 0h8", LiveLinkView.MarkupOf("kick"), StringComparison.Ordinal);
         Assert.StartsWith("M0 0h24v24H0zM3.75 3.75", LiveLinkView.MarkupOf("facebook"), StringComparison.Ordinal);
         Assert.StartsWith("M12.525.02", LiveLinkView.MarkupOf("tiktok"), StringComparison.Ordinal);
-        var marks = new[] { "twitch", "youtube", "kick", "facebook", "tiktok", "x", null }.Select(LiveLinkView.MarkupOf).ToList();
+        var marks = new[] { "twitch", "youtube", "kick", "facebook", "tiktok", null }.Select(LiveLinkView.MarkupOf).ToList();
         Assert.Equal(marks.Count, marks.Distinct().Count());
 
         Assert.Equal("platform-kick", LiveLinkView.ClassOf("kick"));
@@ -668,9 +628,9 @@ public sealed class LiveLinkTests
     }
 
     [Fact]
-    public void TheChannelSettingsOfferTheSixPlatformsWithTheirIngest()
+    public void TheChannelSettingsOfferTheFivePlatformsWithTheirIngest()
     {
-        Assert.Equal(["twitch", "youtube", "kick", "facebook", "tiktok", "x"], MainChannelSettingModel.Platforms.Select(platform => platform.Value));
+        Assert.Equal(["twitch", "youtube", "kick", "facebook", "tiktok"], MainChannelSettingModel.Platforms.Select(platform => platform.Value));
         Assert.All(MainChannelSettingModel.Platforms, platform =>
         {
             Assert.StartsWith("rtmp", platform.StreamUrl, StringComparison.Ordinal);
@@ -678,17 +638,13 @@ public sealed class LiveLinkTests
             Assert.Equal(platform.Platform, Orbis.Stream.Core.Streaming.StreamPlatforms.Detect(platform.StreamUrl + "/key"));
         });
 
-        // Kick and Facebook share the hint about their dashboard. TikTok, whose key is asked
-        // for at every live, has a hint of its own, and X is
-        // asked for the region of its source instead of an address.
+        // Kick and Facebook share the hint about their dashboard. TikTok has its own hint
+        // about the key asked for at every live.
         Assert.Equal(
             [("ingestFromDashboard", "kick facebook")],
             MainChannelSettingModel.IngestHints);
         Assert.Equal("tiktok", MainChannelSettingModel.KeyEachLive);
-        Assert.Equal("x", MainChannelSettingModel.RegionalIngest);
 
-        // X is fed over RTMPS.
-        Assert.StartsWith("rtmps://", MainChannelSettingModel.ChoiceOf("x")!.StreamUrl, StringComparison.Ordinal);
     }
 
     [Fact]
@@ -711,7 +667,6 @@ public sealed class LiveLinkTests
         Assert.Equal("youtube", MainChannelSettingModel.ChoiceOfSetting("Youtube")?.Value);
         Assert.Equal("facebook", MainChannelSettingModel.ChoiceOfSetting("Facebook Gaming")?.Value);
         Assert.Equal("tiktok", MainChannelSettingModel.ChoiceOfSetting(" TikTok ")?.Value);
-        Assert.Equal("x", MainChannelSettingModel.ChoiceOfSetting("X")?.Value);
 
         // A setting of the user's own was made for no platform.
         Assert.Null(MainChannelSettingModel.ChoiceOfSetting(VideoSettingForm.CustomPlatform));
@@ -734,7 +689,6 @@ public sealed class LiveLinkTests
         // The seed spells YouTube the way it was stored, and is shown the way it is spelled.
         Assert.Equal("Default Low YouTube", SettingTitleView.Of("Default Low Youtube", text));
         Assert.Equal("Default Kick", SettingTitleView.Of("Default Kick", text));
-        Assert.Equal(text["defaultLowX"], SettingTitleView.Of("Default Low X", text));
         Assert.Equal("Mine", SettingTitleView.Of("Mine", text));
         Assert.Equal(text["untitled"], SettingTitleView.Of("  ", text));
     }

@@ -380,15 +380,6 @@ public sealed class LiveOutput : IAsyncDisposable
                     "The ffmpeg sender to {Platform} said: {Errors}",
                     Profile.Platform,
                     FfmpegStreamingSession.RedactStreamKey(errors.Length > 2000 ? errors[^2000..] : errors, OutputUrl));
-
-                // X closes the socket without an RTMP error when it refuses a publish: the end of
-                // file is all ffmpeg sees, and the reason is on the side of Media Studio Producer.
-                if (Profile.Platform == StreamPlatform.X && errors.Contains("End of file", StringComparison.Ordinal))
-                {
-                    _logger.LogWarning(
-                        "X closed the connection of the live: check in Media Studio Producer that the source is in region {Region}, that its key is the current one and that no broadcast on it has ended",
-                        XIngestRegions.OfUrl(OutputUrl)?.Code ?? "?");
-                }
             }
             return FfmpegStreamingSession.RedactStreamKey(errors, OutputUrl);
         }

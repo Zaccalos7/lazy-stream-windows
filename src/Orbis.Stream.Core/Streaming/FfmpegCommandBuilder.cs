@@ -362,7 +362,17 @@ public static class FfmpegCommandBuilder
 
         // A label of the graph can feed one output only: with a preview the composed picture is
         // split in two, and the copy is shrunk inside the graph (-vf cannot act on a graph output).
-        var graph = BuildFilterGraph(items, pictures, canvasWidth, canvasHeight, frameRate, pacedGraph);
+        // Inputs and tiles restart their timestamps at zero. A resumed finite scene therefore
+        // has only the remaining duration to encode, including its preview branch.
+        var duration = request.Duration is { } length && length > TimeSpan.Zero
+            ? length - request.ResumeFrom
+            : (TimeSpan?)null;
+        if (duration is { } remaining && remaining <= TimeSpan.Zero)
+        {
+            throw new ArgumentException("The composition has already reached its end", nameof(request));
+        }
+
+        var graph = BuildFilterGraph(items, pictures, canvasWidth, canvasHeight, frameRate, pacedGraph, duration);
         var videoLabel = VideoLabel;
 
         // A canvas on a connection that went on air at another size is fitted into that size.
@@ -413,12 +423,12 @@ public static class FfmpegCommandBuilder
 
         // The length of the canvas is an output option: it counts what goes on air, whatever the
         // inputs do. It stands before the destination, which is where every output option goes.
-        // A canvas started again from where it was interrupted reads from that point on, so the
-        // clock of the output carries the part already streamed: the live lasts the same either way.
-        if (request.Duration is { } duration && duration > TimeSpan.Zero)
+        // The graph has the same bound: -t on the live output alone leaves the preview drawing
+        // an infinite canvas, which can prevent the video encoder from flushing its last frames.
+        if (duration is { } outputDuration)
         {
             arguments.Add("-t");
-            arguments.Add(Seconds(duration + request.ResumeFrom));
+            arguments.Add(Seconds(outputDuration));
         }
 
         AppendDestination(arguments, request.OutputUrl, relay);
@@ -796,12 +806,14 @@ public static class FfmpegCommandBuilder
         int canvasWidth,
         int canvasHeight,
         double frameRate,
-        bool paced)
+        bool paced,
+        TimeSpan? duration)
     {
         var graph = new StringBuilder();
 
+        var end = duration is { } length ? ":d=" + Seconds(length) : string.Empty;
         graph.Append(CultureInfo.InvariantCulture,
-            $"color=c=black:s={canvasWidth}x{canvasHeight}:r={Number(frameRate)}[{CanvasLabel}];");
+            $"color=c=black:s={canvasWidth}x{canvasHeight}:r={Number(frameRate)}{end}[{CanvasLabel}];");
 
         // Every tile is scaled and normalised on its own, so the overlay only ever sees pictures
         // that already have the pixel format and the sample aspect the canvas wants. Its clock
@@ -1557,16 +1569,9 @@ public static class FfmpegCommandBuilder
             "-hide_banner",
             "-nostdin",
             "-loglevel",
-            // X closes a publish it refuses without an RTMP error: only the verbose log of the
-            // handshake and of the onStatus it answered with says what it made of the stream.
             // The ingests that report (see StreamPlatformProfile.Diagnostics) name what they made
             // of the stream at info level too, which is where a header they could not read shows.
-            profile.Platform switch
-            {
-                StreamPlatform.X => "verbose",
-                _ when profile.Diagnostics => "level+info",
-                _ => "error"
-            },
+            profile.Diagnostics ? "level+info" : "error",
             "-progress",
             "pipe:1",
             "-nostats",
@@ -1594,12 +1599,6 @@ public static class FfmpegCommandBuilder
             if (profile.Preroll > TimeSpan.Zero)
             {
                 arguments.AddRange(["-readrate_initial_burst", Seconds(profile.Preroll)]);
-            }
-            else if (profile.Platform == StreamPlatform.X)
-            {
-                // FFmpeg 8.1 uses a 0.5s burst when this option is absent OR zero.
-                // A positive microsecond disables that default without advancing a frame.
-                arguments.AddRange(["-readrate_initial_burst", "0.000001"]);
             }
         }
 

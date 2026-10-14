@@ -5,7 +5,7 @@
 </a>
 
 Desktop application that streams local video files to Twitch, YouTube, Kick, Facebook Gaming,
-TikTok, X and any other RTMP-compatible platform.
+TikTok and any other RTMP-compatible platform.
 
 The application is a native rewrite of the original Java Spring Boot + JCEF project:
 
@@ -259,28 +259,6 @@ picked, the `Default TikTok` and `Default Low TikTok` presets are 1080 × 1920 a
 the platform profile turns the frame of a live that would lie down (`StreamPlatformProfile.Orient`),
 so a landscape file or canvas is fitted into 9:16 with bands instead of being stretched. Delivery
 is the one of YouTube: ffmpeg publishes at real time with a short head start, with AAC at 48 kHz.
-
-### X
-
-X uses an ffmpeg sender with AAC at 44.1 kHz and one picture format for the whole live.
-It sends at real time from the first frame. FFmpeg's default half-second initial burst is
-explicitly reduced to one microsecond (zero selects the default).
-
-| Setting | X |
-| --- | --- |
-| Ingest | `rtmps://<region>.pscp.tv:443/x`, region picked in the form |
-| Stream key | Persistent, one per source of Media Studio Producer |
-| Rate control | Capped VBR |
-| Keyframe interval | 3 s |
-| Default preset | 1080p30 at 9 Mbps, AAC 128 kbit/s |
-| Default Low preset | 720p30 at 4 Mbps |
-
-The channel form asks for the region of the source instead of an address (`XIngestRegions`).
-A source belongs to the region it was made in, and the configuration keeps the RTMPS address
-of that server. A live reaches its source only: it goes on air once a broadcast is started
-on that source in Media Studio Producer. A broadcast whose source stops sending times out
-and cannot be restarted. The preview keeps the local picture, and the icon of a live opens
-the account's profile.
 
 ### Scenes and overlays
 

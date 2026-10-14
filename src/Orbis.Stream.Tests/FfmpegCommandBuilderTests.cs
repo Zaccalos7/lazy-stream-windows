@@ -321,13 +321,14 @@ public sealed class FfmpegCompositionTests
     public void ACanvasOfFilesIsBoundedByItsLongestFile()
     {
         // The canvas ends with the longest of its files, the way a playlist ends with the last one:
-        // -t is an output option, so ffmpeg stops on its own and closes the connection to the
-        // platform instead of waiting to be asked.
+        // Both the canvas and its live output end, so the preview cannot keep the graph alive
+        // while the live encoder is waiting to flush its last frames.
         var request = Request([Camera(0, 0, 1920, 1080)]) with { Duration = TimeSpan.FromSeconds(754.5) };
         var command = FfmpegCommandBuilder.BuildComposition(request);
         var text = string.Join(' ', command);
 
         Assert.Contains("-t 754.5 rtmp://ingest/live/key", text, StringComparison.Ordinal);
+        Assert.Contains("color=c=black:s=1920x1080:r=30:d=754.5[canvas]", text, StringComparison.Ordinal);
         Assert.True(command.ToList().IndexOf("-t") < command.ToList().IndexOf("rtmp://ingest/live/key"));
     }
 
@@ -344,8 +345,8 @@ public sealed class FfmpegCompositionTests
     [Fact]
     public void ACanvasStartedAgainFromWhereItStoppedStillLastsAsLong()
     {
-        // The inputs read from the point the interrupted pass got to, so the clock of the output
-        // carries the part that was already on air.
+        // Input timestamps restart at zero after seeking: only the remaining 480 seconds
+        // belong to this encoder, and the preview shares that end.
         var request = Request([Camera(0, 0, 1920, 1080)]) with
         {
             Duration = TimeSpan.FromSeconds(600),
@@ -353,9 +354,10 @@ public sealed class FfmpegCompositionTests
         };
 
         Assert.Contains(
-            "-t 720",
+            "-t 480",
             string.Join(' ', FfmpegCommandBuilder.BuildComposition(request)),
             StringComparison.Ordinal);
+        Assert.Contains("r=30:d=480[canvas]", GraphOf(FfmpegCommandBuilder.BuildComposition(request)), StringComparison.Ordinal);
     }
 
     [Fact]

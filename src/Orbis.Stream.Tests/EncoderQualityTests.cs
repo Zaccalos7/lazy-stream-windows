@@ -263,10 +263,10 @@ public sealed class EncoderQualityTests
         await tuning.TuneDefaultsAsync(CancellationToken.None);
 
         var defaults = settings.FindAll(new Dictionary<string, string>())
-            .Where(setting => setting.DefaultPlatformConfiguration is "Twitch" or "Youtube" or "Kick" or "Facebook Gaming" or "TikTok" or "X")
+            .Where(setting => setting.DefaultPlatformConfiguration is "Twitch" or "Youtube" or "Kick" or "Facebook Gaming" or "TikTok")
             .ToList();
-        // A default and a low CPU one for each of the six platforms.
-        Assert.Equal(12, defaults.Count);
+        // A default and a low CPU one for each of the five platforms.
+        Assert.Equal(10, defaults.Count);
         Assert.All(defaults, setting =>
         {
             Assert.Equal("h264_nvenc", setting.VideoCodecName);

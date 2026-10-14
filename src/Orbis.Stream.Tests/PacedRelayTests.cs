@@ -34,10 +34,6 @@ public sealed class StreamPlatformTests
     [InlineData("rtmp://push-rtmp-f5-tt02.tiktokcdn-eu.com/game/stream-123", StreamPlatform.TikTok)]
     [InlineData("rtmp://push.tiktokcdn-us.com/live/stream-123", StreamPlatform.TikTok)]
     [InlineData("rtmp://nottiktokcdn.com/live/key", StreamPlatform.Generic)]
-    // X: one server per region, over RTMP on 80 or RTMPS on 443.
-    [InlineData("rtmps://de.pscp.tv:443/x/abcdefghijkl", StreamPlatform.X)]
-    [InlineData("rtmp://va.pscp.tv:80/x/abcdefghijkl", StreamPlatform.X)]
-    [InlineData("rtmp://notpscp.tv/x/key", StreamPlatform.Generic)]
     public void Detect_ReadsThePlatformOffTheHost(string? url, StreamPlatform expected) =>
         Assert.Equal(expected, StreamPlatforms.Detect(url));
 
@@ -77,7 +73,6 @@ public sealed class StreamPlatformTests
 
         Assert.Same(StreamPlatformProfile.Kick, StreamPlatformProfile.For("rtmps://fa723fc1b171.global-contribute.live-video.net/app/key"));
         Assert.Same(StreamPlatformProfile.Facebook, StreamPlatformProfile.For("rtmps://rtmp-api.facebook.com:443/rtmp/key"));
-        Assert.Same(StreamPlatformProfile.X, StreamPlatformProfile.For("rtmps://de.pscp.tv:443/x/key"));
     }
 
     [Fact]
@@ -135,9 +130,6 @@ public sealed class StreamPlatformTests
             Assert.Equal(2, profile.KeyframeSeconds);
         }
 
-        // X asks for its keyframe every three seconds.
-        Assert.Equal(TimeSpan.FromSeconds(1), StreamPlatformProfile.X.RateBuffer);
-        Assert.Equal(3, StreamPlatformProfile.X.KeyframeSeconds);
     }
 }
 
@@ -715,88 +707,10 @@ public sealed class PacedRelayFfmpegTests
 
     public PacedRelayFfmpegTests(ITestOutputHelper output) => _output = output;
 
-    [Fact]
-    public async Task XSenderPacesTheFirstSecondInsteadOfBurstingIt()
-    {
-        var ffmpeg = Which("ffmpeg");
-        var ffprobe = Which("ffprobe");
-        if (ffmpeg is null || ffprobe is null)
-        {
-            _output.WriteLine("ffmpeg/ffprobe are not installed: the sender test is skipped.");
-            return;
-        }
-
-        var directory = Directory.CreateTempSubdirectory("orbis-x-pacing-");
-        try
-        {
-            var clip = Path.Combine(directory.FullName, "clip.flv");
-            await RunAsync(ffmpeg,
-                $"-y -f lavfi -i testsrc2=size=320x240:rate=30 -f lavfi -i sine=frequency=440:sample_rate=44100 -t 2 -c:v libx264 -preset superfast -bf 0 -c:a aac -f flv \"{clip}\"");
-
-            var locator = new FfmpegToolLocator(ffmpeg, ffprobe);
-            var start = locator.CreateStartInfo(ffmpeg, FfmpegCommandBuilder.BuildSender(
-                Path.Combine(directory.FullName, "out.flv"), StreamPlatformProfile.X));
-            start.RedirectStandardInput = true;
-            using var sender = Process.Start(start)!;
-            using var timeout = new CancellationTokenSource(TimeSpan.FromSeconds(15));
-            try
-            {
-                var error = sender.StandardError.ReadToEndAsync(timeout.Token);
-                // All the input is available immediately, like the relay's four-second queue.
-                var input = FeedAsync();
-                long? firstPosition = null;
-                long firstReport = 0;
-                var checkedPacing = false;
-                while (await sender.StandardOutput.ReadLineAsync(timeout.Token) is { } line)
-                {
-                    if (!line.StartsWith("out_time_us=", StringComparison.Ordinal)
-                        || !long.TryParse(line.AsSpan("out_time_us=".Length), out var position)) continue;
-
-                    if (firstPosition is null)
-                    {
-                        firstPosition = position;
-                        firstReport = Stopwatch.GetTimestamp();
-                    }
-                    else if (!checkedPacing && position - firstPosition.Value >= 800_000)
-                    {
-                        var elapsed = Stopwatch.GetElapsedTime(firstReport).TotalSeconds;
-                        var advanced = (position - firstPosition.Value) / 1_000_000d;
-                        _output.WriteLine($"X sender advanced {advanced:0.000}s in {elapsed:0.000}s");
-                        // Allow one progress period of timing noise, but never a 0.5s burst.
-                        Assert.True(elapsed >= advanced - 0.2,
-                            $"X sent {advanced:0.000}s of media in only {elapsed:0.000}s");
-                        checkedPacing = true;
-                    }
-                }
-
-                await input;
-                await sender.WaitForExitAsync(timeout.Token);
-                Assert.True(sender.ExitCode == 0, await error);
-                Assert.True(checkedPacing, "the sender did not report its first second of media");
-
-                async Task FeedAsync()
-                {
-                    await using var source = File.OpenRead(clip);
-                    await source.CopyToAsync(sender.StandardInput.BaseStream, timeout.Token);
-                    sender.StandardInput.Close();
-                }
-            }
-            finally
-            {
-                if (!sender.HasExited) sender.Kill(entireProcessTree: true);
-                await sender.WaitForExitAsync();
-            }
-        }
-        finally
-        {
-            directory.Delete(recursive: true);
-        }
-    }
 
     [Theory]
     [InlineData(StreamPlatform.Twitch)]
     [InlineData(StreamPlatform.YouTube)]
-    [InlineData(StreamPlatform.X)]
     public async Task Relay_StreamsAFileInRealTimeAndIsOnAir(StreamPlatform platform)
     {
         var ffmpeg = Which("ffmpeg");
@@ -821,7 +735,6 @@ public sealed class PacedRelayFfmpegTests
             var profile = (platform switch
             {
                 StreamPlatform.YouTube => StreamPlatformProfile.YouTube,
-                StreamPlatform.X => StreamPlatformProfile.X,
                 _ => StreamPlatformProfile.Twitch
             })
                 with { Transport = RelayTransport.FfmpegSender };

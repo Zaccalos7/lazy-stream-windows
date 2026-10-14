@@ -113,10 +113,7 @@ public sealed class FfmpegStreamingSession : IAsyncDisposable
     /// </summary>
     public bool IsOnAir => OnAirSinceTicks != 0;
 
-    // X must keep receiving through its first GOP; a publish that closes immediately
-    // after the first packets must not flash LIVE in the grid and preview.
-    public bool IsPublishing => IsOnAir && !HasExited && SinceLastAdvance <= Profile.StallTimeout
-        && (Profile.Platform != StreamPlatform.X || OnAirFor >= TimeSpan.FromSeconds(Profile.KeyframeSeconds));
+    public bool IsPublishing => IsOnAir && !HasExited && SinceLastAdvance <= Profile.StallTimeout;
 
     /// <summary>How long the live has been on air; zero when it is not.</summary>
     public TimeSpan OnAirFor

@@ -11,11 +11,13 @@ namespace Orbis.Stream.Tests;
 public sealed class YouTubeDeliveryTests(ITestOutputHelper output)
 {
     [Theory]
-    [InlineData(true, false)]
-    [InlineData(false, false)]
-    [InlineData(true, true)]
-    [InlineData(false, true)]
-    public async Task YouTubeSenderPublishesDecodableAudioAndVideoAcrossEncoderChanges(bool sourceHasAudio, bool composition)
+    [InlineData(true, false, 0)]
+    [InlineData(false, false, 0)]
+    [InlineData(true, true, 0)]
+    [InlineData(false, true, 0)]
+    [InlineData(true, true, 2)]
+    [InlineData(false, true, 2)]
+    public async Task YouTubeSenderPublishesDecodableAudioAndVideoAcrossEncoderChanges(bool sourceHasAudio, bool composition, int resumeSeconds)
     {
         var ffmpeg = Tool("ffmpeg");
         var ffprobe = Tool("ffprobe");
@@ -72,24 +74,22 @@ public sealed class YouTubeDeliveryTests(ITestOutputHelper output)
                                 [new(SourceKind.File, clip, 0, 0, 1280, 720, sourceHasAudio),
                                  new(SourceKind.Overlay, overlay, 960, 0, 320, 160, false, Overlay: OverlayMedia.Still)],
                                 url, setting, 1280, 720, 30, logger,
+                                resumeFrom: TimeSpan.FromSeconds(resumeSeconds),
                                 duration: TimeSpan.FromSeconds(6), previewPath: preview, output: live, quality: quality)
                             : FfmpegStreamingSession.Start(locator, 1, clip, url, setting, probe,
                                 logger, previewPath: preview, output: live, quality: quality);
                         var ended = session.WaitForExitAsync(token);
                         var previewSeen = false;
-                        // The app ends a finite scene at its last timestamp: the JPEG preview's
-                        // blank canvas can keep the encoder alive after its FLV output has ended.
-                        while (!ended.IsCompleted && session.ContinuationMilliseconds < 5960)
+                        // A finite scene must flush its video encoder and finish on its own,
+                        // even with a preview. Killing it would hide an infinite canvas and
+                        // could discard the delayed frames at the end of each pass.
+                        while (!ended.IsCompleted)
                         {
                             previewSeen |= File.Exists(preview) && new FileInfo(preview).Length > 0;
                             await Task.Delay(20, token);
                         }
-                        if (!ended.IsCompleted)
-                        {
-                            await session.EndNaturallyAsync();
-                        }
                         var exit = await ended;
-                        Assert.True(exit == 0 || session.EndedNaturally, await session.ReadErrorAsync());
+                        Assert.True(exit == 0, await session.ReadErrorAsync());
                         Assert.True(previewSeen, "The encoder produced no JPEG preview while publishing.");
                     }
                     await live.CompleteAsync(token);
@@ -111,7 +111,17 @@ public sealed class YouTubeDeliveryTests(ITestOutputHelper output)
                 Assert.Equal("h264", video.GetProperty("codec_name").GetString());
                 Assert.Equal(1280, video.GetProperty("width").GetInt32());
                 Assert.Equal(720, video.GetProperty("height").GetInt32());
-                Assert.InRange(int.Parse(video.GetProperty("nb_read_frames").GetString()!), 525, 540);
+                var frames = int.Parse(video.GetProperty("nb_read_frames").GetString()!);
+                // Every canvas frame, including the delayed frames flushed at each handover,
+                // must survive. A resumed canvas contains only the part after its seek point.
+                if (composition)
+                {
+                    Assert.Equal((6 - resumeSeconds) * 30 * 3, frames);
+                }
+                else
+                {
+                    Assert.InRange(frames, 525, 540);
+                }
                 var audio = Assert.Single(streams, stream => stream.GetProperty("codec_type").GetString() == "audio");
                 Assert.Equal("aac", audio.GetProperty("codec_name").GetString());
                 Assert.Equal("48000", audio.GetProperty("sample_rate").GetString());

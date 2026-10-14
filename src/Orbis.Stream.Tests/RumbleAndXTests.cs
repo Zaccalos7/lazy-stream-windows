@@ -71,7 +71,7 @@ public sealed class RumbleAndXDeliveryTests
     }
 
     [Fact]
-    public void XIsDeliveredTheWayYouTubeIsWithAKeyframeEveryThreeSeconds()
+    public void XHasADeliveryOfItsOwnWithNoBurstAndAKeyframeEveryThreeSeconds()
     {
         var x = StreamPlatformProfile.X;
 
@@ -80,7 +80,8 @@ public sealed class RumbleAndXDeliveryTests
         Assert.Equal(StreamPlatform.X, x.Platform);
         Assert.Equal(RelayPacing.Sender, x.Pacing);
         Assert.Equal(RelayTransport.FfmpegSender, x.Transport);
-        Assert.Equal(StreamPlatformProfile.YouTube.Preroll, x.Preroll);
+        // No head start: the ingest of X closes a publish that arrives faster than real time.
+        Assert.Equal(TimeSpan.Zero, x.Preroll);
         Assert.Same(StreamPlatformProfile.YouTube.Adaptation, x.Adaptation);
         Assert.True(x.UniformFormat);
         Assert.True(x.RequiresAudio);
@@ -160,18 +161,28 @@ public sealed class RumbleAndXDeliveryTests
         Assert.Contains("-force_key_frames expr:gte(t,n_forced*3)", Command(X, StreamPlatformProfile.X, Setting(gopSize: null)), StringComparison.Ordinal);
     }
 
-    [Theory]
-    [InlineData(Rumble)]
-    [InlineData(X)]
-    public void RumbleAndXGoOutThroughAnFfmpegSenderThatReadsAtRealTimeWithItsBurst(string ingest)
+    [Fact]
+    public void RumbleGoesOutThroughAnFfmpegSenderThatReadsAtRealTimeWithItsBurst()
     {
-        var output = LiveOutput.For(ingest, new FfmpegToolLocator("ffmpeg", "ffprobe"), NullLogger.Instance, RelayTransport.NativeRtmp);
+        var output = LiveOutput.For(Rumble, new FfmpegToolLocator("ffmpeg", "ffprobe"), NullLogger.Instance, RelayTransport.NativeRtmp);
 
-        // The channel asks for nothing on either: they go out the way their kind does.
-        Assert.Equal(StreamPlatformProfile.For(ingest), output!.Profile);
-        var arguments = string.Join(' ', FfmpegCommandBuilder.BuildSender(ingest, output.Profile));
+        // The channel asks for nothing: it goes out the way its kind does.
+        Assert.Equal(StreamPlatformProfile.Rumble, output!.Profile);
+        var arguments = string.Join(' ', FfmpegCommandBuilder.BuildSender(Rumble, output.Profile));
         Assert.Contains("-readrate 1 -readrate_initial_burst 2 -f flv -i pipe:0", arguments, StringComparison.Ordinal);
-        Assert.EndsWith(ingest, arguments, StringComparison.Ordinal);
+        Assert.EndsWith(Rumble, arguments, StringComparison.Ordinal);
+    }
+
+    [Fact]
+    public void XGoesOutThroughAnFfmpegSenderThatReadsAtRealTimeFromTheFirstFrame()
+    {
+        var output = LiveOutput.For(X, new FfmpegToolLocator("ffmpeg", "ffprobe"), NullLogger.Instance, RelayTransport.NativeRtmp);
+
+        Assert.Equal(StreamPlatformProfile.X, output!.Profile);
+        var arguments = string.Join(' ', FfmpegCommandBuilder.BuildSender(X, output.Profile));
+        Assert.Contains("-readrate 1 -f flv -i pipe:0", arguments, StringComparison.Ordinal);
+        Assert.DoesNotContain("-readrate_initial_burst", arguments, StringComparison.Ordinal);
+        Assert.EndsWith(X, arguments, StringComparison.Ordinal);
     }
 }
 

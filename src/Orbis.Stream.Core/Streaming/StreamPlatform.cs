@@ -349,17 +349,19 @@ public sealed record StreamPlatformProfile(
         SingleReference: true);
 
     /// <summary>
-    /// X: the delivery of YouTube - the ffmpeg sender keeps the time with a head start, over the
-    /// RTMPS X asks its sources to be fed with - and the keyframe X asks for, one every three
-    /// seconds (90 frames at 30 fps), with AAC at the 44.1 kHz its sources recommend. One format for
-    /// the whole live and a silent track for a source with no sound. The buffered delivery is the
-    /// one that rides out a slow moment of the network instead of going quiet, and on X going quiet
-    /// costs the broadcast: one whose source stops sending times out, and cannot be started again.
+    /// X: a delivery of its own, next to the one of YouTube. The ffmpeg sender keeps the time, over
+    /// the RTMPS X asks its sources to be fed with, but with no head start: the ingest of X (the
+    /// Periscope network) was seen closing a publish a second after the burst of the YouTube
+    /// delivery, so the stream leaves at the rate it plays from the first frame, the way OBS sends
+    /// it. The jitter buffer stays on this side of the sender. On top of it what X asks of a source:
+    /// a keyframe every three seconds (90 frames at 30 fps), AAC at 44.1 kHz, one format for the
+    /// whole live and a silent track for a source with no sound. Going quiet costs the
+    /// broadcast on X: one whose source stops sending times out, and cannot be started again.
     /// </summary>
     public static readonly StreamPlatformProfile X = new(
         StreamPlatform.X,
         UsesRelay: true,
-        Preroll: TimeSpan.FromSeconds(2),
+        Preroll: TimeSpan.Zero,
         MaxLead: TimeSpan.FromSeconds(4),
         ConnectTimeout: TimeSpan.FromSeconds(30),
         StallTimeout: TimeSpan.FromSeconds(20),

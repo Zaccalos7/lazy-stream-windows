@@ -43,6 +43,7 @@ public sealed class FfmpegStreamingSession : IAsyncDisposable
     private int _stopRequested;
     private int _restartRequested;
     private int _endedNaturally;
+    private WebpOverlayInputs? _webpInputs;
 
     private FfmpegStreamingSession(
         Process process,
@@ -77,8 +78,12 @@ public sealed class FfmpegStreamingSession : IAsyncDisposable
         InputPath = inputPath;
         Probe = probe;
         Output = output;
-        _standardError = ReadToEndAsync(process.StandardError);
-        _senderError = sender is null ? null : ReadToEndAsync(sender.StandardError);
+        _standardError = profile.Platform == StreamPlatform.YouTube
+            ? FfmpegProcessLog.ReadAsync(process.StandardError, logger, "encoder", outputUrl)
+            : ReadToEndAsync(process.StandardError);
+        _senderError = sender is null ? null : profile.Platform == StreamPlatform.YouTube
+            ? FfmpegProcessLog.ReadAsync(sender.StandardError, logger, "sender", outputUrl)
+            : ReadToEndAsync(sender.StandardError);
 
         // Nothing else reads what ffmpeg writes on its standard output, and the pipe it writes
         // <c>-progress</c> into is small: a session that left it alone would block ffmpeg itself.
@@ -361,22 +366,32 @@ public sealed class FfmpegStreamingSession : IAsyncDisposable
         var frame = profile.UniformFormat
             ? output?.Pin(profile.Orient(new MediaOutput(FfmpegCommandBuilder.Even(canvasWidth), FfmpegCommandBuilder.Even(canvasHeight), frameRate)))
             : null;
-        var arguments = FfmpegCommandBuilder.BuildComposition(new FfmpegCompositionRequest(
-            items, outputUrl, setting, canvasWidth, canvasHeight, canvasFrameRate, resumeFrom, duration, previewPath, profile, quality, frame,
-            BitrateOf(setting, output), alwaysSound));
+        var webpInputs = WebpOverlayInputs.Prepare(items);
+        try
+        {
+            var arguments = FfmpegCommandBuilder.BuildComposition(new FfmpegCompositionRequest(
+                webpInputs.Items, outputUrl, setting, canvasWidth, canvasHeight, canvasFrameRate, resumeFrom, duration, previewPath, profile, quality, frame,
+                BitrateOf(setting, output), alwaysSound));
 
-        var mediaOutput = frame ?? new MediaOutput(canvasWidth, canvasHeight, frameRate);
-        var sound = FfmpegCommandBuilder.CarriesSound(items);
+            var mediaOutput = frame ?? new MediaOutput(canvasWidth, canvasHeight, frameRate);
+            var sound = FfmpegCommandBuilder.CarriesSound(items);
 
-        // The length of the canvas is kept in the probe because that is where the streaming loop
-        // looks for it: a playlist ends when the position reaches the length of its file, and a
-        // canvas made of files ends the same way. A probe that said zero is a live that never ends.
-        var probe = new MediaProbeResult(
-            canvasWidth, canvasHeight, frameRate, sound, sound ? 2 : 0, duration?.TotalSeconds ?? 0);
+            // The length of the canvas is kept in the probe because that is where the streaming loop
+            // looks for it: a playlist ends when the position reaches the length of its file, and a
+            // canvas made of files ends the same way. A probe that said zero is a live that never ends.
+            var probe = new MediaProbeResult(
+                canvasWidth, canvasHeight, frameRate, sound, sound ? 2 : 0, duration?.TotalSeconds ?? 0);
 
-        var session = Launch(locator, videoPkid, SceneDescriptionOf(items), outputUrl, arguments, probe, mediaOutput, resumeFrom, profile, logger, output);
-        session.Measure(setting, profile);
-        return session;
+            var session = Launch(locator, videoPkid, SceneDescriptionOf(items), outputUrl, arguments, probe, mediaOutput, resumeFrom, profile, logger, output);
+            session._webpInputs = webpInputs;
+            session.Measure(setting, profile);
+            return session;
+        }
+        catch
+        {
+            webpInputs.Dispose();
+            throw;
+        }
     }
 
     /// <summary>
@@ -867,6 +882,7 @@ public sealed class FfmpegStreamingSession : IAsyncDisposable
 
             _process.Dispose();
             _sender?.Dispose();
+            _webpInputs?.Dispose();
         }
     }
 }

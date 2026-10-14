@@ -728,6 +728,7 @@ const paintPreview = state => {
   for (const box of preview.querySelectorAll('[data-param="keepSource"]')) {
     if (Date.now() < (previewDirty.get("keepSource") || 0)) continue;
     box.checked = parameters.videoWidth === null || parameters.videoWidth === undefined;
+    setSourceFields(box.checked);
   }
   for (const source of state.sources || []) {
     if (Date.now() < (previewDirty.get("volume" + source.pkid) || 0)) continue;
@@ -752,8 +753,8 @@ if (watchLive && stream) {
   });
 }
 
-// "As the source" and the two halves of a resolution are one decision: the halves are hidden and
-// skipped while it is on, which is also why they travel as nothing at all in the request.
+// "As the source" and the two halves of a resolution are one decision: the halves are hidden
+// while it is on; both travel as zero to clear a previously saved resolution.
 const sourceFields = () => preview.querySelectorAll("[data-source-off]");
 
 const setSourceFields = keep => {
@@ -803,7 +804,7 @@ if (previewForm) {
       if (key === "videoWidth" || key === "videoHeight") {
         // Zero is how the request says "as the source": the two halves travel together, and both
         // travel only when the decision is to drop the resolution the setting carried.
-        if (!keep) body[key] = value === "" ? 0 : Number(value);
+        body[key] = keep || value === "" ? 0 : Number(value);
         continue;
       }
       if (key === "frameRate") {

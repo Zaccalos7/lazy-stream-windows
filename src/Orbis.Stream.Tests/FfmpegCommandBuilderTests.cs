@@ -78,6 +78,10 @@ public sealed class FfmpegCommandBuilderTests
         // The scale of the setting comes first: the preview gets the same picture the live does,
         // and shrinks it on its own.
         Assert.Contains("fps=30,scale=w='min(640,iw)':h=-2", text, StringComparison.Ordinal);
+        Assert.Contains("split=2[orbisv][orbisp0]", text, StringComparison.Ordinal);
+        Assert.Contains("-map [orbisv]", text, StringComparison.Ordinal);
+        Assert.Contains("-map [orbisp]", text, StringComparison.Ordinal);
+        Assert.DoesNotContain("-vf", command);
         Assert.Contains("-an -sn -dn", text, StringComparison.Ordinal);
         Assert.Contains("-c:v mjpeg -q:v 6", text, StringComparison.Ordinal);
         Assert.Contains("-f image2 -update 1 /data/preview/7.jpg", text, StringComparison.Ordinal);

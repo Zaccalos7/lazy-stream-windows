@@ -253,7 +253,7 @@
   "slotsHint": "Una sagoma è un rettangolo vuoto: alla partenza della live ci trascinerai dentro uno schermo, una webcam o un video.",
   "addSlot": "Aggiungi sagoma",
   "overlays": "Overlay e immagini",
-  "overlaysHint": "PNG, GIF, WebP o WebM con trasparenza: le parti trasparenti lasciano vedere le sagome sotto. Trascinali qui per la libreria o direttamente sul canvas.",
+  "overlaysHint": "PNG, GIF, WebP statici o animati, o WebM con trasparenza: le parti trasparenti lasciano vedere le sagome sotto. Trascinali qui per la libreria o direttamente sul canvas.",
   "overlaysEmpty": "La libreria è vuota: carica il primo overlay.",
   "overlaysFailed": "Impossibile leggere la libreria degli overlay.",
   "overlayUploading": "Caricamento…",

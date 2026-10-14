@@ -370,8 +370,10 @@ public sealed class LiveOutput : IAsyncDisposable
     {
         try
         {
-            var errors = (await process.StandardError.ReadToEndAsync().ConfigureAwait(false)).Trim();
-            if (errors.Length > 0)
+            var errors = Profile.Platform == StreamPlatform.YouTube
+                ? await FfmpegProcessLog.ReadAsync(process.StandardError, _logger, "sender", OutputUrl).ConfigureAwait(false)
+                : (await process.StandardError.ReadToEndAsync().ConfigureAwait(false)).Trim();
+            if (errors.Length > 0 && Profile.Platform != StreamPlatform.YouTube)
             {
                 // The tail is what matters: ffmpeg says why it stopped last.
                 _logger.LogWarning(

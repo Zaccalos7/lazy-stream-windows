@@ -170,7 +170,7 @@ Section "FFmpeg (included, works offline)" SecFfmpeg
   File "${FFMPEGDIR}\*"
   SetOutPath "$INSTDIR"
 
-  DetailPrint "FFmpeg 8.1.3 (GPL) installed in $INSTDIR\ffmpeg"
+  DetailPrint "FFmpeg 9.0.2 (GPL, release/9.0) installed in $INSTDIR\ffmpeg"
   WriteRegStr HKCU "${REGKEY}" "Ffmpeg" "$INSTDIR\ffmpeg\ffmpeg.exe"
 SectionEnd
 !else

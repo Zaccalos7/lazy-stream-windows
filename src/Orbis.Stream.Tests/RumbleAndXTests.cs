@@ -180,8 +180,8 @@ public sealed class RumbleAndXDeliveryTests
 
         Assert.Equal(StreamPlatformProfile.X, output!.Profile);
         var arguments = string.Join(' ', FfmpegCommandBuilder.BuildSender(X, output.Profile));
-        Assert.Contains("-readrate 1 -f flv -i pipe:0", arguments, StringComparison.Ordinal);
-        Assert.DoesNotContain("-readrate_initial_burst", arguments, StringComparison.Ordinal);
+        // Omitting the burst, or writing zero, asks FFmpeg 8.1 for its default half second.
+        Assert.Contains("-readrate 1 -readrate_initial_burst 0.000001 -f flv -i pipe:0", arguments, StringComparison.Ordinal);
         Assert.EndsWith(X, arguments, StringComparison.Ordinal);
     }
 }

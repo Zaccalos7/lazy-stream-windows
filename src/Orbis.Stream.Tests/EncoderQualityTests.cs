@@ -30,6 +30,77 @@ public sealed class EncoderQualityTests
             "/videos/clip.mp4", "rtmp://ingest/live/key", Probe, setting, Quality: quality)));
 
     [Theory]
+    [InlineData("default", "p4", null)]
+    [InlineData("hp", "p1", null)]
+    [InlineData("hq", "p7", null)]
+    [InlineData("bd", "p5", null)]
+    [InlineData("ll", "p4", "ll")]
+    [InlineData("llhp", "p1", "ll")]
+    [InlineData("llhq", "p7", "ll")]
+    [InlineData("lossless", "p4", "lossless")]
+    [InlineData("losslesshp", "p1", "lossless")]
+    public void LegacyNvencPresetsStillStartWithFfmpeg9(string legacy, string preset, string? tune)
+    {
+        foreach (var encoder in new[] { "h264_nvenc", "hevc_nvenc", "av1_nvenc" })
+        {
+            var setting = Setting(encoder, ("preset", legacy));
+            var command = Command(setting);
+            Assert.Contains("-preset " + preset, command, StringComparison.Ordinal);
+            if (tune is not null)
+            {
+                Assert.Contains("-tune " + tune, command, StringComparison.Ordinal);
+            }
+            Assert.Equal(legacy, setting.VideoSettingsOptions.Single().Value);
+        }
+    }
+
+    [Theory]
+    [InlineData("vbr_minqp", "vbr", null)]
+    [InlineData("vbr_2pass", "vbr", "fullres")]
+    [InlineData("vbr_hq", "vbr", "fullres")]
+    [InlineData("ll_2pass_quality", "cbr", "fullres")]
+    [InlineData("ll_2pass_size", "cbr", "qres")]
+    [InlineData("cbr_ld_hq", "cbr", "fullres")]
+    [InlineData("cbr_hq", "cbr", "fullres")]
+    public void RemovedNvencRateControlsUseTheModernModeAndMultipass(string legacy, string rc, string? multipass)
+    {
+        var command = Command(Setting("h264_nvenc", ("rc", legacy)));
+        Assert.Contains("-rc " + rc, command, StringComparison.Ordinal);
+        Assert.DoesNotContain("-rc " + legacy, command, StringComparison.Ordinal);
+        if (multipass is not null)
+        {
+            Assert.Contains("-multipass " + multipass, command, StringComparison.Ordinal);
+        }
+    }
+
+    [Theory]
+    [InlineData("1", "qres")]
+    [InlineData("0", "disabled")]
+    public void RemovedNvencFlagsAreConvertedAndModernOverridesWin(string twoPass, string multipass)
+    {
+        var command = Command(Setting("h264_nvenc", ("cbr", "1"), ("2pass", twoPass)));
+        Assert.Contains("-rc cbr", command, StringComparison.Ordinal);
+        Assert.Contains("-multipass " + multipass, command, StringComparison.Ordinal);
+        Assert.DoesNotContain("-2pass", command, StringComparison.Ordinal);
+        Assert.DoesNotContain("-cbr ", command, StringComparison.Ordinal);
+
+        command = Command(Setting("h264_nvenc", ("preset", "llhq"), ("rc", "vbr_hq"), ("2pass", "1"),
+            ("tune:v", "hq"), ("multipass", "disabled")));
+        Assert.Contains("-tune:v hq", command, StringComparison.Ordinal);
+        Assert.DoesNotContain("-tune ll", command, StringComparison.Ordinal);
+        Assert.Contains("-multipass disabled", command, StringComparison.Ordinal);
+        Assert.DoesNotContain("-multipass qres", command, StringComparison.Ordinal);
+    }
+
+    [Fact]
+    public void NvencCompatibilityLeavesOtherEncodersAndModernPresetsAlone()
+    {
+        Assert.Contains("-preset default", Command(Setting("other_encoder", ("preset", "default"))), StringComparison.Ordinal);
+        Assert.Contains("-preset p7", Command(Setting("h264_nvenc", ("preset", "p7"))), StringComparison.Ordinal);
+        Assert.Contains("-preset slow", Command(Setting("libx264", ("preset", "slow"))), StringComparison.Ordinal);
+    }
+
+    [Theory]
     [InlineData("libx264", EncoderQuality.Light, "-preset superfast")]
     [InlineData("libx264", EncoderQuality.Balanced, "-preset veryfast")]
     [InlineData("libx264", EncoderQuality.High, "-preset faster")]

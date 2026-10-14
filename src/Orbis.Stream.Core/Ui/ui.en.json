@@ -253,7 +253,7 @@
   "slotsHint": "A slot is an empty rectangle: when the live starts you drop a screen, a webcam or a video into it.",
   "addSlot": "Add slot",
   "overlays": "Overlays and images",
-  "overlaysHint": "PNG, GIF, WebP or WebM with transparency: the clear parts let the slots underneath show through. Drop them here for the library, or straight onto the canvas.",
+  "overlaysHint": "PNG, GIF, static or animated WebP, or WebM with transparency: the clear parts let the slots underneath show through. Drop them here for the library, or straight onto the canvas.",
   "overlaysEmpty": "The library is empty: upload the first overlay.",
   "overlaysFailed": "The overlay library could not be read.",
   "overlayUploading": "Uploading…",

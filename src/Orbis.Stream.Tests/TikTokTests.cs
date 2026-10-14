@@ -101,11 +101,11 @@ public sealed class TikTokDeliveryTests
             PreviewPath: "/tmp/preview.jpg", Profile: StreamPlatformProfile.TikTok, Frame: Upright)));
 
         Assert.Contains(
-            "-vf scale=1080:1920:force_original_aspect_ratio=decrease:force_divisible_by=2,pad=1080:1920:(ow-iw)/2:(oh-ih)/2:color=black,setsar=1",
+            "[0:v:0]scale=1080:1920:force_original_aspect_ratio=decrease:force_divisible_by=2,pad=1080:1920:(ow-iw)/2:(oh-ih)/2:color=black,setsar=1,split=2",
             command,
             StringComparison.Ordinal);
         // The preview is bounded on its height: 360x640, the pixels of the landscape one turned.
-        Assert.Contains("setsar=1,fps=30,scale=w=-2:h='min(640,ih)'", command, StringComparison.Ordinal);
+        Assert.Contains("[orbisp0]fps=30,scale=w=-2:h='min(640,ih)'[orbisp]", command, StringComparison.Ordinal);
     }
 
     [Fact]

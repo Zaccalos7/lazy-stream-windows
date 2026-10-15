@@ -18,6 +18,7 @@ public sealed class StreamingPlatformPageTests : IClassFixture<ApplicationFixtur
         var html = await _fixture.Client.GetStringAsync("/orbis/mainChannelSetting?edit=new");
 
         Assert.Contains("data-show-when=\"kick facebook\"", html, StringComparison.Ordinal);
+        Assert.Contains("value=\"facebook\" data-stream-url=\"rtmps://live-api-s.facebook.com:443/rtmp\"", html, StringComparison.Ordinal);
     }
 
     [Fact]

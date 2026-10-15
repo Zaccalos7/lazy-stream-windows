@@ -16,7 +16,7 @@ Unicode true
 !include "x64.nsh"
 
 !ifndef APPVERSION
-  !define APPVERSION "2.1.4"
+  !define APPVERSION "2.1.5"
 !endif
 !ifndef PUBLISHDIR
   !define PUBLISHDIR "..\artifacts\publish"
@@ -83,6 +83,17 @@ VIAddVersionKey "Comments"        "Created by ${APPPUBLISHER}"
 !insertmacro MUI_LANGUAGE "Spanish"
 !insertmacro MUI_LANGUAGE "French"
 !insertmacro MUI_LANGUAGE "German"
+!insertmacro MUI_LANGUAGE "Russian"
+!insertmacro MUI_LANGUAGE "Hindi"
+!insertmacro MUI_LANGUAGE "Arabic"
+!insertmacro MUI_LANGUAGE "Romanian"
+!insertmacro MUI_LANGUAGE "Danish"
+!insertmacro MUI_LANGUAGE "Dutch"
+!insertmacro MUI_LANGUAGE "Turkish"
+!insertmacro MUI_LANGUAGE "Greek"
+; Match the application's real languages. NSIS does not ship Filipino, so bundle it locally.
+; Latin, Klingon and Hodor are intentionally excluded from the installer.
+!insertmacro MUI_LANGUAGEEX "languages" "Filipino"
 
 !macro Require64Bit
   ${IfNot} ${RunningX64}

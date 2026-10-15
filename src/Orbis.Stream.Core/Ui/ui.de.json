@@ -439,5 +439,8 @@
   "manualIntro": "Alles, was Orbis Stream kann, eine Seite pro Funktion: ein Bild der App und ein Pfeil auf die Taste, die zu drücken ist. Du kannst dieses Handbuch als PDF herunterladen, zum Aufbewahren oder Drucken.",
   "manualDownloadPdf": "PDF herunterladen",
   "manualPrint": "Drucken",
-  "manualToc": "In diesem Handbuch"
+  "manualToc": "In diesem Handbuch",
+  "defaultLowInstagram": "Default Low Instagram",
+  "instagramKey": "Instagram stream key",
+  "instagramKeyHint": "Copy it from Instagram Live Producer."
 }

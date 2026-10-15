@@ -439,5 +439,8 @@
   "manualIntro": "Tutto quello che Orbis Stream sa fare, una pagina per funzione: un'immagine dell'app e una freccia sul pulsante da premere. Puoi scaricare questo manuale in PDF, per conservarlo o stamparlo.",
   "manualDownloadPdf": "Scarica PDF",
   "manualPrint": "Stampa",
-  "manualToc": "In questo manuale"
+  "manualToc": "In questo manuale",
+  "defaultLowInstagram": "Default Low Instagram",
+  "instagramKey": "Instagram stream key",
+  "instagramKeyHint": "Copy it from Instagram Live Producer."
 }

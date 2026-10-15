@@ -124,5 +124,8 @@
       "figure": "settings",
       "callout": "सेटिंग्स वीडियो/ऑडियो, चैनल और यह गाइड इकट्ठा करती हैं।"
     }
-  ]
+  ],
+  "defaultLowInstagram": "Default Low Instagram",
+  "instagramKey": "Instagram stream key",
+  "instagramKeyHint": "Copy it from Instagram Live Producer."
 }

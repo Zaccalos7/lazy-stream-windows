@@ -124,5 +124,8 @@
       "figure": "settings",
       "callout": "Ajustes reúne vídeo/audio, canales y este manual."
     }
-  ]
+  ],
+  "defaultLowInstagram": "Default Low Instagram",
+  "instagramKey": "Instagram stream key",
+  "instagramKeyHint": "Copy it from Instagram Live Producer."
 }

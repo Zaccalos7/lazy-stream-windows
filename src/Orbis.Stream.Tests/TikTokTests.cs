@@ -320,3 +320,47 @@ public sealed class TikTokKeyTests : IClassFixture<ApplicationFixture>
         Assert.DoesNotContain("live_999", html, StringComparison.Ordinal);
     }
 }
+
+public sealed class InstagramDeliveryTests
+{
+    private const string Ingest = "rtmps://live-upload.instagram.com:443/rtmp/";
+
+    private static readonly MediaOutput Upright = new(1080, 1920, 30d);
+
+    private static readonly MediaOutput FullHd = new(1920, 1080, 30d);
+
+    private static VideoSettingEntity Setting(int? width = null, int? height = null) => new()
+    {
+        Title = "test",
+        VideoCodec = 27,
+        VideoCodecName = "libx264",
+        PixelFormat = 0,
+        VideoBitrate = 4_500_000,
+        VideoFormat = "flv",
+        GopSize = 2,
+        VideoWidth = width,
+        VideoHeight = height,
+        AudioSetting = new AudioSettingEntity { AudioCodec = 86018, AudioBitrate = 128_000 }
+    };
+
+    [Fact]
+    public void InstagramIsDeliveredTheWayYouTubeIsStandingUp()
+    {
+        var instagram = StreamPlatformProfile.Instagram;
+
+        Assert.Equal(StreamPlatform.Instagram, instagram.Platform);
+        Assert.True(instagram.UsesRelay);
+        Assert.True(instagram.RequiresAudio);
+        Assert.Equal(RelayTransport.FfmpegSender, instagram.Transport);
+        Assert.Equal(RelayPacing.Sender, instagram.Pacing);
+        Assert.True(instagram.UniformFormat);
+        Assert.True(instagram.Portrait);
+    }
+
+    [Fact]
+    public void InstagramStandsThePictureUp()
+    {
+        Assert.Equal(Upright, StreamPlatformProfile.Instagram.Orient(FullHd));
+        Assert.Equal(Upright, StreamPlatformProfile.Instagram.Orient(Upright));
+    }
+}

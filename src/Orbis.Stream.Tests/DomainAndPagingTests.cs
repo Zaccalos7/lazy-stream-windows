@@ -226,7 +226,7 @@ public sealed class DatabaseBootstrapperTests
     }
 
     [Fact]
-    public void StartAsync_SeedsTikTokStandingUp()
+    public void StartAsync_SeedsVerticalPlatformsStandingUp()
     {
         using var database = new TemporaryDatabase();
         var settings = database.Repository<VideoSettingRepository>();
@@ -241,6 +241,16 @@ public sealed class DatabaseBootstrapperTests
         Assert.NotNull(low);
         Assert.False(low.IsDefaultConfiguration);
         Assert.Equal((720, 1280, 2_500_000), (low.VideoWidth, low.VideoHeight, low.VideoBitrate));
+
+        var instagram = Assert.Single(settings.FindByIsDefaultConfigurationTrueAndDefaultPlatformConfiguration("Instagram"));
+        Assert.Equal("Default Instagram", instagram.Title);
+        Assert.Equal((1080, 1920, 30d), (instagram.VideoWidth, instagram.VideoHeight, instagram.FrameRate));
+        Assert.Equal(4_500_000, instagram.VideoBitrate);
+
+        var lowInstagram = settings.FindByTitleAndPlatform("Default Low Instagram", "Instagram");
+        Assert.NotNull(lowInstagram);
+        Assert.False(lowInstagram.IsDefaultConfiguration);
+        Assert.Equal((720, 1280, 2_500_000), (lowInstagram.VideoWidth, lowInstagram.VideoHeight, lowInstagram.VideoBitrate));
     }
 
 
@@ -258,7 +268,7 @@ public sealed class DatabaseBootstrapperTests
                 NullLogger<DatabaseBootstrapper>.Instance)
             .StartAsync(CancellationToken.None);
 
-        foreach (var platform in new[] { "Twitch", "Youtube", "Kick", "Facebook Gaming", "TikTok" })
+        foreach (var platform in new[] { "Twitch", "Youtube", "Kick", "Facebook Gaming", "TikTok", "Instagram" })
         {
             Assert.Single(settings.FindByIsDefaultConfigurationTrueAndDefaultPlatformConfiguration(platform));
         }
@@ -567,12 +577,14 @@ public sealed class LiveLinkTests
     private const string Kick = "rtmps://fa723fc1b171.global-contribute.live-video.net/app";
     private const string Facebook = "rtmps://rtmp-api.facebook.com:443/rtmp";
     private const string TikTok = "rtmp://push-rtmp-l11-va01.tiktokcdn.com/stage";
+    private const string Instagram = "rtmps://live-upload.instagram.com:443/rtmp/";
 
     [Theory]
     // The presets of the channel settings...
     [InlineData(Kick, "kick")]
     [InlineData(Facebook, "facebook")]
     [InlineData(TikTok, "tiktok")]
+    [InlineData(Instagram, "instagram")]
     // As the dashboards write them: with the slash at the end.
     [InlineData(Facebook + "/", "facebook")]
     [InlineData("rtmp://live.twitch.tv/app/", "twitch")]
@@ -605,6 +617,13 @@ public sealed class LiveLinkTests
         Assert.Equal("https://www.tiktok.com/@repro/live", LiveLinkView.UrlOf("rtmp://push.tiktokcdn-us.com/live", "repro", null));
     }
 
+    [Fact]
+    public void UrlOf_InstagramIsTheAccountPage()
+    {
+        Assert.Equal("https://www.instagram.com/repro.channel", LiveLinkView.UrlOf(Instagram, "@repro.channel", "instagram"));
+        Assert.Equal("https://www.instagram.com/repro", LiveLinkView.UrlOf("rtmps://live-upload.instagram.com:443/rtmp/", "repro", null));
+    }
+
 
 
     [Fact]
@@ -618,19 +637,22 @@ public sealed class LiveLinkTests
         Assert.StartsWith("M1.333 0h8", LiveLinkView.MarkupOf("kick"), StringComparison.Ordinal);
         Assert.StartsWith("M0 0h24v24H0zM3.75 3.75", LiveLinkView.MarkupOf("facebook"), StringComparison.Ordinal);
         Assert.StartsWith("M12.525.02", LiveLinkView.MarkupOf("tiktok"), StringComparison.Ordinal);
-        var marks = new[] { "twitch", "youtube", "kick", "facebook", "tiktok", null }.Select(LiveLinkView.MarkupOf).ToList();
+        Assert.StartsWith("M12 2.163", LiveLinkView.MarkupOf("instagram"), StringComparison.Ordinal);
+        var marks = new[] { "twitch", "youtube", "kick", "facebook", "tiktok", "instagram", null }.Select(LiveLinkView.MarkupOf).ToList();
         Assert.Equal(marks.Count, marks.Distinct().Count());
 
         Assert.Equal("platform-kick", LiveLinkView.ClassOf("kick"));
         Assert.Equal("platform-facebook", LiveLinkView.ClassOf("facebook"));
         Assert.Equal("platform-tiktok", LiveLinkView.ClassOf("tiktok"));
+        Assert.Equal("platform-instagram", LiveLinkView.ClassOf("instagram"));
         Assert.Equal("TikTok", LiveLinkView.LabelOf("tiktok"));
+        Assert.Equal("Instagram", LiveLinkView.LabelOf("instagram"));
     }
 
     [Fact]
     public void TheChannelSettingsOfferTheFivePlatformsWithTheirIngest()
     {
-        Assert.Equal(["twitch", "youtube", "kick", "facebook", "tiktok"], MainChannelSettingModel.Platforms.Select(platform => platform.Value));
+        Assert.Equal(["twitch", "youtube", "kick", "facebook", "tiktok", "instagram"], MainChannelSettingModel.Platforms.Select(platform => platform.Value));
         Assert.All(MainChannelSettingModel.Platforms, platform =>
         {
             Assert.StartsWith("rtmp", platform.StreamUrl, StringComparison.Ordinal);

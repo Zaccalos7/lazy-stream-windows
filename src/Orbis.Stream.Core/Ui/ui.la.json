@@ -439,5 +439,8 @@
   "manualIntro": "Omnia quae Orbis Stream facere potest, una pagina pro quoque munere: imago applicationis et sagitta in bulla premenda. Hoc manuale ut PDF demittere potes, servandum vel imprimendum.",
   "manualDownloadPdf": "PDF demittere",
   "manualPrint": "Imprimere",
-  "manualToc": "In hoc manuali"
+  "manualToc": "In hoc manuali",
+  "defaultLowInstagram": "Default Low Instagram",
+  "instagramKey": "Instagram stream key",
+  "instagramKeyHint": "Copy it from Instagram Live Producer."
 }

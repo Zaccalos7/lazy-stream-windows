@@ -124,5 +124,8 @@
       "figure": "settings",
       "callout": "Pinagsasama ng Mga setting ang video/audio, channel at manwal na ito."
     }
-  ]
+  ],
+  "defaultLowInstagram": "Default Low Instagram",
+  "instagramKey": "Instagram stream key",
+  "instagramKeyHint": "Copy it from Instagram Live Producer."
 }

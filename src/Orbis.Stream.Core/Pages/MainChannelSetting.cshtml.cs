@@ -51,6 +51,8 @@ public sealed class MainChannelSettingModel(SettingService settings, RequestVali
         // A TikTok LIVE server as LIVE Producer shows it. The key that goes with it is good for one
         // live only, so it is not kept here: it is asked for whenever a live starts (LiveStreamKeys).
         new("tiktok", "TikTok", "rtmp://push-rtmp-l11-va01.tiktokcdn.com/stage", StreamPlatform.TikTok, PersonalIngest: true),
+        // Instagram Live
+        new("instagram", "Instagram", "rtmps://live-upload.instagram.com:443/rtmp/", StreamPlatform.Instagram, PersonalIngest: true),
     ];
 
     /// <summary>

@@ -439,5 +439,8 @@
   "manualIntro": "Alles wat Orbis Stream kan, één pagina per functie: een beeld van de app en een pijl naar de knop die je moet indrukken. Je kunt deze handleiding als PDF downloaden, om te bewaren of te printen.",
   "manualDownloadPdf": "PDF downloaden",
   "manualPrint": "Afdrukken",
-  "manualToc": "In deze handleiding"
+  "manualToc": "In deze handleiding",
+  "defaultLowInstagram": "Default Low Instagram",
+  "instagramKey": "Instagram stream key",
+  "instagramKeyHint": "Copy it from Instagram Live Producer."
 }

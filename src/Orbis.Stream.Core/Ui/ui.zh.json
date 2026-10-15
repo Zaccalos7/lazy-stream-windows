@@ -439,5 +439,8 @@
   "manualIntro": "Orbis Stream 能做的所有事情，每项功能一页：一张应用截图，以及指向要按的按钮的箭头。你可以把手册下载为 PDF，方便保存或打印。",
   "manualDownloadPdf": "下载 PDF",
   "manualPrint": "打印",
-  "manualToc": "本手册内容"
+  "manualToc": "本手册内容",
+  "defaultLowInstagram": "Default Low Instagram",
+  "instagramKey": "Instagram stream key",
+  "instagramKeyHint": "Copy it from Instagram Live Producer."
 }

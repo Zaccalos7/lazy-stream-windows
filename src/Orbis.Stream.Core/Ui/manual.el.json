@@ -124,5 +124,8 @@
       "figure": "settings",
       "callout": "Οι Ρυθμίσεις ομαδοποιούν βίντεο/ήχο, κανάλια και αυτόν τον οδηγό."
     }
-  ]
+  ],
+  "defaultLowInstagram": "Default Low Instagram",
+  "instagramKey": "Instagram stream key",
+  "instagramKeyHint": "Copy it from Instagram Live Producer."
 }

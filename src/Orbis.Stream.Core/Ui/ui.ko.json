@@ -439,5 +439,8 @@
   "manualIntro": "Orbis Stream이 할 수 있는 모든 것, 기능마다 한 페이지: 앱 화면과 눌러야 할 버튼을 가리키는 화살표. 이 설명서를 PDF로 내려받아 보관하거나 인쇄할 수 있습니다.",
   "manualDownloadPdf": "PDF 내려받기",
   "manualPrint": "인쇄",
-  "manualToc": "이 설명서에서"
+  "manualToc": "이 설명서에서",
+  "defaultLowInstagram": "Default Low Instagram",
+  "instagramKey": "Instagram stream key",
+  "instagramKeyHint": "Copy it from Instagram Live Producer."
 }

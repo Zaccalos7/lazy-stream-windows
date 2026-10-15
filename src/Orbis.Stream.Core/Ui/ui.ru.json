@@ -439,5 +439,8 @@
   "manualIntro": "Всё, что умеет Orbis Stream, — по странице на функцию: изображение приложения и стрелка на кнопке, которую нужно нажать. Руководство можно скачать в PDF, чтобы сохранить или распечатать.",
   "manualDownloadPdf": "Скачать PDF",
   "manualPrint": "Печать",
-  "manualToc": "В этом руководстве"
+  "manualToc": "В этом руководстве",
+  "defaultLowInstagram": "Default Low Instagram",
+  "instagramKey": "Instagram stream key",
+  "instagramKeyHint": "Copy it from Instagram Live Producer."
 }

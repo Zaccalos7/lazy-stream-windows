@@ -439,5 +439,8 @@
   "manualIntro": "Hoch 'e' Orbis Stream: wa' 'ay' mIw, De'wI' 'echlet 'ej naghvaD paw leQ. ghojmeH PDF pong, pol pagh print.",
   "manualDownloadPdf": "PDF pong",
   "manualPrint": "print",
-  "manualToc": "ghojmeH mIwDaq"
+  "manualToc": "ghojmeH mIwDaq",
+  "defaultLowInstagram": "Default Low Instagram",
+  "instagramKey": "Instagram stream key",
+  "instagramKeyHint": "Copy it from Instagram Live Producer."
 }

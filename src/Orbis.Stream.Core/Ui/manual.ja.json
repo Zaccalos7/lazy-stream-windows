@@ -124,5 +124,8 @@
       "figure": "settings",
       "callout": "設定に映像/音声、チャンネル、このマニュアルがまとまります。"
     }
-  ]
+  ],
+  "defaultLowInstagram": "Default Low Instagram",
+  "instagramKey": "Instagram stream key",
+  "instagramKeyHint": "Copy it from Instagram Live Producer."
 }

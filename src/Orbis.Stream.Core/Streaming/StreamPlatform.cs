@@ -26,7 +26,16 @@ public enum StreamPlatform
     /// TikTok LIVE, whose stream key LIVE Producer hands out for every live (it expires), and whose
     /// viewers hold their phone upright.
     /// </summary>
+    /// <summary>
+    /// TikTok LIVE, whose stream key LIVE Producer hands out for every live (it expires), and whose
+    /// viewers hold their phone upright.
+    /// </summary>
     TikTok,
+
+    /// <summary>
+    /// Instagram Live: vertical aspect ratio, stream key from Live Producer.
+    /// </summary>
+    Instagram,
 
 }
 
@@ -338,6 +347,27 @@ public sealed record StreamPlatformProfile(
         Portrait: true,
         Adaptation: RateAdaptation.Buffered);
 
+    /// <summary>
+    /// Instagram Live: similar to TikTok, vertical aspect ratio.
+    /// </summary>
+    public static readonly StreamPlatformProfile Instagram = new(
+        StreamPlatform.Instagram,
+        UsesRelay: true,
+        Preroll: TimeSpan.FromSeconds(2),
+        MaxLead: TimeSpan.FromSeconds(3),
+        ConnectTimeout: TimeSpan.FromSeconds(30),
+        StallTimeout: TimeSpan.FromSeconds(20),
+        ReconnectAttempts: 3,
+        RequiresAudio: true,
+        AudioSampleRate: 48_000,
+        Transport: RelayTransport.FfmpegSender,
+        KeyframeSeconds: 2,
+        Pacing: RelayPacing.Sender,
+        UniformFormat: true,
+        RateBuffer: TimeSpan.FromSeconds(1),
+        Portrait: true,
+        Adaptation: RateAdaptation.Buffered);
+
     /// <summary>A destination this application does not know: one ffmpeg, as before.</summary>
     public static readonly StreamPlatformProfile Generic = new(
         StreamPlatform.Generic,
@@ -360,6 +390,7 @@ public sealed record StreamPlatformProfile(
         StreamPlatform.Kick => Kick,
         StreamPlatform.Facebook => Facebook,
         StreamPlatform.TikTok => TikTok,
+        StreamPlatform.Instagram => Instagram,
         _ => Generic
     };
 
@@ -456,6 +487,11 @@ public static class StreamPlatforms
         if (IsOrUnder(host, "facebook.com"))
         {
             return StreamPlatform.Facebook;
+        }
+
+        if (IsOrUnder(host, "instagram.com"))
+        {
+            return StreamPlatform.Instagram;
         }
 
         foreach (var domain in TikTokDomains)

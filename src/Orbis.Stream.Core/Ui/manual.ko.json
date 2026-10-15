@@ -124,5 +124,8 @@
       "figure": "settings",
       "callout": "설정은 영상/오디오, 채널과 이 설명서를 모읍니다."
     }
-  ]
+  ],
+  "defaultLowInstagram": "Default Low Instagram",
+  "instagramKey": "Instagram stream key",
+  "instagramKeyHint": "Copy it from Instagram Live Producer."
 }

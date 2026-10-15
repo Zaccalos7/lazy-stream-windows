@@ -439,5 +439,8 @@
   "manualIntro": "Hodor hodor Orbis Stream hodor, hodor hodor hodor: hodor hodor hodor hodor. Hodor hodor PDF hodor, hodor hodor hodor.",
   "manualDownloadPdf": "Hodor PDF",
   "manualPrint": "Hodor",
-  "manualToc": "Hodor hodor"
+  "manualToc": "Hodor hodor",
+  "defaultLowInstagram": "Default Low Instagram",
+  "instagramKey": "Instagram stream key",
+  "instagramKeyHint": "Copy it from Instagram Live Producer."
 }

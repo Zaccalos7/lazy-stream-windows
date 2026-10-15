@@ -22,6 +22,8 @@
   /* TikTok's pink, where the platform is a hue (the ring of a choice); its logo is black, cyan and red. */
   --tiktok: #fe2c55;
   --tiktok-cyan: #25f4ee;
+  --instagram: #E1306C;
+  --instagram-cyan: #FCAF45;
   /* The blue of the Facebook Gaming logo itself, the same in both themes: a logo is not restyled. */
   --facebook-logo: #015eec;
   --grad: var(--accent);

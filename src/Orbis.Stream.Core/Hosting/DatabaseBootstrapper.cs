@@ -83,6 +83,8 @@ public sealed class DatabaseBootstrapper : IHostedService
         InitializeDefaultVideoSetting("Facebook Gaming", createHighQuality: false);
         InitializeDefaultVideoSetting("TikTok", createHighQuality: true);
         InitializeDefaultVideoSetting("TikTok", createHighQuality: false);
+        InitializeDefaultVideoSetting("Instagram", createHighQuality: true);
+        InitializeDefaultVideoSetting("Instagram", createHighQuality: false);
         UpgradeLegacyYouTubeDefaults();
     }
 
@@ -160,6 +162,14 @@ public sealed class DatabaseBootstrapper : IHostedService
         2_500_000, 128_000, 720, 1280, 30,
         [("preset", "superfast"), ("profile", "main"), ("x264-params", "scenecut=0:rc_lookahead=0")]);
 
+    private static readonly DefaultSpec InstagramHigh = new(
+        4_500_000, 128_000, 1080, 1920, 30,
+        [("preset", "veryfast"), ("profile", "high")]);
+
+    private static readonly DefaultSpec InstagramLow = new(
+        2_500_000, 128_000, 720, 1280, 30,
+        [("preset", "superfast"), ("profile", "main"), ("x264-params", "scenecut=0:rc_lookahead=0")]);
+
     private static DefaultSpec SpecOf(string platform, bool highQuality) => (platform, highQuality) switch
     {
         ("Twitch", true) => new(6_000_000, 160_000, null, null, null,
@@ -168,6 +178,7 @@ public sealed class DatabaseBootstrapper : IHostedService
         ("Kick", true) => KickHigh,
         ("Facebook Gaming", true) => FacebookGamingHigh,
         ("TikTok", true) => TikTokHigh,
+        ("Instagram", true) => InstagramHigh,
         (_, true) => new(5_000_000, 128_000, null, null, null,
             [("preset", "veryfast"), ("tune", "zerolatency")]),
 
@@ -178,6 +189,7 @@ public sealed class DatabaseBootstrapper : IHostedService
         ("Kick", false) => KickLow,
         ("Facebook Gaming", false) => FacebookGamingLow,
         ("TikTok", false) => TikTokLow,
+        ("Instagram", false) => InstagramLow,
         _ => new(2_000_000, 64_000, 1280, 720, 30,
             [("preset", "ultrafast"), ("tune", "zerolatency")])
     };

@@ -439,5 +439,8 @@
   "manualIntro": "Lahat ng kayang gawin ng Orbis Stream, isang pahina bawat tampok: isang larawan ng app at isang arrow sa button na dapat pindutin. Maaari mong i-download ang manwal na ito bilang PDF, upang itago o i-print.",
   "manualDownloadPdf": "I-download ang PDF",
   "manualPrint": "I-print",
-  "manualToc": "Sa manwal na ito"
+  "manualToc": "Sa manwal na ito",
+  "defaultLowInstagram": "Default Low Instagram",
+  "instagramKey": "Instagram stream key",
+  "instagramKeyHint": "Copy it from Instagram Live Producer."
 }

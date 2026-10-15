@@ -124,5 +124,8 @@
       "figure": "settings",
       "callout": "Hodor video/audio, hodor hodor hodor."
     }
-  ]
+  ],
+  "defaultLowInstagram": "Default Low Instagram",
+  "instagramKey": "Instagram stream key",
+  "instagramKeyHint": "Copy it from Instagram Live Producer."
 }

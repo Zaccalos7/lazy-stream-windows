@@ -439,5 +439,8 @@
   "manualIntro": "Orbis Stream にできることすべてを、機能ごとに1ページで：アプリの画像と、押すボタンを指す矢印。このマニュアルは PDF としてダウンロードでき、保存や印刷ができます。",
   "manualDownloadPdf": "PDF をダウンロード",
   "manualPrint": "印刷",
-  "manualToc": "このマニュアルの内容"
+  "manualToc": "このマニュアルの内容",
+  "defaultLowInstagram": "Default Low Instagram",
+  "instagramKey": "Instagram stream key",
+  "instagramKeyHint": "Copy it from Instagram Live Producer."
 }

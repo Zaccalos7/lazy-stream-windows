@@ -393,6 +393,8 @@ public sealed record StreamPlatformProfile(
 
 public static class StreamPlatforms
 {
+    public const string FacebookIngestUrl = "rtmps://live-api-s.facebook.com:443/rtmp";
+
     /// <summary>
     /// The host YouTube serves RTMPS on. <c>a.rtmp.youtube.com</c> is the plain RTMP host: it
     /// answers on 443 too, but with a certificate made out to <c>*.rtmps.youtube.com</c>, so a TLS
@@ -490,7 +492,8 @@ public static class StreamPlatforms
     }
 
     /// <summary>
-    /// Points a YouTube ingest at the host YouTube serves RTMPS on (see <see cref="YouTubeRtmpsHost"/>).
+    /// Updates legacy Facebook presets to Live Producer and points YouTube at its RTMPS host
+    /// (see <see cref="YouTubeRtmpsHost"/>).
     /// <para>Both halves are rewritten, and the scheme is one of them: a plain
     /// <c>rtmp://a.rtmp.youtube.com</c> is turned into <c>rtmps://a.rtmps.youtube.com</c>, not only
     /// the host of an url that already said rtmps. YouTube takes ingest over TLS and nothing else,
@@ -505,8 +508,21 @@ public static class StreamPlatforms
         ArgumentNullException.ThrowIfNull(outputUrl);
 
         if (!Uri.TryCreate(outputUrl, UriKind.Absolute, out var uri)
-            || !uri.Scheme.StartsWith("rtmp", StringComparison.OrdinalIgnoreCase)
-            || !IsOrUnder(uri.Host, YouTubeRtmpHost))
+            || !uri.Scheme.StartsWith("rtmp", StringComparison.OrdinalIgnoreCase))
+        {
+            return outputUrl;
+        }
+
+        // Previously saved Facebook presets use rtmp-api. Route them through the same endpoint
+        // as new configurations, preserving the raw path and key (including any query string).
+        if (uri.Host.Equals("rtmp-api.facebook.com", StringComparison.OrdinalIgnoreCase))
+        {
+            var pathStart = outputUrl.IndexOf('/', outputUrl.IndexOf("://", StringComparison.Ordinal) + 3);
+            return pathStart < 0 ? FacebookIngestUrl
+                : string.Concat("rtmps://live-api-s.facebook.com:443", outputUrl.AsSpan(pathStart));
+        }
+
+        if (!IsOrUnder(uri.Host, YouTubeRtmpHost))
         {
             return outputUrl;
         }

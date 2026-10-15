@@ -44,10 +44,8 @@ public sealed class MainChannelSettingModel(SettingService settings, RequestVali
         // The IVS endpoint the Kick dashboard shows (RTMPS on 443, app "app"). An account can be
         // given one of its own, under the same network, which is why Kick is read off the domain.
         new("kick", "Kick", "rtmps://fa723fc1b171.global-contribute.live-video.net/app", StreamPlatform.Kick, PersonalIngest: true, IngestHint: "ingestFromDashboard"),
-        // The RTMPS ingest of Facebook Live, where Facebook Gaming lives go: RTMPS on 443 only, as
-        // OBS lists it. Live Producer may show another host of Facebook's (live-api-s), and either
-        // is recognised by its domain.
-        new("facebook", "Facebook Gaming", "rtmps://rtmp-api.facebook.com:443/rtmp", StreamPlatform.Facebook, PersonalIngest: true, IngestHint: "ingestFromDashboard"),
+        // Facebook Live Producer's RTMPS endpoint, also used for gaming broadcasts.
+        new("facebook", "Facebook Gaming", StreamPlatforms.FacebookIngestUrl, StreamPlatform.Facebook, PersonalIngest: true, IngestHint: "ingestFromDashboard"),
         // A TikTok LIVE server as LIVE Producer shows it. The key that goes with it is good for one
         // live only, so it is not kept here: it is asked for whenever a live starts (LiveStreamKeys).
         new("tiktok", "TikTok", "rtmp://push-rtmp-l11-va01.tiktokcdn.com/stage", StreamPlatform.TikTok, PersonalIngest: true),

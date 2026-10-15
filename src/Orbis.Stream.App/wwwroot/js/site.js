@@ -1234,13 +1234,13 @@ for (const counter of document.querySelectorAll("[data-countdown]")) {
 for (const dialog of document.querySelectorAll('dialog[data-open]:not([data-open="0"])')) dialog.showModal();
 
 // <input type="radio" data-stream-url="rtmp://…">: picking a platform fills its form's streamUrl,
-// unless the user typed a custom ingest (anything that is not one of the platform presets).
+// Facebook always starts with its Live Producer endpoint. Other platforms preserve custom ingests.
 document.addEventListener("change", event => {
   const url = event.target.dataset?.streamUrl;
   if (!url) return;
   const field = event.target.form.elements.streamUrl;
   const presets = [...event.target.form.querySelectorAll("[data-stream-url]")].map(radio => radio.dataset.streamUrl);
-  if (!field.value.trim() || presets.includes(field.value.trim())) field.value = url;
+  if (event.target.value === "facebook" || !field.value.trim() || presets.includes(field.value.trim())) field.value = url;
 });
 
 // <input data-drop-path>: dropping a file or folder on it fills its absolute path. The browser

@@ -49,6 +49,15 @@ public sealed class StreamPlatformTests
     public void NormalizeIngestUrl_PutsYouTubeOnTheTlsItOnlyTakesIngestOver(string url, string expected) =>
         Assert.Equal(expected, StreamPlatforms.NormalizeIngestUrl(url));
 
+    [Theory]
+    [InlineData("rtmps://rtmp-api.facebook.com:443/rtmp/FB-test-key", "rtmps://live-api-s.facebook.com:443/rtmp/FB-test-key")]
+    [InlineData("rtmp://RTMP-API.FACEBOOK.COM:80/rtmp/key%2Fvalue?token=a%2Bb", "rtmps://live-api-s.facebook.com:443/rtmp/key%2Fvalue?token=a%2Bb")]
+    [InlineData("rtmps://rtmp-api.facebook.com:443/rtmp", "rtmps://live-api-s.facebook.com:443/rtmp")]
+    [InlineData("rtmps://live-api-s.facebook.com:443/rtmp/key", "rtmps://live-api-s.facebook.com:443/rtmp/key")]
+    [InlineData("rtmps://rtmp-api.facebook.com.example:443/rtmp/key", "rtmps://rtmp-api.facebook.com.example:443/rtmp/key")]
+    public void NormalizeIngestUrl_UsesLiveProducerForLegacyFacebookConfigurations(string url, string expected) =>
+        Assert.Equal(expected, StreamPlatforms.NormalizeIngestUrl(url));
+
     [Fact]
     public void NormalizeIngestUrl_LeavesAnUnreadableUrlAlone()
     {

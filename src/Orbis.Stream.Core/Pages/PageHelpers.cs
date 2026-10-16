@@ -89,6 +89,7 @@ public static class SettingTitleView
 /// </summary>
 public static class LiveLinkView
 {
+    public const string FacebookProducerUrl = "https://www.facebook.com/live/producer/v2/";
     /// <summary>Platform of an ingest URL (<c>twitch</c>, <c>youtube</c>, <c>kick</c>, <c>facebook</c>, <c>tiktok</c>), or null if unknown.</summary>
     public static string? PlatformOf(string? streamUrl)
     {
@@ -194,6 +195,7 @@ public static class LiveLinkView
     /// <param name="videoId">The video YouTube broadcasts the live as, when it is known.</param>
     public static string? UrlOf(string? streamUrl, string? channelName, string? platformStreamName, string? videoId = null)
     {
+        if (PlatformOf(streamUrl) == "facebook") return FacebookProducerUrl;
         var name = (channelName ?? platformStreamName)?.Trim();
         if (string.IsNullOrEmpty(name))
         {
@@ -206,8 +208,6 @@ public static class LiveLinkView
             "youtube" => YouTubeStudioUrl(name, videoId),
             // A Kick channel is its name in lower case, as its address shows it.
             "kick" => "https://kick.com/" + Uri.EscapeDataString(name.ToLowerInvariant()),
-            // A gaming creator streams from a page, addressed by its user name.
-            "facebook" => "https://www.facebook.com/" + Uri.EscapeDataString(name.TrimStart('@')),
             // A TikTok account is addressed by its handle, and its live has a page of its own.
             "tiktok" => "https://www.tiktok.com/@" + Uri.EscapeDataString(name.TrimStart('@')) + "/live",
             _ => null

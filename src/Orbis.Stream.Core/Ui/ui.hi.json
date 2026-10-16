@@ -1,4 +1,11 @@
 {
+  "reportError": "Report error",
+  "reportHelp": "Take a screenshot or a photo of the QR code and open an issue on GitHub. If the problem is caused by the software, we will try to fix it.",
+  "reportMultiple": "If there are several QR codes, capture every page so the complete error is included.",
+  "reportOpenIssue": "Open an issue on GitHub",
+  "reportText": "Error report text",
+  "reportQrAlt": "QR code containing the error report",
+  "reportLoadFailed": "The error report could not be loaded. Close this window and try again.",
   "facebookGoLiveHelp": "Orbis में स्ट्रीम शुरू करने के बाद Facebook Live Producer खोलें और प्रसारण चालू करने के लिए “लाइव जाएँ” दबाएँ।",
   "success": "सफलता",
   "ffmpegProcessesDetails": "FFmpeg प्रक्रियाओं का विवरण",

@@ -1,4 +1,11 @@
 {
+  "reportError": "Report error",
+  "reportHelp": "Take a screenshot or a photo of the QR code and open an issue on GitHub. If the problem is caused by the software, we will try to fix it.",
+  "reportMultiple": "If there are several QR codes, capture every page so the complete error is included.",
+  "reportOpenIssue": "Open an issue on GitHub",
+  "reportText": "Error report text",
+  "reportQrAlt": "QR code containing the error report",
+  "reportLoadFailed": "The error report could not be loaded. Close this window and try again.",
   "facebookGoLiveHelp": "Orbisで配信を開始した後、Facebook Live Producerを開き、「ライブ配信を開始」を押して放送を開始してください。",
   "success": "成功",
   "ffmpegProcessesDetails": "FFmpegプロセスの詳細",

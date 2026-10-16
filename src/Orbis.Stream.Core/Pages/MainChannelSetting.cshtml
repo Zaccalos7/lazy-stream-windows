@@ -131,6 +131,9 @@
                     <span>@T["description"]</span>
                     <textarea class="input" name="description" rows="3">@editing.Description</textarea>
                 </label>
+                <div class="section" data-show-when="facebook">
+                    <partial name="_FacebookLiveNotice" />
+                </div>
                 @* How the live reaches the ingest. On, the ffmpeg delivery - ffmpeg keeps
                    the time and publishes over its own RTMPS; off, the relay and the RTMP of this
                    application. The option is always visible. YouTube cannot be turned off. *@

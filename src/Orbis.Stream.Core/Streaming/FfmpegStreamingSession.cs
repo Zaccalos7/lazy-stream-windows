@@ -43,6 +43,7 @@ public sealed class FfmpegStreamingSession : IAsyncDisposable
     private int _stopRequested;
     private int _restartRequested;
     private int _endedNaturally;
+    private WebpOverlayInputs? _webpInputs;
 
     private FfmpegStreamingSession(
         Process process,
@@ -77,8 +78,12 @@ public sealed class FfmpegStreamingSession : IAsyncDisposable
         InputPath = inputPath;
         Probe = probe;
         Output = output;
-        _standardError = ReadToEndAsync(process.StandardError);
-        _senderError = sender is null ? null : ReadToEndAsync(sender.StandardError);
+        _standardError = profile.Diagnostics
+            ? FfmpegProcessLog.ReadAsync(process.StandardError, logger, profile.Name, "encoder", outputUrl)
+            : ReadToEndAsync(process.StandardError);
+        _senderError = sender is null ? null : profile.Diagnostics
+            ? FfmpegProcessLog.ReadAsync(sender.StandardError, logger, profile.Name, "sender", outputUrl)
+            : ReadToEndAsync(sender.StandardError);
 
         // Nothing else reads what ffmpeg writes on its standard output, and the pipe it writes
         // <c>-progress</c> into is small: a session that left it alone would block ffmpeg itself.
@@ -108,10 +113,7 @@ public sealed class FfmpegStreamingSession : IAsyncDisposable
     /// </summary>
     public bool IsOnAir => OnAirSinceTicks != 0;
 
-    // X must keep receiving through its first GOP; a publish that closes immediately
-    // after the first packets must not flash LIVE in the grid and preview.
-    public bool IsPublishing => IsOnAir && !HasExited && SinceLastAdvance <= Profile.StallTimeout
-        && (Profile.Platform != StreamPlatform.X || OnAirFor >= TimeSpan.FromSeconds(Profile.KeyframeSeconds));
+    public bool IsPublishing => IsOnAir && !HasExited && SinceLastAdvance <= Profile.StallTimeout;
 
     /// <summary>How long the live has been on air; zero when it is not.</summary>
     public TimeSpan OnAirFor
@@ -361,22 +363,32 @@ public sealed class FfmpegStreamingSession : IAsyncDisposable
         var frame = profile.UniformFormat
             ? output?.Pin(profile.Orient(new MediaOutput(FfmpegCommandBuilder.Even(canvasWidth), FfmpegCommandBuilder.Even(canvasHeight), frameRate)))
             : null;
-        var arguments = FfmpegCommandBuilder.BuildComposition(new FfmpegCompositionRequest(
-            items, outputUrl, setting, canvasWidth, canvasHeight, canvasFrameRate, resumeFrom, duration, previewPath, profile, quality, frame,
-            BitrateOf(setting, output), alwaysSound));
+        var webpInputs = WebpOverlayInputs.Prepare(items);
+        try
+        {
+            var arguments = FfmpegCommandBuilder.BuildComposition(new FfmpegCompositionRequest(
+                webpInputs.Items, outputUrl, setting, canvasWidth, canvasHeight, canvasFrameRate, resumeFrom, duration, previewPath, profile, quality, frame,
+                BitrateOf(setting, output), alwaysSound));
 
-        var mediaOutput = frame ?? new MediaOutput(canvasWidth, canvasHeight, frameRate);
-        var sound = FfmpegCommandBuilder.CarriesSound(items);
+            var mediaOutput = frame ?? new MediaOutput(canvasWidth, canvasHeight, frameRate);
+            var sound = FfmpegCommandBuilder.CarriesSound(items);
 
-        // The length of the canvas is kept in the probe because that is where the streaming loop
-        // looks for it: a playlist ends when the position reaches the length of its file, and a
-        // canvas made of files ends the same way. A probe that said zero is a live that never ends.
-        var probe = new MediaProbeResult(
-            canvasWidth, canvasHeight, frameRate, sound, sound ? 2 : 0, duration?.TotalSeconds ?? 0);
+            // The length of the canvas is kept in the probe because that is where the streaming loop
+            // looks for it: a playlist ends when the position reaches the length of its file, and a
+            // canvas made of files ends the same way. A probe that said zero is a live that never ends.
+            var probe = new MediaProbeResult(
+                canvasWidth, canvasHeight, frameRate, sound, sound ? 2 : 0, duration?.TotalSeconds ?? 0);
 
-        var session = Launch(locator, videoPkid, SceneDescriptionOf(items), outputUrl, arguments, probe, mediaOutput, resumeFrom, profile, logger, output);
-        session.Measure(setting, profile);
-        return session;
+            var session = Launch(locator, videoPkid, SceneDescriptionOf(items), outputUrl, arguments, probe, mediaOutput, resumeFrom, profile, logger, output);
+            session._webpInputs = webpInputs;
+            session.Measure(setting, profile);
+            return session;
+        }
+        catch
+        {
+            webpInputs.Dispose();
+            throw;
+        }
     }
 
     /// <summary>
@@ -720,6 +732,32 @@ public sealed class FfmpegStreamingSession : IAsyncDisposable
         }
 
         var key = outputUrl.TrimEnd('/');
+        if (StreamPlatforms.Detect(outputUrl) == StreamPlatform.Facebook
+            && outputUrl.IndexOf("/rtmp/", StringComparison.Ordinal) is var facebookPath && facebookPath >= 0)
+        {
+            key = outputUrl[(facebookPath + 6)..];
+            // Debug logs show the playpath separately, sometimes without its query.
+            // Mask before truncation, and cover decoded forms and individual long tokens too.
+            var secrets = new List<string> { key, Uri.UnescapeDataString(key) };
+            var queryStart = key.IndexOf('?');
+            if (queryStart >= 0)
+            {
+                secrets.Add(key[..queryStart]);
+                secrets.Add(Uri.UnescapeDataString(key[..queryStart]));
+                foreach (var parameter in key[(queryStart + 1)..].Split('&'))
+                {
+                    var equals = parameter.IndexOf('=');
+                    if (equals >= 0 && parameter.Length - equals - 1 >= 8)
+                    {
+                        secrets.Add(parameter[(equals + 1)..]);
+                        secrets.Add(Uri.UnescapeDataString(parameter[(equals + 1)..]));
+                    }
+                }
+            }
+            foreach (var secret in secrets.Where(value => value.Length > 0).OrderByDescending(value => value.Length))
+                text = text.Replace(secret, "****", StringComparison.Ordinal);
+            return text;
+        }
         key = key[(key.LastIndexOf('/') + 1)..];
         return key.Length < 8 ? text : text.Replace(key, "****", StringComparison.Ordinal);
     }
@@ -867,6 +905,7 @@ public sealed class FfmpegStreamingSession : IAsyncDisposable
 
             _process.Dispose();
             _sender?.Dispose();
+            _webpInputs?.Dispose();
         }
     }
 }

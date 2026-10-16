@@ -90,6 +90,19 @@ public sealed class RelayTransportTests
 
     private const string Facebook = "rtmps://rtmp-api.facebook.com:443/rtmp/FB-123-0-Abc";
 
+    [Theory]
+    [InlineData("FB-123-0-Abc")]
+    [InlineData("FB-123/secret?token=abcd%2Fefgh&next=/other")]
+    public void FacebookKeepsTheWholeKeyOutOfTheApplicationName(string key)
+    {
+        var url = "rtmps://live-api-s.facebook.com:443/rtmp/" + key;
+        var arguments = FfmpegCommandBuilder.BuildSender(url, StreamPlatformProfile.Facebook).ToList();
+        Assert.Equal("rtmp", arguments[arguments.IndexOf("-rtmp_app") + 1]);
+        Assert.Equal(key, arguments[arguments.IndexOf("-rtmp_playpath") + 1]);
+        Assert.Equal("rtmps://live-api-s.facebook.com:443/rtmp", arguments[arguments.IndexOf("-rtmp_tcurl") + 1]);
+        Assert.Equal(url, arguments[^1]);
+    }
+
     [Fact]
     public void KickGoesOutOnTheNativePublisherPacedByTheRelayAndHasNoSwitch()
     {

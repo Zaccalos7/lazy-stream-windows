@@ -74,8 +74,6 @@
 
 @if (editing is not null)
 {
-    // The region of a configuration of X, read off its address; a new one starts on the preset's.
-    var editingRegion = XIngestRegions.OfUrl(editing.StreamUrl) ?? XIngestRegions.Default;
     <dialog class="dialog wide" data-open>
         <form method="post" asp-page-handler="Save" asp-route-platform="@Model.Platform" asp-route-active="@Model.Active">
             <input type="hidden" name="id" value="@editing.Id" />
@@ -101,31 +99,16 @@
                         <span>@T["channelName"]</span>
                         <input class="input" name="channelName" value="@editing.ChannelName" required />
                     </label>
-                    @* X is asked for a region instead (below): the box goes away while X is picked. *@
-                    <label class="field" data-hide-when="@MainChannelSettingModel.RegionalIngest">
+                    <label class="field">
                         <span>@T["url"]</span>
                         <input class="input" name="streamUrl" value="@editing.StreamUrl" placeholder="rtmp://…" />
-                        @* Kick, Facebook Gaming and Rumble fill in where their ingest usually is, and the
+                        @* Kick and Facebook Gaming fill in where their ingest usually is, and the
                            address to use is the one their dashboard shows: said where the address is typed,
                            with where each of them shows it. *@
                         @foreach (var hint in MainChannelSettingModel.IngestHints)
                         {
                             <small data-show-when="@hint.Platforms">@T[hint.Key]</small>
                         }
-                    </label>
-                    @* A source of X is fed on the server of the region it was made in, and only there: X
-                       is asked for that region, and the configuration keeps the RTMPS address of its
-                       server (XIngestRegions). Each region says its server too, the name the address
-                       Media Studio Producer shows is made of. *@
-                    <label class="field" data-show-when="@MainChannelSettingModel.RegionalIngest">
-                        <span>@T["xRegion"]</span>
-                        <select class="input" name="xRegion">
-                            @foreach (var region in XIngestRegions.All)
-                            {
-                                <option value="@region.Code" selected="@(region == editingRegion)">@T[region.Key] · @region.Host</option>
-                            }
-                        </select>
-                        <small>@T["ingestFromXProducer"]</small>
                     </label>
                     @* TikTok hands out a key for every live, which goes stale by the next one: its
                        configuration keeps none, and the key is asked for when a live starts. *@
@@ -148,6 +131,9 @@
                     <span>@T["description"]</span>
                     <textarea class="input" name="description" rows="3">@editing.Description</textarea>
                 </label>
+                <div class="section" data-show-when="facebook">
+                    <partial name="_FacebookLiveNotice" />
+                </div>
                 @* How the live reaches the ingest. On, the ffmpeg delivery - ffmpeg keeps
                    the time and publishes over its own RTMPS; off, the relay and the RTMP of this
                    application. The option is always visible. YouTube cannot be turned off. *@

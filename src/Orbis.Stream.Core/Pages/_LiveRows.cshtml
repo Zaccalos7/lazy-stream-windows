@@ -38,7 +38,7 @@ else
                         var platform = video.VideoLiveHistory?.PlatformStreamName;
 
                         var knownPlatform = LiveLinkView.PlatformOf(video.VideoLiveHistory?.StreamUrl);
-                        var liveUrl = live ? LiveLinkView.UrlOf(video.VideoLiveHistory?.StreamUrl, video.ChannelName, platform, Air.OnAirVideoOf(historyPkid)) : null;
+                        var liveUrl = live || (active && knownPlatform == "facebook") ? LiveLinkView.UrlOf(video.VideoLiveHistory?.StreamUrl, video.ChannelName, platform, Air.OnAirVideoOf(historyPkid)) : null;
                         // A live to TikTok is started again with the key of the new live (LiveStreamKeys).
                         var askKey = Orbis.Stream.Core.Streaming.LiveStreamKeys.IsAskedFor(platform, video.VideoLiveHistory?.StreamUrl);
                         // A picture or overlay of the scene deck active on the live.
@@ -74,6 +74,10 @@ else
                             </td>
                             <td>
                                 @(video.ChannelName ?? "N/A")
+                                @if (active && knownPlatform == "facebook")
+                                {
+                                    <partial name="_FacebookLiveNotice" />
+                                }
                             </td>
                             <td>@LiveStatusView.Date(video.StartDateLive, "dd/MM/yyyy HH:mm:ss")</td>
                             <td>

@@ -72,12 +72,6 @@
                     <a class="btn brand tiktok" href="?edit=@(Model.Form.Id?.ToString() ?? "new")&preset=TikTok">
                         <svg viewBox="0 0 24 24" aria-hidden="true"><path d="@LiveLinkView.MarkupOf("tiktok")" /></svg>TikTok
                     </a>
-                    <a class="btn brand rumble" href="?edit=@(Model.Form.Id?.ToString() ?? "new")&preset=Rumble">
-                        <svg viewBox="0 0 24 24" aria-hidden="true"><path d="@LiveLinkView.MarkupOf("rumble")" /></svg>Rumble
-                    </a>
-                    <a class="btn brand x" href="?edit=@(Model.Form.Id?.ToString() ?? "new")&preset=X">
-                        <svg viewBox="0 0 24 24" aria-hidden="true"><path d="@LiveLinkView.MarkupOf("x")" /></svg>X
-                    </a>
                 </div>
                 <partial name="_VideoSettingFields" for="Form" />
             </div>

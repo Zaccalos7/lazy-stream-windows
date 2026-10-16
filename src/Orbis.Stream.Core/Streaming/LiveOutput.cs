@@ -370,23 +370,16 @@ public sealed class LiveOutput : IAsyncDisposable
     {
         try
         {
-            var errors = (await process.StandardError.ReadToEndAsync().ConfigureAwait(false)).Trim();
-            if (errors.Length > 0)
+            var errors = Profile.Diagnostics
+                ? await FfmpegProcessLog.ReadAsync(process.StandardError, _logger, Profile.Name, "sender", OutputUrl).ConfigureAwait(false)
+                : (await process.StandardError.ReadToEndAsync().ConfigureAwait(false)).Trim();
+            if (errors.Length > 0 && !Profile.Diagnostics)
             {
                 // The tail is what matters: ffmpeg says why it stopped last.
                 _logger.LogWarning(
                     "The ffmpeg sender to {Platform} said: {Errors}",
                     Profile.Platform,
                     FfmpegStreamingSession.RedactStreamKey(errors.Length > 2000 ? errors[^2000..] : errors, OutputUrl));
-
-                // X closes the socket without an RTMP error when it refuses a publish: the end of
-                // file is all ffmpeg sees, and the reason is on the side of Media Studio Producer.
-                if (Profile.Platform == StreamPlatform.X && errors.Contains("End of file", StringComparison.Ordinal))
-                {
-                    _logger.LogWarning(
-                        "X closed the connection of the live: check in Media Studio Producer that the source is in region {Region}, that its key is the current one and that no broadcast on it has ended",
-                        XIngestRegions.OfUrl(OutputUrl)?.Code ?? "?");
-                }
             }
             return FfmpegStreamingSession.RedactStreamKey(errors, OutputUrl);
         }

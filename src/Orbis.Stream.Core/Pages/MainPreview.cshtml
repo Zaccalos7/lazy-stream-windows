@@ -88,6 +88,11 @@
      data-playable="@(live.IsPlayable ? "1" : "0")"
      data-platform="@(LiveLinkView.PlatformOf(live.StreamUrl))">
 
+@if (LiveLinkView.PlatformOf(live.StreamUrl) == "facebook")
+{
+    <partial name="_FacebookLiveNotice" />
+}
+
 @if (!live.IsLive)
 {
     <div class="card empty">

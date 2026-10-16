@@ -145,7 +145,12 @@ public sealed class MainLiveModel(
         LoadDetails();
         Channels = settings.RetrieveChannel(new Dictionary<string, string>());
         Locked = videos.GetLockedVideos();
-        ActiveSettings = videoSettings.GetAllVideoSettings(new Dictionary<string, string> { ["isVideoAndAudioSettingActive"] = "true" });
+        // Presets from a platform no longer offered must not reappear on upgraded installations.
+        ActiveSettings = videoSettings.GetAllVideoSettings(new Dictionary<string, string> { ["isVideoAndAudioSettingActive"] = "true" })
+            .Where(setting => string.IsNullOrWhiteSpace(setting.DefaultPlatformConfiguration)
+                || setting.DefaultPlatformConfiguration == VideoSettingForm.CustomPlatform
+                || MainChannelSettingModel.ChoiceOfSetting(setting.DefaultPlatformConfiguration) is not null)
+            .ToList();
         ActiveConfigurations = settings.RetrieveSettings(new Dictionary<string, string> { ["isActive"] = "true" });
 
         if (link is not null || linkHistory is not null)

@@ -28,7 +28,7 @@ public enum SourceKind
 
     /// <summary>
     /// A picture of the layout laid over the sources, the way an overlay of Streamlabs is: a still
-    /// (PNG, JPEG, WebP) or an animation that starts again whenever it ends (GIF, APNG, a WebM or a
+    /// (PNG, JPEG, WebP) or an animation that starts again whenever it ends (GIF, APNG, animated WebP, a WebM or a
     /// MOV with alpha). It is not a source: nothing is dropped into it when a live starts, it comes
     /// with the layout, and its transparent pixels let whatever is under it through. It is never
     /// heard and it never ends, so it decides neither the sound nor the length of a live.

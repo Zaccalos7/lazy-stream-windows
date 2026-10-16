@@ -1818,17 +1818,7 @@ public sealed class FfmpegVideoPlaylistStreamer : IVideoPlaylistStreamer
         return string.IsNullOrWhiteSpace(errorOutput) ? message : message + "\n" + errorOutput.Trim();
     }
 
-    private static string PlatformName(FfmpegStreamingSession session) => session.Profile.Platform switch
-    {
-        StreamPlatform.Twitch => "Twitch",
-        StreamPlatform.YouTube => "YouTube",
-        StreamPlatform.Kick => "Kick",
-        StreamPlatform.Facebook => "Facebook Gaming",
-        StreamPlatform.TikTok => "TikTok",
-        StreamPlatform.Rumble => "Rumble",
-        StreamPlatform.X => "X",
-        _ => "RTMP"
-    };
+    private static string PlatformName(FfmpegStreamingSession session) => session.Profile.Name;
 
     private async Task StopAndRecordAsync(
         FfmpegStreamingSession session,

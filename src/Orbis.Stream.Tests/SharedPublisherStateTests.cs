@@ -13,7 +13,7 @@ namespace Orbis.Stream.Tests;
 public sealed class SharedPublisherStateTests
 {
     [Fact]
-    public async Task BufferedFramesDoNotMakeABlockedXPublishLive()
+    public async Task BufferedFramesDoNotMakeABlockedPublishLive()
     {
         var ffmpeg = Tool("ffmpeg");
         var ffprobe = Tool("ffprobe");
@@ -23,13 +23,13 @@ public sealed class SharedPublisherStateTests
         var videos = host.Services.GetRequiredService<VideoRepository>();
         var video = videos.Insert(new VideoEntity
         {
-            Name = "clip.mp4", VideoPath = clip, Extension = "mp4", ChannelName = "x-test",
+            Name = "clip.mp4", VideoPath = clip, Extension = "mp4", ChannelName = "publisher-test",
             VideoSettingId = 1, LiveStatus = LiveStatus.Connecting
         });
         using var listener = new TcpListener(IPAddress.Loopback, 0);
         listener.Start();
-        var url = $"rtmp://127.0.0.1:{((IPEndPoint)listener.LocalEndpoint).Port}/x/test-key-1234";
-        var profile = StreamPlatformProfile.X with { ConnectTimeout = TimeSpan.FromSeconds(5) };
+        var url = $"rtmp://127.0.0.1:{((IPEndPoint)listener.LocalEndpoint).Port}/live2/test-key-1234";
+        var profile = StreamPlatformProfile.YouTube with { ConnectTimeout = TimeSpan.FromSeconds(5) };
         var locator = new FfmpegToolLocator(ffmpeg, ffprobe);
         await using var output = LiveOutput.For(url, locator, NullLogger.Instance, profile: profile)!;
         var frames = host.Services.GetRequiredService<LivePreviewFrames>();
@@ -61,10 +61,8 @@ public sealed class SharedPublisherStateTests
         Assert.DoesNotContain("test-key-1234", error, StringComparison.Ordinal);
     }
 
-    [Theory]
-    [InlineData(false)]
-    [InlineData(true)]
-    public async Task XPreviewRequiresASustainedPublishAndDisappearsWhenTheSenderExits(bool sustained)
+    [Fact]
+    public async Task PreviewTracksTheSenderUntilItExits()
     {
         var ffmpeg = Tool("ffmpeg");
         var ffprobe = Tool("ffprobe");
@@ -74,10 +72,10 @@ public sealed class SharedPublisherStateTests
         var videos = host.Services.GetRequiredService<VideoRepository>();
         var video = videos.Insert(new VideoEntity
         {
-            Name = "clip.mp4", VideoPath = clip, Extension = "mp4", ChannelName = "x-test",
+            Name = "clip.mp4", VideoPath = clip, Extension = "mp4", ChannelName = "publisher-test",
             VideoSettingId = 1, LiveStatus = LiveStatus.Connecting
         });
-        var url = $"rtmp://127.0.0.1:{RtmpPublisherUrlTests.FreePort()}/x/test-key-1234";
+        var url = $"rtmp://127.0.0.1:{RtmpPublisherUrlTests.FreePort()}/live2/test-key-1234";
         var startInfo = new ProcessStartInfo(ffmpeg)
         {
             RedirectStandardError = true, RedirectStandardOutput = true, UseShellExecute = false
@@ -91,26 +89,20 @@ public sealed class SharedPublisherStateTests
         {
             await Task.Delay(300);
             var locator = new FfmpegToolLocator(ffmpeg, ffprobe);
-            await using var output = LiveOutput.For(url, locator, NullLogger.Instance, profile: StreamPlatformProfile.X)!;
+            await using var output = LiveOutput.For(url, locator, NullLogger.Instance, profile: StreamPlatformProfile.YouTube)!;
             await using var session = FfmpegStreamingSession.Start(
                 locator, video, clip, url, Setting(), new MediaProbeResult(320, 240, 30, true, 2, 30),
                 NullLogger.Instance, output: output);
             var registry = host.Services.GetRequiredService<StreamingSessionRegistry>();
             registry.Register(session);
             var preview = host.Services.GetRequiredService<LivePreviewService>();
-            await UntilAsync(() => session.IsOnAir);
-            Assert.False(session.IsPublishing);
-            Assert.False(preview.Snapshot(video).IsLive);
-
-            if (sustained)
-            {
-                await UntilAsync(() => session.IsPublishing);
-                Assert.True(preview.Snapshot(video).IsLive);
-                Assert.Single(preview.Snapshot(video).Running);
-                Assert.True(session.PositionMilliseconds > 0);
-                // An explicitly watched live must not silently change to another channel.
-                Assert.False(preview.Snapshot(video + 1).IsLive);
-            }
+            await UntilAsync(() => session.IsPublishing);
+            Assert.True(session.IsOnAir);
+            Assert.True(preview.Snapshot(video).IsLive);
+            Assert.Single(preview.Snapshot(video).Running);
+            Assert.True(session.PositionMilliseconds > 0);
+            // An explicitly watched live must not silently change to another channel.
+            Assert.False(preview.Snapshot(video + 1).IsLive);
 
             server.Kill(entireProcessTree: true);
             await server.WaitForExitAsync();
@@ -131,8 +123,8 @@ public sealed class SharedPublisherStateTests
 
     private static VideoSettingEntity Setting() => new()
     {
-        Title = "X", VideoCodec = 27, VideoCodecName = "libx264", PixelFormat = 0,
-        VideoBitrate = 800_000, VideoFormat = "flv", GopSize = 3,
+        Title = "publisher", VideoCodec = 27, VideoCodecName = "libx264", PixelFormat = 0,
+        VideoBitrate = 800_000, VideoFormat = "flv", GopSize = 2,
         AudioSetting = new AudioSettingEntity { AudioCodec = 86018, AudioBitrate = 128_000 }
     };
 

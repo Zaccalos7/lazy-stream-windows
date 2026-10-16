@@ -1550,3 +1550,47 @@ for (const show of document.querySelectorAll("[data-show-when]")) {
   });
   update();
 }
+
+// Error reports are generated locally and opened only when the user asks.
+{
+  const dialog = document.getElementById("error-report-dialog");
+  let images = [];
+  let page = 0;
+  let generation = 0;
+  const showPage = () => {
+    dialog.querySelector("[data-report-qr]").src = images[page];
+    dialog.querySelector("[data-report-page]").textContent = `${page + 1} / ${images.length}`;
+    dialog.querySelector("[data-report-prev]").disabled = page === 0;
+    dialog.querySelector("[data-report-next]").disabled = page === images.length - 1;
+  };
+  document.addEventListener("click", async event => {
+    const button = event.target.closest("[data-error-report]");
+    if (!button || !dialog) return;
+    const request = ++generation;
+    const status = dialog.querySelector("[data-report-status]");
+    images = [];
+    page = 0;
+    dialog.querySelector("[data-report-qr]").hidden = true;
+    dialog.querySelector("[data-report-pages]").hidden = true;
+    dialog.querySelector("[data-report-text]").textContent = "";
+    status.textContent = status.dataset.loading;
+    if (!dialog.open) dialog.showModal();
+    try {
+      const response = await fetch(`/video/${encodeURIComponent(button.dataset.errorReport)}/error-report`, { cache: "no-store" });
+      if (!response.ok) throw new Error(String(response.status));
+      const report = await response.json();
+      if (request !== generation || !dialog.open) return;
+      images = report.images;
+      showPage();
+      dialog.querySelector("[data-report-qr]").hidden = false;
+      dialog.querySelector("[data-report-pages]").hidden = images.length < 2;
+      dialog.querySelector("[data-report-text]").textContent = report.text;
+      status.textContent = "";
+    } catch {
+      if (request === generation) status.textContent = status.dataset.failed;
+    }
+  });
+  dialog?.querySelector("[data-report-prev]").addEventListener("click", () => { if (page > 0) { page--; showPage(); } });
+  dialog?.querySelector("[data-report-next]").addEventListener("click", () => { if (page < images.length - 1) { page++; showPage(); } });
+  dialog?.addEventListener("close", () => { generation++; });
+}

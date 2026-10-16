@@ -594,8 +594,9 @@ public sealed class LiveLinkTests
     public void UrlOf_KickIsTheChannelAndFacebookGamingThePage()
     {
         Assert.Equal("https://kick.com/reprochannel", LiveLinkView.UrlOf(Kick, "ReproChannel", "kick"));
-        Assert.Equal("https://www.facebook.com/ReproGaming", LiveLinkView.UrlOf(Facebook, "ReproGaming", "facebook"));
-        Assert.Equal("https://www.facebook.com/repro", LiveLinkView.UrlOf("rtmps://live-api-s.facebook.com:443/rtmp/", "@repro", null));
+        Assert.Equal("https://www.facebook.com/live/producer/v2/", LiveLinkView.UrlOf(Facebook, "ReproGaming", "facebook"));
+        Assert.Equal("https://www.facebook.com/live/producer/v2/", LiveLinkView.UrlOf("rtmps://live-api-s.facebook.com:443/rtmp/", "@repro", null));
+        Assert.Equal("https://www.facebook.com/live/producer/v2/", LiveLinkView.UrlOf(Facebook, null, null));
     }
 
     [Fact]

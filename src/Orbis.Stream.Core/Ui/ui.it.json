@@ -1,4 +1,5 @@
 {
+  "viewFullMessage": "Vedi il messaggio completo",
   "reportError": "Segnala errore",
   "reportHelp": "Fai uno screenshot o una foto del QR code e apri una issue su GitHub. Se il problema dipende dal software, cercheremo di risolverlo.",
   "reportMultiple": "Se ci sono più QR code, fotografa tutte le pagine per includere l’errore completo.",

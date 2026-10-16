@@ -377,6 +377,8 @@ public sealed class FfmpegCompositionTests
     [InlineData("rtmp://live.twitch.tv/app/live_477413959_abcdef", "Error opening output rtmp://live.twitch.tv/app/live_477413959_abcdef: I/O error", "Error opening output rtmp://live.twitch.tv/app/****: I/O error")]
     [InlineData("rtmp://a.rtmp.youtube.com/live2/abcd-efgh-ijkl/", "abcd-efgh-ijkl twice abcd-efgh-ijkl", "**** twice ****")]
     [InlineData("C:/videos/out.flv", "C:/videos/out.flv: I/O error", "C:/videos/out.flv: I/O error")]
+    [InlineData("rtmps://live-api-s.facebook.com:443/rtmp/FB-test/secret?token=abcd%2Fefgh", "playpath FB-test/secret token abcd/efgh", "playpath **** token ****")]
+    [InlineData("rtmps://live-api-s.facebook.com:443/rtmp/FB-short?ds=1", "publish FB-short", "publish ****")]
     [InlineData("rtmp://ingest/live/key", "rtmp://ingest/live/key", "rtmp://ingest/live/key")]
     public void TheStreamKeyNeverReachesAnErrorMessage(string outputUrl, string error, string expected)
     {

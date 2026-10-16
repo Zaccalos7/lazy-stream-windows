@@ -732,6 +732,32 @@ public sealed class FfmpegStreamingSession : IAsyncDisposable
         }
 
         var key = outputUrl.TrimEnd('/');
+        if (StreamPlatforms.Detect(outputUrl) == StreamPlatform.Facebook
+            && outputUrl.IndexOf("/rtmp/", StringComparison.Ordinal) is var facebookPath && facebookPath >= 0)
+        {
+            key = outputUrl[(facebookPath + 6)..];
+            // Debug logs show the playpath separately, sometimes without its query.
+            // Mask before truncation, and cover decoded forms and individual long tokens too.
+            var secrets = new List<string> { key, Uri.UnescapeDataString(key) };
+            var queryStart = key.IndexOf('?');
+            if (queryStart >= 0)
+            {
+                secrets.Add(key[..queryStart]);
+                secrets.Add(Uri.UnescapeDataString(key[..queryStart]));
+                foreach (var parameter in key[(queryStart + 1)..].Split('&'))
+                {
+                    var equals = parameter.IndexOf('=');
+                    if (equals >= 0 && parameter.Length - equals - 1 >= 8)
+                    {
+                        secrets.Add(parameter[(equals + 1)..]);
+                        secrets.Add(Uri.UnescapeDataString(parameter[(equals + 1)..]));
+                    }
+                }
+            }
+            foreach (var secret in secrets.Where(value => value.Length > 0).OrderByDescending(value => value.Length))
+                text = text.Replace(secret, "****", StringComparison.Ordinal);
+            return text;
+        }
         key = key[(key.LastIndexOf('/') + 1)..];
         return key.Length < 8 ? text : text.Replace(key, "****", StringComparison.Ordinal);
     }

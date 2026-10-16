@@ -56,6 +56,22 @@ public sealed class FfmpegProcessLogTests
     }
 
     [Fact]
+    public async Task SenderKeepsConnectionDebugButDropsPacketDebugAfterOpeningOutput()
+    {
+        const string url = "rtmps://live-api-s.facebook.com:443/rtmp/FB-private/secret?token=long-private-token";
+        const string lines = "[debug] Sending publish command for 'FB-private/secret'\n"
+            + "[info] Output #0, flv\n[debug] packet details\n[error] connection lost\n";
+        using var reader = new StreamReader(new MemoryStream(Encoding.UTF8.GetBytes(lines)));
+        var logger = new CapturingLogger();
+        var tail = await FfmpegProcessLog.ReadAsync(reader, logger, "Facebook", "sender", url);
+        Assert.Contains("Sending publish command for '****'", tail, StringComparison.Ordinal);
+        Assert.Contains("connection lost", tail, StringComparison.Ordinal);
+        Assert.DoesNotContain("packet details", tail, StringComparison.Ordinal);
+        Assert.DoesNotContain("FB-private", tail, StringComparison.Ordinal);
+        Assert.Equal(3, logger.Entries.Count);
+    }
+
+    [Fact]
     public void YouTubeEncoderAndSenderExposeCodecInformationAndWarnings()
     {
         var sender = FfmpegCommandBuilder.BuildSender(Url, StreamPlatformProfile.YouTube);
@@ -95,7 +111,7 @@ public sealed class FfmpegProcessLogTests
         // Facebook cannot read is a warning, and a warning is hidden below the error level.
         Assert.True(StreamPlatformProfile.Facebook.Diagnostics);
         var sender = FfmpegCommandBuilder.BuildSender(Url, StreamPlatformProfile.Facebook);
-        Assert.Equal("level+info", sender[sender.ToList().IndexOf("-loglevel") + 1]);
+        Assert.Equal("level+debug", sender[sender.ToList().IndexOf("-loglevel") + 1]);
 
         var setting = new VideoSettingEntity { VideoCodecName = "libx264" };
         var encoder = FfmpegCommandBuilder.Build(new FfmpegStreamRequest(

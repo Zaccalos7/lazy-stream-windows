@@ -12,10 +12,15 @@ internal static class FfmpegProcessLog
     public static async Task<string> ReadAsync(StreamReader reader, ILogger logger, string platform, string role, string outputUrl)
     {
         var tail = new StringBuilder();
+        var outputOpened = false;
         try
         {
             while (await reader.ReadLineAsync().ConfigureAwait(false) is { } line)
             {
+                // Keep connection diagnostics, without filling the log with packet details
+                // for the remaining hours of a successful live.
+                if (line.Contains("Output #0,", StringComparison.Ordinal)) outputOpened = true;
+                if (outputOpened && line.Contains("[debug]", StringComparison.OrdinalIgnoreCase)) continue;
                 // Mask before truncating: a long line cut halfway through a key must not leak it.
                 var safe = FfmpegStreamingSession.RedactStreamKey(line, outputUrl);
                 tail.AppendLine(safe);

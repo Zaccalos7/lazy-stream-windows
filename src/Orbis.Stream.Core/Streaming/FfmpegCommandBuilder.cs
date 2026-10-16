@@ -1571,7 +1571,7 @@ public static class FfmpegCommandBuilder
             "-loglevel",
             // The ingests that report (see StreamPlatformProfile.Diagnostics) name what they made
             // of the stream at info level too, which is where a header they could not read shows.
-            profile.Diagnostics ? "level+info" : "error",
+            profile.Platform == StreamPlatform.Facebook ? "level+debug" : profile.Diagnostics ? "level+info" : "error",
             "-progress",
             "pipe:1",
             "-nostats",
@@ -1626,9 +1626,20 @@ public static class FfmpegCommandBuilder
             // A connection that hangs - an ingest that never answers, a network that stopped
             // taking data - fails after this long instead of looking like a live for ever.
             "-rw_timeout",
-            ((long)profile.ConnectTimeout.TotalMilliseconds * 1000).ToString(CultureInfo.InvariantCulture),
-            outputUrl
+            ((long)profile.ConnectTimeout.TotalMilliseconds * 1000).ToString(CultureInfo.InvariantCulture)
         ]);
+
+        // Facebook's app is /rtmp. Do not let FFmpeg interpret a slash in the key
+        // (including its query) as an application instance. Keep the raw key intact.
+        if (profile.Platform == StreamPlatform.Facebook
+            && Uri.TryCreate(outputUrl, UriKind.Absolute, out var ingest)
+            && ingest.AbsolutePath.StartsWith("/rtmp/", StringComparison.Ordinal))
+        {
+            var pathStart = outputUrl.IndexOf('/', outputUrl.IndexOf("://", StringComparison.Ordinal) + 3);
+            arguments.AddRange(["-rtmp_app", "rtmp", "-rtmp_playpath", outputUrl[(pathStart + 6)..],
+                "-rtmp_tcurl", outputUrl[..pathStart] + "/rtmp"]);
+        }
+        arguments.Add(outputUrl);
 
         return arguments;
     }

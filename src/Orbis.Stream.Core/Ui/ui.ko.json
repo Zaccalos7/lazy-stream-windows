@@ -1,4 +1,5 @@
 {
+  "facebookGoLiveHelp": "Orbis에서 스트리밍을 시작한 후 Facebook Live Producer를 열고 “라이브 방송 시작”을 눌러 방송을 활성화하세요.",
   "success": "성공",
   "ffmpegProcessesDetails": "FFmpeg 프로세스 상세 정보",
   "noActiveFfmpegProcess": "활성화된 FFmpeg 프로세스가 없습니다.",

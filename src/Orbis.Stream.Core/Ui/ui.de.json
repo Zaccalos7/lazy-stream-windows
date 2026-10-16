@@ -1,4 +1,5 @@
 {
+  "facebookGoLiveHelp": "Öffne nach dem Start des Streams in Orbis Facebook Live Producer und klicke auf „Live gehen“, um die Übertragung zu aktivieren.",
   "success": "Erfolgreich",
   "ffmpegProcessesDetails": "FFmpeg-Prozessdetails",
   "noActiveFfmpegProcess": "Kein aktiver FFmpeg-Prozess.",

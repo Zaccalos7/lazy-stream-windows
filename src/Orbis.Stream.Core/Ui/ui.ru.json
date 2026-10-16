@@ -1,4 +1,5 @@
 {
+  "facebookGoLiveHelp": "После запуска трансляции в Orbis откройте Facebook Live Producer и нажмите «В прямой эфир», чтобы начать эфир.",
   "success": "Успешно",
   "ffmpegProcessesDetails": "Сведения о процессах FFmpeg",
   "noActiveFfmpegProcess": "Нет активного процесса FFmpeg.",

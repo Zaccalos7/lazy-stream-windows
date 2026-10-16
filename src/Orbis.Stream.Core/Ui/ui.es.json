@@ -1,4 +1,5 @@
 {
+  "facebookGoLiveHelp": "Después de iniciar la transmisión en Orbis, abre Facebook Live Producer y pulsa «Transmitir» para activar el directo.",
   "success": "Éxito",
   "ffmpegProcessesDetails": "Detalles del proceso FFmpeg",
   "noActiveFfmpegProcess": "No hay procesos FFmpeg activos.",

@@ -1,4 +1,5 @@
 {
+  "facebookGoLiveHelp": "After starting the stream in Orbis, open Facebook Live Producer and click “Go live” to activate the broadcast.",
   "success": "Success",
   "ffmpegProcessesDetails": "FFmpeg processes details",
   "noActiveFfmpegProcess": "No active FFmpeg process.",

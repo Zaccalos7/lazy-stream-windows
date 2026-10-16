@@ -1,4 +1,5 @@
 {
+  "facebookGoLiveHelp": "在 Orbis 中启动推流后，打开 Facebook Live Producer 并点击“开始直播”以启用直播。",
   "success": "成功",
   "ffmpegProcessesDetails": "FFmpeg 进程详情",
   "noActiveFfmpegProcess": "没有活动的 FFmpeg 进程。",

@@ -1,4 +1,5 @@
 {
+  "facebookGoLiveHelp": "Når streamen er startet i Orbis, skal du åbne Facebook Live Producer og trykke på “Gå live” for at aktivere udsendelsen.",
   "success": "Gennemført",
   "ffmpegProcessesDetails": "Detaljer om FFmpeg-processer",
   "noActiveFfmpegProcess": "Ingen aktiv FFmpeg-proces.",

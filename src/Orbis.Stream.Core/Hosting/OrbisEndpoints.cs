@@ -317,6 +317,18 @@ public static class OrbisEndpoints
     {
         var group = app.MapGroup("/video");
 
+        group.MapGet("/{pkid:int}/error-report", (int pkid, VideoRepository videos, VideoLiveHistoryRepository histories, HttpContext context) =>
+        {
+            context.Response.Headers.CacheControl = "no-store";
+            var video = videos.FindByPkid(pkid);
+            if (video is null || video.LiveStatus != LiveStatus.Error || string.IsNullOrWhiteSpace(video.Message))
+                return Results.NotFound();
+            var history = video.VideoLiveHistoryId is long historyId ? histories.FindByPkid(historyId) : null;
+            var text = ErrorReport.Text(video, history?.StreamKey);
+            var parts = ErrorReport.Parts(text);
+            return Results.Ok(new { text, images = parts.Select((part, index) => ErrorReport.Image(part, index, parts.Count)).ToArray() });
+        });
+
         group.MapGet("/getPage", (HttpContext context, VideoService service) => service.GetVideoList(
             PageRequest.Parse(context.Request.Query, 20, "pkid", true)));
 

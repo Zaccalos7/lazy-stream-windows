@@ -187,6 +187,10 @@ else
                     <td class="nowrap">@LiveStatusView.Date(history?.LocalDateTimeStartLive, "dd-MM-yyyy HH:mm:ss")</td>
                     <td>@video.Message</td>
                     <td class="nowrap">
+                        @if (video.LiveStatus == LiveStatus.Error && !string.IsNullOrWhiteSpace(video.Message) && video.Pkid is int reportId)
+                        {
+                            <partial name="_ErrorReportButton" model="reportId" />
+                        }
                         @if (historyPkid > 0)
                         {
                             <form method="post" asp-page-handler="Delete" asp-all-route-data="@Model.DeleteRoute(historyPkid)" class="inline" data-confirm="@T["deleteLiveHistoryConfirm"]">

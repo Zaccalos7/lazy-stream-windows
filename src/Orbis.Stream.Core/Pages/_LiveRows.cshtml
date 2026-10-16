@@ -82,6 +82,10 @@ else
                             <td>@LiveStatusView.Date(video.StartDateLive, "dd/MM/yyyy HH:mm:ss")</td>
                             <td>
                                 <div class="actions">
+                                    @if (status == LiveStatus.Error && !string.IsNullOrWhiteSpace(video.Message) && video.Pkid is int reportId)
+                                    {
+                                        <partial name="_ErrorReportButton" model="reportId" />
+                                    }
                                     @if (standIn is { Holds: true })
                                     {
                                         <button type="button" class="btn scene-row-resume" data-scene-row-resume data-video="@video.Pkid"

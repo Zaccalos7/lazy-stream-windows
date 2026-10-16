@@ -43,6 +43,10 @@
                         <td class="num">@(position > 0 && status != LiveStatus.Ended ? TimeSpan.FromMilliseconds(position).ToString(@"hh\:mm\:ss") : "–")</td>
                         <td>
                             <div class="actions">
+                                @if (status == LiveStatus.Error && !string.IsNullOrWhiteSpace(video.Message) && video.Pkid is int reportId)
+                                {
+                                    <partial name="_ErrorReportButton" model="reportId" />
+                                }
                                 @{
                                     var history = playlist.History;
                                     var platform = history.PlatformStreamName;

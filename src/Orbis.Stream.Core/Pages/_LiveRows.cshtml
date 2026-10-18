@@ -78,14 +78,17 @@ else
                             </td>
                             <td>
                                 @(video.ChannelName ?? "N/A")
-                                @if (active && knownPlatform == "facebook")
-                                {
-                                    <partial name="_FacebookLiveNotice" />
-                                }
                             </td>
                             <td>@LiveStatusView.Date(video.StartDateLive, "dd/MM/yyyy HH:mm:ss")</td>
                             <td>
                                 <div class="actions">
+                                    @if (active && knownPlatform == "facebook")
+                                    {
+                                        <button type="button" class="btn subtle icon-only" commandfor="facebook-live-dialog" command="show-modal"
+                                                title="@T["seeDetails"]" aria-label="@T["seeDetails"]" aria-haspopup="dialog">
+                                            <i class="icon" aria-hidden="true">&#xE946;</i>
+                                        </button>
+                                    }
                                     @if (status == LiveStatus.Error && !string.IsNullOrWhiteSpace(video.Message) && video.Pkid is int reportId)
                                     {
                                         <partial name="_ErrorReportButton" model="reportId" />

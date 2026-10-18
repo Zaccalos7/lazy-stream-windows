@@ -326,6 +326,11 @@ public sealed class FfmpegVideoPlaylistStreamer : IVideoPlaylistStreamer
         FfmpegStreamingSession? session = null;
         var reconnects = new ReconnectBudget();
 
+        // The platform of the pass that failed, kept because the session is disposed before the
+        // failure is written and a key that does not keep is only worth warning about on the
+        // platforms that hand one out for every live.
+        StreamPlatform? publishPlatform = null;
+
         try
         {
             var probe = planned.Probe ?? await _probe.ProbeAsync(inputPath, cancellationToken).ConfigureAwait(false);
@@ -422,6 +427,7 @@ public sealed class FfmpegVideoPlaylistStreamer : IVideoPlaylistStreamer
                 // A started process is not a live: the row says it is connecting until the ingest
                 // takes the stream, and only then that it is streaming.
                 var platform = PlatformName(next);
+                publishPlatform = next.Profile.Platform;
                 var connecting = _localizer.PrintMessage("video.live.connecting", [inputPath, platform]);
                 _logger.LogInformation("{Message}", connecting);
                 SaveMessageOnVideoLiveHistory(
@@ -588,10 +594,10 @@ public sealed class FfmpegVideoPlaylistStreamer : IVideoPlaylistStreamer
                     }
                 }
 
-                var streamingError = _localizer.PrintMessage(
-                    "error.during.streaming.video", [inputPath, videoLiveHistoryPkid])
-                    + "\n"
-                    + (string.IsNullOrWhiteSpace(errorOutput) ? $"ffmpeg exited with code {exitCode}" : errorOutput.Trim());
+                var streamingError = Failure(
+                    _localizer.PrintMessage("error.during.streaming.video", [inputPath, videoLiveHistoryPkid]),
+                    string.IsNullOrWhiteSpace(errorOutput) ? $"ffmpeg exited with code {exitCode}" : errorOutput.Trim(),
+                    publishPlatform);
                 _logger.LogError("{Message}", streamingError);
                 SaveMessageOnVideoLiveHistory(
                     streamingError, videoLiveHistoryPkid, inputPath, LiveStatus.Error, DateTime.Now, 0);
@@ -816,6 +822,10 @@ public sealed class FfmpegVideoPlaylistStreamer : IVideoPlaylistStreamer
         FfmpegStreamingSession? session = null;
         var reconnects = new ReconnectBudget();
 
+        // See StreamVideoAsync: the platform of the pass that failed, kept past the disposal of its
+        // session so that the failure can warn about a key that does not keep.
+        StreamPlatform? publishPlatform = null;
+
         try
         {
             var initialPosition = baseRow.LastTimeStampBeforeStop;
@@ -939,6 +949,7 @@ public sealed class FfmpegVideoPlaylistStreamer : IVideoPlaylistStreamer
                 }
 
                 var platform = PlatformName(next);
+                publishPlatform = next.Profile.Platform;
                 var connecting = _localizer.PrintMessage("video.live.connecting", [description, platform]);
                 MarkRows(rows, LiveStatus.Connecting, connecting);
                 _logger.LogInformation("{Message}", connecting);

@@ -468,7 +468,7 @@
   "youtubeCheckStep4": "Start Orbis: it sends a static picture and silence during verification without consuming your video. The content starts only when a live broadcast is found on YouTube. Excellent connection only confirms signal reception. You can use Check YouTube again.",
   "youtubeCheckStep5": "Orbis tries up to 3 connections, for up to 60 seconds each, keeping the video paused. If verification still fails, it stops and preserves the position. Recheck Dual stream, the key and Auto-start in Studio; if the event ended, create a new one before retrying.",
   "youtubeCheckStep6": "Use Show live and check audio and moving video. Private or unlisted events may be absent from the public channel: open their viewer link in Studio. A public-channel lookup cannot confirm which stream key feeds a video when several events are live.",
-  "youtubeChecking": "Video paused · waiting for YouTube confirmation",
+  "youtubeChecking": "Signal sent · YouTube verification pending",
   "youtubeVerified": "Live found on the YouTube channel",
   "youtubeCheckNow": "Check YouTube again",
   "youtubeCheckFailed": "YouTube could not be checked. Try again or open Studio."

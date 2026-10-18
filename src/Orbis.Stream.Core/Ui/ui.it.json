@@ -468,7 +468,7 @@
   "youtubeCheckStep4": "Avvia Orbis: durante la verifica invia un’immagine fissa e silenzio, senza consumare il video. Il contenuto parte solo quando viene trovata la diretta su YouTube. Connessione eccellente conferma soltanto la ricezione del segnale. Puoi usare Ricontrolla YouTube.",
   "youtubeCheckStep5": "Orbis prova al massimo 3 connessioni, fino a 60 secondi ciascuna, mantenendo fermo il video. Se la verifica continua a fallire, si ferma e conserva la posizione. In Studio ricontrolla Doppio stream, chiave e avvio automatico; se l’evento è terminato, creane uno nuovo prima di riprovare.",
   "youtubeCheckStep6": "Usa Mostra diretta e verifica audio e video in movimento. Gli eventi privati o non in elenco possono non apparire sul canale pubblico: apri il loro link spettatore da Studio. Se ci sono più eventi in onda, il controllo pubblico non può sapere quale chiave alimenta ciascun video.",
-  "youtubeChecking": "Video in pausa · attesa conferma YouTube",
+  "youtubeChecking": "Segnale inviato · verifica YouTube in corso",
   "youtubeVerified": "Diretta trovata sul canale YouTube",
   "youtubeCheckNow": "Ricontrolla YouTube",
   "youtubeCheckFailed": "Verifica YouTube non riuscita. Riprova o apri Studio."

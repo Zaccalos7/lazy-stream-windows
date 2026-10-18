@@ -55,6 +55,7 @@ public sealed class FfmpegVideoPlaylistStreamer : IVideoPlaylistStreamer
     private readonly MediaProxyService _proxies;
     private readonly EncoderTuningService _tuning;
     private readonly LiveTakeovers _takeovers;
+    private readonly YouTubeStartupGate _youtubeStartup;
     private readonly ILogger<FfmpegVideoPlaylistStreamer> _logger;
 
     public FfmpegVideoPlaylistStreamer(
@@ -70,6 +71,7 @@ public sealed class FfmpegVideoPlaylistStreamer : IVideoPlaylistStreamer
         MediaProxyService proxies,
         EncoderTuningService tuning,
         LiveTakeovers takeovers,
+        YouTubeStartupGate youtubeStartup,
         ILogger<FfmpegVideoPlaylistStreamer> logger)
     {
         _videoRepository = videoRepository;
@@ -84,6 +86,7 @@ public sealed class FfmpegVideoPlaylistStreamer : IVideoPlaylistStreamer
         _proxies = proxies;
         _tuning = tuning;
         _takeovers = takeovers;
+        _youtubeStartup = youtubeStartup;
         _logger = logger;
     }
 
@@ -346,6 +349,9 @@ public sealed class FfmpegVideoPlaylistStreamer : IVideoPlaylistStreamer
                 // Read on every pass, not once before the loop: this is where a parameter changed
                 // from the preview page arrives, and it has to reach the next command line.
                 var videoSetting = FindSetting(videoKey);
+
+                if (!await PrepareYouTubeAsync([video], video, videoSetting, PictureOf(videoSetting, probe, output),
+                    output, resumeFrom, cancellationToken).ConfigureAwait(false)) return StreamOutcome.Stopped;
 
                 _logger.LogInformation("INPUT: working directory = {InputPath}", inputPath);
                 _logger.LogInformation(
@@ -852,6 +858,11 @@ public sealed class FfmpegVideoPlaylistStreamer : IVideoPlaylistStreamer
             {
                 cancellationToken.ThrowIfCancellationRequested();
                 var videoSetting = CanvasSetting(videoKey, rows);
+
+                var startupFrame = new MediaOutput(FfmpegCommandBuilder.Even(canvasWidth), FfmpegCommandBuilder.Even(canvasHeight),
+                    videoSetting.FrameRate is > 0 ? videoSetting.FrameRate.Value : DefaultCanvasFrameRate);
+                if (!await PrepareYouTubeAsync(rows, baseRow, videoSetting, startupFrame,
+                    output, resumeFrom, cancellationToken).ConfigureAwait(false)) return;
 
                 // The volume of a source is changed from the preview while the live runs, and the
                 // change arrives as a new pass: each pass reads it again.
@@ -1468,6 +1479,24 @@ public sealed class FfmpegVideoPlaylistStreamer : IVideoPlaylistStreamer
     /// Every row of a canvas shows the same live, so they all carry the same status: the live page
     /// lists them one under the other and a row left behind at OFFLINE is a row that looks broken.
     /// </summary>
+    private Task<bool> PrepareYouTubeAsync(IReadOnlyList<VideoEntity> rows, VideoEntity driving,
+        VideoSettingEntity setting, MediaOutput frame, LiveOutput? output, TimeSpan resumeFrom,
+        CancellationToken cancellationToken)
+    {
+        if (output is null || output.Profile.Platform != StreamPlatform.YouTube || output.BroadcastVerified)
+            return Task.FromResult(true);
+        return _youtubeStartup.WaitAsync(driving.Pkid, driving.ChannelName, output, setting, frame, resumeFrom,
+            () => _videoRepository.FindByPkid(driving.Pkid) is not { ShouldBeStop: false },
+            (status, message) =>
+            {
+                // Persist the original program position, including a resumed live. Waiting and
+                // reconnecting never consume the user's files or the rest of a playlist.
+                foreach (var row in rows) row.LastTimeStampBeforeStop = (long)resumeFrom.TotalMilliseconds;
+                MarkRows(rows, status, message);
+                if (status == LiveStatus.Stopped) _videoRepository.SetStopFlag(driving.Pkid, false);
+            }, cancellationToken);
+    }
+
     private void MarkRows(IReadOnlyList<VideoEntity> rows, LiveStatus status, string message)
     {
         foreach (var row in rows)

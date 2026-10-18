@@ -209,6 +209,8 @@
   "previewBandwidth": "Avvia l’anteprima quando serve per risparmiare connessione. Il download si ferma quando la finestra è nascosta.",
   "previewExternal": "Apri la pagina della diretta per guardare la trasmissione su questa piattaforma.",
   "previewUnavailable": "Impossibile verificare la diretta. Nuovo tentativo automatico tra 30 secondi.",
+  "previewFacebookUrl": "Link pubblico Facebook Live",
+  "previewFacebookHint": "Incolla il link pubblico del video live (…/videos/123… oppure …/watch/?v=123…). La diretta deve consentire l’incorporamento. Il nome della pagina o il link di Live Producer non identificano il video.",
   "noLiveRunning": "Nessuna live in corso",
   "startALiveHere": "Avvia una live e comparirà qui.",
   "liveNow": "Live ora",

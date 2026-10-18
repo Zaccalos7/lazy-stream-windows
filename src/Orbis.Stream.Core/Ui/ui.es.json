@@ -209,6 +209,8 @@
   "previewBandwidth": "Inicia la vista previa cuando la necesites para ahorrar conexión. La descarga se detiene al ocultar la ventana.",
   "previewExternal": "Abre la página del directo para ver la emisión en esta plataforma.",
   "previewUnavailable": "No se puede verificar la emisión. Se reintentará automáticamente en 30 segundos.",
+  "previewFacebookUrl": "Enlace público de Facebook Live",
+  "previewFacebookHint": "Pega el enlace público del vídeo en directo (…/videos/123… o …/watch/?v=123…). Debe permitir la inserción. El nombre de la página o el enlace de Live Producer no identifican el vídeo.",
   "noLiveRunning": "No hay ningún directo en curso",
   "startALiveHere": "Inicia un directo y aparecerá aquí.",
   "liveNow": "En directo ahora",

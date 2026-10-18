@@ -209,6 +209,8 @@
   "previewBandwidth": "通信量を節約するため、必要なときにプレビューを開始してください。ウィンドウが非表示になるとダウンロードが停止します。",
   "previewExternal": "このプラットフォームの配信を視聴するにはライブページを開いてください。",
   "previewUnavailable": "配信を確認できません。30秒後に自動で再試行します。",
+  "previewFacebookUrl": "Facebook Live 公開リンク",
+  "previewFacebookHint": "ライブ動画の公開リンク（…/videos/123… または …/watch/?v=123…）を貼り付けてください。埋め込みの許可が必要です。ページ名や Live Producer のリンクでは動画を特定できません。",
   "noLiveRunning": "実行中のライブ配信はありません",
   "startALiveHere": "ライブ配信を開始すると、ここに表示されます。",
   "liveNow": "ライブ配信中",

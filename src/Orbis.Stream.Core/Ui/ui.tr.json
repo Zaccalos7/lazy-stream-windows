@@ -209,6 +209,8 @@
   "previewBandwidth": "Veri tasarrufu için önizlemeyi gerektiğinde başlatın. Pencere gizlendiğinde indirme durur.",
   "previewExternal": "Bu platformdaki yayını izlemek için canlı yayın sayfasını açın.",
   "previewUnavailable": "Yayın kontrol edilemiyor. 30 saniye sonra otomatik olarak yeniden denenecek.",
+  "previewFacebookUrl": "Facebook Live herkese açık bağlantısı",
+  "previewFacebookHint": "Canlı videonun herkese açık bağlantısını yapıştırın (…/videos/123… veya …/watch/?v=123…). Yerleştirmeye izin verilmelidir. Sayfa adı veya Live Producer bağlantısı videoyu tanımlamaz.",
   "noLiveRunning": "Çalışan canlı yayın yok",
   "startALiveHere": "Bir canlı yayın başlatın; burada görünecektir.",
   "liveNow": "Şimdi canlı",

@@ -209,6 +209,8 @@
   "previewBandwidth": "Pornește previzualizarea la nevoie pentru a economisi trafic. Descărcarea se oprește când fereastra este ascunsă.",
   "previewExternal": "Deschide pagina live pentru a urmări transmisia pe această platformă.",
   "previewUnavailable": "Transmisia nu poate fi verificată. O nouă încercare automată peste 30 de secunde.",
+  "previewFacebookUrl": "Link public Facebook Live",
+  "previewFacebookHint": "Lipește linkul public al videoclipului live (…/videos/123… sau …/watch/?v=123…). Încorporarea trebuie permisă. Numele paginii sau linkul Live Producer nu identifică videoclipul.",
   "noLiveRunning": "Nu rulează niciun live",
   "startALiveHere": "Porniți un live și va apărea aici.",
   "liveNow": "Live acum",

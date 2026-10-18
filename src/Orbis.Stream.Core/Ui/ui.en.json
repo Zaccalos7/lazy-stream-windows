@@ -209,6 +209,8 @@
   "previewBandwidth": "Start the preview when needed to save bandwidth. It stops downloading while the window is hidden.",
   "previewExternal": "Open the live page to watch this platform’s broadcast.",
   "previewUnavailable": "Unable to check the broadcast. Retrying automatically in 30 seconds.",
+  "previewFacebookUrl": "Facebook Live public URL",
+  "previewFacebookHint": "Paste the public live video link (…/videos/123… or …/watch/?v=123…). The broadcast must allow embedding. A page name or Live Producer link is not a video link.",
   "noLiveRunning": "No live is running",
   "startALiveHere": "Start a live and it will show up here.",
   "liveNow": "Live now",

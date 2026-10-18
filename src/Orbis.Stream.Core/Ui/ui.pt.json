@@ -209,6 +209,8 @@
   "previewBandwidth": "Inicie a pré-visualização quando precisar para poupar ligação. A transferência para quando a janela está oculta.",
   "previewExternal": "Abra a página do direto para ver a transmissão nesta plataforma.",
   "previewUnavailable": "Não foi possível verificar a transmissão. Nova tentativa automática em 30 segundos.",
+  "previewFacebookUrl": "Ligação pública do Facebook Live",
+  "previewFacebookHint": "Cole a ligação pública do vídeo em direto (…/videos/123… ou …/watch/?v=123…). A incorporação deve estar autorizada. O nome da página ou a ligação do Live Producer não identificam o vídeo.",
   "noLiveRunning": "Nenhuma live em curso",
   "startALiveHere": "Inicia uma live e ela aparece aqui.",
   "liveNow": "Live agora",

@@ -209,6 +209,8 @@
   "previewBandwidth": "Start forhåndsvisningen efter behov for at spare båndbredde. Download stopper, når vinduet er skjult.",
   "previewExternal": "Åbn livesiden for at se udsendelsen på denne platform.",
   "previewUnavailable": "Udsendelsen kan ikke kontrolleres. Prøver automatisk igen om 30 sekunder.",
+  "previewFacebookUrl": "Offentligt Facebook Live-link",
+  "previewFacebookHint": "Indsæt det offentlige link til livevideoen (…/videos/123… eller …/watch/?v=123…). Indlejring skal være tilladt. Et sidenavn eller Live Producer-link identificerer ikke videoen.",
   "noLiveRunning": "Ingen livestream kører",
   "startALiveHere": "Start en livestream, så vises den her.",
   "liveNow": "Live nu",

@@ -209,6 +209,8 @@
   "previewBandwidth": "Praevisionem cum opus est incipe ut datos serves. Deiectio sistitur dum fenestra latet.",
   "previewExternal": "Paginam emissionis aperi ut emissionem huius suggestus spectes.",
   "previewUnavailable": "Emissio inspici non potest. Post 30 secunda iterum temptabitur.",
+  "previewFacebookUrl": "Nexus publicus Facebook Live",
+  "previewFacebookHint": "Nexum publicum emissionis insere (…/videos/123… aut …/watch/?v=123…). Insertio permittenda est. Nomen paginae aut nexus Live Producer video non est.",
   "noLiveRunning": "Nūllum directum currit",
   "startALiveHere": "Cum incipere coeperis, hīc apparebit.",
   "liveNow": "Nunc in directo",

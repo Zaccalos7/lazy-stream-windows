@@ -209,6 +209,8 @@
   "previewBandwidth": "Simulan ang preview kung kailangan upang makatipid ng data. Hihinto ang pag-download kapag nakatago ang window.",
   "previewExternal": "Buksan ang live page para panoorin ang broadcast sa platform na ito.",
   "previewUnavailable": "Hindi ma-check ang broadcast. Awtomatikong susubukan muli pagkalipas ng 30 segundo.",
+  "previewFacebookUrl": "Pampublikong link ng Facebook Live",
+  "previewFacebookHint": "I-paste ang pampublikong link ng live video (…/videos/123… o …/watch/?v=123…). Dapat pinapayagan ang pag-embed. Hindi tinutukoy ng pangalan ng page o link ng Live Producer ang video.",
   "noLiveRunning": "Walang tumatakbong live",
   "startALiveHere": "Magsimula ng live at lalabas ito rito.",
   "liveNow": "Live ngayon",

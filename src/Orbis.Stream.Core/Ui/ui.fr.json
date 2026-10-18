@@ -209,6 +209,8 @@
   "previewBandwidth": "Lancez l’aperçu au besoin pour économiser la connexion. Le téléchargement s’arrête lorsque la fenêtre est masquée.",
   "previewExternal": "Ouvrez la page du direct pour regarder la diffusion sur cette plateforme.",
   "previewUnavailable": "Impossible de vérifier le direct. Nouvelle tentative automatique dans 30 secondes.",
+  "previewFacebookUrl": "Lien public Facebook Live",
+  "previewFacebookHint": "Collez le lien public de la vidéo en direct (…/videos/123… ou …/watch/?v=123…). L’intégration doit être autorisée. Le nom de la page ou le lien Live Producer n’identifient pas la vidéo.",
   "noLiveRunning": "Aucun direct en cours",
   "startALiveHere": "Lancez un direct, il apparaîtra ici.",
   "liveNow": "En direct",

@@ -571,6 +571,41 @@ public sealed class LivePreviewTests : IAsyncLifetime
     }
 
     [Fact]
+    public async Task KickAndFacebook_PublicPlayersAreAvailableFromThePreview()
+    {
+        if (!await StartLiveAsync()) return;
+        await WaitForLiveAsync();
+        foreach (var (platform, ingest) in new[]
+        {
+            ("kick", "rtmps://fa723fc1b171.global-contribute.live-video.net/app"),
+            ("facebook", "rtmps://live-api-s.facebook.com:443/rtmp/")
+        })
+        {
+            using (var connection = _host.Services.GetRequiredService<Orbis.Stream.Core.Data.SqliteConnectionFactory>().Open())
+            using (var command = connection.CreateCommand())
+            {
+                command.CommandText = "UPDATE video_live_history SET stream_url = $url;";
+                command.Parameters.AddWithValue("$url", ingest);
+                command.ExecuteNonQuery();
+            }
+            var query = platform == "facebook"
+                ? "&watchUrl=" + Uri.EscapeDataString("https://www.facebook.com/page/videos/123456789/")
+                : string.Empty;
+            using var response = await _host.Client.GetAsync($"/preview/live/embed?live={_pkid}{query}");
+            var embed = JsonDocument.Parse(await response.Content.ReadAsStringAsync()).RootElement.GetProperty("embed");
+            Assert.Equal(platform, embed.GetProperty("platform").GetString());
+            Assert.StartsWith(platform == "kick" ? "https://player.kick.com/" : "https://www.facebook.com/plugins/video.php?",
+                embed.GetProperty("url").GetString());
+            Assert.NotNull(embed.GetProperty("watchUrl").GetString());
+            using var page = await _host.Client.GetAsync($"/orbis/mainPreview?live={_pkid}");
+            var html = await page.Content.ReadAsStringAsync();
+            Assert.Contains("data-platform-toggle", html);
+            Assert.DoesNotContain("data-preview-frame", html);
+            if (platform == "facebook") Assert.Contains("data-platform-url", html);
+        }
+    }
+
+    [Fact]
     public async Task WithTwoLivesOnAir_ThePreviewPageOffersThemInAList()
     {
         if (!await StartLiveAsync())

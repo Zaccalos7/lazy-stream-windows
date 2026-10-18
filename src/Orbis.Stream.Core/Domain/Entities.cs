@@ -40,6 +40,14 @@ public sealed class SettingEntity
     /// default; the switch for an ingest that takes the native publish and then does not air it.
     /// </summary>
     public bool FfmpegSender { get; set; }
+
+    /// <summary>
+    /// When this key was last saved. Nothing but a key of a platform whose keys stop working reads
+    /// it (Facebook, see <see cref="Streaming.ExpiringStreamKeys"/>); it is kept for the others as
+    /// well so that a configuration that becomes one of them is not taken to have a key of unknown
+    /// age. Null on a row written before the column existed.
+    /// </summary>
+    public DateTime? StreamKeySavedAt { get; set; }
 }
 
 /// <summary>Port of <c>com.orbis.stream.model.VideoLiveHistory</c>.</summary>

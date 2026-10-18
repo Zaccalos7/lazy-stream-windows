@@ -270,12 +270,12 @@ public sealed class LivePlatformEmbedTests
         var first = await embeds.ResolveAsync(YouTube, "channel", null, "localhost", default);
         var second = await embeds.ResolveAsync(YouTube, "channel", null, "localhost", default);
         Assert.Equal(first, second);
-        Assert.Single(handler.Asked);
+        Assert.Equal(failure ? 3 : 1, handler.Asked.Count);
         Assert.Equal(failure, second.Reason is not null);
 
         clock.Advance(TimeSpan.FromSeconds(30));
         await embeds.ResolveAsync(YouTube, "channel", null, "localhost", default);
-        Assert.Equal(2, handler.Asked.Count);
+        Assert.Equal(failure ? 6 : 2, handler.Asked.Count);
     }
 
     [Fact]
@@ -403,6 +403,41 @@ public sealed class LivePlatformEmbedTests
     {
         const string page = """<script>var ytInitialData={"contents":[{"videoId":"newVideo002","thumbnail":{}}]};window.extra=1;</script>""";
         Assert.Equal("newVideo002", LivePlatformEmbeds.CandidateOf(page));
+    }
+
+    [Fact]
+    public async Task YouTube_AConsentPageCanBeRecoveredThroughTheDirectLiveAddress()
+    {
+        var handler = new RecordingHandler(request => Text(request.RequestUri!.AbsolutePath.EndsWith("/live")
+            ? """{"playabilityStatus":{"status":"OK"},"videoDetails":{"videoId":"newVideo002","isLive":true,"isLiveContent":true}}"""
+            : "<html>consent</html>"));
+        var embeds = new LivePlatformEmbeds(new HttpClient(handler), NullLogger<LivePlatformEmbeds>.Instance);
+        var found = await embeds.ResolveAsync(YouTube, "@channel", "youtube", null, default);
+        Assert.Equal("newVideo002", found.Embed?.VideoId);
+        Assert.Equal(2, handler.Asked.Count);
+        Assert.Contains("/live?ucbcb=1", handler.Asked[1].ToString());
+    }
+
+    [Fact]
+    public async Task YouTube_CanRecoverTheGridWithoutMistakingAnArchivedDirectVideoForTheLive()
+    {
+        var embeds = Platform(request => Text(request.RequestUri!.AbsolutePath.EndsWith("/live") ? Ended()
+            : request.RequestUri.AbsolutePath.EndsWith("/streams")
+                ? request.RequestUri.Query.Length == 0 ? "<html>consent</html>" : Streams("newVideo002")
+                : Watch(true)));
+        var found = await embeds.ResolveAsync(YouTube, "channel", "youtube", null, default);
+        Assert.Equal("newVideo002", found.Embed?.VideoId);
+    }
+
+    [Theory]
+    [InlineData("LIVE_STREAM_OFFLINE")]
+    [InlineData("UNPLAYABLE")]
+    [InlineData("LOGIN_REQUIRED")]
+    public void YouTube_AnUnplayablePlayerCannotConfirmTheStartEvenWithALiveFlag(string status)
+    {
+        var page = "{\"playabilityStatus\":{\"status\":\"" + status + "\"},\"videoDetails\":{\"isLive\":true,\"isLiveContent\":true}}";
+        Assert.Null(LivePlatformEmbeds.HasEnded(page));
+        Assert.Null(LivePlatformEmbeds.LiveVideoOf(page));
     }
 
     private static LivePlatformEmbeds Platform(Func<HttpRequestMessage, HttpResponseMessage> answer) =>

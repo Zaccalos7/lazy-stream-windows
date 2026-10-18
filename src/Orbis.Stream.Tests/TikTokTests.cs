@@ -314,6 +314,11 @@ public sealed class TikTokKeyTests : IClassFixture<ApplicationFixture>
         Assert.Matches("value=\"\\d+\" required\\s+(data-youtube-studio=\"\"\\s+data-is-facebook=\"\"\\s+)?data-key-each-live=\"1\" data-portrait=\"1\" />", html);
         // A Twitch configuration says neither: its key is the one it keeps, and its live lies down.
         Assert.Matches("value=\"\\d+\" required\\s+(data-youtube-studio=\"\"\\s+data-is-facebook=\"\"\\s+)?/>", html);
+        // the start from the step to the canvas, and is never written into the page. Every pick
+        // carries the Studio link attribute, empty where the platform is not YouTube.
+        Assert.Matches("value=\"\\d+\" required\\s+data-youtube-studio=\"\"\\s+data-key-each-live=\"1\" data-portrait=\"1\" />", html);
+        // A Twitch configuration says neither: its key is the one it keeps, and its live lies down.
+        Assert.Matches("value=\"\\d+\" required\\s+data-youtube-studio=\"\"\\s+/>", html);
         Assert.Contains("data-live-key", html, StringComparison.Ordinal);
         Assert.Contains("data-wizard-fields=\"settingId configurationId streamKey\"", html, StringComparison.Ordinal);
         Assert.DoesNotContain(LiveStreamKeys.StandInPrefix, html, StringComparison.Ordinal);

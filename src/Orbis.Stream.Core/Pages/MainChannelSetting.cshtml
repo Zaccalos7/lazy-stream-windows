@@ -53,6 +53,10 @@
                 <div class="caption truncate">@configuration.Description</div>
             }
             <div class="caption truncate">@configuration.StreamUrl</div>
+            @if (choice?.Value == "facebook")
+            {
+                <partial name="_FacebookKeyWarning" model="StreamKeyAge.Of(configuration)" />
+            }
         </div>
         <div class="actions">
             @if (youtube && !configuration.FfmpegSender)
@@ -136,6 +140,9 @@
                 </label>
                 <div class="section" data-show-when="facebook">
                     <partial name="_FacebookLiveNotice" />
+                    @* The dialog is where a new key is pasted in: the moment it is saved is written
+                       with it, which is what clears the warning the wizard shows on it. *@
+                    <partial name="_FacebookKeyWarning" model="StreamKeyAge.Of(editing)" />
                 </div>
                 @* How the live reaches the ingest. On, the ffmpeg delivery - ffmpeg keeps
                    the time and publishes over its own RTMPS; off, the relay and the RTMP of this

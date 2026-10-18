@@ -1,3 +1,4 @@
+using Orbis.Stream.Core.Contracts;
 using Orbis.Stream.Core.Domain;
 using Orbis.Stream.Core.I18n;
 using Orbis.Stream.Core.Streaming;
@@ -83,13 +84,41 @@ public static class SettingTitleView
 }
 
 /// <summary>
+/// What a streaming configuration has to say about its stream key to a platform that expires them
+/// (Facebook, see <see cref="Streaming.ExpiringStreamKeys"/>): whether the key it keeps can still
+/// be streamed with, and since when. Shown wherever the key is asked for or edited, because the
+/// key is not something the user can tell is stale - the page is the only thing that knows how long
+/// ago it was written.
+/// </summary>
+public sealed record StreamKeyAge(string? PlatformStreamName, string? StreamUrl, DateTime? SavedAt)
+{
+    /// <summary>Whether the stored key is past its life. False for a platform whose keys do not expire.</summary>
+    public bool Expired => ExpiringStreamKeys.IsExpired(PlatformStreamName, StreamUrl, SavedAt, DateTime.Now);
+
+    /// <summary>The key was saved, and it is still good: when, so the user can see how much is left of it.</summary>
+    public bool Saved => !Expired && SavedAt is not null;
+
+    public static StreamKeyAge Of(SettingResponse configuration)
+    {
+        ArgumentNullException.ThrowIfNull(configuration);
+
+        return new StreamKeyAge(configuration.PlatformStreamName, configuration.StreamUrl, configuration.StreamKeySavedAt);
+    }
+}
+
+/// <summary>
 /// Public page of a live on its platform, built from the RTMP ingest stored with the live: the
 /// ingest URL is the only platform evidence a video row carries, so a configuration that points
 /// to a custom ingest (a service this application does not know) has no link.
 /// </summary>
 public static class LiveLinkView
 {
-    public const string FacebookProducerUrl = "https://www.facebook.com/live/producer/v2/";
+    /// <summary>
+    /// Where a Facebook live is stood up and where its stream key is read. The address the producer
+    /// opens on its own, without a version segment: the one the dashboard and the help pages of
+    /// Meta link to, and the only one that keeps working when the version behind it changes.
+    /// </summary>
+    public const string FacebookProducerUrl = "https://www.facebook.com/live/producer";
     /// <summary>Platform of an ingest URL (<c>twitch</c>, <c>youtube</c>, <c>kick</c>, <c>facebook</c>, <c>tiktok</c>), or null if unknown.</summary>
     public static string? PlatformOf(string? streamUrl)
     {

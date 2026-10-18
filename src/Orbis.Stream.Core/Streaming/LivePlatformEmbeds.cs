@@ -324,7 +324,7 @@ public sealed class LivePlatformEmbeds
             streams = await ReadAsync(streamsUrl + "?ucbcb=1", cancellationToken);
             candidates = streams is null ? null : CandidatesOf(streams);
             if (candidates is null)
-                return (null, "YouTube channel and live pages could not be verified (possibly a consent page)");
+                return (null, $"YouTube channel and live pages of @{handle} could not be verified (possibly a consent page)");
         }
 
         string? failure = null;
@@ -377,6 +377,9 @@ public sealed class LivePlatformEmbeds
         {
             using var response = ReadData(watch, PlayerResponse);
             if (response is null) return null;
+            if (response.RootElement.TryGetProperty("playabilityStatus", out var playability) &&
+                playability.TryGetProperty("status", out var status) && status.GetString() != "OK")
+                return null; // A live flag with an offline/unplayable player cannot release paused content.
             var details = response.RootElement.GetRawText();
             // Related videos in ytInitialData are not evidence about this broadcast.
             return OnAirNow.IsMatch(details) ? false : LiveContent.IsMatch(details) ? true : null;

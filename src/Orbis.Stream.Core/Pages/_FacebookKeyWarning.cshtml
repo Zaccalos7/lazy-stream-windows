@@ -1,0 +1,16 @@
+@using System.Globalization
+@model StreamKeyAge
+@* Whether the key stored on a configuration can still be streamed with. Nothing is drawn for a
+   platform whose keys do not expire, and nothing is said about the age of one that was never
+   written down: the warning is the whole of what this partial has to offer. *@
+@if (Model.Expired)
+{
+    <p class="tuning-hint facebook-key-expired" data-facebook-key-expired>
+        <i class="icon">&#xE7BA;</i>
+        <span>@T["facebookKeyExpired"]</span>
+    </p>
+}
+else if (Model.Saved)
+{
+    <p class="caption facebook-key-saved" data-facebook-key-saved>@string.Format(T["facebookKeySavedOn"], Model.SavedAt!.Value.ToString("dd/MM/yyyy HH:mm", CultureInfo.InvariantCulture))</p>
+}

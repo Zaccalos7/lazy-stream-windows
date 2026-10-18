@@ -319,6 +319,20 @@ public sealed class VideoRepository
         command.ExecuteNonQuery();
     }
 
+    /// <summary>Startup progress must not overwrite a stop flag changed by the user meanwhile.</summary>
+    public void SetStartupState(int pkid, LiveStatus status, string message, long position)
+    {
+        using var connection = _connectionFactory.Open();
+        using var command = connection.CreateCommand();
+        command.CommandText = "UPDATE video SET live_status = @status, message = @message, "
+            + "last_time_stamp_before_stop = @position WHERE pkid = @pkid;";
+        command.Parameters.AddWithValue("@status", status.ToStorageValue());
+        command.Parameters.AddWithValue("@message", message);
+        command.Parameters.AddWithValue("@position", Math.Max(0, position));
+        command.Parameters.AddWithValue("@pkid", pkid);
+        command.ExecuteNonQuery();
+    }
+
     public void SetStopFlag(int pkid, bool shouldBeStop)
     {
         using var connection = _connectionFactory.Open();

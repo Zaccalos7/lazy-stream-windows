@@ -1,4 +1,13 @@
-<span class="caption" style="display: block;" data-facebook-live-notice>
+@* What Facebook asks of a stream before it takes one. The producer is where the broadcast is
+   started and where the key of that broadcast is written, so the live is started there first and
+   the key is copied out of it into this configuration - a key taken from any other broadcast is
+   refused, and so is the ingest of one that was never started at all. *@
+<span class="caption facebook-live-help" style="display: block;" data-facebook-live-notice>
     @T["facebookGoLiveHelp"]
     <a href="@LiveLinkView.FacebookProducerUrl" target="_blank" rel="noopener noreferrer">@LiveLinkView.FacebookProducerUrl</a>
 </span>
+<ol class="facebook-live-steps">
+    <li>@T["facebookGoLiveStep"]</li>
+    <li>@T["facebookStreamingKeyHelp"]</li>
+</ol>
+<p class="caption facebook-key-lifetime">@T["facebookKeyLifetime"]</p>

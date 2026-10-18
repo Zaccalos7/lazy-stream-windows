@@ -127,15 +127,15 @@
     {
       "id": "errorReports",
       "title": "Report an error",
-      "body": "Take a screenshot or a photo of the QR code and open an issue on GitHub. If the problem is caused by the software, we will try to fix it.",
+      "body": "在 GitHub 上报告错误时，请附加二维码或完整的 .txt 文件。推流密钥会被隐藏。",
       "steps": [
         "In History or Live management, press the Report error icon beside a failed live.",
-        "A dialog opens with the error QR code. Stream keys are masked.",
-        "If there are several QR codes, capture every page so the complete error is included.",
-        "Take screenshots or photos, then press Open an issue on GitHub. Attach the images and describe what you were doing. You can also copy the report text."
+        "报告窗口将打开。简短错误使用二维码，较长错误可下载为 .txt 文件。",
+        "如果错误内容过长，无法放入一个二维码，请下载完整的 .txt 文件并附加到 GitHub 问题中。",
+        "在 GitHub 上创建问题，附加 .txt 文件或二维码截图或照片，并描述当时的操作。也可以复制报告文本。"
       ],
       "figure": "errorReports",
-      "callout": "Capture the QR code and attach it to the GitHub issue."
+      "callout": "将二维码或下载的 .txt 文件附加到问题中。"
     }
   ]
 }

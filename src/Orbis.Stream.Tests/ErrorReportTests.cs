@@ -31,8 +31,10 @@ public sealed class ErrorReportTests : IClassFixture<ApplicationFixture>
         Assert.Equal(new byte[] { 137, 80, 78, 71, 13, 10, 26, 10 }, png[..8]);
     }
 
-    [Fact]
-    public async Task FailedLiveHasReportButtonsAndALocalQrReportWithoutItsStreamKey()
+    [Theory]
+    [InlineData(false)]
+    [InlineData(true)]
+    public async Task FailedLiveOffersASingleQrOrACompleteTextAttachmentWithoutItsStreamKey(bool longError)
     {
         var histories = _fixture.Services.GetRequiredService<VideoLiveHistoryRepository>();
         var videos = _fixture.Services.GetRequiredService<VideoRepository>();
@@ -48,7 +50,8 @@ public sealed class ErrorReportTests : IClassFixture<ApplicationFixture>
             Name = "qr-report.mp4", VideoPath = "/clips/qr-report.mp4", Extension = "mp4",
             ChannelName = "qr-report-test", VideoSettingId = 1, VideoLiveHistoryId = historyId,
             LiveStatus = LiveStatus.Error, StartDateLive = DateTime.Now,
-            Message = $"publish {key} failed\nrtmps://ingest/rtmp/{key}\nprivate-key-123456 token secret-value\n<script>alert(1)</script>"
+            Message = $"publish {key} failed\nrtmps://ingest/rtmp/{key}\nprivate-key-123456 token secret-value\n<script>alert(1)</script>" +
+                (longError ? string.Concat(Enumerable.Repeat("\nErrore 日本語 🎥: dettagli completi", 2000)) : "")
         });
         try
         {
@@ -57,6 +60,7 @@ public sealed class ErrorReportTests : IClassFixture<ApplicationFixture>
                 var html = await _fixture.Client.GetStringAsync(page + "?channelName=qr-report-test");
                 Assert.Contains($"data-error-report=\"{id}\"", html, StringComparison.Ordinal);
                 Assert.Contains("id=\"error-report-dialog\"", html, StringComparison.Ordinal);
+                Assert.Contains("data-report-download", html, StringComparison.Ordinal);
             }
             using var response = await _fixture.Client.GetAsync($"/video/{id}/error-report");
             Assert.Equal(HttpStatusCode.OK, response.StatusCode);
@@ -66,12 +70,35 @@ public sealed class ErrorReportTests : IClassFixture<ApplicationFixture>
             Assert.Contains("failed", text, StringComparison.Ordinal);
             Assert.DoesNotContain("private-key", text, StringComparison.Ordinal);
             Assert.DoesNotContain("secret-value", text, StringComparison.Ordinal);
-            Assert.StartsWith("data:image/png;base64,", report.GetProperty("images")[0].GetString(), StringComparison.Ordinal);
+            if (longError)
+            {
+                Assert.True(ErrorReport.Parts(text).Count > 1);
+                Assert.Equal(0, report.GetProperty("images").GetArrayLength());
+                Assert.Equal($"/video/{id}/error-report.txt", report.GetProperty("downloadUrl").GetString());
+            }
+            else
+            {
+                Assert.Equal(JsonValueKind.Null, report.GetProperty("downloadUrl").ValueKind);
+                Assert.Equal(1, report.GetProperty("images").GetArrayLength());
+                Assert.StartsWith("data:image/png;base64,", report.GetProperty("images")[0].GetString(), StringComparison.Ordinal);
+            }
+
+            using var attachment = await _fixture.Client.GetAsync($"/video/{id}/error-report.txt");
+            Assert.Equal(HttpStatusCode.OK, attachment.StatusCode);
+            Assert.True(attachment.Headers.CacheControl?.NoStore);
+            Assert.Equal("text/plain", attachment.Content.Headers.ContentType?.MediaType);
+            Assert.Equal("utf-8", attachment.Content.Headers.ContentType?.CharSet);
+            Assert.Equal("attachment", attachment.Content.Headers.ContentDisposition?.DispositionType);
+            Assert.Equal($"Orbis-error-report-{id}.txt", attachment.Content.Headers.ContentDisposition?.FileName?.Trim('"'));
+            Assert.Equal(text, await attachment.Content.ReadAsStringAsync());
+            Assert.Equal(Encoding.UTF8.GetBytes(text), await attachment.Content.ReadAsByteArrayAsync());
             var video = videos.FindByPkid(id)!;
             video.LiveStatus = LiveStatus.Ended;
             videos.Update(video);
             using var noError = await _fixture.Client.GetAsync($"/video/{id}/error-report");
             Assert.Equal(HttpStatusCode.NotFound, noError.StatusCode);
+            using var noAttachment = await _fixture.Client.GetAsync($"/video/{id}/error-report.txt");
+            Assert.Equal(HttpStatusCode.NotFound, noAttachment.StatusCode);
             foreach (var page in new[] { "/orbis/mainLiveHistory", "/orbis/mainLive" })
             {
                 var html = await _fixture.Client.GetStringAsync(page + "?channelName=qr-report-test");
@@ -83,5 +110,12 @@ public sealed class ErrorReportTests : IClassFixture<ApplicationFixture>
             videos.Delete(id);
             histories.DeleteRow(historyId);
         }
+    }
+
+    [Fact]
+    public async Task AnUnknownLiveHasNoReportAttachment()
+    {
+        using var response = await _fixture.Client.GetAsync("/video/2147483647/error-report.txt");
+        Assert.Equal(HttpStatusCode.NotFound, response.StatusCode);
     }
 }

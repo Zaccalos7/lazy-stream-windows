@@ -127,15 +127,15 @@
     {
       "id": "errorReports",
       "title": "Report an error",
-      "body": "Take a screenshot or a photo of the QR code and open an issue on GitHub. If the problem is caused by the software, we will try to fix it.",
+      "body": "QR 코드 또는 전체 .txt 파일을 첨부하여 GitHub에 오류를 신고하세요. 스트림 키는 가려집니다.",
       "steps": [
         "In History or Live management, press the Report error icon beside a failed live.",
-        "A dialog opens with the error QR code. Stream keys are masked.",
-        "If there are several QR codes, capture every page so the complete error is included.",
-        "Take screenshots or photos, then press Open an issue on GitHub. Attach the images and describe what you were doing. You can also copy the report text."
+        "보고서 창이 열립니다. 짧은 오류에는 QR 코드가 표시되고 긴 오류는 .txt 파일로 다운로드할 수 있습니다.",
+        "오류가 하나의 QR 코드에 담기에는 너무 길면 전체 .txt 파일을 다운로드하여 GitHub 이슈에 첨부하세요.",
+        "GitHub 이슈를 열고 .txt 파일 또는 QR 코드의 스크린샷이나 사진을 첨부한 뒤 당시 작업을 설명하세요. 보고서 텍스트를 복사할 수도 있습니다."
       ],
       "figure": "errorReports",
-      "callout": "Capture the QR code and attach it to the GitHub issue."
+      "callout": "QR 코드 또는 다운로드한 .txt 파일을 이슈에 첨부하세요."
     }
   ]
 }

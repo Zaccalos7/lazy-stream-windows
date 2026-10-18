@@ -167,6 +167,7 @@ Section "Application" SecMain
   RMDir /r "$INSTDIR\wwwroot"
   SetOutPath "$INSTDIR"
   File /r "${PUBLISHDIR}\*"
+  File /oname=LICENSE.txt "..\LICENSE"
 
   CreateDirectory "$SMPROGRAMS\${APPNAME}"
   CreateShortCut "$SMPROGRAMS\${APPNAME}\${APPNAME}.lnk" "$INSTDIR\${APPEXE}"

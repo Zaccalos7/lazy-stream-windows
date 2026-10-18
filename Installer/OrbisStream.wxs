@@ -42,12 +42,16 @@
     <Property Id="WIXUI_EXITDIALOGOPTIONAL" Value="1" />
 
     <ui:WixUI Id="WixUI_InstallDir" />
+    <WixVariable Id="WixUILicenseRtf" Value="$(var.LicenseRtf)" />
 
     <!-- Per-user installation under %LOCALAPPDATA%: no elevation prompt, and the
          install folder is writable so the app can keep stream.db and logs there. -->
     <StandardDirectory Id="LocalAppDataFolder">
       <Directory Id="INSTALLFOLDER" Name="$(var.InstallFolderName)">
         <Files Include="$(var.PublishDir)\**" />
+        <Component Id="ApplicationLicense" Guid="*">
+          <File Id="ApplicationLicenseFile" Source="$(var.LicenseFile)" Name="LICENSE.txt" KeyPath="yes" />
+        </Component>
         <Directory Id="FfmpegFolder" Name="ffmpeg">
           <Files Include="$(var.FfmpegDir)\**" />
         </Directory>
@@ -90,6 +94,7 @@
     </StandardDirectory>
 
     <Feature Id="Main" Title="$(var.ProductName)" Level="1" AllowAbsent="no">
+      <ComponentRef Id="ApplicationLicense" />
       <ComponentRef Id="ApplicationShortcuts" />
       <ComponentRef Id="DesktopShortcut" />
     </Feature>

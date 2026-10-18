@@ -52,12 +52,21 @@ Write-Host '==> Building the MSI'
 if (Test-Path $OutputDirectory) { Remove-Item $OutputDirectory -Recurse -Force }
 New-Item -ItemType Directory -Path $OutputDirectory -Force | Out-Null
 
+# Use the repository licence, including third-party credits, in the MSI dialog.
+$licenseRtf = Join-Path $OutputDirectory 'license.rtf'
+$licenseText = Get-Content (Join-Path $root 'LICENSE') -Raw
+$licenseText = $licenseText.Replace('\', '\\').Replace('{', '\{').Replace('}', '\}')
+$licenseText = $licenseText -replace '\r?\n', '\par '
+Set-Content -Path $licenseRtf -Value ('{\rtf1\ansi\deff0{\fonttbl{\f0 Segoe UI;}}\f0\fs18 ' + $licenseText + '}') -Encoding ascii
+
 $msi = Join-Path $OutputDirectory "OrbisStream-$version-win-x64.msi"
 & $wix build (Join-Path $PSScriptRoot 'OrbisStream.wxs') `
     -arch x64 `
     -ext WixToolset.UI.wixext `
     -d "PublishDir=$publish" `
     -d "FfmpegDir=$ffmpeg" `
+    -d "LicenseFile=$(Join-Path $root 'LICENSE')" `
+    -d "LicenseRtf=$licenseRtf" `
     -d 'ProductName=Orbis Stream' `
     -d 'Manufacturer=Orbis' `
     -d "ProductVersion=$version" `

@@ -36,7 +36,7 @@ public sealed class StreamingPlatformPageTests : IClassFixture<ApplicationFixtur
         Assert.Contains("data-show-when=\"kick facebook\"", html, StringComparison.Ordinal);
         Assert.Contains("value=\"facebook\" data-stream-url=\"rtmps://live-api-s.facebook.com:443/rtmp\"", html, StringComparison.Ordinal);
         Assert.Contains("data-show-when=\"facebook\"", html, StringComparison.Ordinal);
-        Assert.Contains("href=\"https://www.facebook.com/live/producer/v2/\"", html, StringComparison.Ordinal);
+        Assert.Contains("href=\"https://www.facebook.com/live/producer\"", html, StringComparison.Ordinal);
     }
 
     [Fact]

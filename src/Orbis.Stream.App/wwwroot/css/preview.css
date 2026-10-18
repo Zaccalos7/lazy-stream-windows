@@ -25,6 +25,7 @@
 }
 
 /* Platform help sits above both preview columns, with its own padding and separation. */
+.page-header.preview-header-with-help { margin-bottom: 8px; }
 .preview-platform-help { padding: 18px 20px; margin-block: 0 24px; }
 .preview-platform-help > p { margin: 0 0 12px; }
 .preview-platform-help > .youtube-checks { padding: 14px 16px; margin-block: 16px 0; }

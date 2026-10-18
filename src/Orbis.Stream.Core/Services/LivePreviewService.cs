@@ -164,8 +164,7 @@ public sealed class LivePreviewService
     /// <summary>
     /// The platform player of the live the page is watching, so the page can show the live as the
     /// viewers see it. Nothing when the live is not running, when the platform is one this
-    /// application does not have a player for, or when the channel is not on air: the page falls
-    /// back to the picture ffmpeg writes, which is the truth of the encoder either way.
+    /// application does not have a player for, or when the channel is not on air.
     /// <para>A channel that is off air and a platform this application failed to reach are told
     /// apart here, because the page has something else to say about the second.</para>
     /// </summary>

@@ -37,7 +37,10 @@ public sealed class YouTubeAirWatch : BackgroundService
     /// </summary>
     internal static readonly TimeSpan Grace = TimeSpan.FromSeconds(90);
 
-    /// <summary>How often the lives are looked for. The lookup answers are held for longer anyway.</summary>
+    /// <summary>
+    /// Keep checking every live, including those with a visible or dismissed warning. The next
+    /// successful lookup clears the warning; the preview page does not need to be open.
+    /// </summary>
     private static readonly TimeSpan Interval = TimeSpan.FromSeconds(30);
 
     private readonly StreamingSessionRegistry _sessions;

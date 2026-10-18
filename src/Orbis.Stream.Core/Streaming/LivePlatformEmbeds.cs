@@ -82,19 +82,26 @@ public sealed class LivePlatformEmbeds
 
     private readonly HttpClient _http;
     private readonly ILogger<LivePlatformEmbeds> _logger;
-    private readonly ConcurrentDictionary<string, (string? VideoId, DateTimeOffset Asked)> _youtube =
+    private readonly TimeProvider _time;
+    private readonly ConcurrentDictionary<string, (string? VideoId, string? Failure, DateTimeOffset Asked)> _youtube =
         new(StringComparer.OrdinalIgnoreCase);
 
     /// <summary>One question at a time: a page asking again while the first one is still open.</summary>
     private readonly SemaphoreSlim _gate = new(1, 1);
 
     public LivePlatformEmbeds(HttpClient http, ILogger<LivePlatformEmbeds> logger)
+        : this(http, logger, TimeProvider.System)
+    {
+    }
+
+    internal LivePlatformEmbeds(HttpClient http, ILogger<LivePlatformEmbeds> logger, TimeProvider time)
     {
         _http = http;
         _logger = logger;
+        _time = time;
     }
 
-/// <summary>
+    /// <summary>
     /// The answer for a live that cannot be played where it goes, and why. There is a difference
     /// between a channel that is not on air and a channel this application failed to ask about, and
     /// a page told the first when the second is what happened repeats it for ever, because the
@@ -177,7 +184,7 @@ public sealed class LivePlatformEmbeds
             handle,
             // Muted and inline, so the browser lets it start on its own: a preview is opened
             // without a gesture on the player and autoplay of sound is not one it will allow.
-            $"https://www.youtube.com/embed/{videoId}?autoplay=1&mute=1&playsinline=1&rel=0&modestbranding=1",
+            $"https://www.youtube.com/embed/{videoId}?autoplay=1&mute=1&playsinline=1&rel=0",
             videoId));
     }
 
@@ -189,7 +196,7 @@ public sealed class LivePlatformEmbeds
     {
         if (Remembered(handle) is { } fresh)
         {
-            return (fresh, null);
+            return fresh;
         }
 
         await _gate.WaitAsync(cancellationToken);
@@ -197,11 +204,11 @@ public sealed class LivePlatformEmbeds
         {
             if (Remembered(handle) is { } again)
             {
-                return (again, null);
+                return again;
             }
 
             var (videoId, failure) = await LookUpAsync(handle, cancellationToken);
-            _youtube[handle] = (videoId, DateTimeOffset.UtcNow);
+            _youtube[handle] = (videoId, failure, _time.GetUtcNow());
             return (videoId, failure);
         }
         catch (OperationCanceledException)
@@ -210,12 +217,11 @@ public sealed class LivePlatformEmbeds
         }
         catch (Exception problem)
         {
-            // A platform that cannot be asked is not a reason to fail the preview: the answer the
-            // page already had is the one it keeps.
+            // A stale success cannot confirm that a broadcast is still on air.
             _logger.LogWarning(problem, "The live of the YouTube channel {Channel} could not be looked up.", handle);
-            return _youtube.TryGetValue(handle, out var last)
-                ? (last.VideoId, null)
-                : (null, "YouTube could not be asked for the streams of the channel");
+            const string failure = "YouTube could not be asked for the streams of the channel";
+            _youtube[handle] = (null, failure, _time.GetUtcNow());
+            return (null, failure);
         }
         finally
         {
@@ -224,15 +230,15 @@ public sealed class LivePlatformEmbeds
     }
 
     /// <summary>The answer for a channel that was asked recently enough to still be a good one.</summary>
-    private string? Remembered(string handle)
+    private (string? VideoId, string? Failure)? Remembered(string handle)
     {
         if (!_youtube.TryGetValue(handle, out var entry))
         {
             return null;
         }
 
-        var age = DateTimeOffset.UtcNow - entry.Asked;
-        return age < (entry.VideoId is null ? OffAir : OnAir) ? entry.VideoId : null;
+        var age = _time.GetUtcNow() - entry.Asked;
+        return age < (entry.VideoId is null ? OffAir : OnAir) ? (entry.VideoId, entry.Failure) : null;
     }
 
     /// <summary>

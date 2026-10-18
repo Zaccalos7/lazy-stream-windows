@@ -214,6 +214,21 @@ public static class LiveLinkView
         };
     }
 
+    /// <summary>The public broadcast, for the preview and its link to the viewer's page.</summary>
+    public static string? WatchUrlOf(string? streamUrl, string? channelName, string? platformStreamName, string? videoId = null)
+    {
+        var name = (channelName ?? platformStreamName)?.Trim();
+        if (string.IsNullOrEmpty(name)) return null;
+        return PlatformOf(streamUrl) switch
+        {
+            "youtube" => string.IsNullOrWhiteSpace(videoId)
+                ? YouTubeChannelUrl(name) + "/live"
+                : "https://www.youtube.com/watch?v=" + Uri.EscapeDataString(videoId),
+            "twitch" or "kick" or "tiktok" => UrlOf(streamUrl, channelName, platformStreamName),
+            _ => null
+        };
+    }
+
     /// <summary>
     /// The live control room of YouTube Studio for a live, as precise as what is known of it:
     /// <list type="bullet">

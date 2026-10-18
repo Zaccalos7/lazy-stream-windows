@@ -43,7 +43,7 @@ else
         var choice = MainChannelSettingModel.ChoiceOf(configuration.PlatformStreamName, configuration.StreamUrl);
         if (choice?.Value == "facebook")
         {
-            <div class="section" data-show-when="@configuration.Id">
+            <div class="section" data-show-when="@configuration.Id" data-show-when-field="configurationId" style="display: none;">
                 <partial name="_FacebookLiveNotice" />
                 <partial name="_FacebookKeyWarning" model="StreamKeyAge.Of(configuration)" />
             </div>

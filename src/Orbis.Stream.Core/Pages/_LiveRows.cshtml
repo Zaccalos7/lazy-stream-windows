@@ -161,14 +161,14 @@ else
                                             title="@T["sceneDeckOpen"]" aria-label="@T["sceneDeckOpen"]">
                                         <partial name="_SceneDeckIcon" />
                                     </button>
+                                    @if (active)
+                                    {
+                                        <a class="btn subtle icon-only" href="/orbis/mainPreview?live=@video.Pkid" title="@T["preview"]" aria-label="@T["preview"]">
+                                            <i class="icon" aria-hidden="true">&#xE7F4;</i>
+                                        </a>
+                                    }
                                     @if (hasSetting && !row.IsPlaylist)
                                     {
-                                        @if (live)
-                                        {
-                                            <a class="btn subtle icon-only" href="/orbis/mainPreview?live=@video.Pkid" title="@T["preview"]" aria-label="@T["preview"]">
-                                                <i class="icon">&#xE7F4;</i>
-                                            </a>
-                                        }
                                         <button class="btn subtle icon-only" disabled="@(!live)" title="@T["playSpot"]" aria-label="@T["playSpot"]"
                                                 onclick="document.querySelector('#spot-dialog input[name=videoKey]').value = '@video.Pkid'; document.getElementById('spot-dialog').showModal();"
                                                 commandfor="spot-dialog" command="show-modal">

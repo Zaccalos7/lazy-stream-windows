@@ -312,6 +312,7 @@ public sealed class TikTokKeyTests : IClassFixture<ApplicationFixture>
         // The pick of a TikTok configuration says so, and stands the canvas up; the key goes with
         // the start from the step to the canvas, and is never written into the page. Every pick
         // carries the Studio link attribute, empty where the platform is not YouTube.
+        foreach (System.Text.RegularExpressions.Match probe in System.Text.RegularExpressions.Regex.Matches(html, "<input type=\"radio\" name=\"configurationId\"[\\s\\S]*?/>")) { Console.WriteLine("PROBE>> " + probe.Value.Replace("\n", " ").Replace("\r", "")); }
         Assert.Matches("value=\"\\d+\" required\\s+data-youtube-studio=\"\"\\s+data-key-each-live=\"1\" data-portrait=\"1\" />", html);
         // A Twitch configuration says neither: its key is the one it keeps, and its live lies down.
         Assert.Matches("value=\"\\d+\" required\\s+data-youtube-studio=\"\"\\s+/>", html);

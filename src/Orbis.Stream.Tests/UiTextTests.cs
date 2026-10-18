@@ -55,6 +55,24 @@ public sealed class UiTextTests
     }
 
     [Fact]
+    public void EveryYouTubeInstructionIsTranslatedInsteadOfCopiedFromEnglish()
+    {
+        var english = Bundle(UiText.FallbackLanguage);
+        var keys = english.Keys.Where(key => key.StartsWith("youtube", StringComparison.Ordinal)).ToArray();
+        Assert.NotEmpty(keys);
+        foreach (var language in UiText.Languages.Where(language => language.Code != UiText.FallbackLanguage))
+        {
+            var translated = Bundle(language.Code);
+            foreach (var key in keys)
+            {
+                Assert.True(translated.TryGetValue(key, out var value), $"ui.{language.Code}.json is missing '{key}'");
+                Assert.False(string.IsNullOrWhiteSpace(value), $"ui.{language.Code}.json leaves '{key}' empty");
+                Assert.NotEqual(english[key], value);
+            }
+        }
+    }
+
+    [Fact]
     public void NoBundlePrefixesItsStringsWithALanguageTag()
     {
         foreach (var language in UiText.Languages)

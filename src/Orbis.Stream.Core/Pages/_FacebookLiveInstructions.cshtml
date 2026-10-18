@@ -2,18 +2,18 @@
 <span class="caption facebook-live-help" style="display: block;" data-facebook-live-notice>@T["facebookGoLiveHelp"]</span>
 @if (!Model)
 {
-    <p class="caption facebook-live-help">@T["facebookStreamingKeyHelp"] @T["facebookSaveKeyStep"]</p>
+    <p class="caption facebook-live-help">@Html.Raw(T["facebookStreamingKeyHelp"]) @Html.Raw(T["facebookSaveKeyStep"])</p>
 }
 <ol class="facebook-live-steps">
     <li>
-        @T["facebookStartStreamStep"]
+        @Html.Raw(T["facebookStartStreamStep"])
         @if (Model)
         {
             <a href="/orbis/mainChannelSetting?platform=facebook">@T["configureChannel"]</a>
         }
     </li>
     <li>
-        @T["facebookGoLiveStep"]
+        @Html.Raw(T["facebookGoLiveStep"])
         <a class="btn subtle facebook-live-open" href="@LiveLinkView.FacebookProducerUrl" target="_blank" rel="noopener noreferrer">@T["facebookOpenProducer"]</a>
     </li>
     <li>@T["facebookReturnStep"]</li>

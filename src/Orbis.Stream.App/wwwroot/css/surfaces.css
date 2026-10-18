@@ -251,9 +251,9 @@ a:hover > .platform-mark { background: var(--tint); }
 .live-rows-container {
   display: flex;
   flex-direction: column;
-  height: 65vh;
+  height: 78vh;
   min-height: 400px;
-  max-height: 800px;
+  max-height: 900px;
   background: var(--card);
   border: 1px solid var(--stroke);
   border-radius: var(--radius-lg);
@@ -279,10 +279,6 @@ a:hover > .platform-mark { background: var(--tint); }
   top: 0;
   z-index: 1;
 }
-
-/* The history has seven columns and a row for every past live, so it is given more of the window
-   than the live grid: with the grid's height the pager sat below the fold and went unseen. */
-.history-rows-container { height: 78vh; max-height: 900px; }
 
 .pager-fixed {
   flex-shrink: 0;

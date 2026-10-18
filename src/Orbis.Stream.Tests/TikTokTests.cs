@@ -311,9 +311,9 @@ public sealed class TikTokKeyTests : IClassFixture<ApplicationFixture>
 
         // The pick of a TikTok configuration says so, and stands the canvas up; the key goes with
         // the start from the step to the canvas, and is never written into the page.
-        Assert.Matches("value=\"\\d+\" required\\s+data-key-each-live=\"1\" data-portrait=\"1\" />", html);
+        Assert.Matches("value=\"\\d+\" required\\s+(data-youtube-studio=\"\"\\s+data-is-facebook=\"\"\\s+)?data-key-each-live=\"1\" data-portrait=\"1\" />", html);
         // A Twitch configuration says neither: its key is the one it keeps, and its live lies down.
-        Assert.Matches("value=\"\\d+\" required\\s+/>", html);
+        Assert.Matches("value=\"\\d+\" required\\s+(data-youtube-studio=\"\"\\s+data-is-facebook=\"\"\\s+)?/>", html);
         Assert.Contains("data-live-key", html, StringComparison.Ordinal);
         Assert.Contains("data-wizard-fields=\"settingId configurationId streamKey\"", html, StringComparison.Ordinal);
         Assert.DoesNotContain(LiveStreamKeys.StandInPrefix, html, StringComparison.Ordinal);

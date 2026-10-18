@@ -1340,3 +1340,13 @@ for (const block of document.querySelectorAll("[data-youtube-preflight]")) {
   form.addEventListener("change", update);
   update();
 }
+
+for (const block of document.querySelectorAll("[data-facebook-preflight]")) {
+  const form = block.closest("form");
+  const update = () => {
+    const selected = form.querySelector('input[name="configurationId"]:checked');
+    block.hidden = !selected?.dataset.isFacebook;
+  };
+  form.addEventListener("change", update);
+  update();
+}

@@ -23,15 +23,12 @@ else
             <label class="choice @(choice?.Value)">
                 <input type="radio" name="configurationId" value="@configuration.Id" required
                        data-youtube-studio="@(choice?.Value == "youtube" ? LiveLinkView.YouTubeStudioUrl(configuration.ChannelName ?? string.Empty, null) : null)"
+                       data-is-facebook="@(choice?.Value == "facebook" ? "1" : null)"
                        data-key-each-live="@(keyEachLive ? "1" : null)" data-portrait="@(upright ? "1" : null)" />
                 <svg class="choice-mark" viewBox="0 0 24 24" aria-hidden="true"><path d="@LiveLinkView.MarkupOf(choice?.Value)" /></svg>
                 <span class="grow">
                     <strong>@configuration.ChannelName</strong> · @(choice?.Label ?? configuration.PlatformStreamName)
                     <span class="caption truncate" style="display: block;" title="@configuration.StreamUrl">@configuration.StreamUrl</span>
-                    @if (choice?.Value == "facebook")
-                    {
-                        <partial name="_FacebookLiveNotice" />
-                    }
                     @if (!string.IsNullOrWhiteSpace(configuration.Description))
                     {
                         <span class="caption" style="display: block;">@configuration.Description</span>
@@ -44,6 +41,23 @@ else
     <section data-youtube-preflight hidden>
         <a class="btn" data-youtube-studio-link target="_blank" rel="noopener noreferrer">YouTube Studio</a>
         <partial name="_YouTubeLiveChecks" />
+    </section>
+
+    <section data-facebook-preflight hidden>
+        <div class="infobar info section">
+            <i class="icon">&#xE946;</i>
+            <p>
+                <span>
+                    @Html.Raw(System.Text.RegularExpressions.Regex.Replace(
+                        T["facebookGoLiveHelp"],
+                        @"(Orbis)|(Facebook Live Producer)|([«""”“][^»""”“]+[»""”“])",
+                        m => m.Groups[1].Success ? $"<strong style=\"color: var(--accent);\">{m.Value}</strong>"
+                           : m.Groups[2].Success ? $"<strong style=\"color: #1877F2;\">{m.Value}</strong>"
+                           : $"<strong style=\"color: var(--success);\">{m.Value}</strong>"))
+                </span><br />
+                <a href="@LiveLinkView.FacebookProducerUrl" target="_blank" rel="noopener noreferrer">@LiveLinkView.FacebookProducerUrl</a>
+            </p>
+        </div>
     </section>
 
     @* The key of this live, for a destination that hands out one for every live (TikTok): it goes

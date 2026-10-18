@@ -317,16 +317,37 @@ public static class OrbisEndpoints
     {
         var group = app.MapGroup("/video");
 
+        static string? ReportText(int pkid, VideoRepository videos, VideoLiveHistoryRepository histories)
+        {
+            var video = videos.FindByPkid(pkid);
+            if (video is null || video.LiveStatus != LiveStatus.Error || string.IsNullOrWhiteSpace(video.Message))
+                return null;
+            var history = video.VideoLiveHistoryId is long historyId ? histories.FindByPkid(historyId) : null;
+            return ErrorReport.Text(video, history?.StreamKey);
+        }
+
         group.MapGet("/{pkid:int}/error-report", (int pkid, VideoRepository videos, VideoLiveHistoryRepository histories, HttpContext context) =>
         {
             context.Response.Headers.CacheControl = "no-store";
-            var video = videos.FindByPkid(pkid);
-            if (video is null || video.LiveStatus != LiveStatus.Error || string.IsNullOrWhiteSpace(video.Message))
-                return Results.NotFound();
-            var history = video.VideoLiveHistoryId is long historyId ? histories.FindByPkid(historyId) : null;
-            var text = ErrorReport.Text(video, history?.StreamKey);
+            var text = ReportText(pkid, videos, histories);
+            if (text is null) return Results.NotFound();
             var parts = ErrorReport.Parts(text);
-            return Results.Ok(new { text, images = parts.Select((part, index) => ErrorReport.Image(part, index, parts.Count)).ToArray() });
+            // A large diagnostic is an attachment, rather than a sequence of QR screenshots.
+            var download = parts.Count > 1;
+            return Results.Ok(new
+            {
+                text,
+                images = download ? Array.Empty<string>() : parts.Select((part, index) => ErrorReport.Image(part, index, parts.Count)).ToArray(),
+                downloadUrl = download ? $"/video/{pkid}/error-report.txt" : null
+            });
+        });
+
+        group.MapGet("/{pkid:int}/error-report.txt", (int pkid, VideoRepository videos, VideoLiveHistoryRepository histories, HttpContext context) =>
+        {
+            context.Response.Headers.CacheControl = "no-store";
+            var text = ReportText(pkid, videos, histories);
+            if (text is null) return Results.NotFound();
+            return Results.File(System.Text.Encoding.UTF8.GetBytes(text), "text/plain; charset=utf-8", $"Orbis-error-report-{pkid}.txt");
         });
 
         group.MapGet("/getPage", (HttpContext context, VideoService service) => service.GetVideoList(

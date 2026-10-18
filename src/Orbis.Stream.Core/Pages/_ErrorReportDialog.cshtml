@@ -3,14 +3,12 @@
         <h2 id="error-report-title">@T["reportError"]</h2>
         <p data-report-status role="status" data-loading="@T["loading"]" data-failed="@T["reportLoadFailed"]"></p>
         <img data-report-qr alt="@T["reportQrAlt"]" hidden style="display: block; width: 100%; max-width: 560px; height: auto; margin: auto; image-rendering: pixelated;" />
-        <div class="actions" data-report-pages hidden>
-            <button type="button" class="btn" data-report-prev aria-label="@T["back"]">←</button>
-            <span data-report-page></span>
-            <button type="button" class="btn" data-report-next aria-label="@T["next"]">→</button>
+        <p data-report-qr-help hidden>@T["reportHelp"]</p>
+        <p data-report-download-help hidden>@T["reportMultiple"]</p>
+        <div class="actions">
+            <a class="btn" data-report-download download hidden>@T["reportDownload"]</a>
+            <a class="btn accent" href="@Orbis.Stream.Core.Services.ErrorReport.IssuesUrl" target="_blank" rel="noopener noreferrer">@T["reportOpenIssue"]</a>
         </div>
-        <p>@T["reportHelp"]</p>
-        <p>@T["reportMultiple"]</p>
-        <a class="btn accent" href="@Orbis.Stream.Core.Services.ErrorReport.IssuesUrl" target="_blank" rel="noopener noreferrer">@T["reportOpenIssue"]</a>
         <details><summary>@T["reportText"]</summary><pre data-report-text style="white-space: pre-wrap; overflow-wrap: anywhere;"></pre></details>
     </div>
     <form method="dialog"><div class="dialog-footer"><button class="btn" value="close">@T["close"]</button></div></form>

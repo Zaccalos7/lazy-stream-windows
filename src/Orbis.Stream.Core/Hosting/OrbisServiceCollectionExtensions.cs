@@ -62,6 +62,7 @@ public static class OrbisServiceCollectionExtensions
             provider.GetRequiredService<FfmpegProbe>(),
             provider.GetRequiredService<Microsoft.Extensions.Logging.ILogger<MediaProxyService>>()));
         services.AddSingleton<EncoderTuningService>();
+        services.AddSingleton<YouTubeStartupGate>();
         services.AddSingleton<FfmpegVideoPlaylistStreamer>();
         services.AddSingleton<IVideoPlaylistStreamer>(provider => (IVideoPlaylistStreamer)provider.GetRequiredService<FfmpegVideoPlaylistStreamer>());
 

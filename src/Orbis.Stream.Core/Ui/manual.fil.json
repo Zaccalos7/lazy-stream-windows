@@ -127,15 +127,15 @@
     {
       "id": "errorReports",
       "title": "Report an error",
-      "body": "Take a screenshot or a photo of the QR code and open an issue on GitHub. If the problem is caused by the software, we will try to fix it.",
+      "body": "Mag-ulat ng error sa GitHub sa pamamagitan ng paglakip ng QR code o buong .txt file. Nakatago ang mga stream key.",
       "steps": [
         "In History or Live management, press the Report error icon beside a failed live.",
-        "A dialog opens with the error QR code. Stream keys are masked.",
-        "If there are several QR codes, capture every page so the complete error is included.",
-        "Take screenshots or photos, then press Open an issue on GitHub. Attach the images and describe what you were doing. You can also copy the report text."
+        "Bubukas ang ulat. May QR code ang maiikling error; maaaring i-download bilang .txt file ang mahahabang error.",
+        "Kung masyadong mahaba ang error para sa isang QR code, i-download ang buong .txt file at ilakip ito sa GitHub issue.",
+        "Magbukas ng issue sa GitHub, ilakip ang .txt file o screenshot o larawan ng QR code, at ilarawan ang ginagawa mo noon. Maaari mo ring kopyahin ang teksto ng ulat."
       ],
       "figure": "errorReports",
-      "callout": "Capture the QR code and attach it to the GitHub issue."
+      "callout": "Ilakip ang QR code o na-download na .txt file sa issue."
     }
   ]
 }

@@ -127,15 +127,15 @@
     {
       "id": "errorReports",
       "title": "Report an error",
-      "body": "Take a screenshot or a photo of the QR code and open an issue on GitHub. If the problem is caused by the software, we will try to fix it.",
+      "body": "Report an error on GitHub by attaching the QR code or the complete .txt file. Stream keys are masked.",
       "steps": [
         "In History or Live management, press the Report error icon beside a failed live.",
-        "A dialog opens with the error QR code. Stream keys are masked.",
-        "If there are several QR codes, capture every page so the complete error is included.",
-        "Take screenshots or photos, then press Open an issue on GitHub. Attach the images and describe what you were doing. You can also copy the report text."
+        "The report dialog opens. Short errors have a QR code; long errors can be downloaded as a .txt file.",
+        "If the error is too long for one QR code, download the complete .txt file and attach it to the GitHub issue.",
+        "Press Open an issue on GitHub, attach the .txt file or a screenshot or photo of the QR code, and describe what you were doing. You can also copy the report text."
       ],
       "figure": "errorReports",
-      "callout": "Capture the QR code and attach it to the GitHub issue."
+      "callout": "Attach the QR code or the downloaded .txt file to the issue."
     }
   ]
 }

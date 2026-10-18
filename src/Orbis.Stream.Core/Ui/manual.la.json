@@ -127,15 +127,15 @@
     {
       "id": "errorReports",
       "title": "Report an error",
-      "body": "Take a screenshot or a photo of the QR code and open an issue on GitHub. If the problem is caused by the software, we will try to fix it.",
+      "body": "Errorem in GitHub nuntia codice QR aut integro fasciculo .txt addito. Claves emissionis occultantur.",
       "steps": [
         "In History or Live management, press the Report error icon beside a failed live.",
-        "A dialog opens with the error QR code. Stream keys are masked.",
-        "If there are several QR codes, capture every page so the complete error is included.",
-        "Take screenshots or photos, then press Open an issue on GitHub. Attach the images and describe what you were doing. You can also copy the report text."
+        "Fenestra relationis aperitur. Errores breves codicem QR habent; longi ut fasciculi .txt deponi possunt.",
+        "Si error uno codice QR longior est, integrum fasciculum .txt depone atque quaestioni GitHub adde.",
+        "Quaestionem in GitHub aperi, fasciculum .txt aut imaginem codicis QR adde et quid faciebas describe. Textum relationis etiam exscribere potes."
       ],
       "figure": "errorReports",
-      "callout": "Capture the QR code and attach it to the GitHub issue."
+      "callout": "Codicem QR aut fasciculum .txt depositum quaestioni adde."
     }
   ]
 }

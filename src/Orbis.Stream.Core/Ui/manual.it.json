@@ -127,15 +127,15 @@
     {
       "id": "errorReports",
       "title": "Segnalare un errore",
-      "body": "Fai uno screenshot o una foto del QR code e apri una issue su GitHub. Se il problema dipende dal software, cercheremo di risolverlo.",
+      "body": "Segnala un errore su GitHub allegando il QR code oppure il file .txt completo. Le chiavi di streaming vengono mascherate.",
       "steps": [
         "Nella Cronologia o in Gestione live, premi l’icona Segnala errore accanto a una diretta in errore.",
-        "Si apre una finestra con il QR code dell’errore. Le chiavi di streaming vengono mascherate.",
-        "Se ci sono più QR code, fotografa tutte le pagine per includere l’errore completo.",
-        "Fai uno screenshot o una foto e premi Apri una issue su GitHub. Allega le immagini e descrivi cosa stavi facendo. Puoi anche copiare il testo della segnalazione."
+        "Si apre la finestra della segnalazione. Gli errori brevi hanno un QR code; quelli lunghi possono essere scaricati come file .txt.",
+        "Se l’errore è troppo lungo per un solo QR code, scarica il file .txt completo e allegalo alla issue su GitHub.",
+        "Premi Apri una issue su GitHub, allega il file .txt oppure lo screenshot o la foto del QR code e descrivi cosa stavi facendo. Puoi anche copiare il testo della segnalazione."
       ],
       "figure": "errorReports",
-      "callout": "Fotografa il QR code e allegalo alla issue su GitHub."
+      "callout": "Allega alla issue il QR code oppure il file .txt scaricato."
     }
   ]
 }

@@ -90,8 +90,12 @@ public sealed class FacebookStreamKeyTests : IClassFixture<ApplicationFixture>
         var html = WebUtility.HtmlDecode(await _fixture.Client.GetStringAsync("/orbis/mainLive?start=1"));
 
         // The producer is where the broadcast is started and where its key is written, so that is
-        // where the page sends the user, on the address the dashboard itself opens.
+        // where the page sends the user, on the address the dashboard itself opens, and as
+        // something to click rather than as a line of text to read off the screen.
         Assert.Contains("https://www.facebook.com/live/producer", html, StringComparison.Ordinal);
+        Assert.Contains("class=\"btn subtle facebook-live-open\" href=\"https://www.facebook.com/live/producer\"", html, StringComparison.Ordinal);
+        // The block has a heading, so it reads as instructions instead of as loose text.
+        Assert.Contains("class=\"facebook-live-title\"", html, StringComparison.Ordinal);
 
         // The four steps, in the order they are asked: the broadcast first, the key out of the
         // producer, the key into the configuration, and the stream from here at the end.
@@ -145,6 +149,12 @@ public sealed class FacebookStreamKeyTests : IClassFixture<ApplicationFixture>
 
             var editor = await _fixture.Client.GetStringAsync($"/orbis/mainChannelSetting?edit={configuration.Id}");
             Assert.Contains("data-facebook-key-expired", editor, StringComparison.Ordinal);
+
+            // The warning is not a dead end: it says what to do and carries the producer that does it.
+            var warning = WebUtility.HtmlDecode(editor.Substring(editor.IndexOf("data-facebook-key-expired", StringComparison.Ordinal), 900));
+            Assert.Contains("Copy a new one", warning, StringComparison.Ordinal);
+            Assert.Contains("save this configuration again", warning, StringComparison.Ordinal);
+            Assert.Contains("href=\"https://www.facebook.com/live/producer\"", warning, StringComparison.Ordinal);
         }
         finally
         {

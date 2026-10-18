@@ -1243,8 +1243,10 @@ for (const show of document.querySelectorAll("[data-show-when]")) {
   if (!form) continue;
 
   const targets = show.dataset.showWhen.split(/\s+/).filter(Boolean);
+  const field = show.dataset.showWhenField;
   const update = () => {
-    const picked = targets.some(target => form.querySelector(`input[type=radio][value="${target}"]`)?.checked);
+    const picked = [...form.querySelectorAll('input[type="radio"]')]
+      .some(radio => (!field || radio.name === field) && radio.checked && targets.includes(radio.value));
     show.style.display = picked ? "" : "none";
   };
 

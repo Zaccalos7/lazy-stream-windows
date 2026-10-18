@@ -58,48 +58,48 @@
         <div class="nav-lives-region" data-refresh="/orbis/mainLive?handler=SidebarLives" data-since="@Changes.Version">
             <partial name="_SidebarLives" />
         </div>
-        <div class="nav-spacer"></div>
-        
-        <div class="segmented-control" role="radiogroup" aria-label="Theme">
-            <button type="button" class="segment" data-theme-set="light" title="Light" aria-label="Light Theme"><i class="icon">&#xE706;</i></button>
-            <button type="button" class="segment" data-theme-set="dark" title="Dark" aria-label="Dark Theme"><i class="icon">&#xE708;</i></button>
-        </div>
+        <div class="nav-footer">
+            <div class="segmented-control" role="radiogroup" aria-label="Theme">
+                <button type="button" class="segment" data-theme-set="light" title="Light" aria-label="Light Theme"><i class="icon">&#xE706;</i></button>
+                <button type="button" class="segment" data-theme-set="dark" title="Dark" aria-label="Dark Theme"><i class="icon">&#xE708;</i></button>
+            </div>
 
-        <details class="lang-picker">
-            <summary class="lang-current" title="Language" aria-label="Language">
-                @{
-                    // The language of the page is always one of the ones offered: T.Language already
-                    // falls back to English when the cookie asks for something no bundle answers.
-                    var current = UiText.Languages.First(l => l.Code == T.Language);
-                }
-                <img src="~/flags/@current.Flag" alt="" width="22" height="15">
-                <span>@current.Name</span>
-                <i class="icon" aria-hidden="true">&#xE70D;</i>
-            </summary>
-            <ul class="lang-menu">
-                @foreach (var language in UiText.Languages)
-                {
-                    <li>
-                        <a href="/orbis/lang/@language.Code" lang="@language.Code" hreflang="@language.Code"
-                           aria-current="@(language.Code == T.Language ? "true" : null)">
-                            <img src="~/flags/@language.Flag" alt="" width="22" height="15">
-                            <span>@language.Name</span>
-                        </a>
-                    </li>
-                }
-            </ul>
-        </details>
+            <details class="lang-picker">
+                <summary class="lang-current" title="Language" aria-label="Language">
+                    @{
+                        // The language of the page is always one of the ones offered: T.Language already
+                        // falls back to English when the cookie asks for something no bundle answers.
+                        var current = UiText.Languages.First(l => l.Code == T.Language);
+                    }
+                    <img src="~/flags/@current.Flag" alt="" width="22" height="15">
+                    <span>@current.Name</span>
+                    <i class="icon" aria-hidden="true">&#xE70D;</i>
+                </summary>
+                <ul class="lang-menu">
+                    @foreach (var language in UiText.Languages)
+                    {
+                        <li>
+                            <a href="/orbis/lang/@language.Code" lang="@language.Code" hreflang="@language.Code"
+                               aria-current="@(language.Code == T.Language ? "true" : null)">
+                                <img src="~/flags/@language.Flag" alt="" width="22" height="15">
+                                <span>@language.Name</span>
+                            </a>
+                        </li>
+                    }
+                </ul>
+            </details>
         
-        <button type="button" class="nav-about" id="about-button" data-open-about title="@T["about"]" aria-label="@T["about"]" aria-haspopup="dialog">
-            <i class="icon" aria-hidden="true">&#xE946;</i>
-            <span class="nav-about-text">
-                <strong>@AppInfo.Current.NameAndVersion</strong>
-                @if (AppInfo.Current.Author is { Length: > 0 } author)
-                {
-                    <small>@T["aboutAuthor"] @author</small>
-                }
-            </span>
-        </button>
+            <button type="button" class="nav-about" id="about-button" data-open-about title="@T["about"]" aria-label="@T["about"]" aria-haspopup="dialog">
+                <i class="icon" aria-hidden="true">&#xE946;</i>
+                <span class="nav-about-text">
+                    <strong>@AppInfo.Current.NameAndVersion</strong>
+                    @if (AppInfo.Current.Author is { Length: > 0 } author)
+                    {
+                        <small>@T["aboutAuthor"] @author</small>
+                    }
+                </span>
+            </button>
+        </div>
     </nav>
     <main class="content">
         <div class="page">

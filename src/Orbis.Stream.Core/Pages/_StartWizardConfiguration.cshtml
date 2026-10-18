@@ -22,6 +22,7 @@ else
             var choice = MainChannelSettingModel.ChoiceOf(configuration.PlatformStreamName, configuration.StreamUrl);
             <label class="choice @(choice?.Value)">
                 <input type="radio" name="configurationId" value="@configuration.Id" required
+                       data-youtube-studio="@(choice?.Value == "youtube" ? LiveLinkView.YouTubeStudioUrl(configuration.ChannelName ?? string.Empty, null) : null)"
                        data-key-each-live="@(keyEachLive ? "1" : null)" data-portrait="@(upright ? "1" : null)" />
                 <svg class="choice-mark" viewBox="0 0 24 24" aria-hidden="true"><path d="@LiveLinkView.MarkupOf(choice?.Value)" /></svg>
                 <span class="grow">
@@ -39,6 +40,11 @@ else
             </label>
         }
     </div>
+
+    <section data-youtube-preflight hidden>
+        <a class="btn" data-youtube-studio-link target="_blank" rel="noopener noreferrer">YouTube Studio</a>
+        <partial name="_YouTubeLiveChecks" />
+    </section>
 
     @* The key of this live, for a destination that hands out one for every live (TikTok): it goes
        with the start and is kept nowhere. The field is there for the configurations that need it. *@

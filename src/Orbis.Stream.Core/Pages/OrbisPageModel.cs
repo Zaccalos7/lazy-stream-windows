@@ -1,4 +1,5 @@
 using Microsoft.Data.Sqlite;
+using Microsoft.AspNetCore.Http;
 using Microsoft.AspNetCore.Mvc;
 using Microsoft.AspNetCore.Mvc.RazorPages;
 using Orbis.Stream.Core.Contracts;
@@ -43,7 +44,7 @@ public abstract class OrbisPageModel : PageModel
         {
             var result = operation();
             var success = result.Body.Response == ApiEnvelope.Success;
-            SetNotice(success ? NoticeKind.Success : NoticeKind.Error, result.Body.Message);
+            SetNotice(success ? result.StatusCode == StatusCodes.Status202Accepted ? NoticeKind.Warning : NoticeKind.Success : NoticeKind.Error, result.Body.Message);
             return success;
         });
     }

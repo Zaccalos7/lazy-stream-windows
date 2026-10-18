@@ -1,5 +1,7 @@
 using System.Collections.Concurrent;
 using System.Text.RegularExpressions;
+using System.Text.Json;
+using System.Text;
 using Microsoft.AspNetCore.WebUtilities;
 using Microsoft.Extensions.Logging;
 using Orbis.Stream.Core.Pages;
@@ -41,25 +43,25 @@ public sealed class LivePlatformEmbeds
     /// </summary>
     private static readonly TimeSpan OffAir = TimeSpan.FromSeconds(10);
 
-    /// <summary>
-    /// The first entry of the grid of a page of streams, which is the live when the channel is on
-    /// air and the last broadcast when it is not. The pair of fields is what keeps the id of a
-    /// video somewhere else on the page (the watch later list, the suggestions) from being taken for
-    /// it.
-    /// </summary>
-    private static readonly Regex Lockup = new(
-        "\"contentId\":\"(?<id>[A-Za-z0-9_-]{11})\",\"contentType\":\"LOCKUP_CONTENT_TYPE_VIDEO\"",
-        RegexOptions.CultureInvariant);
-
-    /// <summary>The same entry as the older page of a channel laid it out, with its thumbnail.</summary>
-    private static readonly Regex Legacy = new(
-        "\"videoId\":\"(?<id>[A-Za-z0-9_-]{11})\",\"thumbnail\"",
-        RegexOptions.CultureInvariant);
-
-    /// <summary>The data of a page of a channel, which is where the grid of its streams is.</summary>
+    // YouTube changes renderer layouts and JSON property order. Read the data rather than
+    // depending on adjacent fields in the HTML. Window assignments occur alongside var declarations.
     private static readonly Regex InitialData = new(
-        @"var ytInitialData = (?<json>.*?);</script>",
+        @"(?:var\s+ytInitialData|window\s*\[\s*[""']ytInitialData[""']\s*\]|ytInitialData)\s*=\s*",
         RegexOptions.CultureInvariant | RegexOptions.Singleline);
+
+    private static readonly Regex PlayerResponse = new(
+        @"(?:var\s+ytInitialPlayerResponse|window\s*\[\s*[""']ytInitialPlayerResponse[""']\s*\]|ytInitialPlayerResponse)\s*=\s*",
+        RegexOptions.CultureInvariant);
+
+    private static JsonDocument? ReadData(string html, Regex assignment)
+    {
+        var match = assignment.Match(html);
+        var json = match.Success ? html.AsSpan(match.Index + match.Length) : html.AsSpan().TrimStart();
+        if (!match.Success && (json.IsEmpty || json[0] != '{')) return null;
+        var reader = new Utf8JsonReader(Encoding.UTF8.GetBytes(json.ToString()));
+        // Parse only the assigned JSON value, even if more JavaScript follows in the same script.
+        return JsonDocument.ParseValue(ref reader);
+    }
 
     /// <summary>
     /// What YouTube says about a video, before it localises anything on the page: the details of
@@ -68,7 +70,7 @@ public sealed class LivePlatformEmbeds
     /// field that makes the last live of a channel off air look like a live.
     /// </summary>
     private static readonly Regex OnAirNow = new(
-        "\"isLive(?:Now)?\":true",
+        "\"isLive(?:Now)?\"\\s*:\\s*true",
         RegexOptions.CultureInvariant);
 
     /// <summary>
@@ -77,7 +79,7 @@ public sealed class LivePlatformEmbeds
     /// application did not understand, and that is not taken to mean anything.
     /// </summary>
     private static readonly Regex LiveContent = new(
-        "\"isLiveContent\":true",
+        "\"isLiveContent\"\\s*:\\s*true",
         RegexOptions.CultureInvariant);
 
     private readonly HttpClient _http;
@@ -144,7 +146,9 @@ public sealed class LivePlatformEmbeds
         }
         if (string.IsNullOrEmpty(channel))
         {
-            return LivePlatformLookup.Nothing;
+            return LiveLinkView.PlatformOf(streamUrl) == "youtube"
+                ? LivePlatformLookup.Failed("YouTube requires a channel handle or channel id")
+                : LivePlatformLookup.Nothing;
         }
 
         return LiveLinkView.PlatformOf(streamUrl) switch
@@ -241,6 +245,13 @@ public sealed class LivePlatformEmbeds
     /// The id of the video a channel is broadcasting right now, or nothing. <c>Failure</c> is what
     /// could not be asked, as opposed to what was asked and found empty.
     /// </summary>
+    public async Task RefreshYouTubeAsync(string channel, CancellationToken cancellationToken)
+    {
+        await _gate.WaitAsync(cancellationToken).ConfigureAwait(false);
+        try { _youtube.TryRemove(channel.Trim().TrimStart('@'), out _); }
+        finally { _gate.Release(); }
+    }
+
     private async Task<(string? VideoId, string? Failure)> LiveVideoAsync(string handle, CancellationToken cancellationToken)
     {
         if (Remembered(handle) is { } fresh)
@@ -307,19 +318,27 @@ public sealed class LivePlatformEmbeds
             return (null, $"YouTube did not return the streams page of @{handle}");
         }
 
-        var candidate = CandidateOf(streams);
-        if (candidate is null)
+        var candidates = CandidatesOf(streams);
+        if (candidates is null)
         {
-            return (null, null);
+            return (null, "YouTube returned an unrecognized channel page (possibly a consent page)");
         }
 
-        var watch = await ReadAsync($"https://www.youtube.com/watch?v={candidate}", cancellationToken);
-        if (watch is null)
+        string? failure = null;
+        // A scheduled event or another completed broadcast can precede the live in the grid.
+        // Check a bounded set, with entries carrying a LIVE badge first, and verify every watch page.
+        foreach (var candidate in candidates.Take(5))
         {
-            return (null, $"YouTube did not return the page of the video {candidate}");
+            var watch = await ReadAsync($"https://www.youtube.com/watch?v={candidate}", cancellationToken);
+            var ended = HasEnded(watch);
+            if (ended is null)
+            {
+                failure = $"YouTube did not return recognizable broadcast details for {candidate}";
+                continue;
+            }
+            if (ended == false) return (candidate, null);
         }
-
-        return OnAirNow.IsMatch(watch) ? (candidate, null) : (null, null);
+        return (null, failure);
     }
 
     /// <summary>
@@ -334,32 +353,75 @@ public sealed class LivePlatformEmbeds
     }
 
     /// <summary>The reading of <see cref="HasEndedAsync"/>, on a page already read.</summary>
-    internal static bool? HasEnded(string? watch) =>
-        watch is null ? null
-        : OnAirNow.IsMatch(watch) ? false
-        : LiveContent.IsMatch(watch) ? true
-        : null;
-
-    /// <summary>The id of the first entry of the grid of a page of a channel, or nothing.</summary>
-    internal static string? CandidateOf(string html)
+    internal static bool? HasEnded(string? watch)
     {
-        if (string.IsNullOrWhiteSpace(html))
+        if (watch is null) return null;
+        try
+        {
+            using var response = ReadData(watch, PlayerResponse);
+            if (response is null) return null;
+            var details = response.RootElement.GetRawText();
+            // Related videos in ytInitialData are not evidence about this broadcast.
+            return OnAirNow.IsMatch(details) ? false : LiveContent.IsMatch(details) ? true : null;
+        }
+        catch (JsonException) { return null; }
+    }
+
+    internal static string? CandidateOf(string html) => CandidatesOf(html)?.FirstOrDefault();
+
+    /// <summary>Null means unreadable; an empty recognized grid means no public broadcasts.</summary>
+    internal static IReadOnlyList<string>? CandidatesOf(string html)
+    {
+        try
+        {
+            using var document = ReadData(html, InitialData);
+            if (document is null) return null;
+            var candidates = new List<(string Id, bool Live)>();
+            Visit(document.RootElement);
+            if (candidates.Count == 0 && (document.RootElement.ValueKind != JsonValueKind.Object ||
+                !document.RootElement.TryGetProperty("contents", out _))) return null;
+            return candidates.OrderByDescending(entry => entry.Live).Select(entry => entry.Id).Distinct().ToArray();
+
+            void Visit(JsonElement node)
+            {
+                if (node.ValueKind == JsonValueKind.Array)
+                {
+                    foreach (var child in node.EnumerateArray()) Visit(child);
+                }
+                else if (node.ValueKind == JsonValueKind.Object)
+                {
+                    // A selected channel tab contains the streams grid. Ignore recommendations
+                    // and videos in unrelated tabs, which can belong to other channels.
+                    if (node.TryGetProperty("tabs", out var tabs) && tabs.ValueKind == JsonValueKind.Array)
+                    {
+                        foreach (var tab in tabs.EnumerateArray())
+                            if (tab.TryGetProperty("tabRenderer", out var renderer) &&
+                                renderer.TryGetProperty("selected", out var selected) && selected.ValueKind == JsonValueKind.True &&
+                                renderer.TryGetProperty("content", out var content)) Visit(content);
+                        return;
+                    }
+                    if (node.TryGetProperty("contentType", out var type) && type.ValueKind == JsonValueKind.String && type.GetString() == "LOCKUP_CONTENT_TYPE_VIDEO" &&
+                        node.TryGetProperty("contentId", out var id)) Add(id, node);
+                    else if (node.TryGetProperty("videoId", out var video) && node.TryGetProperty("thumbnail", out _)) Add(video, node);
+                    foreach (var property in node.EnumerateObject())
+                    {
+                        if (property.Name is "secondaryContents" or "header" or "topbar") continue;
+                        Visit(property.Value);
+                    }
+                }
+            }
+
+            void Add(JsonElement id, JsonElement node)
+            {
+                if (id.ValueKind == JsonValueKind.String && id.GetString() is { Length: 11 } value &&
+                    value.All(character => char.IsAsciiLetterOrDigit(character) || character is '_' or '-'))
+                    candidates.Add((value, Regex.IsMatch(node.GetRawText(), @"""(?:style|overlayStyle|badgeStyle)""\s*:\s*""(?:LIVE|BADGE_STYLE_TYPE_LIVE_NOW|THUMBNAIL_OVERLAY_BADGE_STYLE_LIVE)""")));
+            }
+        }
+        catch (JsonException)
         {
             return null;
         }
-
-        // Only the data of the page is read, and not the scripts around it: the id of a video
-        // elsewhere on the page is not the top of the grid, and the grid is what is wanted.
-        var data = InitialData.Match(html);
-        var scope = data.Success ? data.Groups["json"].Value : html;
-
-        var entry = Lockup.Match(scope);
-        if (!entry.Success)
-        {
-            entry = Legacy.Match(scope);
-        }
-
-        return entry.Success ? entry.Groups["id"].Value : null;
     }
 
     /// <summary>

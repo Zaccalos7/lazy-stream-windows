@@ -71,8 +71,11 @@ public sealed record LiveSnapshot(
     long? History = null,
     /// <summary>What is on air in place of the program, when something is: a spot or a scene button.</summary>
     LiveScene? Scene = null,
-    LiveStatus? Status = null)
+    LiveStatus? Status = null,
+    bool PlatformVerified = false)
 {
+    public string? PlatformManagementUrl => Pages.LiveLinkView.UrlOf(StreamUrl, ChannelName, PlatformStreamName, PlatformVideoId);
+
     public static LiveSnapshot Offline(IReadOnlyList<LiveOption> running) => new(
         false,
         false,
@@ -259,7 +262,8 @@ public sealed class LivePreviewService
             _air.OnAirVideoOf(video.VideoLiveHistoryId),
             video.VideoLiveHistoryId,
             LiveScene.Of(_takeovers.CurrentOf(video.VideoLiveHistoryId)),
-            session.IsPublishing ? LiveStatus.Live : video.LiveStatus);
+            session.IsPublishing ? LiveStatus.Live : video.LiveStatus,
+            _air.IsConfirmed(video.VideoLiveHistoryId));
     }
 
     /// <summary>

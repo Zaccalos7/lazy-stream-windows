@@ -459,5 +459,17 @@
   "manualIntro": "Todo lo que Orbis Stream puede hacer, una página por función: una imagen de la aplicación y una flecha sobre el botón que hay que pulsar. Puedes descargar este manual en PDF, para guardarlo o imprimirlo.",
   "manualDownloadPdf": "Descargar PDF",
   "manualPrint": "Imprimir",
-  "manualToc": "En este manual"
+  "manualToc": "En este manual",
+  "youtubeCheckTitle": "YouTube live checks",
+  "youtubeCheckIntro": "Orbis checks the public channel. Stream keys alone cannot read or change your Studio settings. Follow these steps before retrying.",
+  "youtubeCheckStep1": "Open YouTube Studio with the correct account. Select an event that has not ended and compare its stream key with the channel configuration in Orbis. Stop any other encoder using that key.",
+  "youtubeCheckStep2": "If sending one stream, use Auto for the vertical version or turn off Dual stream before starting. Dual stream in Encoder mode requires a separate vertical feed and its matching key; one Orbis destination sends one feed.",
+  "youtubeCheckStep3": "Enable Auto-start, or press Go live in Studio when the preview is ready. If you need to reconnect without ending the event, turn off Auto-stop.",
+  "youtubeCheckStep4": "Start Orbis and wait for Studio to show moving video. Excellent connection confirms reception, not that viewers can watch. Use Check YouTube again without stopping the encoder.",
+  "youtubeCheckStep5": "If Studio stays on Preparing, stop Orbis once and wait until Studio reports no incoming signal. Recheck Dual stream and the key. If the event ended or is still stuck, create a new event; if you change the key, save it in Orbis before starting again.",
+  "youtubeCheckStep6": "Use Show live and check audio and moving video. Private or unlisted events may be absent from the public channel: open their viewer link in Studio. A public-channel lookup cannot confirm which stream key feeds a video when several events are live.",
+  "youtubeChecking": "Signal sent · YouTube verification pending",
+  "youtubeVerified": "Live found on the YouTube channel",
+  "youtubeCheckNow": "Check YouTube again",
+  "youtubeCheckFailed": "YouTube could not be checked. Try again or open Studio."
 }

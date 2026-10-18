@@ -610,7 +610,7 @@ public sealed class StreamingService
         var transport = TransportOf(videoLiveHistory);
         _executor.Execute(() => _ = RunPlaylistAsync(videoList, streamingUrl, videoLiveHistoryId, transport));
 
-        return _responses.Build("live.started", StatusCodes.Status202Accepted);
+        return _responses.Build("live.start.requested", StatusCodes.Status202Accepted);
     }
 
     /// <summary>

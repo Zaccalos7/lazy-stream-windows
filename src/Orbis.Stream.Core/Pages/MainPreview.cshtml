@@ -5,6 +5,8 @@
 @{
     ViewData["Title"] = T["livePreviewTitle"];
     var live = Model.Snapshot;
+    var youtube = LiveLinkView.PlatformOf(live.StreamUrl) == "youtube";
+    var verifying = youtube && !live.PlatformVerified;
 
     string Fps(double value) => value <= 0 ? "–" : value.ToString("0.###", CultureInfo.InvariantCulture) + " fps";
     string Size(LiveMedia media) => media.Width > 0 ? $"{media.Width}×{media.Height}" : "–";
@@ -46,9 +48,9 @@
         </form>
         @if (Model.LiveUrl is { } liveUrl)
         {
-            <a class="btn live-indicator is-live" href="@liveUrl" target="_blank" rel="noopener noreferrer"
-               title="@T["openLivePage"]@(" (" + Model.LivePlatform + ")")" aria-label="@T["liveNow"]">
-                <span class="platform-mark @Model.LiveGlyphClass"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="@Model.LiveGlyph" /></svg></span>@T["liveNow"]
+            <a class="btn live-indicator @(verifying ? "is-checking" : "is-live")" href="@liveUrl" data-platform-manage data-youtube-indicator="@(youtube ? "" : null)" target="_blank" rel="noopener noreferrer"
+               title="@T["openLivePage"]@(" (" + Model.LivePlatform + ")")" aria-label="@T[verifying ? "youtubeChecking" : "liveNow"]">
+                <span class="platform-mark @Model.LiveGlyphClass"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="@Model.LiveGlyph" /></svg></span><span data-live-indicator-text>@T[verifying ? "youtubeChecking" : "liveNow"]</span>
             </a>
         }
         else
@@ -148,6 +150,17 @@ else
         <p><strong>@T["youtubeUnverified"]</strong> @T["youtubeUnverifiedHelp"]</p>
         <button class="btn subtle icon-only" type="button" data-air-dismiss title="@T["close"]" aria-label="@T["close"]"><i class="icon">&#xE711;</i></button>
     </div>
+    @if (youtube)
+    {
+        <section class="card section" data-youtube-verification
+                 data-checking="@T["youtubeChecking"]" data-verified="@T["youtubeVerified"]"
+                 data-offair="@T["youtubeOffAir"]" data-unverified="@T["youtubeUnverified"]"
+                 data-failed="@T["youtubeCheckFailed"]" aria-live="polite">
+            <p data-youtube-status>@T[live.PlatformVerified ? "youtubeVerified" : live.PlatformOffAir ? "youtubeOffAir" : live.PlatformUnverified ? "youtubeUnverified" : "youtubeChecking"]</p>
+            <button type="button" class="btn" data-youtube-recheck>@T["youtubeCheckNow"]</button>
+            <partial name="_YouTubeLiveChecks" />
+        </section>
+    }
     <div class="preview">
         <div class="preview-main">
             <div class="preview-stage card">
@@ -194,9 +207,9 @@ else
                               data-player-error="@T["previewPlayerError"]"
                               data-failed="@T["previewUnavailable"]"></span>
                     }
-                    @if (Model.WatchUrl is { } watchUrl)
+                    @if (Model.LiveUrl is { } manageUrl)
                     {
-                        <a class="btn subtle" href="@watchUrl" data-platform-watch target="_blank" rel="noopener noreferrer">@T["openLivePage"]</a>
+                        <a class="btn subtle" href="@manageUrl" data-platform-manage target="_blank" rel="noopener noreferrer">@T["openLivePage"]</a>
                     }
                     else if (platform == "facebook")
                     {

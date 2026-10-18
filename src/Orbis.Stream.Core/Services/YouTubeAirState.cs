@@ -28,6 +28,22 @@ internal sealed class YouTubeAirState
 
     private readonly ConcurrentDictionary<long, Live> _lives = new();
 
+    public bool IsConfirmed(long? history, object? run = null) =>
+        Find(history) is { Confirmed: true } live && (run is null || ReferenceEquals(live.Run, run));
+
+    public bool MatchesRun(long? history, object run) =>
+        Find(history) is { } live && ReferenceEquals(live.Run, run);
+
+    // The connection survives playlist handovers, while an explicit stop/start gets a new one.
+    // Even a restart between two watcher ticks must drop the old warning and broadcast id.
+    public bool TrackRun(long history, object run)
+    {
+        var live = Of(history);
+        if (ReferenceEquals(live.Run, run)) return false;
+        _lives[history] = new Live { Run = run };
+        return true;
+    }
+
     /// <summary>The lives something is known about, by their history.</summary>
     public IEnumerable<long> Known => _lives.Keys;
 
@@ -75,7 +91,8 @@ internal sealed class YouTubeAirState
     public bool Observe(long history, LivePlatformEmbeds.LivePlatformLookup found)
     {
         var live = Of(history);
-        var before = Shown(live);
+        var before = (Shown(live), live.Confirmed, live.OnAirVideo);
+        live.Confirmed = found.Embed is not null;
         if (found.Embed is { } embed)
         {
             live.Misses = 0;
@@ -95,7 +112,7 @@ internal sealed class YouTubeAirState
             live.Failures++;
         }
 
-        return before != Shown(live);
+        return before != (Shown(live), live.Confirmed, live.OnAirVideo);
     }
 
     /// <summary>The user closed the warning: it stays closed until the live is found on air.</summary>
@@ -142,6 +159,10 @@ internal sealed class YouTubeAirState
     /// </summary>
     private sealed class Live
     {
+        public object? Run;
+
+        public bool Confirmed;
+
         public int Misses;
 
         public int Endings;

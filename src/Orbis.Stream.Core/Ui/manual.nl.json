@@ -123,6 +123,19 @@
       ],
       "figure": "settings",
       "callout": "Instellingen bundelen video/audio, kanalen en deze handleiding."
+    },
+    {
+      "id": "errorReports",
+      "title": "Report an error",
+      "body": "Meld een fout op GitHub met de QR-code of het volledige .txt-bestand als bijlage. Streamsleutels worden verborgen.",
+      "steps": [
+        "In History or Live management, press the Report error icon beside a failed live.",
+        "Het rapportvenster opent. Korte fouten hebben een QR-code; lange fouten kunnen als .txt-bestand worden gedownload.",
+        "Als de fout te lang is voor één QR-code, download dan het volledige .txt-bestand en voeg het toe aan het GitHub-issue.",
+        "Open een GitHub-issue, voeg het .txt-bestand of een schermafbeelding of foto van de QR-code toe en beschrijf wat je deed. Je kunt ook de rapporttekst kopiëren."
+      ],
+      "figure": "errorReports",
+      "callout": "Voeg de QR-code of het gedownloade .txt-bestand toe aan het issue."
     }
   ]
 }

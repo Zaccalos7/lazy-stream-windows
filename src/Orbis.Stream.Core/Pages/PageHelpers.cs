@@ -1,3 +1,4 @@
+using Orbis.Stream.Core.Contracts;
 using Orbis.Stream.Core.Domain;
 using Orbis.Stream.Core.I18n;
 using Orbis.Stream.Core.Streaming;
@@ -29,6 +30,8 @@ public static class LiveStatusView
     public static string Key(LiveStatus? status) => status switch
     {
         LiveStatus.Live => "liveStatusLive",
+        LiveStatus.Connecting => "liveStatusConnecting",
+        LiveStatus.Reconnecting => "liveStatusReconnecting",
         LiveStatus.Ended => "liveStatusEnded",
         LiveStatus.Error => "liveStatusError",
         LiveStatus.Stopped => "liveStatusStopped",
@@ -38,6 +41,8 @@ public static class LiveStatusView
     public static string Css(LiveStatus? status) => status switch
     {
         LiveStatus.Live => "live",
+        LiveStatus.Connecting => "connecting",
+        LiveStatus.Reconnecting => "connecting",
         LiveStatus.Ended => "ended",
         LiveStatus.Error => "error",
         LiveStatus.Stopped => "stopped",
@@ -79,12 +84,41 @@ public static class SettingTitleView
 }
 
 /// <summary>
+/// What a streaming configuration has to say about its stream key to a platform that expires them
+/// (Facebook, see <see cref="Streaming.ExpiringStreamKeys"/>): whether the key it keeps can still
+/// be streamed with, and since when. Shown wherever the key is asked for or edited, because the
+/// key is not something the user can tell is stale - the page is the only thing that knows how long
+/// ago it was written.
+/// </summary>
+public sealed record StreamKeyAge(string? PlatformStreamName, string? StreamUrl, DateTime? SavedAt)
+{
+    /// <summary>Whether the stored key is past its life. False for a platform whose keys do not expire.</summary>
+    public bool Expired => ExpiringStreamKeys.IsExpired(PlatformStreamName, StreamUrl, SavedAt, DateTime.Now);
+
+    /// <summary>The key was saved, and it is still good: when, so the user can see how much is left of it.</summary>
+    public bool Saved => !Expired && SavedAt is not null;
+
+    public static StreamKeyAge Of(SettingResponse configuration)
+    {
+        ArgumentNullException.ThrowIfNull(configuration);
+
+        return new StreamKeyAge(configuration.PlatformStreamName, configuration.StreamUrl, configuration.StreamKeySavedAt);
+    }
+}
+
+/// <summary>
 /// Public page of a live on its platform, built from the RTMP ingest stored with the live: the
 /// ingest URL is the only platform evidence a video row carries, so a configuration that points
 /// to a custom ingest (a service this application does not know) has no link.
 /// </summary>
 public static class LiveLinkView
 {
+    /// <summary>
+    /// Where a Facebook live is stood up and where its stream key is read. The address the producer
+    /// opens on its own, without a version segment: the one the dashboard and the help pages of
+    /// Meta link to, and the only one that keeps working when the version behind it changes.
+    /// </summary>
+    public const string FacebookProducerUrl = "https://www.facebook.com/live/producer";
     /// <summary>Platform of an ingest URL (<c>twitch</c>, <c>youtube</c>, <c>kick</c>, <c>facebook</c>, <c>tiktok</c>), or null if unknown.</summary>
     public static string? PlatformOf(string? streamUrl)
     {
@@ -105,8 +139,7 @@ public static class LiveLinkView
         }
 
         // An ingest of the account or of the live is not always the preset (a Kick endpoint of its
-        // own, a Facebook host of the broadcast, a TikTok server of another region): those
-        // platforms are recognised by their domain.
+        // own, a Facebook host of the broadcast, a TikTok server of another region): those platforms are recognised by their domain.
         var detected = StreamPlatforms.Detect(normalized);
         return MainChannelSettingModel.Platforms
             .FirstOrDefault(known => known.PersonalIngest && known.Platform == detected)?.Value;
@@ -175,9 +208,10 @@ public static class LiveLinkView
             .FirstOrDefault(known => known.Value == platform)?.Label;
 
     /// <summary>
-    /// Where the icon of a live leads: on Twitch and Kick the channel, on Facebook Gaming the page,
-    /// on TikTok the live of the account, on YouTube the live control room of YouTube Studio
-    /// (<see cref="YouTubeStudioUrl"/>), which is where a live there is managed.
+    /// Where the icon of a live leads: on Twitch and Kick the channel, on Facebook Gaming the
+    /// page, on TikTok the live of the account, on YouTube the live
+    /// control room of YouTube Studio (<see cref="YouTubeStudioUrl"/>), which is where a live there
+    /// is managed.
     /// </summary>
     /// <param name="channelName">
     /// The channel of the configuration. The form of the configuration keeps the platform in the
@@ -190,6 +224,7 @@ public static class LiveLinkView
     /// <param name="videoId">The video YouTube broadcasts the live as, when it is known.</param>
     public static string? UrlOf(string? streamUrl, string? channelName, string? platformStreamName, string? videoId = null)
     {
+        if (PlatformOf(streamUrl) == "facebook") return FacebookProducerUrl;
         var name = (channelName ?? platformStreamName)?.Trim();
         if (string.IsNullOrEmpty(name))
         {
@@ -202,10 +237,25 @@ public static class LiveLinkView
             "youtube" => YouTubeStudioUrl(name, videoId),
             // A Kick channel is its name in lower case, as its address shows it.
             "kick" => "https://kick.com/" + Uri.EscapeDataString(name.ToLowerInvariant()),
-            // A gaming creator streams from a page, addressed by its user name.
-            "facebook" => "https://www.facebook.com/" + Uri.EscapeDataString(name.TrimStart('@')),
             // A TikTok account is addressed by its handle, and its live has a page of its own.
             "tiktok" => "https://www.tiktok.com/@" + Uri.EscapeDataString(name.TrimStart('@')) + "/live",
+            _ => null
+        };
+    }
+
+    /// <summary>The public broadcast, for the preview and its link to the viewer's page.</summary>
+    public static string? WatchUrlOf(string? streamUrl, string? channelName, string? platformStreamName, string? videoId = null)
+    {
+        var name = (channelName ?? platformStreamName)?.Trim();
+        if (string.IsNullOrEmpty(name)) return null;
+        return PlatformOf(streamUrl) switch
+        {
+            "youtube" => string.IsNullOrWhiteSpace(videoId)
+                ? YouTubeChannelUrl(name) + "/live"
+                : "https://www.youtube.com/watch?v=" + Uri.EscapeDataString(videoId),
+            "kick" => LivePlatformEmbeds.KickChannel(name) is { } kick ? "https://kick.com/" + Uri.EscapeDataString(kick) : null,
+            "facebook" => LivePlatformEmbeds.FacebookVideoUrl(name),
+            "twitch" or "tiktok" => UrlOf(streamUrl, channelName, platformStreamName),
             _ => null
         };
     }

@@ -123,6 +123,19 @@
       ],
       "figure": "settings",
       "callout": "Ayarlar video/ses, kanallar ve bu kılavuzu toplar."
+    },
+    {
+      "id": "errorReports",
+      "title": "Report an error",
+      "body": "QR kodunu veya tam .txt dosyasını ekleyerek GitHub üzerinde hata bildirin. Yayın anahtarları gizlenir.",
+      "steps": [
+        "In History or Live management, press the Report error icon beside a failed live.",
+        "Rapor penceresi açılır. Kısa hatalarda QR kodu bulunur; uzun hatalar .txt dosyası olarak indirilebilir.",
+        "Hata tek bir QR kodu için çok uzunsa tam .txt dosyasını indirin ve GitHub sorununa ekleyin.",
+        "GitHub üzerinde bir sorun açın, .txt dosyasını veya QR kodunun ekran görüntüsünü ya da fotoğrafını ekleyin ve ne yaptığınızı açıklayın. Rapor metnini de kopyalayabilirsiniz."
+      ],
+      "figure": "errorReports",
+      "callout": "QR kodunu veya indirilen .txt dosyasını soruna ekleyin."
     }
   ]
 }

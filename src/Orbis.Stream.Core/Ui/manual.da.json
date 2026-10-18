@@ -123,6 +123,19 @@
       ],
       "figure": "settings",
       "callout": "Indstillinger samler video/lyd, kanaler og denne manual."
+    },
+    {
+      "id": "errorReports",
+      "title": "Report an error",
+      "body": "Rapportér en fejl på GitHub ved at vedhæfte QR-koden eller hele .txt-filen. Streamnøgler skjules.",
+      "steps": [
+        "In History or Live management, press the Report error icon beside a failed live.",
+        "Rapportvinduet åbnes. Korte fejl har en QR-kode; lange fejl kan downloades som en .txt-fil.",
+        "Hvis fejlen er for lang til én QR-kode, skal du downloade hele .txt-filen og vedhæfte den til sagen på GitHub.",
+        "Åbn en sag på GitHub, vedhæft .txt-filen eller et skærmbillede eller foto af QR-koden, og beskriv, hvad du lavede. Du kan også kopiere rapportteksten."
+      ],
+      "figure": "errorReports",
+      "callout": "Vedhæft QR-koden eller den downloadede .txt-fil til sagen."
     }
   ]
 }

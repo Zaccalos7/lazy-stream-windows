@@ -36,6 +36,10 @@ public sealed class MainPreviewModel(
     public string? LiveUrl =>
         LiveLinkView.UrlOf(Snapshot.StreamUrl, Snapshot.ChannelName, Snapshot.PlatformStreamName, Snapshot.PlatformVideoId);
 
+    /// <summary>The public destination to watch, separate from the broadcast management page.</summary>
+    public string? WatchUrl =>
+        LiveLinkView.WatchUrlOf(Snapshot.StreamUrl, Snapshot.ChannelName, Snapshot.PlatformStreamName, Snapshot.PlatformVideoId);
+
     public string LivePlatform => LiveLinkView.LabelOf(LiveLinkView.PlatformOf(Snapshot.StreamUrl)) ?? string.Empty;
 
     public string LiveGlyph => LiveLinkView.MarkupOf(LiveLinkView.PlatformOf(Snapshot.StreamUrl));

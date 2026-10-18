@@ -146,7 +146,7 @@
 }
 else
 {
-    <div class="live-rows-container history-rows-container">
+    <div class="live-rows-container">
     <div class="table-wrap-scrollable">
     <div class="table-wrap">
         <table class="list roomy">
@@ -185,8 +185,31 @@ else
                     </td>
                     <td class="path"><div class="truncate" title="@video.VideoPath">@video.VideoPath</div></td>
                     <td class="nowrap">@LiveStatusView.Date(history?.LocalDateTimeStartLive, "dd-MM-yyyy HH:mm:ss")</td>
-                    <td>@video.Message</td>
+                    <td>
+                        @if (video.Message is { Length: > 120 } message)
+                        {
+                            var messageDialogId = $"outcome-message-{video.Pkid}";
+                            <button type="button" class="btn subtle" command="show-modal" commandfor="@messageDialogId">@T["viewFullMessage"]</button>
+                            <dialog class="dialog wide" id="@messageDialogId" aria-labelledby="@(messageDialogId + "-title")">
+                                <div class="dialog-body">
+                                    <h2 id="@(messageDialogId + "-title")">@T["outcome"]</h2>
+                                    <pre style="white-space: pre-wrap; overflow-wrap: anywhere;">@message</pre>
+                                </div>
+                                <form method="dialog">
+                                    <div class="dialog-footer"><button class="btn" value="close">@T["close"]</button></div>
+                                </form>
+                            </dialog>
+                        }
+                        else
+                        {
+                            @video.Message
+                        }
+                    </td>
                     <td class="nowrap">
+                        @if (video.LiveStatus == LiveStatus.Error && !string.IsNullOrWhiteSpace(video.Message) && video.Pkid is int reportId)
+                        {
+                            <partial name="_ErrorReportButton" model="reportId" />
+                        }
                         @if (historyPkid > 0)
                         {
                             <form method="post" asp-page-handler="Delete" asp-all-route-data="@Model.DeleteRoute(historyPkid)" class="inline" data-confirm="@T["deleteLiveHistoryConfirm"]">

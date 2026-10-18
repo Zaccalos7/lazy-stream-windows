@@ -34,10 +34,11 @@ else
                         var status = row.Status;
                         var hasSetting = video.VideoSetting is not null;
                         var live = status == LiveStatus.Live;
+                        var active = status.IsActive();
                         var platform = video.VideoLiveHistory?.PlatformStreamName;
 
                         var knownPlatform = LiveLinkView.PlatformOf(video.VideoLiveHistory?.StreamUrl);
-                        var liveUrl = live ? LiveLinkView.UrlOf(video.VideoLiveHistory?.StreamUrl, video.ChannelName, platform, Air.OnAirVideoOf(historyPkid)) : null;
+                        var liveUrl = live || (active && knownPlatform == "facebook") ? LiveLinkView.UrlOf(video.VideoLiveHistory?.StreamUrl, video.ChannelName, platform, Air.OnAirVideoOf(historyPkid)) : null;
                         // A live to TikTok is started again with the key of the new live (LiveStreamKeys).
                         var askKey = Orbis.Stream.Core.Streaming.LiveStreamKeys.IsAskedFor(platform, video.VideoLiveHistory?.StreamUrl);
                         // A picture or overlay of the scene deck active on the live.
@@ -45,7 +46,11 @@ else
                         var liveTitle = (row.SceneName ?? video.Name) + (string.IsNullOrEmpty(video.ChannelName) ? "" : " · " + video.ChannelName);
                         <tr data-row>
                             <td>
-                                <span class="badge @LiveStatusView.Css(status)">@T[LiveStatusView.Key(status)]</span>
+                                <span class="badge @(live && knownPlatform == "youtube" && !Air.IsConfirmed(historyPkid) ? "offair" : LiveStatusView.Css(status))">@T[live && knownPlatform == "youtube" && !Air.IsConfirmed(historyPkid) ? "youtubeChecking" : LiveStatusView.Key(status)]</span>
+                                @if (active && !live && knownPlatform == "youtube")
+                                {
+                                    <p class="caption">@video.Message</p>
+                                }
                                 @if (live && Air.IsOffAir(historyPkid))
                                 {
                                     @* Sent, and not shown: the row says it where the user looks first. *@
@@ -77,6 +82,17 @@ else
                             <td>@LiveStatusView.Date(video.StartDateLive, "dd/MM/yyyy HH:mm:ss")</td>
                             <td>
                                 <div class="actions">
+                                    @if (active && knownPlatform == "facebook")
+                                    {
+                                        <button type="button" class="btn subtle icon-only" commandfor="facebook-live-dialog" command="show-modal"
+                                                title="@T["seeDetails"]" aria-label="@T["seeDetails"]" aria-haspopup="dialog">
+                                            <i class="icon" aria-hidden="true">&#xE946;</i>
+                                        </button>
+                                    }
+                                    @if (status == LiveStatus.Error && !string.IsNullOrWhiteSpace(video.Message) && video.Pkid is int reportId)
+                                    {
+                                        <partial name="_ErrorReportButton" model="reportId" />
+                                    }
                                     @if (standIn is { Holds: true })
                                     {
                                         <button type="button" class="btn scene-row-resume" data-scene-row-resume data-video="@video.Pkid"
@@ -145,26 +161,26 @@ else
                                             title="@T["sceneDeckOpen"]" aria-label="@T["sceneDeckOpen"]">
                                         <partial name="_SceneDeckIcon" />
                                     </button>
+                                    @if (active)
+                                    {
+                                        <a class="btn subtle icon-only" href="/orbis/mainPreview?live=@video.Pkid" title="@T["preview"]" aria-label="@T["preview"]">
+                                            <i class="icon" aria-hidden="true">&#xE7F4;</i>
+                                        </a>
+                                    }
                                     @if (hasSetting && !row.IsPlaylist)
                                     {
-                                        @if (live)
-                                        {
-                                            <a class="btn subtle icon-only" href="/orbis/mainPreview?live=@video.Pkid" title="@T["preview"]" aria-label="@T["preview"]">
-                                                <i class="icon">&#xE7F4;</i>
-                                            </a>
-                                        }
                                         <button class="btn subtle icon-only" disabled="@(!live)" title="@T["playSpot"]" aria-label="@T["playSpot"]"
                                                 onclick="document.querySelector('#spot-dialog input[name=videoKey]').value = '@video.Pkid'; document.getElementById('spot-dialog').showModal();"
                                                 commandfor="spot-dialog" command="show-modal">
                                             <partial name="_SpotIcon" />
                                         </button>
                                         <form method="post" asp-page="/MainLive" asp-page-handler="Stop" asp-all-route-data="Model.RowRoute(video.Pkid)" data-confirm="@T["stopLive"]">
-                                            <button class="btn subtle icon-only danger" disabled="@(!live)" title="@T["stopLiveIconLabel"]" aria-label="@T["stopLiveIconLabel"]"><i class="icon">&#xE71A;</i></button>
+                                            <button class="btn subtle icon-only danger" disabled="@(!active)" title="@T["stopLiveIconLabel"]" aria-label="@T["stopLiveIconLabel"]"><i class="icon">&#xE71A;</i></button>
                                         </form>
                                         <form method="post" asp-page="/MainLive" asp-page-handler="Replay" asp-all-route-data="Model.RowRoute(video.Pkid)"
                                               data-confirm="@(askKey ? null : T["startLiveAlert"])" data-ask-key="@(askKey ? T["startLiveAlert"] : null)">
                                             <input type="hidden" name="streamKey" />
-                                            <button class="btn subtle icon-only success" disabled="@live" title="@T["startLiveIconLabel"]" aria-label="@T["startLiveIconLabel"]"><i class="icon">&#xE768;</i></button>
+                                            <button class="btn subtle icon-only success" disabled="@active" title="@T["startLiveIconLabel"]" aria-label="@T["startLiveIconLabel"]"><i class="icon">&#xE768;</i></button>
                                         </form>
                                         <form method="post" asp-page="/MainLive" asp-page-handler="Restart" asp-all-route-data="Model.RowRoute(video.Pkid)"
                                               data-confirm="@(askKey ? null : T["restartLiveAlert"])" data-ask-key="@(askKey ? T["restartLiveAlert"] : null)">
@@ -176,13 +192,13 @@ else
                                     @if (row.HasDetails)
                                     {
                                         <form method="post" asp-page="/MainLive" asp-page-handler="DeletePlaylist" asp-all-route-data="Model.PlaylistRoute(historyPkid)" data-confirm="@string.Format(T[row.IsScene ? "deleteSceneLiveConfirm" : "deletePlaylistConfirm"], row.Total)">
-                                            <button class="btn subtle icon-only danger" disabled="@live" title="@T["deletePlaylist"]" aria-label="@T["deletePlaylist"]"><i class="icon">&#xE74D;</i></button>
+                                            <button class="btn subtle icon-only danger" disabled="@active" title="@T["deletePlaylist"]" aria-label="@T["deletePlaylist"]"><i class="icon">&#xE74D;</i></button>
                                         </form>
                                     }
                                     else
                                     {
                                         <form method="post" asp-page="/MainLive" asp-page-handler="Delete" asp-all-route-data="Model.RowRoute(video.Pkid)" data-confirm="@T["deleteLiveRowConfirm"]">
-                                            <button class="btn subtle icon-only danger" disabled="@live" title="@T["deleteLiveRow"]" aria-label="@T["deleteLiveRow"]"><i class="icon">&#xE74D;</i></button>
+                                            <button class="btn subtle icon-only danger" disabled="@active" title="@T["deleteLiveRow"]" aria-label="@T["deleteLiveRow"]"><i class="icon">&#xE74D;</i></button>
                                         </form>
                                     }
                                     

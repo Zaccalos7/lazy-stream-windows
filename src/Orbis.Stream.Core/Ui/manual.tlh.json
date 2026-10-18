@@ -123,6 +123,19 @@
       ],
       "figure": "settings",
       "callout": "Settings video/audio, channels 'ej manual."
+    },
+    {
+      "id": "errorReports",
+      "title": "Report an error",
+      "body": "GitHub Daq Qagh yIja’: QR pagh .txt naQ yIchel. peghmey So’lu’.",
+      "steps": [
+        "In History or Live management, press the Report error icon beside a failed live.",
+        "Qagh Qorwagh poS. Qagh machvaD QR tu’lu’; Qagh tInvaD .txt yIHev.",
+        "QR wa’ ngoS Qagh De’ net chaw’be’chugh, .txt naQ yIHev ’ej GitHub QInvaD yIchel.",
+        "GitHub QIn yIghItlh. .txt pagh QR mIllogh yIchel ’ej Qu’lIj yIDel. Qagh De’ yIghItlhqa’laH."
+      ],
+      "figure": "errorReports",
+      "callout": "GitHub QInvaD QR pagh .txt yIchel."
     }
   ]
 }

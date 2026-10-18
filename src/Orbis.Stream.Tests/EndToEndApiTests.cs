@@ -1055,6 +1055,11 @@ Assert.Equal(HttpStatusCode.Redirect, chosen.StatusCode);
         var askedBody = await asked.Content.ReadAsStringAsync();
         Assert.Contains("id=\"start-dialog\" data-open=\"\"", askedBody, StringComparison.Ordinal);
 
+        // The playlist wizard is opened the same way, by its own parameter.
+        using var playlistAsked = await _fixture.Client.GetAsync("/orbis/mainLive?playlist=1");
+        var playlistBody = await playlistAsked.Content.ReadAsStringAsync();
+        Assert.Contains("id=\"playlist-dialog\" data-busy-host data-open=\"\"", playlistBody, StringComparison.Ordinal);
+
         // The first step leads to the canvas, which is closed and has not listed any source yet:
         // the composer only boots when its dialog opens.
         Assert.Contains("data-wizard-next=\"compose-dialog\"", plainBody, StringComparison.Ordinal);

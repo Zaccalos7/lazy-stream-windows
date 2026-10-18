@@ -41,6 +41,9 @@ public sealed record LiveSource(int Pkid, string Name, string Kind, int Volume);
 /// <summary>One of the running lives, for the picker when more than one channel is on air.</summary>
 public sealed record LiveOption(int VideoPkid, string ChannelName, string VideoName, bool IsWatching);
 
+/// <summary>A publishing channel for the sidebar, without media probes or platform requests.</summary>
+public sealed record LiveChannel(int VideoPkid, string ChannelName, string? StreamUrl);
+
 /// <summary>
 /// Everything the preview page draws, sampled once a second. The fields that only mean something
 /// while something is running keep their default when nothing is, and <see cref="IsLive"/> is what
@@ -70,8 +73,13 @@ public sealed record LiveSnapshot(
     /// <summary>The live this is, which the scene deck is armed for (see LiveTakeovers).</summary>
     long? History = null,
     /// <summary>What is on air in place of the program, when something is: a spot or a scene button.</summary>
-    LiveScene? Scene = null)
+    LiveScene? Scene = null,
+    LiveStatus? Status = null,
+    bool PlatformVerified = false,
+    string? StartupMessage = null)
 {
+    public string? PlatformManagementUrl => Pages.LiveLinkView.UrlOf(StreamUrl, ChannelName, PlatformStreamName, PlatformVideoId);
+
     public static LiveSnapshot Offline(IReadOnlyList<LiveOption> running) => new(
         false,
         false,
@@ -163,18 +171,17 @@ public sealed class LivePreviewService
     /// <summary>
     /// The platform player of the live the page is watching, so the page can show the live as the
     /// viewers see it. Nothing when the live is not running, when the platform is one this
-    /// application does not have a player for, or when the channel is not on air: the page falls
-    /// back to the picture ffmpeg writes, which is the truth of the encoder either way.
+    /// application does not have a player for, or when the channel is not on air.
     /// <para>A channel that is off air and a platform this application failed to reach are told
     /// apart here, because the page has something else to say about the second.</para>
     /// </summary>
     /// <param name="host">The host the page is served on, which Twitch has to be told about.</param>
     public async Task<LivePlatformEmbeds.LivePlatformLookup> EmbedAsync(
-        int? videoPkid, string? host, CancellationToken cancellationToken)
+        int? videoPkid, string? host, CancellationToken cancellationToken, string? watchUrl = null)
     {
         var snapshot = Snapshot(videoPkid);
         return snapshot.IsLive
-            ? await _embeds.ResolveAsync(snapshot.StreamUrl, snapshot.ChannelName, snapshot.PlatformStreamName, host, cancellationToken)
+            ? await _embeds.ResolveAsync(snapshot.StreamUrl, snapshot.ChannelName, snapshot.PlatformStreamName, host, cancellationToken, watchUrl)
             : LivePlatformEmbeds.LivePlatformLookup.Nothing;
     }
 
@@ -208,7 +215,8 @@ public sealed class LivePreviewService
                         isPlayable,
                         new LiveMedia(0, 0, 0, false, 0),
                         new LiveMedia(0, 0, 0, false, 0),
-                        new LiveParameters(null, null, null, null, null, null, null, null, null, null, null, null, null));
+                        new LiveParameters(null, null, null, null, null, null, null, null, null, null, null, null, null),
+                        Status: vid.LiveStatus);
                 }
             }
             return LiveSnapshot.Offline(Running(null));
@@ -233,7 +241,7 @@ public sealed class LivePreviewService
         }
 
         return new LiveSnapshot(
-            true,
+            session.IsPublishing,
             session.RestartRequested,
             Running(session.VideoPkid),
             video.Pkid,
@@ -257,7 +265,10 @@ public sealed class LivePreviewService
             _air.IsUnverified(video.VideoLiveHistoryId),
             _air.OnAirVideoOf(video.VideoLiveHistoryId),
             video.VideoLiveHistoryId,
-            LiveScene.Of(_takeovers.CurrentOf(video.VideoLiveHistoryId)));
+            LiveScene.Of(_takeovers.CurrentOf(video.VideoLiveHistoryId)),
+            session.IsPublishing && !session.IsStandby ? LiveStatus.Live : video.LiveStatus,
+            _air.IsConfirmed(video.VideoLiveHistoryId),
+            session.IsStandby ? video.Message : null);
     }
 
     /// <summary>
@@ -393,12 +404,27 @@ public sealed class LivePreviewService
         return (video.VideoPath, VideoExtensions.ContentTypeOf(video.Extension), video.Extension);
     }
 
+    /// <summary>One entry per publishing session, regardless of playlist length or scene sources.</summary>
+    public IReadOnlyList<LiveChannel> PublishingChannels()
+    {
+        var channels = new List<LiveChannel>();
+        foreach (var session in _sessions.Running)
+        {
+            if (!session.IsPublishing) continue;
+            var video = _videoRepository.FindByPkid(session.VideoPkid);
+            if (video is null || video.LiveStatus != LiveStatus.Live) continue;
+            var history = video.VideoLiveHistoryId is { } id ? _historyRepository.FindByPkid(id) : null;
+            channels.Add(new LiveChannel(video.Pkid, video.ChannelName, history?.StreamUrl));
+        }
+        return channels;
+    }
+
     private IReadOnlyList<LiveOption> Running(int? watching)
     {
         var options = new List<LiveOption>();
         foreach (var session in _sessions.Running)
         {
-            if (session.HasExited)
+            if (!session.IsPublishing)
             {
                 continue;
             }

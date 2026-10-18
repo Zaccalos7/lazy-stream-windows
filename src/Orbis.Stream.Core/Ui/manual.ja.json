@@ -123,6 +123,19 @@
       ],
       "figure": "settings",
       "callout": "設定に映像/音声、チャンネル、このマニュアルがまとまります。"
+    },
+    {
+      "id": "errorReports",
+      "title": "Report an error",
+      "body": "QRコードまたは完全な .txt ファイルを添付して、GitHubでエラーを報告してください。ストリームキーはマスクされます。",
+      "steps": [
+        "In History or Live management, press the Report error icon beside a failed live.",
+        "レポート画面が開きます。短いエラーはQRコードで表示され、長いエラーは .txt ファイルとしてダウンロードできます。",
+        "エラーが長すぎて1つのQRコードに収まらない場合は、完全な .txt ファイルをダウンロードしてGitHubのIssueに添付してください。",
+        "GitHubでIssueを開き、.txt ファイルまたはQRコードのスクリーンショットや写真を添付して、行っていた操作を説明してください。レポートのテキストもコピーできます。"
+      ],
+      "figure": "errorReports",
+      "callout": "QRコードまたはダウンロードした .txt ファイルをIssueに添付してください。"
     }
   ]
 }

@@ -1,0 +1,37 @@
+@inject Orbis.Stream.Core.Services.LivePreviewService Preview
+@{
+    var channels = Preview.PublishingChannels();
+    var groups = channels.GroupBy(channel => LiveLinkView.PlatformOf(channel.StreamUrl) ?? "other")
+        .OrderBy(group => LiveLinkView.LabelOf(group.Key) ?? T["otherPlatforms"]);
+}
+@if (channels.Count > 0)
+{
+    <section class="nav-lives" aria-labelledby="sidebar-lives-title" data-sidebar-lives data-sidebar-live-count="@channels.Count">
+        <div class="nav-lives-head">
+            <strong class="nav-lives-title" id="sidebar-lives-title"><span class="nav-live-dot" aria-hidden="true"></span>@T["runningLives"]</strong>
+            <a class="nav-lives-total" href="/orbis/mainLive?liveStatus=LIVE"
+               title="@T["runningLives"] · @T["sidebarLiveTotal"]: @channels.Count"
+               aria-label="@T["runningLives"] · @T["sidebarLiveTotal"]: @channels.Count">
+                <span>@T["sidebarLiveTotal"]</span><strong>@channels.Count</strong>
+            </a>
+        </div>
+        <div class="nav-lives-list">
+            @foreach (var group in groups)
+            {
+                var label = LiveLinkView.LabelOf(group.Key) ?? T["otherPlatforms"];
+                <div class="nav-live-platform" data-sidebar-platform="@group.Key">
+                    <div class="nav-live-platform-title">
+                        <span class="platform-mark @LiveLinkView.ClassOf(group.Key)" aria-hidden="true"><svg viewBox="0 0 24 24"><path d="@LiveLinkView.MarkupOf(group.Key)" /></svg></span>
+                        <strong>@label</strong><span class="nav-live-platform-count">@group.Count()</span>
+                    </div>
+                    <ul class="nav-live-channels">
+                        @foreach (var channel in group.OrderBy(channel => channel.ChannelName))
+                        {
+                            <li><a class="nav-live-channel" href="/orbis/mainPreview?live=@channel.VideoPkid" title="@channel.ChannelName · @label"><span class="truncate">@channel.ChannelName</span><i class="icon" aria-hidden="true">&#xE72A;</i></a></li>
+                        }
+                    </ul>
+                </div>
+            }
+        </div>
+    </section>
+}

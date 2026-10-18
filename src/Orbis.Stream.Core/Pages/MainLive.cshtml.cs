@@ -145,7 +145,12 @@ public sealed class MainLiveModel(
         LoadDetails();
         Channels = settings.RetrieveChannel(new Dictionary<string, string>());
         Locked = videos.GetLockedVideos();
-        ActiveSettings = videoSettings.GetAllVideoSettings(new Dictionary<string, string> { ["isVideoAndAudioSettingActive"] = "true" });
+        // Presets from a platform no longer offered must not reappear on upgraded installations.
+        ActiveSettings = videoSettings.GetAllVideoSettings(new Dictionary<string, string> { ["isVideoAndAudioSettingActive"] = "true" })
+            .Where(setting => string.IsNullOrWhiteSpace(setting.DefaultPlatformConfiguration)
+                || setting.DefaultPlatformConfiguration == VideoSettingForm.CustomPlatform
+                || MainChannelSettingModel.ChoiceOfSetting(setting.DefaultPlatformConfiguration) is not null)
+            .ToList();
         ActiveConfigurations = settings.RetrieveSettings(new Dictionary<string, string> { ["isActive"] = "true" });
 
         if (link is not null || linkHistory is not null)
@@ -161,6 +166,12 @@ public sealed class MainLiveModel(
             });
             Form = current is null ? new VideoSettingForm() : VideoSettingForm.From(current);
         }
+    }
+
+    public PartialViewResult OnGetSidebarLives()
+    {
+        Response.Headers.CacheControl = "no-store";
+        return Partial("_SidebarLives");
     }
 
     public PartialViewResult OnGetRows()
@@ -219,7 +230,7 @@ public sealed class MainLiveModel(
         {
             var video = videos.FindVideo(pkid);
             validator.RequireVideo(video);
-            return Run(() => streaming.StartVideo(video, streamKey));
+            return Run(() => streaming.StartVideo(video, streamKey), NoticeKind.Warning);
         });
         return RedirectToPage(Filters);
     }
@@ -238,7 +249,7 @@ public sealed class MainLiveModel(
                 streaming.RestartFromBeginning(historyPkid);
             }
 
-            return Run(() => streaming.StartVideo(video, streamKey));
+            return Run(() => streaming.StartVideo(video, streamKey), NoticeKind.Warning);
         });
         return RedirectToPage(Filters);
     }
@@ -266,7 +277,7 @@ public sealed class MainLiveModel(
             streaming.PrepareStartFrom(pkid);
             var video = videos.FindVideo(pkid);
             validator.RequireVideo(video);
-            return Run(() => streaming.StartVideo(video, streamKey));
+            return Run(() => streaming.StartVideo(video, streamKey), NoticeKind.Warning);
         });
         return RedirectToPage(Filters);
     }
@@ -329,7 +340,7 @@ public sealed class MainLiveModel(
             started = Try(() =>
             {
                 validator.RequireStartSceneLive(request);
-                return Run(() => streaming.StartSceneLive(request));
+                return Run(() => streaming.StartSceneLive(request), NoticeKind.Warning);
             });
         }
 
@@ -345,7 +356,7 @@ public sealed class MainLiveModel(
         var started = request is not null && Try(() =>
         {
             validator.RequireStartLive(request);
-            return Run(() => streaming.StartPlaylist(request));
+            return Run(() => streaming.StartPlaylist(request), NoticeKind.Warning);
         });
 
         return started

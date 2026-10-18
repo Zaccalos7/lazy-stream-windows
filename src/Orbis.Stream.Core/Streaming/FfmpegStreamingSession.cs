@@ -43,6 +43,7 @@ public sealed class FfmpegStreamingSession : IAsyncDisposable
     private int _stopRequested;
     private int _restartRequested;
     private int _endedNaturally;
+    private WebpOverlayInputs? _webpInputs;
 
     private FfmpegStreamingSession(
         Process process,
@@ -77,8 +78,12 @@ public sealed class FfmpegStreamingSession : IAsyncDisposable
         InputPath = inputPath;
         Probe = probe;
         Output = output;
-        _standardError = ReadToEndAsync(process.StandardError);
-        _senderError = sender is null ? null : ReadToEndAsync(sender.StandardError);
+        _standardError = profile.Diagnostics
+            ? FfmpegProcessLog.ReadAsync(process.StandardError, logger, profile.Name, "encoder", outputUrl)
+            : ReadToEndAsync(process.StandardError);
+        _senderError = sender is null ? null : profile.Diagnostics
+            ? FfmpegProcessLog.ReadAsync(sender.StandardError, logger, profile.Name, "sender", outputUrl)
+            : ReadToEndAsync(sender.StandardError);
 
         // Nothing else reads what ffmpeg writes on its standard output, and the pipe it writes
         // <c>-progress</c> into is small: a session that left it alone would block ffmpeg itself.
@@ -107,6 +112,8 @@ public sealed class FfmpegStreamingSession : IAsyncDisposable
     /// was started, which is what the pages used to show as LIVE whatever the platform made of it.
     /// </summary>
     public bool IsOnAir => OnAirSinceTicks != 0;
+
+    public bool IsPublishing => IsOnAir && !HasExited && SinceLastAdvance <= Profile.StallTimeout;
 
     /// <summary>How long the live has been on air; zero when it is not.</summary>
     public TimeSpan OnAirFor
@@ -175,17 +182,33 @@ public sealed class FfmpegStreamingSession : IAsyncDisposable
 
     /// <summary>How long ago the position on air last moved forward.</summary>
     public TimeSpan SinceLastAdvance => TimeSpan.FromMilliseconds(
-        Environment.TickCount64 - (SharesOutput
-            ? _segment!.LastAdvanceTicks
+        Environment.TickCount64 - (UsesSharedSender
+            ? _output!.LastPublishAdvanceTicks
+            : SharesOutput ? _segment!.LastAdvanceTicks
             : IsNative ? _relay!.LastAdvanceTicks : Interlocked.Read(ref _lastAdvanceTicks)));
+
+    private bool UsesSharedSender => SharesOutput && _output?.Profile.Transport == RelayTransport.FfmpegSender;
 
     /// <summary>
     /// Natively, on air is the ingest having accepted the publish and taken a first frame; through
     /// ffmpeg it is bytes on the connection and a clock that moved.
     /// </summary>
-    private long OnAirSinceTicks => SharesOutput
-        ? _segment!.OnAirSinceTicks
-        : IsNative ? _relay!.OnAirSinceTicks : Interlocked.Read(ref _onAirSinceTicks);
+    private long OnAirSinceTicks
+    {
+        get
+        {
+            if (UsesSharedSender)
+            {
+                if (_segment!.FirstSentTimestamp is var first && first >= 0 && _output!.PublishedMilliseconds > first)
+                {
+                    Interlocked.CompareExchange(ref _onAirSinceTicks, Environment.TickCount64, 0);
+                }
+                return Interlocked.Read(ref _onAirSinceTicks);
+            }
+            return SharesOutput ? _segment!.OnAirSinceTicks
+                : IsNative ? _relay!.OnAirSinceTicks : Interlocked.Read(ref _onAirSinceTicks);
+        }
+    }
 
     public int VideoPkid { get; }
 
@@ -207,8 +230,12 @@ public sealed class FfmpegStreamingSession : IAsyncDisposable
     public DateTimeOffset StartedAt { get; } = DateTimeOffset.UtcNow;
 
     /// <summary>How far the transcode got, as ffmpeg last reported it. Zero until the first report.</summary>
-    public long PositionMilliseconds => SharesOutput
-        ? _resumedFromMilliseconds + _segment!.SentPositionMilliseconds
+    public bool IsStandby { get; private set; }
+
+    public long PositionMilliseconds => IsStandby ? _resumedFromMilliseconds : UsesSharedSender
+        ? _resumedFromMilliseconds + (_segment!.FirstSentTimestamp < 0 ? 0
+            : Math.Clamp(_output!.PublishedMilliseconds - _segment.FirstSentTimestamp, 0, _segment.SentPositionMilliseconds))
+        : SharesOutput ? _resumedFromMilliseconds + _segment!.SentPositionMilliseconds
         : IsNative
             ? _resumedFromMilliseconds + _relay!.PositionMilliseconds
             : Interlocked.Read(ref _positionMilliseconds);
@@ -219,7 +246,7 @@ public sealed class FfmpegStreamingSession : IAsyncDisposable
     /// took from the encoder, since all of it goes on air ahead of the next one; otherwise it is
     /// what went on air, because the rest dies with the connection.
     /// </summary>
-    public long ContinuationMilliseconds => SharesOutput
+    public long ContinuationMilliseconds => IsStandby ? _resumedFromMilliseconds : SharesOutput
         ? _resumedFromMilliseconds + _segment!.ReadPositionMilliseconds
         : PositionMilliseconds;
 
@@ -256,7 +283,7 @@ public sealed class FfmpegStreamingSession : IAsyncDisposable
     /// encoder is still doing (it is cleaned up after it).
     /// </summary>
     public bool HasExited => SharesOutput
-        ? _segment!.Ended
+        ? _segment!.Ended || (UsesSharedSender && _output!.SenderHasExited)
         : IsNative ? _relay!.Completion.IsCompleted : Exited(_sender ?? _process);
 
     private static bool Exited(Process process)
@@ -269,6 +296,19 @@ public sealed class FfmpegStreamingSession : IAsyncDisposable
         {
             return true;
         }
+    }
+
+    public static FfmpegStreamingSession StartStandby(FfmpegToolLocator locator, int videoPkid,
+        VideoSettingEntity setting, MediaOutput frame, LiveOutput output, ILogger logger,
+        TimeSpan resumeFrom = default, EncoderQuality quality = EncoderQuality.Light)
+    {
+        frame = output.Pin(frame);
+        var arguments = FfmpegCommandBuilder.BuildStandby(setting, frame, output.OutputUrl, output.Profile, quality);
+        var session = Launch(locator, videoPkid, "YouTube standby (program paused)", output.OutputUrl,
+            arguments, new MediaProbeResult(frame.Width, frame.Height, frame.FrameRate, true, 2, 0),
+            frame, resumeFrom, output.Profile, logger, output);
+        session.IsStandby = true;
+        return session;
     }
 
     public static FfmpegStreamingSession Start(
@@ -338,22 +378,32 @@ public sealed class FfmpegStreamingSession : IAsyncDisposable
         var frame = profile.UniformFormat
             ? output?.Pin(profile.Orient(new MediaOutput(FfmpegCommandBuilder.Even(canvasWidth), FfmpegCommandBuilder.Even(canvasHeight), frameRate)))
             : null;
-        var arguments = FfmpegCommandBuilder.BuildComposition(new FfmpegCompositionRequest(
-            items, outputUrl, setting, canvasWidth, canvasHeight, canvasFrameRate, resumeFrom, duration, previewPath, profile, quality, frame,
-            BitrateOf(setting, output), alwaysSound));
+        var webpInputs = WebpOverlayInputs.Prepare(items);
+        try
+        {
+            var arguments = FfmpegCommandBuilder.BuildComposition(new FfmpegCompositionRequest(
+                webpInputs.Items, outputUrl, setting, canvasWidth, canvasHeight, canvasFrameRate, resumeFrom, duration, previewPath, profile, quality, frame,
+                BitrateOf(setting, output), alwaysSound));
 
-        var mediaOutput = frame ?? new MediaOutput(canvasWidth, canvasHeight, frameRate);
-        var sound = FfmpegCommandBuilder.CarriesSound(items);
+            var mediaOutput = frame ?? new MediaOutput(canvasWidth, canvasHeight, frameRate);
+            var sound = FfmpegCommandBuilder.CarriesSound(items);
 
-        // The length of the canvas is kept in the probe because that is where the streaming loop
-        // looks for it: a playlist ends when the position reaches the length of its file, and a
-        // canvas made of files ends the same way. A probe that said zero is a live that never ends.
-        var probe = new MediaProbeResult(
-            canvasWidth, canvasHeight, frameRate, sound, sound ? 2 : 0, duration?.TotalSeconds ?? 0);
+            // The length of the canvas is kept in the probe because that is where the streaming loop
+            // looks for it: a playlist ends when the position reaches the length of its file, and a
+            // canvas made of files ends the same way. A probe that said zero is a live that never ends.
+            var probe = new MediaProbeResult(
+                canvasWidth, canvasHeight, frameRate, sound, sound ? 2 : 0, duration?.TotalSeconds ?? 0);
 
-        var session = Launch(locator, videoPkid, SceneDescriptionOf(items), outputUrl, arguments, probe, mediaOutput, resumeFrom, profile, logger, output);
-        session.Measure(setting, profile);
-        return session;
+            var session = Launch(locator, videoPkid, SceneDescriptionOf(items), outputUrl, arguments, probe, mediaOutput, resumeFrom, profile, logger, output);
+            session._webpInputs = webpInputs;
+            session.Measure(setting, profile);
+            return session;
+        }
+        catch
+        {
+            webpInputs.Dispose();
+            throw;
+        }
     }
 
     /// <summary>
@@ -666,8 +716,9 @@ public sealed class FfmpegStreamingSession : IAsyncDisposable
             // The ingest's own words (a refused publish, a dropped connection) come first.
             var connection = SharesOutput ? _segment!.Relay : _relay!;
             var relay = connection.Completion.Exception?.GetBaseException().Message ?? string.Empty;
+            var sharedSender = _output is null ? string.Empty : await _output.ReadSenderErrorAsync().ConfigureAwait(false);
             return RedactStreamKey(
-                string.Join("\n", new[] { relay.Trim(), encoder.Trim() }.Where(text => text.Length > 0)), _outputUrl);
+                string.Join("\n", new[] { sharedSender.Trim(), relay.Trim(), encoder.Trim() }.Where(text => text.Length > 0)), _outputUrl);
         }
 
         if (_senderError is null)
@@ -696,6 +747,32 @@ public sealed class FfmpegStreamingSession : IAsyncDisposable
         }
 
         var key = outputUrl.TrimEnd('/');
+        if (StreamPlatforms.Detect(outputUrl) == StreamPlatform.Facebook
+            && outputUrl.IndexOf("/rtmp/", StringComparison.Ordinal) is var facebookPath && facebookPath >= 0)
+        {
+            key = outputUrl[(facebookPath + 6)..];
+            // Debug logs show the playpath separately, sometimes without its query.
+            // Mask before truncation, and cover decoded forms and individual long tokens too.
+            var secrets = new List<string> { key, Uri.UnescapeDataString(key) };
+            var queryStart = key.IndexOf('?');
+            if (queryStart >= 0)
+            {
+                secrets.Add(key[..queryStart]);
+                secrets.Add(Uri.UnescapeDataString(key[..queryStart]));
+                foreach (var parameter in key[(queryStart + 1)..].Split('&'))
+                {
+                    var equals = parameter.IndexOf('=');
+                    if (equals >= 0 && parameter.Length - equals - 1 >= 8)
+                    {
+                        secrets.Add(parameter[(equals + 1)..]);
+                        secrets.Add(Uri.UnescapeDataString(parameter[(equals + 1)..]));
+                    }
+                }
+            }
+            foreach (var secret in secrets.Where(value => value.Length > 0).OrderByDescending(value => value.Length))
+                text = text.Replace(secret, "****", StringComparison.Ordinal);
+            return text;
+        }
         key = key[(key.LastIndexOf('/') + 1)..];
         return key.Length < 8 ? text : text.Replace(key, "****", StringComparison.Ordinal);
     }
@@ -843,6 +920,7 @@ public sealed class FfmpegStreamingSession : IAsyncDisposable
 
             _process.Dispose();
             _sender?.Dispose();
+            _webpInputs?.Dispose();
         }
     }
 }
@@ -869,12 +947,12 @@ public sealed class StreamingSessionRegistry
         _sessions.TryGetValue(videoPkid, out session);
 
     /// <summary>
-    /// The session a preview is about: the one asked for when it is still running, otherwise the
-    /// transcode that started last. Null when nothing is being sent.
+    /// The session a preview is about: the requested one, or the latest when none was requested.
+    /// A requested live that ended never switches the preview to another channel.
     /// </summary>
     public FfmpegStreamingSession? Watched(int? videoPkid) =>
-        videoPkid is { } wanted && _sessions.TryGetValue(wanted, out var asked) && !asked.HasExited
-            ? asked
+        videoPkid is { } wanted
+            ? _sessions.TryGetValue(wanted, out var asked) && !asked.HasExited ? asked : null
             : _sessions.Values.Where(session => !session.HasExited)
                 .OrderByDescending(session => session.StartedAt)
                 .FirstOrDefault();

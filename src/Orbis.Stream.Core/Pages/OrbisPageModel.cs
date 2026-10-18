@@ -37,13 +37,13 @@ public abstract class OrbisPageModel : PageModel
     }
 
     /// <summary>Runs a service operation and records its <c>{response, message}</c> as the notice.</summary>
-    protected bool Run(Func<MessageResponse> operation)
+    protected bool Run(Func<MessageResponse> operation, NoticeKind successNotice = NoticeKind.Success)
     {
         return Try(() =>
         {
             var result = operation();
             var success = result.Body.Response == ApiEnvelope.Success;
-            SetNotice(success ? NoticeKind.Success : NoticeKind.Error, result.Body.Message);
+            SetNotice(success ? successNotice : NoticeKind.Error, result.Body.Message);
             return success;
         });
     }

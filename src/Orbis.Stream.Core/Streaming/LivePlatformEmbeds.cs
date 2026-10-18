@@ -1,5 +1,8 @@
 using System.Collections.Concurrent;
 using System.Text.RegularExpressions;
+using System.Text.Json;
+using System.Text;
+using Microsoft.AspNetCore.WebUtilities;
 using Microsoft.Extensions.Logging;
 using Orbis.Stream.Core.Pages;
 
@@ -11,11 +14,10 @@ namespace Orbis.Stream.Core.Streaming;
 /// address of the player that plays it.
 /// </summary>
 /// <param name="VideoId">The video on air, where the platform addresses a live by one (YouTube).</param>
-public sealed record LivePlatformEmbed(string Platform, string Channel, string Url, string? VideoId = null);
+public sealed record LivePlatformEmbed(string Platform, string Channel, string Url, string? VideoId = null, string? WatchUrl = null);
 
 /// <summary>
-/// Where a live can be watched when the live is not only the local picture: the Twitch and the
-/// YouTube player, addressed by the channel of the configuration.
+/// Public players for Twitch, YouTube, Kick and Facebook Live.
 ///
 /// The channel is the only thing the configuration stores about where a live goes, and it is stored
 /// where it is easy to mistake it for something else: a live started from the wizard keeps the
@@ -41,25 +43,25 @@ public sealed class LivePlatformEmbeds
     /// </summary>
     private static readonly TimeSpan OffAir = TimeSpan.FromSeconds(10);
 
-    /// <summary>
-    /// The first entry of the grid of a page of streams, which is the live when the channel is on
-    /// air and the last broadcast when it is not. The pair of fields is what keeps the id of a
-    /// video somewhere else on the page (the watch later list, the suggestions) from being taken for
-    /// it.
-    /// </summary>
-    private static readonly Regex Lockup = new(
-        "\"contentId\":\"(?<id>[A-Za-z0-9_-]{11})\",\"contentType\":\"LOCKUP_CONTENT_TYPE_VIDEO\"",
-        RegexOptions.CultureInvariant);
-
-    /// <summary>The same entry as the older page of a channel laid it out, with its thumbnail.</summary>
-    private static readonly Regex Legacy = new(
-        "\"videoId\":\"(?<id>[A-Za-z0-9_-]{11})\",\"thumbnail\"",
-        RegexOptions.CultureInvariant);
-
-    /// <summary>The data of a page of a channel, which is where the grid of its streams is.</summary>
+    // YouTube changes renderer layouts and JSON property order. Read the data rather than
+    // depending on adjacent fields in the HTML. Window assignments occur alongside var declarations.
     private static readonly Regex InitialData = new(
-        @"var ytInitialData = (?<json>.*?);</script>",
+        @"(?:var\s+ytInitialData|window\s*\[\s*[""']ytInitialData[""']\s*\]|ytInitialData)\s*=\s*",
         RegexOptions.CultureInvariant | RegexOptions.Singleline);
+
+    private static readonly Regex PlayerResponse = new(
+        @"(?:var\s+ytInitialPlayerResponse|window\s*\[\s*[""']ytInitialPlayerResponse[""']\s*\]|ytInitialPlayerResponse)\s*=\s*",
+        RegexOptions.CultureInvariant);
+
+    private static JsonDocument? ReadData(string html, Regex assignment)
+    {
+        var match = assignment.Match(html);
+        var json = match.Success ? html.AsSpan(match.Index + match.Length) : html.AsSpan().TrimStart();
+        if (!match.Success && (json.IsEmpty || json[0] != '{')) return null;
+        var reader = new Utf8JsonReader(Encoding.UTF8.GetBytes(json.ToString()));
+        // Parse only the assigned JSON value, even if more JavaScript follows in the same script.
+        return JsonDocument.ParseValue(ref reader);
+    }
 
     /// <summary>
     /// What YouTube says about a video, before it localises anything on the page: the details of
@@ -68,7 +70,7 @@ public sealed class LivePlatformEmbeds
     /// field that makes the last live of a channel off air look like a live.
     /// </summary>
     private static readonly Regex OnAirNow = new(
-        "\"isLive(?:Now)?\":true",
+        "\"isLive(?:Now)?\"\\s*:\\s*true",
         RegexOptions.CultureInvariant);
 
     /// <summary>
@@ -77,24 +79,31 @@ public sealed class LivePlatformEmbeds
     /// application did not understand, and that is not taken to mean anything.
     /// </summary>
     private static readonly Regex LiveContent = new(
-        "\"isLiveContent\":true",
+        "\"isLiveContent\"\\s*:\\s*true",
         RegexOptions.CultureInvariant);
 
     private readonly HttpClient _http;
     private readonly ILogger<LivePlatformEmbeds> _logger;
-    private readonly ConcurrentDictionary<string, (string? VideoId, DateTimeOffset Asked)> _youtube =
+    private readonly TimeProvider _time;
+    private readonly ConcurrentDictionary<string, (string? VideoId, string? Failure, DateTimeOffset Asked)> _youtube =
         new(StringComparer.OrdinalIgnoreCase);
 
     /// <summary>One question at a time: a page asking again while the first one is still open.</summary>
     private readonly SemaphoreSlim _gate = new(1, 1);
 
     public LivePlatformEmbeds(HttpClient http, ILogger<LivePlatformEmbeds> logger)
+        : this(http, logger, TimeProvider.System)
+    {
+    }
+
+    internal LivePlatformEmbeds(HttpClient http, ILogger<LivePlatformEmbeds> logger, TimeProvider time)
     {
         _http = http;
         _logger = logger;
+        _time = time;
     }
 
-/// <summary>
+    /// <summary>
     /// The answer for a live that cannot be played where it goes, and why. There is a difference
     /// between a channel that is not on air and a channel this application failed to ask about, and
     /// a page told the first when the second is what happened repeats it for ever, because the
@@ -121,20 +130,71 @@ public sealed class LivePlatformEmbeds
         string? channelName,
         string? platformStreamName,
         string? host,
-        CancellationToken cancellationToken)
+        CancellationToken cancellationToken,
+        string? watchUrl = null)
     {
         var channel = (channelName ?? platformStreamName)?.Trim();
+        // Facebook needs the individual public video, not the producer URL or a page name.
+        if (LiveLinkView.PlatformOf(streamUrl) == "facebook")
+        {
+            var video = FacebookVideoUrl(watchUrl ?? channel);
+            return video is null
+                ? LivePlatformLookup.Failed("Facebook Live requires the public URL of the live video")
+                : LivePlatformLookup.Of(new LivePlatformEmbed("facebook", channel ?? string.Empty,
+                    "https://www.facebook.com/plugins/video.php?href=" + Uri.EscapeDataString(video) +
+                    "&show_text=false&autoplay=true&mute=true&width=640", WatchUrl: video));
+        }
         if (string.IsNullOrEmpty(channel))
         {
-            return LivePlatformLookup.Nothing;
+            return LiveLinkView.PlatformOf(streamUrl) == "youtube"
+                ? LivePlatformLookup.Failed("YouTube requires a channel handle or channel id")
+                : LivePlatformLookup.Nothing;
         }
 
         return LiveLinkView.PlatformOf(streamUrl) switch
         {
             "twitch" => LivePlatformLookup.Of(new LivePlatformEmbed("twitch", channel, TwitchUrl(channel, host))),
             "youtube" => await YouTubeAsync(channel, cancellationToken),
+            "kick" => KickChannel(channel) is { } kick
+                ? LivePlatformLookup.Of(new LivePlatformEmbed("kick", kick,
+                    "https://player.kick.com/" + Uri.EscapeDataString(kick) + "?autoplay=true&muted=true",
+                    WatchUrl: "https://kick.com/" + Uri.EscapeDataString(kick)))
+                : LivePlatformLookup.Failed("Kick requires the channel username or URL"),
             _ => LivePlatformLookup.Nothing
         };
+    }
+
+    /// <summary>Accept a Kick username or its public channel URL.</summary>
+    public static string? KickChannel(string value)
+    {
+        var channel = value.Trim();
+        if (Uri.TryCreate(channel, UriKind.Absolute, out var url))
+        {
+            if (url.Scheme is not ("https" or "http") || !url.IsDefaultPort || url.UserInfo.Length > 0 ||
+                url.Host is not ("kick.com" or "www.kick.com")) return null;
+            channel = url.AbsolutePath.Trim('/');
+        }
+        channel = channel.TrimStart('@').ToLowerInvariant();
+        return Regex.IsMatch(channel, @"\A[a-z0-9_-]+\z", RegexOptions.CultureInvariant) ? channel : null;
+    }
+
+    /// <summary>Canonical public video URL. Page names and Producer URLs do not identify a live.</summary>
+    public static string? FacebookVideoUrl(string? value)
+    {
+        if (!Uri.TryCreate(value?.Trim(), UriKind.Absolute, out var url) ||
+            url.Scheme is not ("https" or "http") || !url.IsDefaultPort || url.UserInfo.Length > 0 ||
+            url.Host is not ("facebook.com" or "www.facebook.com" or "m.facebook.com" or "web.facebook.com")) return null;
+
+        var path = url.AbsolutePath.TrimEnd('/');
+        var match = Regex.Match(path, @"\A/(?:[^/]+/)?videos/(?:[^/]+/)?(?<id>[0-9]+)\z", RegexOptions.CultureInvariant);
+        var id = match.Success ? match.Groups["id"].Value : null;
+        if (id is null && path is ("" or "/watch" or "/watch/live" or "/video.php" or "/live"))
+        {
+            var query = QueryHelpers.ParseQuery(url.Query);
+            if (query.TryGetValue("v", out var video) && video.Count == 1 &&
+                Regex.IsMatch(video.ToString(), @"\A[0-9]+\z", RegexOptions.CultureInvariant)) id = video.ToString();
+        }
+        return id is null ? null : "https://www.facebook.com/watch/?v=" + id;
     }
 
     /// <summary>
@@ -154,6 +214,9 @@ public sealed class LivePlatformEmbeds
     }
 
     /// <summary>The YouTube player of a live, once the id of the video is known.</summary>
+    public Task<LivePlatformLookup> ResolveYouTubeChannelAsync(string channel, CancellationToken cancellationToken) =>
+        YouTubeAsync(channel, cancellationToken);
+
     private async Task<LivePlatformLookup> YouTubeAsync(string channel, CancellationToken cancellationToken)
     {
         var handle = channel.Trim().TrimStart('@');
@@ -177,7 +240,7 @@ public sealed class LivePlatformEmbeds
             handle,
             // Muted and inline, so the browser lets it start on its own: a preview is opened
             // without a gesture on the player and autoplay of sound is not one it will allow.
-            $"https://www.youtube.com/embed/{videoId}?autoplay=1&mute=1&playsinline=1&rel=0&modestbranding=1",
+            $"https://www.youtube.com/embed/{videoId}?autoplay=1&mute=1&playsinline=1&rel=0&enablejsapi=1",
             videoId));
     }
 
@@ -185,11 +248,18 @@ public sealed class LivePlatformEmbeds
     /// The id of the video a channel is broadcasting right now, or nothing. <c>Failure</c> is what
     /// could not be asked, as opposed to what was asked and found empty.
     /// </summary>
+    public async Task RefreshYouTubeAsync(string channel, CancellationToken cancellationToken)
+    {
+        await _gate.WaitAsync(cancellationToken).ConfigureAwait(false);
+        try { _youtube.TryRemove(channel.Trim().TrimStart('@'), out _); }
+        finally { _gate.Release(); }
+    }
+
     private async Task<(string? VideoId, string? Failure)> LiveVideoAsync(string handle, CancellationToken cancellationToken)
     {
         if (Remembered(handle) is { } fresh)
         {
-            return (fresh, null);
+            return fresh;
         }
 
         await _gate.WaitAsync(cancellationToken);
@@ -197,11 +267,11 @@ public sealed class LivePlatformEmbeds
         {
             if (Remembered(handle) is { } again)
             {
-                return (again, null);
+                return again;
             }
 
             var (videoId, failure) = await LookUpAsync(handle, cancellationToken);
-            _youtube[handle] = (videoId, DateTimeOffset.UtcNow);
+            _youtube[handle] = (videoId, failure, _time.GetUtcNow());
             return (videoId, failure);
         }
         catch (OperationCanceledException)
@@ -210,12 +280,11 @@ public sealed class LivePlatformEmbeds
         }
         catch (Exception problem)
         {
-            // A platform that cannot be asked is not a reason to fail the preview: the answer the
-            // page already had is the one it keeps.
+            // A stale success cannot confirm that a broadcast is still on air.
             _logger.LogWarning(problem, "The live of the YouTube channel {Channel} could not be looked up.", handle);
-            return _youtube.TryGetValue(handle, out var last)
-                ? (last.VideoId, null)
-                : (null, "YouTube could not be asked for the streams of the channel");
+            const string failure = "YouTube could not be asked for the streams of the channel";
+            _youtube[handle] = (null, failure, _time.GetUtcNow());
+            return (null, failure);
         }
         finally
         {
@@ -224,15 +293,15 @@ public sealed class LivePlatformEmbeds
     }
 
     /// <summary>The answer for a channel that was asked recently enough to still be a good one.</summary>
-    private string? Remembered(string handle)
+    private (string? VideoId, string? Failure)? Remembered(string handle)
     {
         if (!_youtube.TryGetValue(handle, out var entry))
         {
             return null;
         }
 
-        var age = DateTimeOffset.UtcNow - entry.Asked;
-        return age < (entry.VideoId is null ? OffAir : OnAir) ? entry.VideoId : null;
+        var age = _time.GetUtcNow() - entry.Asked;
+        return age < (entry.VideoId is null ? OffAir : OnAir) ? (entry.VideoId, entry.Failure) : null;
     }
 
     /// <summary>
@@ -244,27 +313,49 @@ public sealed class LivePlatformEmbeds
     {
         var streamsUrl = LiveLinkView.YouTubeChannelUrl(handle) + "/streams";
         var streams = await ReadAsync(streamsUrl, cancellationToken);
-        if (streams is null)
+        var candidates = streams is null ? null : CandidatesOf(streams);
+        if (candidates is null)
         {
-            // Not "the channel is off air": the page never arrived. A handle that is not a handle
-            // and a platform that answered a request from this machine with something else both end
-            // here, and both have to be told apart from a channel that is simply not broadcasting.
-            return (null, $"YouTube did not return the streams page of @{handle}");
+            // Some regions serve a consent document with HTTP 200. Try the public live route,
+            // then the channel with YouTube's public consent-bypass redirect parameter. Neither
+            // uses a signed-in account nor treats the consent page as an offline broadcast.
+            var direct = await ReadAsync(LiveLinkView.YouTubeChannelUrl(handle) + "/live?ucbcb=1", cancellationToken);
+            if (LiveVideoOf(direct) is { } liveVideo) return (liveVideo, null);
+            streams = await ReadAsync(streamsUrl + "?ucbcb=1", cancellationToken);
+            candidates = streams is null ? null : CandidatesOf(streams);
+            if (candidates is null)
+                return (null, $"YouTube channel and live pages of @{handle} could not be verified (possibly a consent page)");
         }
 
-        var candidate = CandidateOf(streams);
-        if (candidate is null)
+        string? failure = null;
+        // A scheduled event or another completed broadcast can precede the live in the grid.
+        // Check a bounded set, with entries carrying a LIVE badge first, and verify every watch page.
+        foreach (var candidate in candidates.Take(5))
         {
-            return (null, null);
+            var watch = await ReadAsync($"https://www.youtube.com/watch?v={candidate}", cancellationToken);
+            var ended = HasEnded(watch);
+            if (ended is null)
+            {
+                failure = $"YouTube did not return recognizable broadcast details for {candidate}";
+                continue;
+            }
+            if (ended == false) return (candidate, null);
         }
+        return (null, failure);
+    }
 
-        var watch = await ReadAsync($"https://www.youtube.com/watch?v={candidate}", cancellationToken);
-        if (watch is null)
+    internal static string? LiveVideoOf(string? page)
+    {
+        if (page is null || HasEnded(page) != false) return null;
+        try
         {
-            return (null, $"YouTube did not return the page of the video {candidate}");
+            using var response = ReadData(page, PlayerResponse);
+            return response is not null && response.RootElement.TryGetProperty("videoDetails", out var details) &&
+                details.TryGetProperty("videoId", out var id) && id.ValueKind == JsonValueKind.String &&
+                id.GetString() is { Length: 11 } video && video.All(c => char.IsAsciiLetterOrDigit(c) || c is '-' or '_')
+                ? video : null;
         }
-
-        return OnAirNow.IsMatch(watch) ? (candidate, null) : (null, null);
+        catch (JsonException) { return null; }
     }
 
     /// <summary>
@@ -279,32 +370,78 @@ public sealed class LivePlatformEmbeds
     }
 
     /// <summary>The reading of <see cref="HasEndedAsync"/>, on a page already read.</summary>
-    internal static bool? HasEnded(string? watch) =>
-        watch is null ? null
-        : OnAirNow.IsMatch(watch) ? false
-        : LiveContent.IsMatch(watch) ? true
-        : null;
-
-    /// <summary>The id of the first entry of the grid of a page of a channel, or nothing.</summary>
-    internal static string? CandidateOf(string html)
+    internal static bool? HasEnded(string? watch)
     {
-        if (string.IsNullOrWhiteSpace(html))
+        if (watch is null) return null;
+        try
+        {
+            using var response = ReadData(watch, PlayerResponse);
+            if (response is null) return null;
+            if (response.RootElement.TryGetProperty("playabilityStatus", out var playability) &&
+                playability.TryGetProperty("status", out var status) && status.GetString() != "OK")
+                return null; // A live flag with an offline/unplayable player cannot release paused content.
+            var details = response.RootElement.GetRawText();
+            // Related videos in ytInitialData are not evidence about this broadcast.
+            return OnAirNow.IsMatch(details) ? false : LiveContent.IsMatch(details) ? true : null;
+        }
+        catch (JsonException) { return null; }
+    }
+
+    internal static string? CandidateOf(string html) => CandidatesOf(html)?.FirstOrDefault();
+
+    /// <summary>Null means unreadable; an empty recognized grid means no public broadcasts.</summary>
+    internal static IReadOnlyList<string>? CandidatesOf(string html)
+    {
+        try
+        {
+            using var document = ReadData(html, InitialData);
+            if (document is null) return null;
+            var candidates = new List<(string Id, bool Live)>();
+            Visit(document.RootElement);
+            if (candidates.Count == 0 && (document.RootElement.ValueKind != JsonValueKind.Object ||
+                !document.RootElement.TryGetProperty("contents", out _))) return null;
+            return candidates.OrderByDescending(entry => entry.Live).Select(entry => entry.Id).Distinct().ToArray();
+
+            void Visit(JsonElement node)
+            {
+                if (node.ValueKind == JsonValueKind.Array)
+                {
+                    foreach (var child in node.EnumerateArray()) Visit(child);
+                }
+                else if (node.ValueKind == JsonValueKind.Object)
+                {
+                    // A selected channel tab contains the streams grid. Ignore recommendations
+                    // and videos in unrelated tabs, which can belong to other channels.
+                    if (node.TryGetProperty("tabs", out var tabs) && tabs.ValueKind == JsonValueKind.Array)
+                    {
+                        foreach (var tab in tabs.EnumerateArray())
+                            if (tab.TryGetProperty("tabRenderer", out var renderer) &&
+                                renderer.TryGetProperty("selected", out var selected) && selected.ValueKind == JsonValueKind.True &&
+                                renderer.TryGetProperty("content", out var content)) Visit(content);
+                        return;
+                    }
+                    if (node.TryGetProperty("contentType", out var type) && type.ValueKind == JsonValueKind.String && type.GetString() == "LOCKUP_CONTENT_TYPE_VIDEO" &&
+                        node.TryGetProperty("contentId", out var id)) Add(id, node);
+                    else if (node.TryGetProperty("videoId", out var video) && node.TryGetProperty("thumbnail", out _)) Add(video, node);
+                    foreach (var property in node.EnumerateObject())
+                    {
+                        if (property.Name is "secondaryContents" or "header" or "topbar") continue;
+                        Visit(property.Value);
+                    }
+                }
+            }
+
+            void Add(JsonElement id, JsonElement node)
+            {
+                if (id.ValueKind == JsonValueKind.String && id.GetString() is { Length: 11 } value &&
+                    value.All(character => char.IsAsciiLetterOrDigit(character) || character is '_' or '-'))
+                    candidates.Add((value, Regex.IsMatch(node.GetRawText(), @"""(?:style|overlayStyle|badgeStyle)""\s*:\s*""(?:LIVE|BADGE_STYLE_TYPE_LIVE_NOW|THUMBNAIL_OVERLAY_BADGE_STYLE_LIVE)""")));
+            }
+        }
+        catch (JsonException)
         {
             return null;
         }
-
-        // Only the data of the page is read, and not the scripts around it: the id of a video
-        // elsewhere on the page is not the top of the grid, and the grid is what is wanted.
-        var data = InitialData.Match(html);
-        var scope = data.Success ? data.Groups["json"].Value : html;
-
-        var entry = Lockup.Match(scope);
-        if (!entry.Success)
-        {
-            entry = Legacy.Match(scope);
-        }
-
-        return entry.Success ? entry.Groups["id"].Value : null;
     }
 
     /// <summary>

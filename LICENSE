@@ -19,3 +19,23 @@ AUTHORS OR COPYRIGHT HOLDERS BE LIABLE FOR ANY CLAIM, DAMAGES OR OTHER
 LIABILITY, WHETHER IN AN ACTION OF CONTRACT, TORT OR OTHERWISE, ARISING FROM,
 OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE
 SOFTWARE.
+
+Third-party acknowledgement: FFmpeg
+----------------------------------
+
+Orbis Stream uses FFmpeg and ffprobe, developed by the FFmpeg project, to
+process and stream audio and video. Thanks to the FFmpeg developers and
+contributors for their work.
+
+FFmpeg project: https://ffmpeg.org/
+Copyright (c) the FFmpeg developers.
+
+The FFmpeg build bundled with the Windows installer is provided by
+BtbN/FFmpeg-Builds and is licensed under the GNU General Public License
+(GPL), version 3 or later. FFmpeg is distributed under its own licence;
+the MIT licence above applies to Orbis Stream.
+
+The bundled FFmpeg licence is installed as ffmpeg/LICENSE-ffmpeg.txt.
+FFmpeg source code: https://git.ffmpeg.org/ffmpeg.git
+Build scripts and release information: https://github.com/BtbN/FFmpeg-Builds
+Licensing information: https://ffmpeg.org/legal.html

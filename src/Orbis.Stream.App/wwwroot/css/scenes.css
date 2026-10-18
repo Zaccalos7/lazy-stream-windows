@@ -252,6 +252,8 @@ dialog.dialog.scene-deck { width: min(760px, calc(100vw - 32px)); }
 .scene-strip-head { display: flex; align-items: center; gap: 10px; flex-wrap: wrap; }
 .scene-strip-head .section { margin: 0; }
 .scene-strip-head .grow { flex: 1; }
+.scene-controls-toggle { flex: none; gap: 8px; font-size: 12px; }
+.scene-controls-toggle input:disabled { cursor: default; opacity: 0.5; }
 .scene-strip-state { color: var(--critical); font-weight: 600; }
 .scene-strip-grid { display: grid; gap: 10px; grid-template-columns: repeat(auto-fill, minmax(130px, 1fr)); }
 .scene-strip-grid .scene-tile-face { padding: 4px 4px 6px; gap: 4px; }
@@ -288,3 +290,8 @@ dialog.dialog.scene-deck { width: min(760px, calc(100vw - 32px)); }
 
 /* The deck icon of a row whose live has something of the deck on air. */
 .btn.subtle.is-on[data-scene-deck-open] { color: var(--critical); }
+
+@media (max-width: 600px) {
+  .scene-deck > .dialog-head { flex-wrap: wrap; }
+  .scene-deck > .dialog-head .scene-controls-toggle { order: 1; width: 100%; justify-content: space-between; }
+}

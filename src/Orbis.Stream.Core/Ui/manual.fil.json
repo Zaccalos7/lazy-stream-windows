@@ -123,6 +123,19 @@
       ],
       "figure": "settings",
       "callout": "Pinagsasama ng Mga setting ang video/audio, channel at manwal na ito."
+    },
+    {
+      "id": "errorReports",
+      "title": "Report an error",
+      "body": "Mag-ulat ng error sa GitHub sa pamamagitan ng paglakip ng QR code o buong .txt file. Nakatago ang mga stream key.",
+      "steps": [
+        "In History or Live management, press the Report error icon beside a failed live.",
+        "Bubukas ang ulat. May QR code ang maiikling error; maaaring i-download bilang .txt file ang mahahabang error.",
+        "Kung masyadong mahaba ang error para sa isang QR code, i-download ang buong .txt file at ilakip ito sa GitHub issue.",
+        "Magbukas ng issue sa GitHub, ilakip ang .txt file o screenshot o larawan ng QR code, at ilarawan ang ginagawa mo noon. Maaari mo ring kopyahin ang teksto ng ulat."
+      ],
+      "figure": "errorReports",
+      "callout": "Ilakip ang QR code o na-download na .txt file sa issue."
     }
   ]
 }

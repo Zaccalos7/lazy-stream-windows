@@ -51,7 +51,7 @@ public sealed class DatabaseBootstrapper : IHostedService
     /// </summary>
     private void ReleaseLivesLeftRunning()
     {
-        foreach (var video in _videoRepository.FindByLiveStatus(LiveStatus.Live))
+        foreach (var video in _videoRepository.FindActive())
         {
             _logger.LogInformation("Video {Name} was still marked live at startup and is released", video.Name);
 
@@ -87,13 +87,18 @@ public sealed class DatabaseBootstrapper : IHostedService
     }
 
     /// <summary>What a default setting is made of: everything the seed decides, per platform and level.</summary>
+    /// <param name="KeyframeSeconds">
+    /// The keyframe interval (the GOP size of the setting, in seconds): the two seconds every
+    /// platform takes, unless its own ingest asks for another one.
+    /// </param>
     private sealed record DefaultSpec(
         int Bitrate,
         int AudioBitrate,
         int? Width,
         int? Height,
         double? FrameRate,
-        (string Key, string Value)[] Options);
+        (string Key, string Value)[] Options,
+        int KeyframeSeconds = 2);
 
     /// <summary>
     /// YouTube, the setting it goes on air with. A fixed 1080p30 at a constant 6 Mbps: YouTube
@@ -218,7 +223,7 @@ public sealed class DatabaseBootstrapper : IHostedService
         setting.VideoWidth = spec.Width;
         setting.VideoHeight = spec.Height;
         setting.FrameRate = spec.FrameRate;
-        setting.GopSize = 2;
+        setting.GopSize = spec.KeyframeSeconds;
         setting.VideoFormat = "flv";
         setting.VideoSettingsOptions = spec.Options
             .Select(option => new VideoSettingsOptionEntity { Key = option.Key, Value = option.Value })

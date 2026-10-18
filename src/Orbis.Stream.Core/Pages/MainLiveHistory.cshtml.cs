@@ -22,7 +22,9 @@ public sealed class MainLiveHistoryModel(VideoService videos, SettingService set
         Domain.LiveStatus.Offline,
         Domain.LiveStatus.Ended,
         Domain.LiveStatus.Error,
-        Domain.LiveStatus.Stopped
+        Domain.LiveStatus.Stopped,
+        Domain.LiveStatus.Connecting,
+        Domain.LiveStatus.Reconnecting
     ];
 
     [BindProperty(SupportsGet = true, Name = "p")]

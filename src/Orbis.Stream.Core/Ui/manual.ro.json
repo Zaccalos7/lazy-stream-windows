@@ -123,6 +123,19 @@
       ],
       "figure": "settings",
       "callout": "Setările adună video/audio, canalele și acest manual."
+    },
+    {
+      "id": "errorReports",
+      "title": "Report an error",
+      "body": "Raportează o eroare pe GitHub atașând codul QR sau fișierul .txt complet. Cheile de streaming sunt mascate.",
+      "steps": [
+        "In History or Live management, press the Report error icon beside a failed live.",
+        "Se deschide fereastra raportului. Erorile scurte au un cod QR; cele lungi pot fi descărcate ca fișier .txt.",
+        "Dacă eroarea este prea lungă pentru un singur cod QR, descarcă fișierul .txt complet și atașează-l la sesizarea de pe GitHub.",
+        "Deschide o sesizare pe GitHub, atașează fișierul .txt sau o captură ori fotografie a codului QR și descrie ce făceai. Poți copia și textul raportului."
+      ],
+      "figure": "errorReports",
+      "callout": "Atașează codul QR sau fișierul .txt descărcat la sesizare."
     }
   ]
 }

@@ -63,11 +63,11 @@ powershell -ExecutionPolicy Bypass -File Installer\build-installer.ps1
 ```
 
 Both publish the application and compile an NSIS setup in
-`artifacts/installer/OrbisStream-<version>-win-x64-setup.exe` (about 117 MB with FFmpeg):
+`artifacts/installer/OrbisStream-<version>-win-x64-setup.exe` (including FFmpeg):
 
 - installs per user in `%LOCALAPPDATA%\Programs\OrbisStream`, so no administrator rights
   are required and uninstalling never touches the videos;
-- **FFmpeg 8.1.3 is bundled** in the `ffmpeg` subdirectory, so streaming works offline
+- **FFmpeg 9.0.2 (release/9.0 build) is bundled** in the `ffmpeg` subdirectory, so streaming works offline
   right after the installation: the application looks there before falling back to `PATH`;
 - the components page lets you skip FFmpeg (or the desktop shortcut) if you prefer your own
   build; the installer then warns when neither FFmpeg nor FFprobe is on `PATH`;
@@ -75,6 +75,11 @@ Both publish the application and compile an NSIS setup in
 - Start Menu and optional desktop shortcuts, an uninstaller registered in
   _Settings → Apps → Installed apps_;
 - supports silent installation (`setup.exe /S`) and silent uninstall.
+
+The [FFmpeg 9 migration guide](docs/FFMPEG-9.md) covers animated WebP overlays,
+compatibility of saved NVENC options and the new engine features. The bundled build is
+pinned to the stable `release/9.0` branch; FFmpeg does not label it LTS. An old or incomplete
+staged payload is refreshed automatically by both fetch scripts.
 
 To build the small setup without the FFmpeg payload, where the FFmpeg component installs
 the official build with `winget` instead:
@@ -209,6 +214,20 @@ on every sample of the push channel.
 4. `PUT /live/stop-live` (or the frontend) flips the live status, which terminates the process
    tree and closes the playlist; the row ends in the `ENDED` state.
 
+### YouTube startup and diagnostics
+
+The YouTube sender analyzes up to 4 MiB / two seconds of the incoming FLV before publishing.
+A 64 KiB limit could end at a large initial H.264 keyframe before an AAC packet was examined,
+leaving incomplete codec parameters and the FLV fallback audio rate instead of the actual 48 kHz.
+The live output and JPEG preview of a file share one filter graph and split after scaling;
+separate graphs could leave the preview advancing while the live encoder stalled.
+
+The application log reports `YouTube ffmpeg encoder:` and `YouTube ffmpeg sender:` lines while
+the live is running, including codec, resolution, frame rate, audio layout and warnings.
+Keys are masked before logging, and the retained process-error tail is bounded.
+These diagnostics distinguish successful delivery from a playable broadcast: the warning
+`no public live` checks the public channel page and does not determine why Studio is buffering.
+
 ### Scene deck
 
 The buttons of the scene deck (up to six, the same for every live) put a video, a banner or an
@@ -241,10 +260,28 @@ the platform profile turns the frame of a live that would lie down (`StreamPlatf
 so a landscape file or canvas is fitted into 9:16 with bands instead of being stretched. Delivery
 is the one of YouTube: ffmpeg publishes at real time with a short head start, with AAC at 48 kHz.
 
+### Facebook Gaming
+
+Facebook does not take a key on its own: Live Producer writes one for a broadcast that is standing
+up, and the ingest (`rtmps://live-api-s.facebook.com:443/rtmp`) refuses the key of anything else.
+So the live is started on Facebook first - the page links
+`https://www.facebook.com/live/producer`, and every Facebook destination spells the four steps out
+where the key is asked for: press *Go live*, take the stream key from *Streaming settings* →
+*Use Stream key* (the REST API), paste it into the configuration and save it, and only then start
+the live from Orbis, which puts the stream into the broadcast already waiting.
+
+That key is good for one day. The moment it was saved is kept with it (`setting.stream_key_saved_at`,
+written by `SettingService` whenever the key itself changes - an edit that touches only the name of
+the channel leaves it alone), and `ExpiringStreamKeys` reads the age of it: a day old, the wizard,
+the row of the configuration and the dialog all say the key has expired and point back at the
+producer. A key saved before the column existed has an age nobody knows and is taken to be expired.
+Nothing asks Facebook whether a key is still good - the ingest only answers by refusing it - so the
+age of the key is the whole of what the page has to go on.
+
 ### Scenes and overlays
 
 The layouts page draws the skeleton of a live: slots, and the overlays that dress it (PNG, GIF,
-WebP or WebM with transparency) taken from the overlay library. The live wizard opens a layout as
+static or animated WebP, or WebM with transparency) taken from the overlay library. The live wizard opens a layout as
 its empty slots and its overlays; the sources are dropped into the slots, and more overlays can be
 laid over them from the same library or by dropping a picture on the canvas. What is on the canvas
 when the live starts is saved as the scene of that live alone and never joins the layouts.
@@ -280,7 +317,7 @@ tests are skipped when `ffmpeg`/`ffprobe` are not available.
 
 | Component                            | Version                   | Licence         | Origin                                                                                                                                                                      |
 | ------------------------------------ | ------------------------- | --------------- | --------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
-| FFmpeg (bundled by the installer)    | 8.1.3, win64 shared build | GPL v3 or later | [BtbN/FFmpeg-Builds](https://github.com/BtbN/FFmpeg-Builds), build `autobuild-2026-09-25-15-37`, SHA-256 `1b3f0a730b1a3d780cce438d2fe091c5b8473dad2a5dbf0c2d0625029b3e70b6` |
+| FFmpeg (bundled by the installer)    | 9.0.2 + 27 branch fixes (`n9.0.2-27-g7e93014c5b`), win64 shared build | GPL v3 or later | [BtbN/FFmpeg-Builds](https://github.com/BtbN/FFmpeg-Builds/releases/tag/autobuild-2026-10-14-13-03), SHA-256 `b45ce2e404fb01c1dbb16a4df92042ca1d739a6b929bda1d727a7596e8babaf9` |
 | Microsoft.Data.Sqlite / SQLitePCLRaw | 10.0.12                   | MIT             | NuGet                                                                                                                                                                       |
 | Swashbuckle.AspNetCore               | 9.0.1                     | MIT             | NuGet                                                                                                                                                                       |
 | Microsoft.Web.WebView2               | 1.0.4191.47               | redistributable | NuGet                                                                                                                                                                       |

@@ -15,11 +15,18 @@ public enum LiveStatus
     Offline = 1,
     Ended = 2,
     Error = 3,
-    Stopped = 4
+    Stopped = 4,
+    Connecting = 5,
+    Reconnecting = 6
 }
 
 public static class LiveStatusExtensions
 {
+    public static bool IsActive(this LiveStatus status) =>
+        status is LiveStatus.Live or LiveStatus.Connecting or LiveStatus.Reconnecting;
+
+    public static bool IsActive(this LiveStatus? status) => status is { } value && value.IsActive();
+
     /// <summary>Wire/database name, e.g. <c>LIVE</c>.</summary>
     public static string ToWireValue(this LiveStatus status) => status switch
     {
@@ -28,6 +35,8 @@ public static class LiveStatusExtensions
         LiveStatus.Ended => "ENDED",
         LiveStatus.Error => "ERROR",
         LiveStatus.Stopped => "STOPPED",
+        LiveStatus.Connecting => "CONNECTING",
+        LiveStatus.Reconnecting => "RECONNECTING",
         _ => status.ToString().ToUpperInvariant()
     };
 
@@ -50,6 +59,12 @@ public static class LiveStatusExtensions
             case "STOPPED":
                 status = LiveStatus.Stopped;
                 return true;
+            case "CONNECTING":
+                status = LiveStatus.Connecting;
+                return true;
+            case "RECONNECTING":
+                status = LiveStatus.Reconnecting;
+                return true;
             default:
                 status = LiveStatus.Offline;
                 return false;
@@ -63,11 +78,11 @@ public static class LiveStatusExtensions
         {
             null => LiveStatus.Offline,
             LiveStatus status => status,
-            int ordinal when ordinal >= 0 && ordinal <= (int)LiveStatus.Stopped => (LiveStatus)ordinal,
-            long ordinal when ordinal >= 0 && ordinal <= (int)LiveStatus.Stopped => (LiveStatus)(int)ordinal,
+            int ordinal when ordinal >= 0 && ordinal <= (int)LiveStatus.Reconnecting => (LiveStatus)ordinal,
+            long ordinal when ordinal >= 0 && ordinal <= (int)LiveStatus.Reconnecting => (LiveStatus)(int)ordinal,
             string text when int.TryParse(text, out var parsedOrdinal)
                 && parsedOrdinal >= 0
-                && parsedOrdinal <= (int)LiveStatus.Stopped => (LiveStatus)parsedOrdinal,
+                && parsedOrdinal <= (int)LiveStatus.Reconnecting => (LiveStatus)parsedOrdinal,
             string text => TryParseWireValue(text, out var parsed) ? parsed : LiveStatus.Offline,
             _ => LiveStatus.Offline
         };

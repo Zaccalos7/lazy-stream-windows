@@ -1,0 +1,16 @@
+@model bool
+<ol class="facebook-live-steps">
+    <li>
+        @Html.Raw(T["facebookStartStreamStep"])
+        @if (Model)
+        {
+            <a href="/orbis/mainChannelSetting?platform=facebook">@T["configureChannel"]</a>
+        }
+    </li>
+    <li>
+        @Html.Raw(T["facebookGoLiveStep"])
+        <a class="btn subtle facebook-live-open" href="@LiveLinkView.FacebookProducerUrl" target="_blank" rel="noopener noreferrer">@T["facebookOpenProducer"]</a>
+    </li>
+    <li>@T["facebookReturnStep"]</li>
+    <li class="facebook-key-lifetime">@T["facebookKeyLifetime"]</li>
+</ol>

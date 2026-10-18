@@ -1,0 +1,15 @@
+<dialog class="dialog" id="error-report-dialog" aria-labelledby="error-report-title">
+    <div class="dialog-body">
+        <h2 id="error-report-title">@T["reportError"]</h2>
+        <p data-report-status role="status" data-loading="@T["loading"]" data-failed="@T["reportLoadFailed"]"></p>
+        <img data-report-qr alt="@T["reportQrAlt"]" hidden style="display: block; width: 100%; max-width: 560px; height: auto; margin: auto; image-rendering: pixelated;" />
+        <p data-report-qr-help hidden>@T["reportHelp"]</p>
+        <p data-report-download-help hidden>@T["reportMultiple"]</p>
+        <div class="actions">
+            <a class="btn" data-report-download download hidden>@T["reportDownload"]</a>
+            <a class="btn accent" href="@Orbis.Stream.Core.Services.ErrorReport.IssuesUrl" target="_blank" rel="noopener noreferrer">@T["reportOpenIssue"]</a>
+        </div>
+        <details><summary>@T["reportText"]</summary><pre data-report-text style="white-space: pre-wrap; overflow-wrap: anywhere;"></pre></details>
+    </div>
+    <form method="dialog"><div class="dialog-footer"><button class="btn" value="close">@T["close"]</button></div></form>
+</dialog>

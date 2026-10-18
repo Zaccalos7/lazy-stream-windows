@@ -28,6 +28,8 @@ public sealed class LiveStatusTests
     [InlineData(2, LiveStatus.Ended)]
     [InlineData(3, LiveStatus.Error)]
     [InlineData(4, LiveStatus.Stopped)]
+    [InlineData(5, LiveStatus.Connecting)]
+    [InlineData(6, LiveStatus.Reconnecting)]
     public void FromStorage_ReadsTheHibernateOrdinal(object value, LiveStatus expected)
     {
         Assert.Equal(expected, LiveStatusExtensions.FromStorage(value));
@@ -37,6 +39,8 @@ public sealed class LiveStatusTests
     [InlineData("LIVE", LiveStatus.Live)]
     [InlineData("stopped", LiveStatus.Stopped)]
     [InlineData("2", LiveStatus.Ended)]
+    [InlineData("CONNECTING", LiveStatus.Connecting)]
+    [InlineData("reconnecting", LiveStatus.Reconnecting)]
     public void FromStorage_AlsoReadsTheWireNameAndTheOrdinalAsText(string value, LiveStatus expected)
     {
         Assert.Equal(expected, LiveStatusExtensions.FromStorage(value));
@@ -238,6 +242,7 @@ public sealed class DatabaseBootstrapperTests
         Assert.False(low.IsDefaultConfiguration);
         Assert.Equal((720, 1280, 2_500_000), (low.VideoWidth, low.VideoHeight, low.VideoBitrate));
     }
+
 
     [Fact]
     public async Task StartAsync_AddsTheNewPlatformsOnceToAnInstallationThatHadTheOldOnes()
@@ -472,6 +477,21 @@ public sealed class LiveLinkTests
     }
 
     [Fact]
+    public void WatchUrlOf_OpensThePublicBroadcast()
+    {
+        Assert.Equal("https://www.youtube.com/watch?v=abcdefghijk", LiveLinkView.WatchUrlOf(YouTube, "channel", null, "abcdefghijk"));
+        Assert.Equal("https://www.youtube.com/@channel/live", LiveLinkView.WatchUrlOf(YouTube, "@channel", null));
+        Assert.Equal("https://www.youtube.com/channel/UCuAXFkgsw1L7xaCfnd5JJOw/live",
+            LiveLinkView.WatchUrlOf(YouTube, "UCuAXFkgsw1L7xaCfnd5JJOw", null));
+        Assert.Equal("https://www.twitch.tv/channel", LiveLinkView.WatchUrlOf(Twitch, "channel", "twitch"));
+        Assert.Null(LiveLinkView.WatchUrlOf(Twitch, null, null));
+        Assert.Equal("https://kick.com/channel", LiveLinkView.WatchUrlOf(
+            "rtmps://fa723fc1b171.global-contribute.live-video.net/app", "https://kick.com/Channel/", null));
+        Assert.Equal("https://www.facebook.com/watch/?v=123", LiveLinkView.WatchUrlOf(
+            "rtmps://live-api-s.facebook.com:443/rtmp/", "https://www.facebook.com/page/videos/123/", null));
+    }
+
+    [Fact]
     public void UrlOf_YouTubeIsTheLiveControlRoomOfTheBroadcastOnAir()
     {
         Assert.Equal(
@@ -589,8 +609,9 @@ public sealed class LiveLinkTests
     public void UrlOf_KickIsTheChannelAndFacebookGamingThePage()
     {
         Assert.Equal("https://kick.com/reprochannel", LiveLinkView.UrlOf(Kick, "ReproChannel", "kick"));
-        Assert.Equal("https://www.facebook.com/ReproGaming", LiveLinkView.UrlOf(Facebook, "ReproGaming", "facebook"));
-        Assert.Equal("https://www.facebook.com/repro", LiveLinkView.UrlOf("rtmps://live-api-s.facebook.com:443/rtmp/", "@repro", null));
+        Assert.Equal(LiveLinkView.FacebookProducerUrl, LiveLinkView.UrlOf(Facebook, "ReproGaming", "facebook"));
+        Assert.Equal(LiveLinkView.FacebookProducerUrl, LiveLinkView.UrlOf("rtmps://live-api-s.facebook.com:443/rtmp/", "@repro", null));
+        Assert.Equal(LiveLinkView.FacebookProducerUrl, LiveLinkView.UrlOf(Facebook, null, null));
     }
 
     [Fact]
@@ -599,6 +620,8 @@ public sealed class LiveLinkTests
         Assert.Equal("https://www.tiktok.com/@repro.channel/live", LiveLinkView.UrlOf(TikTok, "@repro.channel", "tiktok"));
         Assert.Equal("https://www.tiktok.com/@repro/live", LiveLinkView.UrlOf("rtmp://push.tiktokcdn-us.com/live", "repro", null));
     }
+
+
 
     [Fact]
     public void KickAndFacebookGamingHaveTheirNamesMarksAndColours()
@@ -631,10 +654,13 @@ public sealed class LiveLinkTests
             Assert.Equal(platform.Platform, Orbis.Stream.Core.Streaming.StreamPlatforms.Detect(platform.StreamUrl + "/key"));
         });
 
-        // Kick and Facebook are the two whose address can be the account's or the live's own and
-        // whose dashboard the hint points at; TikTok, whose key is asked for at every live, has its own.
-        Assert.Equal("kick facebook", MainChannelSettingModel.PersonalIngests);
+        // Kick and Facebook share the hint about their dashboard. TikTok has its own hint
+        // about the key asked for at every live.
+        Assert.Equal(
+            [("ingestFromDashboard", "kick facebook")],
+            MainChannelSettingModel.IngestHints);
         Assert.Equal("tiktok", MainChannelSettingModel.KeyEachLive);
+
     }
 
     [Fact]
@@ -647,6 +673,21 @@ public sealed class LiveLinkTests
         Assert.Equal("kick", MainChannelSettingModel.ChoiceOf("my channel", Kick + "/")?.Value);
         Assert.Equal("youtube", MainChannelSettingModel.ChoiceOf(null, "rtmps://a.rtmps.youtube.com/live2")?.Value);
         Assert.Null(MainChannelSettingModel.ChoiceOf("my channel", "rtmp://my.cdn.example/live"));
+    }
+
+    [Fact]
+    public void ChoiceOfSetting_ReadsThePlatformADefaultSettingWasSeededFor()
+    {
+        // The seeds name their platform the way they were stored: by value or by name, in any case.
+        Assert.Equal("twitch", MainChannelSettingModel.ChoiceOfSetting("Twitch")?.Value);
+        Assert.Equal("youtube", MainChannelSettingModel.ChoiceOfSetting("Youtube")?.Value);
+        Assert.Equal("facebook", MainChannelSettingModel.ChoiceOfSetting("Facebook Gaming")?.Value);
+        Assert.Equal("tiktok", MainChannelSettingModel.ChoiceOfSetting(" TikTok ")?.Value);
+
+        // A setting of the user's own was made for no platform.
+        Assert.Null(MainChannelSettingModel.ChoiceOfSetting(VideoSettingForm.CustomPlatform));
+        Assert.Null(MainChannelSettingModel.ChoiceOfSetting(null));
+        Assert.Null(MainChannelSettingModel.ChoiceOfSetting("  "));
     }
 
     [Fact]

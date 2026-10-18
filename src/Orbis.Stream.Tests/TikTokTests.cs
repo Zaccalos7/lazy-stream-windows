@@ -101,11 +101,11 @@ public sealed class TikTokDeliveryTests
             PreviewPath: "/tmp/preview.jpg", Profile: StreamPlatformProfile.TikTok, Frame: Upright)));
 
         Assert.Contains(
-            "-vf scale=1080:1920:force_original_aspect_ratio=decrease:force_divisible_by=2,pad=1080:1920:(ow-iw)/2:(oh-ih)/2:color=black,setsar=1",
+            "[0:v:0]scale=1080:1920:force_original_aspect_ratio=decrease:force_divisible_by=2,pad=1080:1920:(ow-iw)/2:(oh-ih)/2:color=black,setsar=1,split=2",
             command,
             StringComparison.Ordinal);
         // The preview is bounded on its height: 360x640, the pixels of the landscape one turned.
-        Assert.Contains("setsar=1,fps=30,scale=w=-2:h='min(640,ih)'", command, StringComparison.Ordinal);
+        Assert.Contains("[orbisp0]fps=30,scale=w=-2:h='min(640,ih)'[orbisp]", command, StringComparison.Ordinal);
     }
 
     [Fact]
@@ -310,10 +310,11 @@ public sealed class TikTokKeyTests : IClassFixture<ApplicationFixture>
         var html = await _fixture.Client.GetStringAsync("/orbis/mainLive?start=1");
 
         // The pick of a TikTok configuration says so, and stands the canvas up; the key goes with
-        // the start from the step to the canvas, and is never written into the page.
-        Assert.Matches("value=\"\\d+\" required\\s+data-key-each-live=\"1\" data-portrait=\"1\" />", html);
+        // the start from the step to the canvas, and is never written into the page. Every pick
+        // carries the Studio link attribute, empty where the platform is not YouTube.
+        Assert.Matches("value=\"\\d+\" required\\s+data-youtube-studio=\"\"\\s+data-key-each-live=\"1\" data-portrait=\"1\" />", html);
         // A Twitch configuration says neither: its key is the one it keeps, and its live lies down.
-        Assert.Matches("value=\"\\d+\" required\\s+/>", html);
+        Assert.Matches("value=\"\\d+\" required\\s+data-youtube-studio=\"\"\\s+data-key-each-live=\"\" data-portrait=\"\" />", html);
         Assert.Contains("data-live-key", html, StringComparison.Ordinal);
         Assert.Contains("data-wizard-fields=\"settingId configurationId streamKey\"", html, StringComparison.Ordinal);
         Assert.DoesNotContain(LiveStreamKeys.StandInPrefix, html, StringComparison.Ordinal);

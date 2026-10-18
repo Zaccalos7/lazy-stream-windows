@@ -22,6 +22,7 @@
 .badge.live { color: #ffffff; background: var(--accent); }
 .badge.ended { color: var(--success); background: var(--success-bg); }
 .badge.error { color: var(--critical); background: var(--critical-bg); }
+.badge.connecting,
 .badge.stopped { color: var(--caution); background: var(--caution-bg); }
 .badge.playlist { color: var(--accent); background: color-mix(in srgb, var(--accent) 15%, transparent); margin-right: 6px; font-variant-numeric: tabular-nums; }
 .badge.playlist::before { display: none; }

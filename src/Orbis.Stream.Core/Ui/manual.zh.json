@@ -123,6 +123,19 @@
       ],
       "figure": "settings",
       "callout": "设置汇集视频/音频、频道和本手册。"
+    },
+    {
+      "id": "errorReports",
+      "title": "Report an error",
+      "body": "在 GitHub 上报告错误时，请附加二维码或完整的 .txt 文件。推流密钥会被隐藏。",
+      "steps": [
+        "In History or Live management, press the Report error icon beside a failed live.",
+        "报告窗口将打开。简短错误使用二维码，较长错误可下载为 .txt 文件。",
+        "如果错误内容过长，无法放入一个二维码，请下载完整的 .txt 文件并附加到 GitHub 问题中。",
+        "在 GitHub 上创建问题，附加 .txt 文件或二维码截图或照片，并描述当时的操作。也可以复制报告文本。"
+      ],
+      "figure": "errorReports",
+      "callout": "将二维码或下载的 .txt 文件附加到问题中。"
     }
   ]
 }

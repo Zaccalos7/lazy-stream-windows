@@ -26,7 +26,8 @@ public enum StreamPlatform
     /// TikTok LIVE, whose stream key LIVE Producer hands out for every live (it expires), and whose
     /// viewers hold their phone upright.
     /// </summary>
-    TikTok
+    TikTok,
+
 }
 
 /// <summary>What carries the paced stream from the relay to the ingest.</summary>
@@ -73,8 +74,9 @@ public enum RelayPacing
 /// <para>Those are the two deliveries there are, and they stay two: the relay keeping the time
 /// over the native RTMP for a low latency player (Twitch), the ffmpeg sender keeping it with a
 /// head start for a player that buffers (YouTube). Kick is an ingest of the first kind - Amazon
-/// IVS, the network the Twitch ingest itself runs on - and Facebook Gaming and TikTok LIVE of the
-/// second, so each of them is the delivery of its kind with the needs of its own platform on top.</para>
+/// IVS, the network the Twitch ingest itself runs on - and Facebook Gaming and TikTok LIVE
+/// of the second, so each of them is the delivery of its kind with the needs of its own platform
+/// on top.</para>
 /// </summary>
 public sealed record StreamPlatformProfile(
     StreamPlatform Platform,
@@ -175,8 +177,40 @@ public sealed record StreamPlatformProfile(
     /// <see cref="BitrateLadder"/>); null keeps the bitrate of the setting whatever happens, which
     /// is what a custom ingest without a relay gets: there is nothing there to measure it on.
     /// </summary>
-    RateAdaptation? Adaptation = null)
+    RateAdaptation? Adaptation = null,
+
+    /// <summary>
+    /// Whether the ingest is handed the stream only once the parameters of both codecs are known:
+    /// the ffmpeg sender analyses the FLV far enough to name the size of the picture and the
+    /// sampling rate of the sound before it publishes the header of the publish. YouTube and
+    /// Facebook Gaming set their broadcast up from that header and keep it off air when it
+    /// describes a stream they cannot decode; a 64 KiB probe finishes on a large first keyframe,
+    /// before the first AAC packet, and the header then carries the 44.1 kHz fallback of AAC - or
+    /// no parameters at all. A platform that reads the tags as they come is left with the small
+    /// probe, which connects sooner.
+    /// </summary>
+    bool CompleteHeaders = false,
+
+    /// <summary>
+    /// Whether the encoder and the sender of a live to this platform report line by line, at their
+    /// own severity, instead of staying quiet until something goes wrong (see
+    /// <see cref="FfmpegProcessLog"/>). The ingests whose header and rhythm are strict, where a
+    /// warning kept below the error level is the only sign of why a broadcast never went up:
+    /// YouTube and Facebook Gaming.
+    /// </summary>
+    bool Diagnostics = false)
 {
+    /// <summary>The name the platform goes by, as the interface and the log write it.</summary>
+    public string Name => Platform switch
+    {
+        StreamPlatform.Twitch => "Twitch",
+        StreamPlatform.YouTube => "YouTube",
+        StreamPlatform.Kick => "Kick",
+        StreamPlatform.Facebook => "Facebook Gaming",
+        StreamPlatform.TikTok => "TikTok",
+        _ => "RTMP"
+    };
+
     /// <summary>
     /// Twitch: no head start, and a short jitter buffer so the preview stays next to what is on
     /// air. The buffer is the whole margin there is, which is why the relay wins a slow moment
@@ -223,7 +257,9 @@ public sealed record StreamPlatformProfile(
         UniformFormat: true,
         ChoosableTransport: true,
         RateBuffer: TimeSpan.FromSeconds(1),
-        Adaptation: RateAdaptation.Buffered);
+        Adaptation: RateAdaptation.Buffered,
+        CompleteHeaders: true,
+        Diagnostics: true);
 
     /// <summary>
     /// Kick: the delivery of Twitch - the relay keeps the time, over the native RTMP, which speaks
@@ -272,7 +308,9 @@ public sealed record StreamPlatformProfile(
         Pacing: RelayPacing.Sender,
         UniformFormat: true,
         RateBuffer: TimeSpan.FromSeconds(1),
-        Adaptation: RateAdaptation.Buffered);
+        Adaptation: RateAdaptation.Buffered,
+        CompleteHeaders: true,
+        Diagnostics: true);
 
     /// <summary>
     /// TikTok LIVE: the delivery of YouTube - the ffmpeg sender keeps the time with a head start,
@@ -355,6 +393,8 @@ public sealed record StreamPlatformProfile(
 
 public static class StreamPlatforms
 {
+    public const string FacebookIngestUrl = "rtmps://live-api-s.facebook.com:443/rtmp";
+
     /// <summary>
     /// The host YouTube serves RTMPS on. <c>a.rtmp.youtube.com</c> is the plain RTMP host: it
     /// answers on 443 too, but with a certificate made out to <c>*.rtmps.youtube.com</c>, so a TLS
@@ -452,7 +492,8 @@ public static class StreamPlatforms
     }
 
     /// <summary>
-    /// Points a YouTube ingest at the host YouTube serves RTMPS on (see <see cref="YouTubeRtmpsHost"/>).
+    /// Updates legacy Facebook presets to Live Producer and points YouTube at its RTMPS host
+    /// (see <see cref="YouTubeRtmpsHost"/>).
     /// <para>Both halves are rewritten, and the scheme is one of them: a plain
     /// <c>rtmp://a.rtmp.youtube.com</c> is turned into <c>rtmps://a.rtmps.youtube.com</c>, not only
     /// the host of an url that already said rtmps. YouTube takes ingest over TLS and nothing else,
@@ -467,8 +508,21 @@ public static class StreamPlatforms
         ArgumentNullException.ThrowIfNull(outputUrl);
 
         if (!Uri.TryCreate(outputUrl, UriKind.Absolute, out var uri)
-            || !uri.Scheme.StartsWith("rtmp", StringComparison.OrdinalIgnoreCase)
-            || !IsOrUnder(uri.Host, YouTubeRtmpHost))
+            || !uri.Scheme.StartsWith("rtmp", StringComparison.OrdinalIgnoreCase))
+        {
+            return outputUrl;
+        }
+
+        // Previously saved Facebook presets use rtmp-api. Route them through the same endpoint
+        // as new configurations, preserving the raw path and key (including any query string).
+        if (uri.Host.Equals("rtmp-api.facebook.com", StringComparison.OrdinalIgnoreCase))
+        {
+            var pathStart = outputUrl.IndexOf('/', outputUrl.IndexOf("://", StringComparison.Ordinal) + 3);
+            return pathStart < 0 ? FacebookIngestUrl
+                : string.Concat("rtmps://live-api-s.facebook.com:443", outputUrl.AsSpan(pathStart));
+        }
+
+        if (!IsOrUnder(uri.Host, YouTubeRtmpHost))
         {
             return outputUrl;
         }

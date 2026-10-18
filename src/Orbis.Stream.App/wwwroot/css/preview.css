@@ -24,6 +24,12 @@
   50% { opacity: 0.45; }
 }
 
+/* Platform help sits above both preview columns, with its own padding and separation. */
+.page-header.preview-header-with-help { margin-bottom: 8px; }
+.preview-platform-help { padding: 18px 20px; margin-block: 0 24px; }
+.preview-platform-help > p { margin: 0 0 12px; }
+.preview-platform-help > .youtube-checks { padding: 14px 16px; margin-block: 16px 0; }
+
 .preview {
   display: grid;
   gap: 12px;
@@ -81,6 +87,8 @@
 .live-picker label.field { width: min(420px, 100%); }
 .preview-cover .icon { font-size: 30px; color: var(--text-3); }
 .preview-cover p { margin: 0; font-size: 12px; }
+.preview-cover { padding: 24px; text-align: center; }
+.preview-player-controls { display: flex; flex-wrap: wrap; gap: 8px; }
 
 .preview-embed-status {
   position: absolute;
@@ -274,3 +282,8 @@
 @media (max-width: 1100px) {
   .preview { grid-template-columns: minmax(0, 1fr); }
 }
+
+.btn.live-indicator.is-checking { background: var(--caution-bg); color: var(--text); border-color: var(--caution); }
+.btn.live-indicator.is-checking .platform-mark { color: currentColor; }
+.youtube-checks summary { cursor: pointer; font-weight: 600; }
+.youtube-checks li { margin-block: 0.65rem; }

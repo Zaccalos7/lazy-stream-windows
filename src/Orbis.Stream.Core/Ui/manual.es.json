@@ -123,6 +123,19 @@
       ],
       "figure": "settings",
       "callout": "Ajustes reúne vídeo/audio, canales y este manual."
+    },
+    {
+      "id": "errorReports",
+      "title": "Report an error",
+      "body": "Informa de un error en GitHub adjuntando el código QR o el archivo .txt completo. Las claves de transmisión se ocultan.",
+      "steps": [
+        "In History or Live management, press the Report error icon beside a failed live.",
+        "Se abre la ventana del informe. Los errores cortos tienen un código QR; los largos se pueden descargar como archivo .txt.",
+        "Si el error es demasiado largo para un solo código QR, descarga el archivo .txt completo y adjúntalo a la incidencia en GitHub.",
+        "Abre una incidencia en GitHub, adjunta el archivo .txt o una captura o foto del código QR y describe qué estabas haciendo. También puedes copiar el texto del informe."
+      ],
+      "figure": "errorReports",
+      "callout": "Adjunta el código QR o el archivo .txt descargado a la incidencia."
     }
   ]
 }

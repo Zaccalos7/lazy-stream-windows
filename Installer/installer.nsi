@@ -16,7 +16,7 @@ Unicode true
 !include "x64.nsh"
 
 !ifndef APPVERSION
-  !define APPVERSION "2.1.3"
+  !define APPVERSION "3.0.0"
 !endif
 !ifndef PUBLISHDIR
   !define PUBLISHDIR "..\artifacts\publish"
@@ -83,6 +83,40 @@ VIAddVersionKey "Comments"        "Created by ${APPPUBLISHER}"
 !insertmacro MUI_LANGUAGE "Spanish"
 !insertmacro MUI_LANGUAGE "French"
 !insertmacro MUI_LANGUAGE "German"
+!insertmacro MUI_LANGUAGE "Russian"
+!insertmacro MUI_LANGUAGE "Hindi"
+!insertmacro MUI_LANGUAGE "Arabic"
+!insertmacro MUI_LANGUAGE "Romanian"
+!insertmacro MUI_LANGUAGE "Danish"
+!insertmacro MUI_LANGUAGE "Dutch"
+!insertmacro MUI_LANGUAGE "Turkish"
+!insertmacro MUI_LANGUAGE "Greek"
+; Match the application's real languages. NSIS does not ship Filipino, so bundle it locally.
+; Latin, Klingon and Hodor are intentionally excluded from the installer.
+!insertmacro MUI_LANGUAGEEX "languages" "Filipino"
+
+; Custom strings, one entry per installer language.
+; NSIS has no built-in Filipino, so its language id comes from languages/Filipino.nlf.
+!define LANG_FILEPINO 1124
+LangString LANG_MSG_CLOSE_APP ${LANG_ITALIAN} "L'app verrà chiusa per installare quella nuova."
+LangString LANG_MSG_CLOSE_APP ${LANG_ENGLISH} "The app will be closed to install the new one."
+LangString LANG_MSG_CLOSE_APP ${LANG_KOREAN} "새 버전을 설치하기 위해 앱이 종료됩니다."
+LangString LANG_MSG_CLOSE_APP ${LANG_JAPANESE} "新しいバージョンをインストールするため、アプリが終了します。"
+LangString LANG_MSG_CLOSE_APP ${LANG_SIMPCHINESE} "将关闭该应用以安装新版本。"
+LangString LANG_MSG_CLOSE_APP ${LANG_TRADCHINESE} "將關閉該應用程式以安裝新版本。"
+LangString LANG_MSG_CLOSE_APP ${LANG_PORTUGUESE} "O aplicativo será fechado para instalar o novo."
+LangString LANG_MSG_CLOSE_APP ${LANG_SPANISH} "La aplicación se cerrará para instalar la nueva."
+LangString LANG_MSG_CLOSE_APP ${LANG_FRENCH} "L'application sera fermée afin d'installer la nouvelle version."
+LangString LANG_MSG_CLOSE_APP ${LANG_GERMAN} "Die App wird geschlossen, um die neue Version zu installieren."
+LangString LANG_MSG_CLOSE_APP ${LANG_RUSSIAN} "Приложение будет закрыто для установки новой версии."
+LangString LANG_MSG_CLOSE_APP ${LANG_HINDI} "नया संस्करण इंस्टॉल करने के लिए ऐप बंद कर दिया जाएगा।"
+LangString LANG_MSG_CLOSE_APP ${LANG_ARABIC} "سيتم إغلاق التطبيق لتثبيت الإصدار الجديد."
+LangString LANG_MSG_CLOSE_APP ${LANG_ROMANIAN} "Aplicația va fi închisă pentru a instala noua versiune."
+LangString LANG_MSG_CLOSE_APP ${LANG_DANISH} "Appen lukkes, så den nye version kan installeres."
+LangString LANG_MSG_CLOSE_APP ${LANG_DUTCH} "De app wordt gesloten om de nieuwe versie te installeren."
+LangString LANG_MSG_CLOSE_APP ${LANG_TURKISH} "Yeni sürüm kurulacağı için uygulama kapatılacak."
+LangString LANG_MSG_CLOSE_APP ${LANG_GREEK} "Η εφαρμογή θα κλείσει για να εγκατασταθεί η νέα έκδοση."
+LangString LANG_MSG_CLOSE_APP ${LANG_FILEPINO} "Masisara ang app upang i-install ang bago."
 
 !macro Require64Bit
   ${IfNot} ${RunningX64}
@@ -119,7 +153,7 @@ Function .onInit
   Pop $0
   Pop $1
   ${If} $0 == 0
-    MessageBox MB_OK "verrà chiusa l’app per installre quella nuova"
+    MessageBox MB_OK "$(LANG_MSG_CLOSE_APP)"
     nsExec::Exec '"$SYSDIR\taskkill.exe" /F /IM OrbisStream.exe'
   ${EndIf}
 
@@ -133,6 +167,7 @@ Section "Application" SecMain
   RMDir /r "$INSTDIR\wwwroot"
   SetOutPath "$INSTDIR"
   File /r "${PUBLISHDIR}\*"
+  File /oname=LICENSE.txt "..\LICENSE"
 
   CreateDirectory "$SMPROGRAMS\${APPNAME}"
   CreateShortCut "$SMPROGRAMS\${APPNAME}\${APPNAME}.lnk" "$INSTDIR\${APPEXE}"
@@ -170,7 +205,7 @@ Section "FFmpeg (included, works offline)" SecFfmpeg
   File "${FFMPEGDIR}\*"
   SetOutPath "$INSTDIR"
 
-  DetailPrint "FFmpeg 8.1.3 (GPL) installed in $INSTDIR\ffmpeg"
+  DetailPrint "FFmpeg 9.0.2 (GPL, release/9.0) installed in $INSTDIR\ffmpeg"
   WriteRegStr HKCU "${REGKEY}" "Ffmpeg" "$INSTDIR\ffmpeg\ffmpeg.exe"
 SectionEnd
 !else

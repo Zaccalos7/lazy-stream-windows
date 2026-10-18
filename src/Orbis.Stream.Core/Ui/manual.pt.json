@@ -123,6 +123,19 @@
       ],
       "figure": "settings",
       "callout": "Definições reúne vídeo/áudio, canais e este manual."
+    },
+    {
+      "id": "errorReports",
+      "title": "Report an error",
+      "body": "Comunique um erro no GitHub anexando o código QR ou o ficheiro .txt completo. As chaves de transmissão são ocultadas.",
+      "steps": [
+        "In History or Live management, press the Report error icon beside a failed live.",
+        "A janela do relatório abre-se. Os erros curtos têm um código QR; os longos podem ser transferidos como ficheiro .txt.",
+        "Se o erro for demasiado longo para um só código QR, transfira o ficheiro .txt completo e anexe-o à issue no GitHub.",
+        "Abra uma issue no GitHub, anexe o ficheiro .txt ou uma captura ou fotografia do código QR e descreva o que estava a fazer. Também pode copiar o texto do relatório."
+      ],
+      "figure": "errorReports",
+      "callout": "Anexe o código QR ou o ficheiro .txt transferido à issue."
     }
   ]
 }

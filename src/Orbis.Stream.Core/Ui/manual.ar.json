@@ -123,6 +123,19 @@
       ],
       "figure": "settings",
       "callout": "الإعدادات تجمع الفيديو/الصوت والقنوات وهذا الدليل."
+    },
+    {
+      "id": "errorReports",
+      "title": "Report an error",
+      "body": "أبلغ عن خطأ على GitHub بإرفاق رمز QR أو ملف .txt الكامل. يتم إخفاء مفاتيح البث.",
+      "steps": [
+        "In History or Live management, press the Report error icon beside a failed live.",
+        "تفتح نافذة التقرير. للأخطاء القصيرة رمز QR؛ ويمكن تنزيل الأخطاء الطويلة كملف .txt.",
+        "إذا كان الخطأ أطول من أن يتسع في رمز QR واحد، فنزّل ملف .txt الكامل وأرفقه بالمشكلة على GitHub.",
+        "افتح مشكلة على GitHub، وأرفق ملف .txt أو لقطة شاشة أو صورة لرمز QR، وصف ما كنت تفعله. يمكنك أيضًا نسخ نص التقرير."
+      ],
+      "figure": "errorReports",
+      "callout": "أرفق رمز QR أو ملف .txt الذي نزّلته بالمشكلة."
     }
   ]
 }

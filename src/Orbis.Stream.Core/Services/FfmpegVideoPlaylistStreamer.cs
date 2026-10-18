@@ -55,6 +55,7 @@ public sealed class FfmpegVideoPlaylistStreamer : IVideoPlaylistStreamer
     private readonly MediaProxyService _proxies;
     private readonly EncoderTuningService _tuning;
     private readonly LiveTakeovers _takeovers;
+    private readonly YouTubeStartupGate _youtubeStartup;
     private readonly ILogger<FfmpegVideoPlaylistStreamer> _logger;
 
     public FfmpegVideoPlaylistStreamer(
@@ -70,6 +71,7 @@ public sealed class FfmpegVideoPlaylistStreamer : IVideoPlaylistStreamer
         MediaProxyService proxies,
         EncoderTuningService tuning,
         LiveTakeovers takeovers,
+        YouTubeStartupGate youtubeStartup,
         ILogger<FfmpegVideoPlaylistStreamer> logger)
     {
         _videoRepository = videoRepository;
@@ -84,6 +86,7 @@ public sealed class FfmpegVideoPlaylistStreamer : IVideoPlaylistStreamer
         _proxies = proxies;
         _tuning = tuning;
         _takeovers = takeovers;
+        _youtubeStartup = youtubeStartup;
         _logger = logger;
     }
 
@@ -135,6 +138,7 @@ public sealed class FfmpegVideoPlaylistStreamer : IVideoPlaylistStreamer
                 cancellationToken.ThrowIfCancellationRequested();
                 await StreamSceneAsync(scene.Videos, outputUrl, output, videoLiveHistoryPkid, cancellationToken)
                     .ConfigureAwait(false);
+                if (scene.Videos.Any(row => row.LiveStatus is LiveStatus.Error or LiveStatus.Stopped)) return;
             }
 
             return;
@@ -326,6 +330,11 @@ public sealed class FfmpegVideoPlaylistStreamer : IVideoPlaylistStreamer
         FfmpegStreamingSession? session = null;
         var reconnects = new ReconnectBudget();
 
+        // The platform of the pass that failed, kept because the session is disposed before the
+        // failure is written and a key that does not keep is only worth warning about on the
+        // platforms that hand one out for every live.
+        StreamPlatform? publishPlatform = null;
+
         try
         {
             var probe = planned.Probe ?? await _probe.ProbeAsync(inputPath, cancellationToken).ConfigureAwait(false);
@@ -341,6 +350,9 @@ public sealed class FfmpegVideoPlaylistStreamer : IVideoPlaylistStreamer
                 // Read on every pass, not once before the loop: this is where a parameter changed
                 // from the preview page arrives, and it has to reach the next command line.
                 var videoSetting = FindSetting(videoKey);
+
+                if (!await PrepareYouTubeAsync([video], video, videoSetting, PictureOf(videoSetting, probe, output),
+                    output, resumeFrom, cancellationToken).ConfigureAwait(false)) return StreamOutcome.Stopped;
 
                 _logger.LogInformation("INPUT: working directory = {InputPath}", inputPath);
                 _logger.LogInformation(
@@ -422,10 +434,11 @@ public sealed class FfmpegVideoPlaylistStreamer : IVideoPlaylistStreamer
                 // A started process is not a live: the row says it is connecting until the ingest
                 // takes the stream, and only then that it is streaming.
                 var platform = PlatformName(next);
+                publishPlatform = next.Profile.Platform;
                 var connecting = _localizer.PrintMessage("video.live.connecting", [inputPath, platform]);
                 _logger.LogInformation("{Message}", connecting);
                 SaveMessageOnVideoLiveHistory(
-                    connecting, videoLiveHistoryPkid, inputPath, LiveStatus.Live, DateTime.Now);
+                    connecting, videoLiveHistoryPkid, inputPath, LiveStatus.Connecting, DateTime.Now);
 
                 var outcome = await MonitorAsync(
                         session,
@@ -527,7 +540,7 @@ public sealed class FfmpegVideoPlaylistStreamer : IVideoPlaylistStreamer
                             session,
                             reconnects,
                             inputPath,
-                            message => SaveMessageOnVideoLiveHistory(message, videoLiveHistoryPkid, inputPath, LiveStatus.Live, null),
+                            message => SaveMessageOnVideoLiveHistory(message, videoLiveHistoryPkid, inputPath, LiveStatus.Reconnecting, null),
                             cancellationToken)
                         .ConfigureAwait(false))
                 {
@@ -588,10 +601,10 @@ public sealed class FfmpegVideoPlaylistStreamer : IVideoPlaylistStreamer
                     }
                 }
 
-                var streamingError = _localizer.PrintMessage(
-                    "error.during.streaming.video", [inputPath, videoLiveHistoryPkid])
-                    + "\n"
-                    + (string.IsNullOrWhiteSpace(errorOutput) ? $"ffmpeg exited with code {exitCode}" : errorOutput.Trim());
+                var streamingError = Failure(
+                    _localizer.PrintMessage("error.during.streaming.video", [inputPath, videoLiveHistoryPkid]),
+                    string.IsNullOrWhiteSpace(errorOutput) ? $"ffmpeg exited with code {exitCode}" : errorOutput.Trim(),
+                    publishPlatform);
                 _logger.LogError("{Message}", streamingError);
                 SaveMessageOnVideoLiveHistory(
                     streamingError, videoLiveHistoryPkid, inputPath, LiveStatus.Error, DateTime.Now, 0);
@@ -816,6 +829,10 @@ public sealed class FfmpegVideoPlaylistStreamer : IVideoPlaylistStreamer
         FfmpegStreamingSession? session = null;
         var reconnects = new ReconnectBudget();
 
+        // See StreamVideoAsync: the platform of the pass that failed, kept past the disposal of its
+        // session so that the failure can warn about a key that does not keep.
+        StreamPlatform? publishPlatform = null;
+
         try
         {
             var initialPosition = baseRow.LastTimeStampBeforeStop;
@@ -842,6 +859,11 @@ public sealed class FfmpegVideoPlaylistStreamer : IVideoPlaylistStreamer
             {
                 cancellationToken.ThrowIfCancellationRequested();
                 var videoSetting = CanvasSetting(videoKey, rows);
+
+                var startupFrame = new MediaOutput(FfmpegCommandBuilder.Even(canvasWidth), FfmpegCommandBuilder.Even(canvasHeight),
+                    videoSetting.FrameRate is > 0 ? videoSetting.FrameRate.Value : DefaultCanvasFrameRate);
+                if (!await PrepareYouTubeAsync(rows, baseRow, videoSetting, startupFrame,
+                    output, resumeFrom, cancellationToken).ConfigureAwait(false)) return;
 
                 // The volume of a source is changed from the preview while the live runs, and the
                 // change arrives as a new pass: each pass reads it again.
@@ -939,8 +961,9 @@ public sealed class FfmpegVideoPlaylistStreamer : IVideoPlaylistStreamer
                 }
 
                 var platform = PlatformName(next);
+                publishPlatform = next.Profile.Platform;
                 var connecting = _localizer.PrintMessage("video.live.connecting", [description, platform]);
-                MarkRows(rows, LiveStatus.Live, connecting);
+                MarkRows(rows, LiveStatus.Connecting, connecting);
                 _logger.LogInformation("{Message}", connecting);
 
                 var outcome = await MonitorAsync(
@@ -1051,7 +1074,7 @@ public sealed class FfmpegVideoPlaylistStreamer : IVideoPlaylistStreamer
                 if (!session.EndedNaturally
                     && (outcome == StreamOutcome.Stalled || exitCode != 0)
                     && await ShouldReconnectAsync(
-                            session, reconnects, description, message => MarkRows(rows, LiveStatus.Live, message), cancellationToken)
+                            session, reconnects, description, message => MarkRows(rows, LiveStatus.Reconnecting, message), cancellationToken)
                         .ConfigureAwait(false))
                 {
                     resumeFrom = TimeSpan.FromMilliseconds(session.PositionMilliseconds);
@@ -1104,9 +1127,10 @@ public sealed class FfmpegVideoPlaylistStreamer : IVideoPlaylistStreamer
                     }
                 }
 
-                var failure = _localizer.PrintMessage("error.during.streaming.video", [description, videoLiveHistoryPkid])
-                    + "\n"
-                    + (string.IsNullOrWhiteSpace(errorOutput) ? $"ffmpeg exited with code {exitCode}" : errorOutput.Trim());
+                var failure = Failure(
+                    _localizer.PrintMessage("error.during.streaming.video", [description, videoLiveHistoryPkid]),
+                    string.IsNullOrWhiteSpace(errorOutput) ? $"ffmpeg exited with code {exitCode}" : errorOutput.Trim(),
+                    publishPlatform);
                 _logger.LogError("{Message}", failure);
                 MarkRows(rows, LiveStatus.Error, failure);
                 return;
@@ -1373,7 +1397,7 @@ public sealed class FfmpegVideoPlaylistStreamer : IVideoPlaylistStreamer
                             session,
                             reconnects,
                             takeover.Label,
-                            message => SaveMessageOnVideoLiveHistory(message, program.History, program.Path, LiveStatus.Live, null),
+                            message => SaveMessageOnVideoLiveHistory(message, program.History, program.Path, LiveStatus.Reconnecting, null),
                             cancellationToken)
                         .ConfigureAwait(false))
                 {
@@ -1456,6 +1480,30 @@ public sealed class FfmpegVideoPlaylistStreamer : IVideoPlaylistStreamer
     /// Every row of a canvas shows the same live, so they all carry the same status: the live page
     /// lists them one under the other and a row left behind at OFFLINE is a row that looks broken.
     /// </summary>
+    private Task<bool> PrepareYouTubeAsync(IReadOnlyList<VideoEntity> rows, VideoEntity driving,
+        VideoSettingEntity setting, MediaOutput frame, LiveOutput? output, TimeSpan resumeFrom,
+        CancellationToken cancellationToken)
+    {
+        if (output is null || output.Profile.Platform != StreamPlatform.YouTube || output.BroadcastVerified)
+            return Task.FromResult(true);
+        return _youtubeStartup.WaitAsync(driving.Pkid, driving.ChannelName, output, setting, frame, resumeFrom,
+            () => _videoRepository.FindByPkid(driving.Pkid) is not { ShouldBeStop: false },
+            (status, message) =>
+            {
+                // Persist the original program position, including a resumed live. Waiting and
+                // reconnecting never consume the user's files or the rest of a playlist.
+                foreach (var row in rows)
+                {
+                    row.LastTimeStampBeforeStop = (long)resumeFrom.TotalMilliseconds;
+                    row.LiveStatus = status;
+                    row.Message = message;
+                    _videoRepository.SetStartupState(row.Pkid, status, message, row.LastTimeStampBeforeStop);
+                }
+                _notifier.Raise();
+                if (status == LiveStatus.Stopped) _videoRepository.SetStopFlag(driving.Pkid, false);
+            }, cancellationToken);
+    }
+
     private void MarkRows(IReadOnlyList<VideoEntity> rows, LiveStatus status, string message)
     {
         foreach (var row in rows)
@@ -1689,7 +1737,7 @@ public sealed class FfmpegVideoPlaylistStreamer : IVideoPlaylistStreamer
             }
             else
             {
-                if (!announced)
+                if (!announced && session.IsPublishing)
                 {
                     announced = true;
                     onAir();
@@ -1814,19 +1862,41 @@ public sealed class FfmpegVideoPlaylistStreamer : IVideoPlaylistStreamer
     private async Task<string> NotReceivedMessageAsync(FfmpegStreamingSession session, string label, string platform)
     {
         var errorOutput = await session.ReadErrorAsync().ConfigureAwait(false);
-        var message = _localizer.PrintMessage("video.live.not.received", [label, platform]);
-        return string.IsNullOrWhiteSpace(errorOutput) ? message : message + "\n" + errorOutput.Trim();
+        return Failure(
+            _localizer.PrintMessage("video.live.not.received", [label, platform]),
+            errorOutput?.Trim(),
+            session.Profile.Platform);
     }
 
-    private static string PlatformName(FfmpegStreamingSession session) => session.Profile.Platform switch
+    /// <summary>
+    /// What is said of a live that did not make it: the headline, then the warning about a key that
+    /// does not keep when the platform is one that hands out a new one for every live, then what
+    /// ffmpeg said.
+    /// </summary>
+    private string Failure(string headline, string? detail, StreamPlatform? platform)
     {
-        StreamPlatform.Twitch => "Twitch",
-        StreamPlatform.YouTube => "YouTube",
-        StreamPlatform.Kick => "Kick",
-        StreamPlatform.Facebook => "Facebook Gaming",
-        StreamPlatform.TikTok => "TikTok",
-        _ => "RTMP"
-    };
+        var text = headline;
+        if (ExpiredKeyWarning(platform) is { } warning)
+        {
+            text += "\n" + warning;
+        }
+
+        return string.IsNullOrWhiteSpace(detail) ? text : text + "\n" + detail;
+    }
+
+    /// <summary>
+    /// The warning a live on a platform whose stream key does not keep gets, and nothing anywhere
+    /// else. Facebook Live Producer and TikTok LIVE hand out a key for every live and it is good
+    /// for 24 hours; past that, or while another publisher holds it, the ingest takes the
+    /// connection, answers the handshake and the publish as it always does, and closes the socket
+    /// without a word. A user only sees an I/O error, so this is what tells them what to do.
+    /// </summary>
+    private string? ExpiredKeyWarning(StreamPlatform? platform) => platform is StreamPlatform.Facebook
+        or StreamPlatform.TikTok
+        ? _localizer.PrintMessage("video.live.key.expired")
+        : null;
+
+    private static string PlatformName(FfmpegStreamingSession session) => session.Profile.Name;
 
     private async Task StopAndRecordAsync(
         FfmpegStreamingSession session,

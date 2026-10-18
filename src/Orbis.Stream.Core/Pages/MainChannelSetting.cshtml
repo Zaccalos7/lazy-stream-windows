@@ -1,5 +1,6 @@
 @page "/orbis/mainChannelSetting"
 @model MainChannelSettingModel
+@using Orbis.Stream.Core.Streaming
 @{
     ViewData["Title"] = T["channelSettings"];
     var editing = Model.Editing;
@@ -52,6 +53,10 @@
                 <div class="caption truncate">@configuration.Description</div>
             }
             <div class="caption truncate">@configuration.StreamUrl</div>
+            @if (choice?.Value == "facebook")
+            {
+                <partial name="_FacebookKeyWarning" model="StreamKeyAge.Of(configuration)" />
+            }
         </div>
         <div class="actions">
             @if (youtube && !configuration.FfmpegSender)
@@ -101,9 +106,16 @@
                     <label class="field">
                         <span>@T["url"]</span>
                         <input class="input" name="streamUrl" value="@editing.StreamUrl" placeholder="rtmp://…" />
-                        @* Kick and Facebook Gaming fill in where their ingest usually is, and the address to use is
-                           the one their dashboard shows: said where the address is typed. *@
-                        <small data-show-when="@MainChannelSettingModel.PersonalIngests">@T["ingestFromDashboard"]</small>
+                        @* Kick and Facebook Gaming fill in where their ingest usually is, and the
+                           address to use is the one their dashboard shows: said where the address is typed,
+                           with where each of them shows it. *@
+                        @foreach (var hint in MainChannelSettingModel.IngestHints)
+                        {
+                            <div class="tuning-hint" data-show-when="@hint.Platforms">
+                                <i class="icon">&#xE7BA;</i>
+                                <span>@T[hint.Key]</span>
+                            </div>
+                        }
                     </label>
                     @* TikTok hands out a key for every live, which goes stale by the next one: its
                        configuration keeps none, and the key is asked for when a live starts. *@
@@ -121,6 +133,11 @@
                         <span>@T["key"]</span>
                         <p class="caption key-each-live"><i class="icon">&#xE72E;</i><span>@T["keyEachLiveHint"]</span></p>
                     </div>
+                </div>
+                @* Publishing steps and key expiry belong to the selected Facebook destination. *@
+                <div class="section" data-show-when="facebook" data-show-when-field="platformStreamName" style="display: none;">
+                    <partial name="_FacebookLiveNotice" />
+                    <partial name="_FacebookKeyWarning" model="StreamKeyAge.Of(editing)" />
                 </div>
                 <label class="field section">
                     <span>@T["description"]</span>

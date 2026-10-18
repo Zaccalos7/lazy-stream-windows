@@ -47,6 +47,10 @@ else
                         <tr data-row>
                             <td>
                                 <span class="badge @(live && knownPlatform == "youtube" && !Air.IsConfirmed(historyPkid) ? "offair" : LiveStatusView.Css(status))">@T[live && knownPlatform == "youtube" && !Air.IsConfirmed(historyPkid) ? "youtubeChecking" : LiveStatusView.Key(status)]</span>
+                                @if (active && !live && knownPlatform == "youtube")
+                                {
+                                    <p class="caption">@video.Message</p>
+                                }
                                 @if (live && Air.IsOffAir(historyPkid))
                                 {
                                     @* Sent, and not shown: the row says it where the user looks first. *@

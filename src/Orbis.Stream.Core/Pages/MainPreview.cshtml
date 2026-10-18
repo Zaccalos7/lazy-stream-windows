@@ -156,7 +156,7 @@ else
                  data-checking="@T["youtubeChecking"]" data-verified="@T["youtubeVerified"]"
                  data-offair="@T["youtubeOffAir"]" data-unverified="@T["youtubeUnverified"]"
                  data-failed="@T["youtubeCheckFailed"]" aria-live="polite">
-            <p data-youtube-status>@T[live.PlatformVerified ? "youtubeVerified" : live.PlatformOffAir ? "youtubeOffAir" : live.PlatformUnverified ? "youtubeUnverified" : "youtubeChecking"]</p>
+            <p data-youtube-status>@(live.StartupMessage ?? T[live.PlatformVerified ? "youtubeVerified" : live.PlatformOffAir ? "youtubeOffAir" : live.PlatformUnverified ? "youtubeUnverified" : "youtubeChecking"])</p>
             <button type="button" class="btn" data-youtube-recheck>@T["youtubeCheckNow"]</button>
             <partial name="_YouTubeLiveChecks" />
         </section>

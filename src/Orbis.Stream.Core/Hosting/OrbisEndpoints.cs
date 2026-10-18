@@ -461,7 +461,7 @@ public static class OrbisEndpoints
         // the platform has been asked which video is on air, and that takes longer than a page
         // should wait to be drawn. There is nothing to hand back when the live is over, when the
         // platform is one this application has no player for, or when the channel is not on air,
-        // and a page that is told so keeps the local picture.
+        // and a page that is told so waits for the public broadcast without playing a local file.
         group.MapGet("/live/embed", async (
             LivePreviewService service,
             HttpRequest request,

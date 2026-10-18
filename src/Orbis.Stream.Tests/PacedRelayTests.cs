@@ -142,6 +142,7 @@ public sealed class StreamPlatformTests
     }
 }
 
+[Collection(TimingSensitiveCollection.Name)]
 public sealed class HybridWaiterTests
 {
     [Fact]
@@ -162,9 +163,8 @@ public sealed class HybridWaiterTests
             lateness.Add(Stopwatch.GetElapsedTime(target, now).TotalMilliseconds);
         }
 
-        // On time is a matter of the median: the suite runs ffmpeg next to this test and the
-        // scheduler may take the core away once, but a wait that sleeps through its target (the
-        // oversleep the halving is there to avoid) is late every time.
+        // These measurements run separately from the encoder tests. Use the median because the
+        // OS may still preempt one wait; a sleeper that consistently misses its target fails.
         lateness.Sort();
         Assert.True(lateness[lateness.Count / 2] < 2, $"median lateness {lateness[lateness.Count / 2]:0.###} ms");
     }

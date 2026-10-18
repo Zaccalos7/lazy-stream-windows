@@ -25,6 +25,8 @@ function setup(answers) {
   dialog.showModal = () => { dialog.open = true; };
   const document = element();
   document.getElementById = () => dialog;
+  // This document contains the report dialog, with no YouTube controls.
+  document.querySelectorAll = () => [];
   const requests = [];
   const fetch = async url => {
     requests.push(url);

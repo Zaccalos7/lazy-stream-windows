@@ -82,6 +82,7 @@
 
 <div data-preview
      data-pkid="@live.VideoPkid"
+     data-history="@live.History"
      data-live="@(live.IsLive ? "1" : "0")"
      data-status="@(live.Status?.ToWireValue())"
      data-position="@live.PositionMilliseconds"
@@ -121,7 +122,7 @@ else
     // The public player is resolved on demand; no local video is shown as proof of delivery.
     var platform = LiveLinkView.PlatformOf(live.StreamUrl);
     var platformLabel = LiveLinkView.LabelOf(platform);
-    var hasPlayer = platform is "twitch" or "youtube";
+    var hasPlayer = platform is "twitch" or "youtube" or "kick" or "facebook";
 
     // A picture that stands up gets a stage that stands up: a live going out in portrait (a
     // setting of 1080x1920, a phone video kept at its own size) is drawn at the height of the
@@ -159,12 +160,21 @@ else
                     <iframe class="preview-platform-player"
                             data-platform-embed
                             title="@(platformLabel ?? "Platform") live stream"
-                            allow="autoplay; fullscreen; picture-in-picture"
+                            allow="autoplay; encrypted-media; fullscreen; picture-in-picture"
                             referrerpolicy="strict-origin-when-cross-origin"
                             allowfullscreen
                             scrolling="no"
                             hidden></iframe>
                 </div>
+                @if (platform == "facebook")
+                {
+                    <label class="field">
+                        <span>@T["previewFacebookUrl"]</span>
+                        <input class="input" type="url" data-platform-url value="@Model.WatchUrl" required maxlength="2048"
+                               placeholder="https://www.facebook.com/watch/?v=…" />
+                        <small>@T["previewFacebookHint"]</small>
+                    </label>
+                }
                 <div class="preview-player-controls">
                     @if (hasPlayer)
                     {
@@ -174,11 +184,16 @@ else
                               data-idle="@T["previewBandwidth"]"
                               data-loading="@T["embedLoading"].Replace("{0}", platformLabel)"
                               data-offair="@T["embedFailed"].Replace("{0}", platformLabel)"
+                              data-facebook="@T["previewFacebookHint"]"
                               data-failed="@T["previewUnavailable"]"></span>
                     }
                     @if (Model.WatchUrl is { } watchUrl)
                     {
                         <a class="btn subtle" href="@watchUrl" data-platform-watch target="_blank" rel="noopener noreferrer">@T["openLivePage"]</a>
+                    }
+                    else if (platform == "facebook")
+                    {
+                        <a class="btn subtle" data-platform-watch target="_blank" rel="noopener noreferrer" hidden>@T["openLivePage"]</a>
                     }
                 </div>
                 <div class="preview-bar">

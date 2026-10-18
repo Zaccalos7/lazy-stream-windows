@@ -1,3 +1,4 @@
+using Orbis.Stream.Core.Contracts;
 using Orbis.Stream.Core.Domain;
 using Orbis.Stream.Core.I18n;
 using Orbis.Stream.Core.Streaming;

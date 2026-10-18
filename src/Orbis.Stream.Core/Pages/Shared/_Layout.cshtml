@@ -1,3 +1,4 @@
+@inject Orbis.Stream.Core.Services.LiveChangeNotifier Changes
 @{
     var path = Context.Request.Path.Value ?? string.Empty;
     string? Current(params string[] pages) =>
@@ -53,6 +54,10 @@
         <a href="/orbis/mainTaskManager" aria-current="@Current("mainTaskManager")"><i class="icon">&#xE9D9;</i><span>@T["taskManager"]</span></a>
         <a href="/orbis/manual" aria-current="@Current("manual")"><i class="icon">&#xE736;</i><span>@T["manual"]</span></a>
         <a href="/orbis/mainSetting" aria-current="@Current("mainSetting", "mainVideoSetting", "mainChannelSetting")"><i class="icon">&#xE713;</i><span>@T["settings"]</span></a>
+        <a class="nav-add-channel" href="/orbis/mainChannelSetting?edit=new" title="@T["addChannel"]"><i class="icon" aria-hidden="true">&#xE710;</i><span>@T["addChannel"]</span></a>
+        <div class="nav-lives-region" data-refresh="/orbis/mainLive?handler=SidebarLives" data-since="@Changes.Version">
+            <partial name="_SidebarLives" />
+        </div>
         <div class="nav-spacer"></div>
         
         <div class="segmented-control" role="radiogroup" aria-label="Theme">

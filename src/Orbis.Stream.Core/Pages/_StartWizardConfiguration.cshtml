@@ -31,6 +31,9 @@ else
                     @if (choice?.Value == "facebook")
                     {
                         <partial name="_FacebookLiveNotice" />
+                        @* A Facebook key is good for a day and the user cannot tell a stale one from
+                           a live one: this is where they read the key before starting with it. *@
+                        <partial name="_FacebookKeyWarning" model="StreamKeyAge.Of(configuration)" />
                     }
                     @if (!string.IsNullOrWhiteSpace(configuration.Description))
                     {

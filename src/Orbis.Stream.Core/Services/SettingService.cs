@@ -35,7 +35,11 @@ public sealed class SettingService
 
         request = WithStandInKey(request);
         CheckUniqueConstraint(request.StreamKey!.Trim(), request.StreamUrl!.Trim());
-        _settingRepository.Insert(ToEntity(request));
+        var saved = ToEntity(request);
+        // The key is new, so the moment it was saved is now: this is what tells a Facebook key
+        // that is still good from one the ingest has stopped taking (ExpiringStreamKeys).
+        saved.StreamKeySavedAt = DateTime.Now;
+        _settingRepository.Insert(saved);
 
         return _responses.Build("setting.created", StatusCodes.Status201Created);
     }
@@ -51,6 +55,8 @@ public sealed class SettingService
             throw new NotFoundCustomException("setting.not.found");
         }
 
+        var keyBefore = setting.StreamKey;
+
         ApplyNonNullValues(request, setting);
 
         // A configuration turned into a TikTok one forgets the key it had, and one that stays
@@ -59,6 +65,8 @@ public sealed class SettingService
         {
             setting.StreamKey = LiveStreamKeys.StandInFor(setting.ChannelName);
         }
+
+        StampTheKeyMoment(setting, before: keyBefore);
 
         _settingRepository.Update(setting);
 
@@ -179,6 +187,19 @@ public sealed class SettingService
         LiveStreamKeys.IsAskedFor(request.PlatformStreamName, request.StreamUrl)
             ? request with { StreamKey = LiveStreamKeys.StandInFor(request.ChannelName) }
             : request;
+
+    /// <summary>
+    /// The moment a key was saved, kept in step with the key itself: an edit that touches anything
+    /// but the key (the name of the channel, its description, the folder) leaves it alone, and an
+    /// edit that changes it starts the day of the new one again.
+    /// </summary>
+    private static void StampTheKeyMoment(SettingEntity setting, string? before)
+    {
+        if (!string.Equals(before, setting.StreamKey, StringComparison.Ordinal))
+        {
+            setting.StreamKeySavedAt = DateTime.Now;
+        }
+    }
 
     private void CheckUniqueConstraint(string streamKey, string streamUrl)
     {

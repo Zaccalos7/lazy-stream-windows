@@ -68,7 +68,8 @@ public static class DatabaseSchema
                 Column("auto_cleanup_enabled", "BOOLEAN", "BOOLEAN DEFAULT 'false' NOT NULL", nullable: false),
                 Column("auto_cleanup_interval_months", "INTEGER", "INTEGER DEFAULT '0'", nullable: false),
                 Column("auto_cleanup_older_than_months", "INTEGER", "INTEGER DEFAULT '0'", nullable: false),
-                Column("ffmpeg_sender", "BOOLEAN", "BOOLEAN DEFAULT 'false' NOT NULL", nullable: false)
+                Column("ffmpeg_sender", "BOOLEAN", "BOOLEAN DEFAULT 'false' NOT NULL", nullable: false),
+                Column("stream_key_saved_at", "TIMESTAMP", "TIMESTAMP", nullable: true)
             ],
             ["video"] =
             [
@@ -197,6 +198,7 @@ public static class DatabaseSchema
             is_active BOOLEAN DEFAULT 'false',
             channel_name TEXT DEFAULT 'Zingy' NOT NULL,
             scene_pkid BIGINT,
+            stream_key_saved_at TIMESTAMP,
             CONSTRAINT uk_setting_stream_url_stream_key UNIQUE (stream_url, stream_key)
         )
         """,

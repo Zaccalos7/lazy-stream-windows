@@ -1295,7 +1295,7 @@ function paintYouTubeVerification(state) {
   const panel = preview.querySelector("[data-youtube-verification]");
   if (!panel) return;
   const key = state.platformVerified ? "verified" : state.platformOffAir ? "offair" : state.platformUnverified ? "unverified" : "checking";
-  panel.querySelector("[data-youtube-status]").textContent = panel.dataset[key];
+  panel.querySelector("[data-youtube-status]").textContent = state.startupMessage || panel.dataset[key];
   for (const link of document.querySelectorAll("[data-platform-manage]")) {
     if (state.platformManagementUrl) link.href = state.platformManagementUrl;
   }

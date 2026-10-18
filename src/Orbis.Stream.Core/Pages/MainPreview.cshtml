@@ -6,6 +6,7 @@
     ViewData["Title"] = T["livePreviewTitle"];
     var live = Model.Snapshot;
     var youtube = LiveLinkView.PlatformOf(live.StreamUrl) == "youtube";
+    var facebook = LiveLinkView.PlatformOf(live.StreamUrl) == "facebook";
     var verifying = youtube && !live.PlatformVerified;
 
     string Fps(double value) => value <= 0 ? "–" : value.ToString("0.###", CultureInfo.InvariantCulture) + " fps";
@@ -26,7 +27,7 @@
     <link rel="stylesheet" href="/css/scenes.css" />
     <script src="/js/live-player.js" defer></script>
 }
-<div class="page-header@(youtube && live.IsLive ? " preview-header-with-help" : "")">
+<div class="page-header@((youtube && live.IsLive) || facebook ? " preview-header-with-help" : "")">
     <div style="display: flex; align-items: center; gap: 1rem;">
         <a class="btn subtle icon-only" href="/orbis/mainLiveMenu" title="@T["back"]" aria-label="@T["back"]"><i class="icon">&#xE72B;</i></a>
         <div>
@@ -87,6 +88,17 @@
     </section>
 }
 
+@if (facebook)
+{
+    <details class="facebook-live preview-platform-help" open>
+        <summary class="facebook-live-toggle">
+            <strong class="facebook-live-title">@T["facebookGoLiveTitle"]</strong>
+            <i class="icon" aria-hidden="true">&#xE70D;</i>
+        </summary>
+        <partial name="_FacebookLiveInstructions" model="true" />
+    </details>
+}
+
 @* The lives on air, when there is more than one: the page watches one of them and this is how it
    says which, a list instead of a row of buttons across the page. The control is on the page from
    the start and the push channel fills it, so a live that starts while the page is open shows up in
@@ -102,17 +114,6 @@
         </select>
     </label>
 </div>
-
-@if (LiveLinkView.PlatformOf(live.StreamUrl) == "facebook")
-{
-    <details class="facebook-live" open>
-        <summary class="facebook-live-toggle">
-            <strong class="facebook-live-title">@T["facebookGoLiveTitle"]</strong>
-            <i class="icon" aria-hidden="true">&#xE70D;</i>
-        </summary>
-        <partial name="_FacebookLiveInstructions" model="true" />
-    </details>
-}
 
 @if (!live.IsLive)
 {

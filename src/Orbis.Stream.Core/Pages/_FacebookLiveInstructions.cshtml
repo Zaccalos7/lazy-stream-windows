@@ -1,9 +1,4 @@
 @model bool
-<span class="caption facebook-live-help" style="display: block;" data-facebook-live-notice>@T["facebookGoLiveHelp"]</span>
-@if (!Model)
-{
-    <p class="caption facebook-live-help">@Html.Raw(T["facebookStreamingKeyHelp"]) @Html.Raw(T["facebookSaveKeyStep"])</p>
-}
 <ol class="facebook-live-steps">
     <li>
         @Html.Raw(T["facebookStartStreamStep"])

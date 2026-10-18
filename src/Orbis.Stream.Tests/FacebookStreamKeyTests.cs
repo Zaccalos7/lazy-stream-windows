@@ -106,9 +106,9 @@ public sealed class FacebookStreamKeyTests : IClassFixture<ApplicationFixture>
         Assert.Contains("keys can expire", steps[3], StringComparison.Ordinal);
         Assert.Contains("validity shown in Live Producer", steps[3], StringComparison.Ordinal);
 
-        // Key setup remains available in the wizard before the publishing instructions.
-        Assert.Contains("Use Stream key", html, StringComparison.Ordinal);
-        Assert.Contains("REST API", html, StringComparison.Ordinal);
+        // The obsolete setup instructions are not repeated above the publishing steps.
+        Assert.DoesNotContain("Use Stream key", html, StringComparison.Ordinal);
+        Assert.DoesNotContain("REST API", html, StringComparison.Ordinal);
 
         settings.DeleteAStreamingSetting(Service<SettingRepository>()
             .FindAll(new Dictionary<string, string> { ["channelName"] = "wizard.facebook.channel" }).Single().Id);

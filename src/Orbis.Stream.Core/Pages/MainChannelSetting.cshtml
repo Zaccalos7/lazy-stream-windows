@@ -134,11 +134,8 @@
                         <p class="caption key-each-live"><i class="icon">&#xE72E;</i><span>@T["keyEachLiveHint"]</span></p>
                     </div>
                 </div>
-                @* Straight under the key it says to paste there, and above the description: the box
-                   and the four steps that fill it belong to the same reading, not two fields apart.
-                   The dialog is also where a new key is saved, and saving it is what writes the
-                   moment that clears the warning the wizard shows on it. *@
-                <div class="section" data-show-when="facebook">
+                @* Publishing steps and key expiry belong to the selected Facebook destination. *@
+                <div class="section" data-show-when="facebook" data-show-when-field="platformStreamName" style="display: none;">
                     <partial name="_FacebookLiveNotice" />
                     <partial name="_FacebookKeyWarning" model="StreamKeyAge.Of(editing)" />
                 </div>

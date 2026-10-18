@@ -158,6 +158,7 @@ else
                         <p class="muted" data-embed-text>@T[hasPlayer ? "previewBandwidth" : "previewExternal"]</p>
                     </div>
                     <iframe class="preview-platform-player"
+                            id="preview-platform-player"
                             data-platform-embed
                             title="@(platformLabel ?? "Platform") live stream"
                             allow="autoplay; encrypted-media; fullscreen; picture-in-picture"
@@ -179,12 +180,18 @@ else
                     @if (hasPlayer)
                     {
                         <button type="button" class="btn" data-platform-toggle aria-pressed="false">@T["previewStart"]</button>
+                        @if (platform == "youtube")
+                        {
+                            <button type="button" class="btn accent" data-platform-play hidden>@T["previewPlay"]</button>
+                        }
                         <span hidden data-platform-words
                               data-start="@T["previewStart"]" data-stop="@T["previewStop"]"
                               data-idle="@T["previewBandwidth"]"
                               data-loading="@T["embedLoading"].Replace("{0}", platformLabel)"
                               data-offair="@T["embedFailed"].Replace("{0}", platformLabel)"
                               data-facebook="@T["previewFacebookHint"]"
+                              data-play-required="@T["previewPlayRequired"]"
+                              data-player-error="@T["previewPlayerError"]"
                               data-failed="@T["previewUnavailable"]"></span>
                     }
                     @if (Model.WatchUrl is { } watchUrl)
@@ -196,6 +203,7 @@ else
                         <a class="btn subtle" data-platform-watch target="_blank" rel="noopener noreferrer" hidden>@T["openLivePage"]</a>
                     }
                 </div>
+                <p class="caption" data-platform-notice role="status" hidden></p>
                 <div class="preview-bar">
                     <div class="preview-id">
                         <strong class="truncate">@live.VideoName</strong>

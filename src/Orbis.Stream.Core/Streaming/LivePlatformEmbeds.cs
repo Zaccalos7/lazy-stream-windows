@@ -233,7 +233,7 @@ public sealed class LivePlatformEmbeds
             handle,
             // Muted and inline, so the browser lets it start on its own: a preview is opened
             // without a gesture on the player and autoplay of sound is not one it will allow.
-            $"https://www.youtube.com/embed/{videoId}?autoplay=1&mute=1&playsinline=1&rel=0",
+            $"https://www.youtube.com/embed/{videoId}?autoplay=1&mute=1&playsinline=1&rel=0&enablejsapi=1",
             videoId));
     }
 

@@ -151,6 +151,8 @@ public sealed class LivePlatformEmbedTests
         Assert.Equal("youtube", found.Embed!.Platform);
         Assert.Equal("reproChannel", found.Embed.Channel);
         Assert.StartsWith("https://www.youtube.com/embed/RU6gEobXVHA?", found.Embed.Url, StringComparison.Ordinal);
+        Assert.Contains("enablejsapi=1", found.Embed.Url, StringComparison.Ordinal);
+        Assert.Contains("mute=1", found.Embed.Url, StringComparison.Ordinal);
     }
 
     [Fact]

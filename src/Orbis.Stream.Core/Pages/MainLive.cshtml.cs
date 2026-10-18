@@ -224,7 +224,7 @@ public sealed class MainLiveModel(
         {
             var video = videos.FindVideo(pkid);
             validator.RequireVideo(video);
-            return Run(() => streaming.StartVideo(video, streamKey));
+            return Run(() => streaming.StartVideo(video, streamKey), NoticeKind.Warning);
         });
         return RedirectToPage(Filters);
     }
@@ -243,7 +243,7 @@ public sealed class MainLiveModel(
                 streaming.RestartFromBeginning(historyPkid);
             }
 
-            return Run(() => streaming.StartVideo(video, streamKey));
+            return Run(() => streaming.StartVideo(video, streamKey), NoticeKind.Warning);
         });
         return RedirectToPage(Filters);
     }
@@ -271,7 +271,7 @@ public sealed class MainLiveModel(
             streaming.PrepareStartFrom(pkid);
             var video = videos.FindVideo(pkid);
             validator.RequireVideo(video);
-            return Run(() => streaming.StartVideo(video, streamKey));
+            return Run(() => streaming.StartVideo(video, streamKey), NoticeKind.Warning);
         });
         return RedirectToPage(Filters);
     }
@@ -334,7 +334,7 @@ public sealed class MainLiveModel(
             started = Try(() =>
             {
                 validator.RequireStartSceneLive(request);
-                return Run(() => streaming.StartSceneLive(request));
+                return Run(() => streaming.StartSceneLive(request), NoticeKind.Warning);
             });
         }
 
@@ -350,7 +350,7 @@ public sealed class MainLiveModel(
         var started = request is not null && Try(() =>
         {
             validator.RequireStartLive(request);
-            return Run(() => streaming.StartPlaylist(request));
+            return Run(() => streaming.StartPlaylist(request), NoticeKind.Warning);
         });
 
         return started

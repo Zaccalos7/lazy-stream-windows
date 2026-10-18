@@ -1,0 +1,23 @@
+@using System.Globalization
+@model StreamKeyAge
+@* Whether the key stored on a configuration can still be streamed with. Nothing is drawn for a
+   platform whose keys do not expire, and nothing is said about the age of one that was never
+   written down: the warning is the whole of what this partial has to offer. It carries the link
+   that fixes it, because a warning that names a key nobody can replace from where it is read is
+   only half of the answer - the user is sent back to the producer and told which of the four
+   steps above it is the one to do. *@
+@if (Model.Expired)
+{
+    <div class="infobar warning facebook-key-expired" data-facebook-key-expired>
+        <i class="icon">&#xE7BA;</i>
+        <span>
+            <strong>@T["facebookKeyExpired"]</strong>
+            <span>@T["facebookKeyExpiredHelp"]</span>
+            <a href="@LiveLinkView.FacebookProducerUrl" target="_blank" rel="noopener noreferrer">@T["facebookOpenProducer"]</a>
+        </span>
+    </div>
+}
+else if (Model.Saved)
+{
+    <p class="caption facebook-key-saved" data-facebook-key-saved>@string.Format(T["facebookKeySavedOn"], Model.SavedAt!.Value.ToString("dd/MM/yyyy HH:mm", CultureInfo.InvariantCulture))</p>
+}

@@ -260,6 +260,24 @@ the platform profile turns the frame of a live that would lie down (`StreamPlatf
 so a landscape file or canvas is fitted into 9:16 with bands instead of being stretched. Delivery
 is the one of YouTube: ffmpeg publishes at real time with a short head start, with AAC at 48 kHz.
 
+### Facebook Gaming
+
+Facebook does not take a key on its own: Live Producer writes one for a broadcast that is standing
+up, and the ingest (`rtmps://live-api-s.facebook.com:443/rtmp`) refuses the key of anything else.
+So the live is started on Facebook first - the page links
+`https://www.facebook.com/live/producer`, and every Facebook destination spells the four steps out
+where the key is asked for: press *Go live*, take the stream key from *Streaming settings* →
+*Use Stream key* (the REST API), paste it into the configuration and save it, and only then start
+the live from Orbis, which puts the stream into the broadcast already waiting.
+
+That key is good for one day. The moment it was saved is kept with it (`setting.stream_key_saved_at`,
+written by `SettingService` whenever the key itself changes - an edit that touches only the name of
+the channel leaves it alone), and `ExpiringStreamKeys` reads the age of it: a day old, the wizard,
+the row of the configuration and the dialog all say the key has expired and point back at the
+producer. A key saved before the column existed has an age nobody knows and is taken to be expired.
+Nothing asks Facebook whether a key is still good - the ingest only answers by refusing it - so the
+age of the key is the whole of what the page has to go on.
+
 ### Scenes and overlays
 
 The layouts page draws the skeleton of a live: slots, and the overlays that dress it (PNG, GIF,

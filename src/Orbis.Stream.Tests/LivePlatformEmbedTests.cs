@@ -151,6 +151,8 @@ public sealed class LivePlatformEmbedTests
         Assert.Equal("youtube", found.Embed!.Platform);
         Assert.Equal("reproChannel", found.Embed.Channel);
         Assert.StartsWith("https://www.youtube.com/embed/RU6gEobXVHA?", found.Embed.Url, StringComparison.Ordinal);
+        Assert.Contains("enablejsapi=1", found.Embed.Url, StringComparison.Ordinal);
+        Assert.Contains("mute=1", found.Embed.Url, StringComparison.Ordinal);
     }
 
     [Fact]
@@ -229,11 +231,11 @@ public sealed class LivePlatformEmbedTests
     }
 
     [Fact]
-    public async Task YouTube_AStreamsPageThatArrivesEmpty_IsAChannelWithoutALive_NotAFailure()
+    public async Task YouTube_ARecognizedEmptyGrid_IsAChannelWithoutALive_NotAFailure()
     {
         // The page was read and had no video on it. That is the answer, and it is not the same as
         // never having got the page.
-        var embeds = Platform(_ => Text(string.Empty));
+        var embeds = Platform(_ => Text("{\"contents\":[]}"));
 
         var found = await embeds.ResolveAsync(YouTube, "reproChannel", "youtube", "localhost", default);
 
@@ -262,18 +264,18 @@ public sealed class LivePlatformEmbedTests
         var clock = new LookupClock();
         var handler = new RecordingHandler(_ => failure
             ? new HttpResponseMessage(HttpStatusCode.ServiceUnavailable)
-            : Text(string.Empty));
+            : Text("{\"contents\":[]}"));
         var embeds = new LivePlatformEmbeds(new HttpClient(handler), NullLogger<LivePlatformEmbeds>.Instance, clock);
 
         var first = await embeds.ResolveAsync(YouTube, "channel", null, "localhost", default);
         var second = await embeds.ResolveAsync(YouTube, "channel", null, "localhost", default);
         Assert.Equal(first, second);
-        Assert.Single(handler.Asked);
+        Assert.Equal(failure ? 3 : 1, handler.Asked.Count);
         Assert.Equal(failure, second.Reason is not null);
 
         clock.Advance(TimeSpan.FromSeconds(30));
         await embeds.ResolveAsync(YouTube, "channel", null, "localhost", default);
-        Assert.Equal(2, handler.Asked.Count);
+        Assert.Equal(failure ? 6 : 2, handler.Asked.Count);
     }
 
     [Fact]
@@ -328,6 +330,114 @@ public sealed class LivePlatformEmbedTests
 
         Assert.Equal("RU6gEobXVHA", LivePlatformEmbeds.CandidateOf(page));
         Assert.Null(LivePlatformEmbeds.CandidateOf("<html>nothing here</html>"));
+    }
+
+    [Fact]
+    public async Task YouTube_FindsALiveAfterAnEndedVideoAndToleratesReorderedProperties()
+    {
+        var embeds = Platform(request => Text(request.RequestUri!.AbsolutePath.EndsWith("/streams")
+            ? """
+              <script>window["ytInitialData"] = {"contents":[
+              {"contentType":"LOCKUP_CONTENT_TYPE_VIDEO","other":true,"contentId":"oldVideo001"},
+              {"contentType":"LOCKUP_CONTENT_TYPE_VIDEO","contentId":"newVideo002"}]};</script>
+              """
+            : request.RequestUri.Query.Contains("oldVideo001") ? Ended() : Watch(true)));
+        var found = await embeds.ResolveAsync(YouTube, "channel", null, null, default);
+        Assert.Equal("newVideo002", found.Embed?.VideoId);
+    }
+
+    [Theory]
+    [InlineData("")]
+    [InlineData("<html>consent</html>")]
+    [InlineData("<script>var ytInitialData = {\"responseContext\":{}};</script>")]
+    public async Task YouTube_AnUnreadablePageIsUnverifiedRatherThanOffAir(string page)
+    {
+        var found = await Platform(_ => Text(page)).ResolveAsync(YouTube, "channel", null, null, default);
+        Assert.Null(found.Embed);
+        Assert.NotNull(found.Reason);
+    }
+
+    [Fact]
+    public async Task YouTube_AConsentWatchPageDoesNotProveThatTheVideoIsOffAir()
+    {
+        var found = await Platform(request => Text(request.RequestUri!.AbsolutePath.EndsWith("/streams")
+            ? Streams("RU6gEobXVHA") : "<html>consent</html>"))
+            .ResolveAsync(YouTube, "channel", null, null, default);
+        Assert.NotNull(found.Reason);
+    }
+
+    [Fact]
+    public async Task YouTube_AManualRecheckDiscardsACachedNegativeAnswer()
+    {
+        var live = false;
+        var embeds = Platform(request => Text(request.RequestUri!.AbsolutePath.EndsWith("/streams")
+            ? Streams("RU6gEobXVHA") : Watch(live)));
+        Assert.Null((await embeds.ResolveAsync(YouTube, "channel", null, null, default)).Embed);
+        live = true;
+        await embeds.RefreshYouTubeAsync("@channel", default);
+        Assert.NotNull((await embeds.ResolveAsync(YouTube, "channel", null, null, default)).Embed);
+    }
+
+    [Fact]
+    public void YouTube_IgnoresOtherTabsAndPrioritizesLiveBadges()
+    {
+        const string page = """
+          {"tabs":[
+          {"tabRenderer":{"selected":false,"content":{"contentId":"wrongVideo1","contentType":"LOCKUP_CONTENT_TYPE_VIDEO"}}},
+          {"tabRenderer":{"selected":true,"content":[
+            {"contentId":"oldVideo001","contentType":"LOCKUP_CONTENT_TYPE_VIDEO"},
+            {"contentId":"newVideo002","contentType":"LOCKUP_CONTENT_TYPE_VIDEO","badge":{"style":"LIVE"}}]}}]}
+          """;
+        Assert.Equal(new[] { "newVideo002", "oldVideo001" }, LivePlatformEmbeds.CandidatesOf(page));
+    }
+
+    [Fact]
+    public void YouTube_ARecommendedLiveDoesNotTurnAnEndedBroadcastIntoALiveOne()
+    {
+        var page = Ended() + """<script>var ytInitialData = {"recommendation":{"isLiveNow":true}};</script>""";
+        Assert.True(LivePlatformEmbeds.HasEnded(page));
+    }
+
+    [Fact]
+    public void YouTube_ReadsTheAssignedJsonEvenWhenAnotherStatementFollows()
+    {
+        const string page = """<script>var ytInitialData={"contents":[{"videoId":"newVideo002","thumbnail":{}}]};window.extra=1;</script>""";
+        Assert.Equal("newVideo002", LivePlatformEmbeds.CandidateOf(page));
+    }
+
+    [Fact]
+    public async Task YouTube_AConsentPageCanBeRecoveredThroughTheDirectLiveAddress()
+    {
+        var handler = new RecordingHandler(request => Text(request.RequestUri!.AbsolutePath.EndsWith("/live")
+            ? """{"playabilityStatus":{"status":"OK"},"videoDetails":{"videoId":"newVideo002","isLive":true,"isLiveContent":true}}"""
+            : "<html>consent</html>"));
+        var embeds = new LivePlatformEmbeds(new HttpClient(handler), NullLogger<LivePlatformEmbeds>.Instance);
+        var found = await embeds.ResolveAsync(YouTube, "@channel", "youtube", null, default);
+        Assert.Equal("newVideo002", found.Embed?.VideoId);
+        Assert.Equal(2, handler.Asked.Count);
+        Assert.Contains("/live?ucbcb=1", handler.Asked[1].ToString());
+    }
+
+    [Fact]
+    public async Task YouTube_CanRecoverTheGridWithoutMistakingAnArchivedDirectVideoForTheLive()
+    {
+        var embeds = Platform(request => Text(request.RequestUri!.AbsolutePath.EndsWith("/live") ? Ended()
+            : request.RequestUri.AbsolutePath.EndsWith("/streams")
+                ? request.RequestUri.Query.Length == 0 ? "<html>consent</html>" : Streams("newVideo002")
+                : Watch(true)));
+        var found = await embeds.ResolveAsync(YouTube, "channel", "youtube", null, default);
+        Assert.Equal("newVideo002", found.Embed?.VideoId);
+    }
+
+    [Theory]
+    [InlineData("LIVE_STREAM_OFFLINE")]
+    [InlineData("UNPLAYABLE")]
+    [InlineData("LOGIN_REQUIRED")]
+    public void YouTube_AnUnplayablePlayerCannotConfirmTheStartEvenWithALiveFlag(string status)
+    {
+        var page = "{\"playabilityStatus\":{\"status\":\"" + status + "\"},\"videoDetails\":{\"isLive\":true,\"isLiveContent\":true}}";
+        Assert.Null(LivePlatformEmbeds.HasEnded(page));
+        Assert.Null(LivePlatformEmbeds.LiveVideoOf(page));
     }
 
     private static LivePlatformEmbeds Platform(Func<HttpRequestMessage, HttpResponseMessage> answer) =>

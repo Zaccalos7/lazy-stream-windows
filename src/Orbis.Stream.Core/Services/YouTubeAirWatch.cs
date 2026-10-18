@@ -35,13 +35,13 @@ public sealed class YouTubeAirWatch : BackgroundService
     /// seconds to move a broadcast from preview to live, and the page of the streams some more to
     /// list it: asking sooner would warn about every live that is simply starting.
     /// </summary>
-    internal static readonly TimeSpan Grace = TimeSpan.FromSeconds(90);
+    internal static readonly TimeSpan Grace = TimeSpan.FromSeconds(15);
 
     /// <summary>
     /// Keep checking every live, including those with a visible or dismissed warning. The next
     /// successful lookup clears the warning; the preview page does not need to be open.
     /// </summary>
-    private static readonly TimeSpan Interval = TimeSpan.FromSeconds(30);
+    private static readonly TimeSpan Interval = TimeSpan.FromSeconds(15);
 
     private readonly StreamingSessionRegistry _sessions;
     private readonly VideoRepository _videos;
@@ -75,14 +75,20 @@ public sealed class YouTubeAirWatch : BackgroundService
         _logger = logger;
     }
 
+    private bool IsCurrentRun(long? history) => _sessions.Running.Any(session => !session.HasExited &&
+        session.Profile.Platform == StreamPlatform.YouTube && _state.MatchesRun(history, (object?)session.Connection ?? session));
+
+    public bool IsConfirmed(long? historyPkid) => IsCurrentRun(historyPkid) && _state.IsConfirmed(historyPkid);
+
     /// <summary>Whether a live is being sent to YouTube and YouTube is not showing it.</summary>
-    public bool IsOffAir(long? historyPkid) => _state.IsOffAir(historyPkid);
+    public bool IsOffAir(long? historyPkid) => IsCurrentRun(historyPkid) && _state.IsOffAir(historyPkid);
 
     /// <summary>Whether YouTube keeps failing to say anything about a live.</summary>
-    public bool IsUnverified(long? historyPkid) => _state.IsUnverified(historyPkid);
+    public bool IsUnverified(long? historyPkid) => IsCurrentRun(historyPkid) && _state.IsUnverified(historyPkid);
 
-    /// <summary>The video YouTube is broadcasting a live as, once it was seen on air; null before.</summary>
-    public string? OnAirVideoOf(long? historyPkid) => historyPkid is { } history ? _state.OnAirVideoOf(history) : null;
+    /// <summary>The video seen on the current run, never an id retained from a previous start.</summary>
+    public string? OnAirVideoOf(long? historyPkid) => historyPkid is { } history && IsCurrentRun(history)
+        ? _state.OnAirVideoOf(history) : null;
 
     /// <summary>The user closed the warning of a live; the pages are told at once.</summary>
     public void Dismiss(long historyPkid)
@@ -117,7 +123,19 @@ public sealed class YouTubeAirWatch : BackgroundService
     }
 
     /// <summary>One pass over the running lives. The rows are redrawn when a warning changed.</summary>
-    internal async Task CheckAsync(CancellationToken cancellationToken)
+    private readonly SemaphoreSlim _checks = new(1, 1);
+
+    public Task RecheckAsync(int videoPkid, CancellationToken cancellationToken) =>
+        CheckAsync(cancellationToken, videoPkid);
+
+    internal async Task CheckAsync(CancellationToken cancellationToken, int? requestedVideo = null)
+    {
+        await _checks.WaitAsync(cancellationToken).ConfigureAwait(false);
+        try { await CheckCoreAsync(cancellationToken, requestedVideo).ConfigureAwait(false); }
+        finally { _checks.Release(); }
+    }
+
+    private async Task CheckCoreAsync(CancellationToken cancellationToken, int? requestedVideo)
     {
         var changed = false;
         var now = DateTimeOffset.UtcNow;
@@ -152,6 +170,11 @@ public sealed class YouTubeAirWatch : BackgroundService
 
         foreach (var (historyId, (session, history, channel)) in lives)
         {
+            if (requestedVideo is { } requested && session.VideoPkid != requested) continue;
+            var newRun = _state.TrackRun(historyId, (object?)session.Connection ?? session);
+            changed |= newRun;
+            if (newRun) await _embeds.RefreshYouTubeAsync(channel, cancellationToken).ConfigureAwait(false);
+
             // Not on air yet: the publish is still being opened, and there is nothing to ask about.
             if (!session.IsOnAir)
             {
@@ -159,14 +182,16 @@ public sealed class YouTubeAirWatch : BackgroundService
             }
 
             // The time YouTube needs to put a live on its page, once for the whole live.
-            if (now - _state.OnAirSince(historyId, now) < Grace)
+            if (now - _state.OnAirSince(historyId, now) < Grace && requestedVideo is null)
             {
                 continue;
             }
 
+            if (requestedVideo is not null) await _embeds.RefreshYouTubeAsync(channel, cancellationToken).ConfigureAwait(false);
             var found = await _embeds.ResolveAsync(
                 history.StreamUrl, channel, history.PlatformStreamName, null, cancellationToken)
                 .ConfigureAwait(false);
+            if (!IsCurrent(session)) continue;
             if (_state.Observe(historyId, found))
             {
                 changed = true;
@@ -179,9 +204,14 @@ public sealed class YouTubeAirWatch : BackgroundService
                 {
                     _logger.LogWarning("The live {Live} cannot be checked on YouTube: {Reason}.", historyId, found.Reason);
                 }
+                else if (_state.IsConfirmed(historyId))
+                {
+                    _logger.LogInformation("A public broadcast for live {Live} was found on the YouTube channel.", historyId);
+                }
                 else
                 {
-                    _logger.LogInformation("The live {Live} is on air on YouTube.", historyId);
+                    _logger.LogInformation("Public broadcast verification for live {Live} is pending: {Reason}.",
+                        historyId, found.Reason ?? "no public broadcast found");
                 }
             }
 
@@ -190,7 +220,7 @@ public sealed class YouTubeAirWatch : BackgroundService
             if (found is { Embed: null, Reason: null } && _state.OnAirVideoOf(historyId) is { } videoId)
             {
                 var ended = await _embeds.HasEndedAsync(videoId, cancellationToken).ConfigureAwait(false);
-                if (_state.ObserveEnding(historyId, ended))
+                if (IsCurrent(session) && _state.ObserveEnding(historyId, ended))
                 {
                     Stop(historyId, session.VideoPkid, videoId);
                     changed = true;
@@ -203,6 +233,10 @@ public sealed class YouTubeAirWatch : BackgroundService
             _notifier.Raise();
         }
     }
+
+    private bool IsCurrent(FfmpegStreamingSession session) =>
+        _sessions.TryGet(session.VideoPkid, out var current) && current is not null && !current.HasExited &&
+        ReferenceEquals((object?)current.Connection ?? current, (object?)session.Connection ?? session);
 
     private void Stop(long historyId, int videoPkid, string videoId)
     {

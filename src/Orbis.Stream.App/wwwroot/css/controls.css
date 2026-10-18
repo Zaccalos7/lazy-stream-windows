@@ -273,6 +273,19 @@ form:has(input[name="platformStreamName"][value="youtube"]:checked) .option-card
 
 .toolbar.preset-bar { align-items: center; }
 
+/* ---------- Facebook: the way a broadcast is started and its key taken ---------- */
+
+.facebook-live { margin-top: 10px; padding: 10px 12px; border: 1px solid var(--stroke); border-radius: var(--radius); background: var(--tint); }
+.facebook-live-title { display: block; font-size: 12px; font-weight: 600; }
+.facebook-live-open { margin-top: 6px; }
+.facebook-live-help { margin-top: 6px; }
+.facebook-live-steps { margin: 8px 0 0; padding-inline-start: 18px; font-size: 11px; line-height: 1.5; color: var(--text-2); }
+.facebook-live-steps li { margin-block: 4px; }
+.facebook-key-lifetime { margin: 6px 0 0; }
+/* The expiry is said where the key is asked for, so it travels with the producer that fixes it. */
+.facebook-key-expired { margin: 10px 0 0; }
+.facebook-key-expired span { display: flex; flex-direction: column; gap: 4px; }
+
 /* ---------- Choices: a list of radios that look like cards ---------- */
 
 .choice-list { display: flex; flex-direction: column; gap: 6px; }
@@ -281,9 +294,8 @@ form:has(input[name="platformStreamName"][value="youtube"]:checked) .option-card
    height, and what they say starts at their top, next to the radio. */
 .choice-list.grid {
   display: grid;
-  grid-template-columns: repeat(auto-fit, minmax(min(100%, 300px), 1fr));
+  grid-template-columns: repeat(auto-fill, minmax(min(100%, 300px), 1fr));
   gap: 10px;
-  align-items: start;
 }
 .choice-list.grid > .choice { align-items: flex-start; min-width: 0; padding: 12px 14px; }
 .choice-list.grid > .choice > input { margin-top: 2px; }

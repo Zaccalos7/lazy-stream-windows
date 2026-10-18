@@ -502,6 +502,16 @@ public static class OrbisEndpoints
 
         // The user closed the YouTube warning of a live: it stays closed until the live is found on
         // air. The live is its history, so the warning is closed for every video of it at once.
+        group.MapPost("/live/{pkid:int}/air/check", async (
+            int pkid, StreamingSessionRegistry sessions, YouTubeAirWatch air, LivePreviewService preview, HttpContext context) =>
+        {
+            if (!sessions.TryGet(pkid, out var session) || session is null ||
+                session.Profile.Platform != StreamPlatform.YouTube) return Results.NotFound();
+            await air.RecheckAsync(pkid, context.RequestAborted);
+            context.Response.Headers.CacheControl = "no-store";
+            return Results.Ok(preview.Snapshot(pkid));
+        });
+
         group.MapPost("/live/{pkid:int}/air/dismiss", (int pkid, VideoRepository videos, YouTubeAirWatch air) =>
         {
             if (videos.FindByPkid(pkid)?.VideoLiveHistoryId is not { } history)

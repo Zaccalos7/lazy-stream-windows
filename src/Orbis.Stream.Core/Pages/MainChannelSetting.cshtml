@@ -53,6 +53,10 @@
                 <div class="caption truncate">@configuration.Description</div>
             }
             <div class="caption truncate">@configuration.StreamUrl</div>
+            @if (choice?.Value == "facebook")
+            {
+                <partial name="_FacebookKeyWarning" model="StreamKeyAge.Of(configuration)" />
+            }
         </div>
         <div class="actions">
             @if (youtube && !configuration.FfmpegSender)
@@ -130,13 +134,18 @@
                         <p class="caption key-each-live"><i class="icon">&#xE72E;</i><span>@T["keyEachLiveHint"]</span></p>
                     </div>
                 </div>
+                @* Straight under the key it says to paste there, and above the description: the box
+                   and the four steps that fill it belong to the same reading, not two fields apart.
+                   The dialog is also where a new key is saved, and saving it is what writes the
+                   moment that clears the warning the wizard shows on it. *@
+                <div class="section" data-show-when="facebook">
+                    <partial name="_FacebookLiveNotice" />
+                    <partial name="_FacebookKeyWarning" model="StreamKeyAge.Of(editing)" />
+                </div>
                 <label class="field section">
                     <span>@T["description"]</span>
                     <textarea class="input" name="description" rows="3">@editing.Description</textarea>
                 </label>
-                <div class="section" data-show-when="facebook">
-                    <partial name="_FacebookLiveNotice" />
-                </div>
                 @* How the live reaches the ingest. On, the ffmpeg delivery - ffmpeg keeps
                    the time and publishes over its own RTMPS; off, the relay and the RTMP of this
                    application. The option is always visible. YouTube cannot be turned off. *@

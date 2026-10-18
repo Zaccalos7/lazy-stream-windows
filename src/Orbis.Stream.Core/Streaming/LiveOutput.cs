@@ -68,6 +68,10 @@ public sealed class LiveOutput : IAsyncDisposable
 
     public string OutputUrl { get; }
 
+    private int _broadcastVerified;
+    public bool BroadcastVerified => Volatile.Read(ref _broadcastVerified) == 1 && !SenderHasExited;
+    public void ConfirmBroadcast() => Interlocked.Exchange(ref _broadcastVerified, 1);
+
     // A write to the sender's stdin only fills a local pipe. Its output progress is the
     // evidence that data was written to the ingest.
     public long PublishedMilliseconds => Interlocked.Read(ref _publishedMilliseconds);
@@ -271,6 +275,7 @@ public sealed class LiveOutput : IAsyncDisposable
     /// <summary>Closes the connection at once, whatever is queued: the live was stopped or broke.</summary>
     public void Abort()
     {
+        Interlocked.Exchange(ref _broadcastVerified, 0);
         lock (_gate)
         {
             CloseQuietly();

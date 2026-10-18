@@ -276,3 +276,8 @@
 @media (max-width: 1100px) {
   .preview { grid-template-columns: minmax(0, 1fr); }
 }
+
+.btn.live-indicator.is-checking { background: var(--caution-bg); color: var(--text); border-color: var(--caution); }
+.btn.live-indicator.is-checking .platform-mark { color: currentColor; }
+.youtube-checks summary { cursor: pointer; font-weight: 600; }
+.youtube-checks li { margin-block: 0.65rem; }

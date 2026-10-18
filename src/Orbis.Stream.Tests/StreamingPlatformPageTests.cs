@@ -13,6 +13,22 @@ public sealed class StreamingPlatformPageTests : IClassFixture<ApplicationFixtur
     public StreamingPlatformPageTests(ApplicationFixture fixture) => _fixture = fixture;
 
     [Fact]
+    public async Task YouTube_OffersStudioAndTheStartupChecksBeforeStartingAnEncoder()
+    {
+        var settings = _fixture.Services.GetRequiredService<Orbis.Stream.Core.Services.SettingService>();
+        const string url = "rtmps://a.rtmps.youtube.com/live2";
+        const string key = "youtube-preflight-test-key";
+        settings.AddNewConfiguration(new SettingRequest(url, key, "youtube", "", null, true,
+            "@preflight-channel", false, 0, 0));
+        var html = WebUtility.HtmlDecode(await _fixture.Client.GetStringAsync("/orbis/mainLive?start=1"));
+        Assert.Contains("data-youtube-studio=\"https://studio.youtube.com/channel/UC/livestreaming\"", html);
+        Assert.Contains("data-youtube-preflight", html);
+        Assert.Contains("YouTube live checks", html);
+        Assert.Contains("Dual stream", html);
+        Assert.DoesNotContain(key, html);
+    }
+
+    [Fact]
     public async Task The_channel_settings_show_the_personal_ingest_help()
     {
         var html = await _fixture.Client.GetStringAsync("/orbis/mainChannelSetting?edit=new");
@@ -20,7 +36,7 @@ public sealed class StreamingPlatformPageTests : IClassFixture<ApplicationFixtur
         Assert.Contains("data-show-when=\"kick facebook\"", html, StringComparison.Ordinal);
         Assert.Contains("value=\"facebook\" data-stream-url=\"rtmps://live-api-s.facebook.com:443/rtmp\"", html, StringComparison.Ordinal);
         Assert.Contains("data-show-when=\"facebook\"", html, StringComparison.Ordinal);
-        Assert.Contains("href=\"https://www.facebook.com/live/producer/v2/\"", html, StringComparison.Ordinal);
+        Assert.Contains("href=\"https://www.facebook.com/live/producer\"", html, StringComparison.Ordinal);
     }
 
     [Fact]

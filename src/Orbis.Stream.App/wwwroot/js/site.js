@@ -398,6 +398,7 @@ const paintPreview = state => {
 
   if (!state.isLive) return;
 
+  paintYouTubeVerification(state);
   setPreviewText("[data-preview-position]", previewClock(position) + " / " + previewClock(state.durationMilliseconds));
   for (const spinner of preview.querySelectorAll("[data-preview-restart]")) spinner.hidden = !state.reconfiguring;
   for (const bar of preview.querySelectorAll("[data-preview-offair]")) bar.hidden = !state.platformOffAir;
@@ -1286,4 +1287,56 @@ for (const show of document.querySelectorAll("[data-show-when]")) {
     }
   });
   dialog?.addEventListener("close", () => { generation++; });
+}
+
+
+function paintYouTubeVerification(state) {
+  if (!preview || preview.dataset.platform !== "youtube") return;
+  const panel = preview.querySelector("[data-youtube-verification]");
+  if (!panel) return;
+  const key = state.platformVerified ? "verified" : state.platformOffAir ? "offair" : state.platformUnverified ? "unverified" : "checking";
+  panel.querySelector("[data-youtube-status]").textContent = state.startupMessage || panel.dataset[key];
+  for (const link of document.querySelectorAll("[data-platform-manage]")) {
+    if (state.platformManagementUrl) link.href = state.platformManagementUrl;
+  }
+  const indicator = document.querySelector("[data-youtube-indicator]");
+  if (indicator) {
+    indicator.classList.toggle("is-checking", !state.platformVerified);
+    indicator.classList.toggle("is-live", !!state.platformVerified);
+    indicator.querySelector("[data-live-indicator-text]").textContent = panel.dataset[key];
+    indicator.setAttribute("aria-label", panel.dataset[key]);
+  }
+  if (!state.platformVerified && (state.platformOffAir || state.platformUnverified)) {
+    panel.querySelector("details").open = true;
+  }
+}
+
+for (const button of document.querySelectorAll("[data-youtube-recheck]")) {
+  button.addEventListener("click", async () => {
+    button.disabled = true;
+    const panel = button.closest("[data-youtube-verification]");
+    try {
+      const response = await fetch(`/preview/live/${previewPkid}/air/check`, { method: "POST" });
+      if (!response.ok) throw new Error("YouTube check failed");
+      paintYouTubeVerification(await response.json());
+    } catch {
+      panel.querySelector("[data-youtube-status]").textContent = panel.dataset.failed;
+      panel.querySelector("details").open = true;
+    } finally { button.disabled = false; }
+  });
+}
+
+for (const block of document.querySelectorAll("[data-youtube-preflight]")) {
+  const form = block.closest("form");
+  const update = () => {
+    const selected = form.querySelector('input[name="configurationId"]:checked');
+    const url = selected?.dataset.youtubeStudio;
+    block.hidden = !url;
+    if (url) {
+      block.querySelector("[data-youtube-studio-link]").href = url;
+      block.querySelector("details").open = true;
+    }
+  };
+  form.addEventListener("change", update);
+  update();
 }

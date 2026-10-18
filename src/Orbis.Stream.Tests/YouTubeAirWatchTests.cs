@@ -15,6 +15,49 @@ public sealed class YouTubeAirWatchTests
     private static readonly Lookup Unreachable = Lookup.Failed("YouTube did not return the streams page of @channel");
 
     [Fact]
+    public void AQuickRestartOfTheSameHistoryDropsThePreviousVideoAndDismissedWarning()
+    {
+        var state = new YouTubeAirState();
+        var run = new object();
+        Assert.True(state.TrackRun(Live, run));
+        state.Observe(Live, OnAir());
+        Assert.True(state.IsConfirmed(Live));
+        Assert.True(state.MatchesRun(Live, run));
+        Assert.False(state.MatchesRun(Live, new object()));
+        state.Observe(Live, OffAir);
+        state.Observe(Live, OffAir);
+        state.Dismiss(Live);
+
+        Assert.True(state.TrackRun(Live, new object()));
+        Assert.Null(state.OnAirVideoOf(Live));
+        Assert.False(state.IsConfirmed(Live));
+        state.Observe(Live, OffAir);
+        state.Observe(Live, OffAir);
+        Assert.True(state.IsOffAir(Live));
+    }
+
+    [Fact]
+    public void APlaylistHandoverOnTheSameConnectionKeepsTheVerification()
+    {
+        var state = new YouTubeAirState();
+        var connection = new object();
+        state.TrackRun(Live, connection);
+        state.Observe(Live, OnAir());
+        Assert.False(state.TrackRun(Live, connection));
+        Assert.True(state.IsConfirmed(Live));
+        Assert.Equal("abcdefghijk", state.OnAirVideoOf(Live));
+    }
+
+    [Fact]
+    public void AFailedCheckWithdrawsConfirmationEvenBeforeAWarningIsShown()
+    {
+        var state = new YouTubeAirState();
+        state.Observe(Live, OnAir());
+        Assert.True(state.Observe(Live, Unreachable));
+        Assert.False(state.IsConfirmed(Live));
+    }
+
+    [Fact]
     public void ALiveIsFlaggedOnlyAfterEnoughAnswersInARowSayItIsNotOnAir()
     {
         var state = new YouTubeAirState();

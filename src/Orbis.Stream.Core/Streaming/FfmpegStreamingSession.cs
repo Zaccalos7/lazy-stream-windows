@@ -230,7 +230,9 @@ public sealed class FfmpegStreamingSession : IAsyncDisposable
     public DateTimeOffset StartedAt { get; } = DateTimeOffset.UtcNow;
 
     /// <summary>How far the transcode got, as ffmpeg last reported it. Zero until the first report.</summary>
-    public long PositionMilliseconds => UsesSharedSender
+    public bool IsStandby { get; private set; }
+
+    public long PositionMilliseconds => IsStandby ? _resumedFromMilliseconds : UsesSharedSender
         ? _resumedFromMilliseconds + (_segment!.FirstSentTimestamp < 0 ? 0
             : Math.Clamp(_output!.PublishedMilliseconds - _segment.FirstSentTimestamp, 0, _segment.SentPositionMilliseconds))
         : SharesOutput ? _resumedFromMilliseconds + _segment!.SentPositionMilliseconds
@@ -244,7 +246,7 @@ public sealed class FfmpegStreamingSession : IAsyncDisposable
     /// took from the encoder, since all of it goes on air ahead of the next one; otherwise it is
     /// what went on air, because the rest dies with the connection.
     /// </summary>
-    public long ContinuationMilliseconds => SharesOutput
+    public long ContinuationMilliseconds => IsStandby ? _resumedFromMilliseconds : SharesOutput
         ? _resumedFromMilliseconds + _segment!.ReadPositionMilliseconds
         : PositionMilliseconds;
 
@@ -294,6 +296,19 @@ public sealed class FfmpegStreamingSession : IAsyncDisposable
         {
             return true;
         }
+    }
+
+    public static FfmpegStreamingSession StartStandby(FfmpegToolLocator locator, int videoPkid,
+        VideoSettingEntity setting, MediaOutput frame, LiveOutput output, ILogger logger,
+        TimeSpan resumeFrom = default, EncoderQuality quality = EncoderQuality.Light)
+    {
+        frame = output.Pin(frame);
+        var arguments = FfmpegCommandBuilder.BuildStandby(setting, frame, output.OutputUrl, output.Profile, quality);
+        var session = Launch(locator, videoPkid, "YouTube standby (program paused)", output.OutputUrl,
+            arguments, new MediaProbeResult(frame.Width, frame.Height, frame.FrameRate, true, 2, 0),
+            frame, resumeFrom, output.Profile, logger, output);
+        session.IsStandby = true;
+        return session;
     }
 
     public static FfmpegStreamingSession Start(

@@ -168,6 +168,21 @@ public static class FfmpegCommandBuilder
     /// </summary>
     private const string DeviceBufferSize = "256M";
 
+    /// <summary>Establish the broadcast without opening or advancing any program source.</summary>
+    public static IReadOnlyList<string> BuildStandby(VideoSettingEntity setting, MediaOutput frame,
+        string outputUrl, StreamPlatformProfile profile, EncoderQuality quality)
+    {
+        var arguments = GlobalArguments(relay: true, diagnostics: profile.Diagnostics);
+        arguments.AddRange(["-f", "lavfi", "-i", string.Create(CultureInfo.InvariantCulture,
+            $"color=c=black:s={frame.Width}x{frame.Height}:r={frame.FrameRate}"),
+            "-f", "lavfi", "-i", "anullsrc=channel_layout=stereo:sample_rate=48000",
+            "-map", "0:v:0", "-map", "1:a:0"]);
+        AppendEncoderArguments(arguments, setting, frame.FrameRate, true, 2, null, profile, quality,
+            bitrate: null, alwaysSound: true);
+        AppendDestination(arguments, outputUrl, relay: true);
+        return arguments;
+    }
+
     public static IReadOnlyList<string> Build(FfmpegStreamRequest request)
     {
         ArgumentNullException.ThrowIfNull(request);

@@ -32,7 +32,8 @@ public sealed record SettingResponse(
     bool AutoCleanupEnabled,
     int AutoCleanupIntervalMonths,
     int AutoCleanupOlderThanMonths,
-    bool FfmpegSender = false)
+    bool FfmpegSender = false,
+    DateTime? StreamKeySavedAt = null)
 {
     public static SettingResponse FromEntity(SettingEntity entity) => new(
         entity.Id,
@@ -48,7 +49,8 @@ public sealed record SettingResponse(
         entity.AutoCleanupEnabled,
         entity.AutoCleanupIntervalMonths,
         entity.AutoCleanupOlderThanMonths,
-        entity.FfmpegSender);
+        entity.FfmpegSender,
+        entity.StreamKeySavedAt);
 }
 
 /// <summary>Port of <c>com.orbis.stream.record.output.VideoPathRecord</c>.</summary>

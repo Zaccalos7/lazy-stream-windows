@@ -470,7 +470,8 @@ public static class OrbisEndpoints
             var found = await service.EmbedAsync(
                 Watched(request),
                 context.Request.Host.Host,
-                context.RequestAborted);
+                context.RequestAborted,
+                request.Query["watchUrl"].FirstOrDefault());
 
             // There is no address to play, but the reason travels with the answer: a channel that is
             // off air and a platform that could not be reached are different things to tell a page,

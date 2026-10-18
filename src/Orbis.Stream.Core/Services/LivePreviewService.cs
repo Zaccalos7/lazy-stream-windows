@@ -170,11 +170,11 @@ public sealed class LivePreviewService
     /// </summary>
     /// <param name="host">The host the page is served on, which Twitch has to be told about.</param>
     public async Task<LivePlatformEmbeds.LivePlatformLookup> EmbedAsync(
-        int? videoPkid, string? host, CancellationToken cancellationToken)
+        int? videoPkid, string? host, CancellationToken cancellationToken, string? watchUrl = null)
     {
         var snapshot = Snapshot(videoPkid);
         return snapshot.IsLive
-            ? await _embeds.ResolveAsync(snapshot.StreamUrl, snapshot.ChannelName, snapshot.PlatformStreamName, host, cancellationToken)
+            ? await _embeds.ResolveAsync(snapshot.StreamUrl, snapshot.ChannelName, snapshot.PlatformStreamName, host, cancellationToken, watchUrl)
             : LivePlatformEmbeds.LivePlatformLookup.Nothing;
     }
 

@@ -1,5 +1,6 @@
 using System.Collections.Concurrent;
 using System.Text.RegularExpressions;
+using Microsoft.AspNetCore.WebUtilities;
 using Microsoft.Extensions.Logging;
 using Orbis.Stream.Core.Pages;
 
@@ -11,11 +12,10 @@ namespace Orbis.Stream.Core.Streaming;
 /// address of the player that plays it.
 /// </summary>
 /// <param name="VideoId">The video on air, where the platform addresses a live by one (YouTube).</param>
-public sealed record LivePlatformEmbed(string Platform, string Channel, string Url, string? VideoId = null);
+public sealed record LivePlatformEmbed(string Platform, string Channel, string Url, string? VideoId = null, string? WatchUrl = null);
 
 /// <summary>
-/// Where a live can be watched when the live is not only the local picture: the Twitch and the
-/// YouTube player, addressed by the channel of the configuration.
+/// Public players for Twitch, YouTube, Kick and Facebook Live.
 ///
 /// The channel is the only thing the configuration stores about where a live goes, and it is stored
 /// where it is easy to mistake it for something else: a live started from the wizard keeps the
@@ -128,9 +128,20 @@ public sealed class LivePlatformEmbeds
         string? channelName,
         string? platformStreamName,
         string? host,
-        CancellationToken cancellationToken)
+        CancellationToken cancellationToken,
+        string? watchUrl = null)
     {
         var channel = (channelName ?? platformStreamName)?.Trim();
+        // Facebook needs the individual public video, not the producer URL or a page name.
+        if (LiveLinkView.PlatformOf(streamUrl) == "facebook")
+        {
+            var video = FacebookVideoUrl(watchUrl ?? channel);
+            return video is null
+                ? LivePlatformLookup.Failed("Facebook Live requires the public URL of the live video")
+                : LivePlatformLookup.Of(new LivePlatformEmbed("facebook", channel ?? string.Empty,
+                    "https://www.facebook.com/plugins/video.php?href=" + Uri.EscapeDataString(video) +
+                    "&show_text=false&autoplay=true&mute=true&width=640", WatchUrl: video));
+        }
         if (string.IsNullOrEmpty(channel))
         {
             return LivePlatformLookup.Nothing;
@@ -140,8 +151,46 @@ public sealed class LivePlatformEmbeds
         {
             "twitch" => LivePlatformLookup.Of(new LivePlatformEmbed("twitch", channel, TwitchUrl(channel, host))),
             "youtube" => await YouTubeAsync(channel, cancellationToken),
+            "kick" => KickChannel(channel) is { } kick
+                ? LivePlatformLookup.Of(new LivePlatformEmbed("kick", kick,
+                    "https://player.kick.com/" + Uri.EscapeDataString(kick) + "?autoplay=true&muted=true",
+                    WatchUrl: "https://kick.com/" + Uri.EscapeDataString(kick)))
+                : LivePlatformLookup.Failed("Kick requires the channel username or URL"),
             _ => LivePlatformLookup.Nothing
         };
+    }
+
+    /// <summary>Accept a Kick username or its public channel URL.</summary>
+    public static string? KickChannel(string value)
+    {
+        var channel = value.Trim();
+        if (Uri.TryCreate(channel, UriKind.Absolute, out var url))
+        {
+            if (url.Scheme is not ("https" or "http") || !url.IsDefaultPort || url.UserInfo.Length > 0 ||
+                url.Host is not ("kick.com" or "www.kick.com")) return null;
+            channel = url.AbsolutePath.Trim('/');
+        }
+        channel = channel.TrimStart('@').ToLowerInvariant();
+        return Regex.IsMatch(channel, @"\A[a-z0-9_-]+\z", RegexOptions.CultureInvariant) ? channel : null;
+    }
+
+    /// <summary>Canonical public video URL. Page names and Producer URLs do not identify a live.</summary>
+    public static string? FacebookVideoUrl(string? value)
+    {
+        if (!Uri.TryCreate(value?.Trim(), UriKind.Absolute, out var url) ||
+            url.Scheme is not ("https" or "http") || !url.IsDefaultPort || url.UserInfo.Length > 0 ||
+            url.Host is not ("facebook.com" or "www.facebook.com" or "m.facebook.com" or "web.facebook.com")) return null;
+
+        var path = url.AbsolutePath.TrimEnd('/');
+        var match = Regex.Match(path, @"\A/(?:[^/]+/)?videos/(?:[^/]+/)?(?<id>[0-9]+)\z", RegexOptions.CultureInvariant);
+        var id = match.Success ? match.Groups["id"].Value : null;
+        if (id is null && path is "" or "/watch" or "/video.php" or "/live")
+        {
+            var query = QueryHelpers.ParseQuery(url.Query);
+            if (query.TryGetValue("v", out var video) && video.Count == 1 &&
+                Regex.IsMatch(video.ToString(), @"\A[0-9]+\z", RegexOptions.CultureInvariant)) id = video.ToString();
+        }
+        return id is null ? null : "https://www.facebook.com/watch/?v=" + id;
     }
 
     /// <summary>

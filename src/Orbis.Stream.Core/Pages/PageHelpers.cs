@@ -224,7 +224,9 @@ public static class LiveLinkView
             "youtube" => string.IsNullOrWhiteSpace(videoId)
                 ? YouTubeChannelUrl(name) + "/live"
                 : "https://www.youtube.com/watch?v=" + Uri.EscapeDataString(videoId),
-            "twitch" or "kick" or "tiktok" => UrlOf(streamUrl, channelName, platformStreamName),
+            "kick" => LivePlatformEmbeds.KickChannel(name) is { } kick ? "https://kick.com/" + Uri.EscapeDataString(kick) : null,
+            "facebook" => LivePlatformEmbeds.FacebookVideoUrl(name),
+            "twitch" or "tiktok" => UrlOf(streamUrl, channelName, platformStreamName),
             _ => null
         };
     }

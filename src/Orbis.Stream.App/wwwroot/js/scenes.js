@@ -3,8 +3,8 @@
 // one is on air, from the panel, from the strip of the preview or from the keyboard.
 //
 // Two rules keep a live safe from a stray key. The keys only work on the two pages that load this
-// script, and only once the panel has been opened for the live they act on: opening it is what turns
-// them on, for that live alone, until the window closes or they are turned off. And every press,
+// script, and only when the switch enables them for the selected live, until the window closes
+// or they are turned off. Opening the panel does not enable them. And every press,
 // button or key, asks before it goes on air.
 (() => {
   const deck = document.querySelector("[data-scene-deck]");
@@ -80,6 +80,8 @@
   const stripState = strip?.querySelector("[data-scene-strip-state]");
   const stripResume = strip?.querySelector("[data-scene-strip-resume]");
   const stripLocked = strip?.querySelector("[data-scene-strip-locked]");
+  const stripToggle = strip?.querySelector("[data-scene-enabled]");
+  const deckToggle = deck.querySelector("[data-scene-enabled]");
   const keysChip = document.querySelector("[data-scene-keys]");
   const keysText = keysChip?.querySelector("[data-scene-keys-text]");
 
@@ -119,13 +121,17 @@
     } catch {
       // Storage refused: the keys stay on for this page only.
     }
-    paintKeys();
-    paintStrip();
+    paintAll();
   };
 
   // On the preview the keys act on the live it watches, and only when they were turned on for it.
-  const armedHere = () => armed && (!strip || Number(strip.dataset.history) === armed.history);
-  const keysVideo = () => !armedHere() ? null : strip ? Number(strip.dataset.video) : armed.video;
+  const armedFor = history => !!history && Number(history) === armed?.history;
+  const armedHere = () => !!armed && (!strip || armedFor(strip.dataset.history));
+  const keysVideo = () => {
+    if (deck.open) return target?.live && armedFor(target.history) ? target.video : null;
+    if (!armedHere() || (strip && !stripLive)) return null;
+    return strip ? Number(strip.dataset.video) : armed.video;
+  };
 
   const paintKeys = () => {
     if (!keysChip) return;
@@ -203,6 +209,7 @@
     target.live = !!state.live;
     target.history = state.history ?? target.history;
     targetScene = state.current || null;
+    if (!target.live && armedFor(target.history)) setArmed(null);
     if (pressed && targetScene?.buttonPkid === pressed) pressed = null;
     paintDeck();
   };
@@ -221,6 +228,7 @@
 
   // A press goes on air once the live takes it, a moment later: the button says so meanwhile.
   const play = (video, button) => {
+    if (video !== keysVideo()) return;
     if (!button.available) {
       notify("error", format(word("missing"), button.label));
       return;
@@ -235,6 +243,7 @@
         : format(word("confirm"), button.label);
 
     confirmThen(confirmPrompt, async () => {
+      if (video !== keysVideo()) return;
       pressed = button.pkid;
       paintAll();
       const response = await fetch(`/live/${video}/scene/${button.pkid}`, { method: "POST" }).catch(() => null);
@@ -285,9 +294,6 @@
 
     await Promise.all([loadButtons(), refreshTarget()]);
 
-    // Opening the panel for a live on air is what turns its keys on.
-    if (target?.live && target.history) setArmed({ video: target.video, history: target.history, title: target.title });
-
     clearInterval(polling);
     polling = setInterval(refreshTarget, 1500);
   };
@@ -321,7 +327,7 @@
     const face = document.createElement("button");
     face.type = "button";
     face.className = "scene-tile-face";
-    face.disabled = !options.locked && (!options.live || !button.available || (onAir && !canToggleOff));
+    face.disabled = !!options.locked || !options.live || !button.available || (onAir && !canToggleOff);
     face.title = !button.available
       ? word("missing")
       : options.locked
@@ -413,6 +419,10 @@
   };
 
   const paintDeck = () => {
+    if (deckToggle) {
+      deckToggle.disabled = !target?.live || !target.history;
+      deckToggle.checked = !deckToggle.disabled && armedFor(target.history);
+    }
     if (!deck.open) return;
 
     const live = !!target?.live;
@@ -445,6 +455,7 @@
     for (const button of buttons) {
       grid.append(tileOf(button, {
         live,
+        locked: !armedFor(target?.history),
         scene: targetScene,
         tools: true,
         press: picked => target && play(target.video, picked)
@@ -752,14 +763,17 @@
   // ---------- The strip of the preview ----------
   //
   // The buttons above the volumes of the live the page watches, with "Resume live" while a picture
-  // stands in for it. Until the keys are on for this live the buttons are locked, and pressing one
-  // opens the panel, which is what turns them on.
+  // stands in for it. The switch enables or locks the buttons and their shortcuts together.
 
   const opener = strip?.querySelector("[data-scene-deck-open]");
 
   const paintStrip = () => {
     if (!strip) return;
     const locked = !armedHere();
+    if (stripToggle) {
+      stripToggle.disabled = !stripLive || !Number(strip.dataset.history);
+      stripToggle.checked = !stripToggle.disabled && !locked;
+    }
     strip.classList.toggle("is-locked", locked);
     if (stripLocked) stripLocked.hidden = !locked || !buttons.length;
     const isOverlay = stripScene?.mode === "in_scene";
@@ -779,7 +793,7 @@
         locked,
         scene: stripScene,
         tools: false,
-        press: picked => locked ? opener && openDeck(opener) : play(Number(strip.dataset.video), picked)
+        press: picked => play(Number(strip.dataset.video), picked)
       }));
     }
 
@@ -799,6 +813,27 @@
     }
   };
 
+  const toggleFor = (enabled, live) => {
+    if (!live?.live || !live.history || !live.video) {
+      paintAll();
+      return;
+    }
+    if (enabled) {
+      setArmed({ video: live.video, history: live.history, title: live.title });
+      if (!loaded) loadButtons();
+    } else if (armedFor(live.history)) {
+      setArmed(null);
+    }
+  };
+
+  deckToggle?.addEventListener("change", () => toggleFor(deckToggle.checked, target));
+  stripToggle?.addEventListener("change", () => toggleFor(stripToggle.checked, {
+    video: Number(strip.dataset.video),
+    history: Number(strip.dataset.history),
+    live: stripLive,
+    title: opener?.dataset.title || ""
+  }));
+
   stripResume?.addEventListener("click", () => resume(Number(strip.dataset.video)));
 
   // The push channel of the preview carries what is on air, once a second (site.js).
@@ -808,6 +843,7 @@
     const before = JSON.stringify([stripLive, stripScene]);
     stripLive = !!state.isLive;
     stripScene = state.scene || null;
+    if (!stripLive && armedFor(strip.dataset.history)) setArmed(null);
     if (pressed && stripScene?.buttonPkid === pressed) pressed = null;
     if (JSON.stringify([stripLive, stripScene]) !== before) paintStrip();
   });

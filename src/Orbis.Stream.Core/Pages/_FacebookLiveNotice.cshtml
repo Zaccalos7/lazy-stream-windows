@@ -1,19 +1,14 @@
-@* What Facebook asks of a stream before it takes one, in the order it is asked, under a heading
-   that says what the block is: Facebook does not take a key on its own. Live Producer writes one
-   for a broadcast that is standing up, and the ingest refuses the key of a broadcast that is not
-   there. So the broadcast is started on Facebook first, its stream key is copied out of the
-   producer into the configuration, and only then is the live started here - which is what puts the
-   stream into the broadcast already waiting. The block is a closed loop, and every step of it is
-   somewhere the user can be right now. *@
+@* Shared Facebook setup and publishing instructions for the channel editor and live wizard. *@
 <section class="facebook-live">
     <strong class="facebook-live-title">@T["facebookGoLiveTitle"]</strong>
     <a class="btn subtle facebook-live-open" href="@LiveLinkView.FacebookProducerUrl" target="_blank" rel="noopener noreferrer">@T["facebookOpenProducer"]</a>
     <span class="caption facebook-live-help" style="display: block;" data-facebook-live-notice>@T["facebookGoLiveHelp"]</span>
     <ol class="facebook-live-steps">
-        <li>@T["facebookGoLiveStep"]</li>
-        <li>@T["facebookStreamingKeyHelp"]</li>
-        <li>@T["facebookSaveKeyStep"]</li>
-        <li>@T["facebookStartStreamStep"]</li>
+        <li>@Html.Raw(T["facebookGoLiveStep"])</li>
+        <li>@Html.Raw(T["facebookStreamingKeyHelp"])</li>
+        <li>@Html.Raw(T["facebookSaveKeyStep"])</li>
+        <li>@Html.Raw(T["facebookStartStreamStep"])</li>
     </ol>
     <p class="caption facebook-key-lifetime">@T["facebookKeyLifetime"]</p>
+    <partial name="_FacebookLiveInstructions" model="false" />
 </section>

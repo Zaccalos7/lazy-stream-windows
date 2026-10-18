@@ -61,15 +61,21 @@ const redraw = async region => {
   if (document.hidden || region.element.querySelector("dialog[open]")) return;
   region.coming = true;
   region.stale = false;
+  let refreshed = false;
   try {
     const response = await fetch(region.element.dataset.refresh);
-    if (response.ok) region.element.innerHTML = await response.text();
+    if (response.ok) {
+      region.element.innerHTML = await response.text();
+      refreshed = true;
+    }
     else region.stale = true;
   } catch {
     // The server is restarting or the window is closing: the next change tries again.
     region.stale = true;
   } finally {
     region.coming = false;
+    // A start/stop received during this request must not leave the sidebar behind.
+    if (refreshed && region.stale) redraw(region);
   }
 };
 

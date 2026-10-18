@@ -69,6 +69,35 @@
 
 .nav-spacer { flex: 1; }
 
+/* Quick channel setup and the publishing channels, grouped by platform. */
+.nav > a { flex-shrink: 0; }
+.nav .nav-add-channel { margin-block: 6px 2px; border: 1px dashed var(--stroke-strong); color: var(--accent-text); }
+.nav .nav-add-channel .icon { color: inherit; }
+.nav-lives-region { display: flex; flex: 0 1 auto; min-height: 0; }
+.nav-lives-region:not(:has(.nav-lives)) { display: none; }
+.nav-lives { display: flex; flex-direction: column; gap: 12px; width: 100%; min-height: 0; margin-block: 10px; padding: 12px 10px; border: 1px solid var(--stroke); border-radius: var(--radius); background: var(--tint); }
+.nav-lives-head { display: flex; flex: none; align-items: center; justify-content: space-between; gap: 6px; }
+.nav-lives-title { display: flex; align-items: center; gap: 6px; color: var(--text); font-size: 11px; font-weight: 600; }
+.nav-live-dot { flex: none; width: 6px; height: 6px; border-radius: 50%; background: var(--critical); box-shadow: 0 0 0 3px var(--critical-bg); }
+.nav .nav-lives-total { gap: 4px; height: 24px; padding-inline: 6px; color: var(--critical); background: var(--critical-bg); font-size: 10px; white-space: nowrap; }
+.nav-lives-total strong { font-size: 12px; font-variant-numeric: tabular-nums; }
+.nav-lives-list { display: flex; flex-direction: column; gap: 12px; min-height: 0; max-height: min(28vh, 210px); overflow-y: auto; overscroll-behavior: contain; scrollbar-width: thin; }
+.nav-live-platform-title { display: flex; align-items: center; gap: 7px; padding-inline: 2px; }
+.nav-live-platform-title .platform-mark { flex: none; width: 16px; height: 16px; }
+.nav-live-platform-title .platform-mark svg { width: 14px; height: 14px; }
+.nav-live-platform-title > strong { flex: 1; min-width: 0; font-size: 11px; color: var(--text); }
+.nav-live-platform-count { font-size: 10px; font-variant-numeric: tabular-nums; color: var(--text-3); }
+.nav-live-channels { list-style: none; margin: 4px 0 0; padding-inline-start: 15px; border-inline-start: 1px solid var(--stroke); }
+.nav .nav-live-channel { justify-content: space-between; gap: 6px; height: 27px; min-width: 0; padding-inline: 6px; font-size: 11px; }
+.nav-live-channel > span { min-width: 0; }
+.nav .nav-live-channel .icon { flex: none; font-size: 9px; color: var(--text-3); }
+@media (max-width: 800px) {
+  .nav-lives { margin-block: 8px; padding: 0; border: none; background: none; }
+  .nav-lives-head { justify-content: center; }
+  .nav-lives-title, .nav-lives-list, .nav-lives-total > span { display: none; }
+  .nav .nav-lives-total { height: 30px; min-width: 30px; justify-content: center; }
+}
+
 /* Which build this is and who wrote it. It sits where the bar has nothing else to say, and it is
    the way into the dialog that says it in full. */
 .nav-about {

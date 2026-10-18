@@ -1,9 +1,6 @@
 @using Orbis.Stream.Core.Services
-@* The scene deck: the buttons that put a video, a banner or an image on air in place of a live, the
-   way Streamlabs switches to a scene. One panel for the page, opened from the row of a live or from
-   the scene strip of the preview, and drawn by scenes.js from /scene-buttons. Opening it for a live
-   that is on air is what turns the keys of its buttons on, on this page and on the other one, and
-   every button asks before it goes on air: a key pressed by mistake must not cut a live. *@
+@* Shared scene controls: the switch enables buttons and keyboard shortcuts for one live.
+   Opening the panel allows configuration; publishing a scene always asks for confirmation. *@
 <dialog class="dialog wide scene-deck" id="scene-deck" data-scene-deck
         data-max="@SceneButtonService.MaxButtons" data-max-label="@SceneButtonService.MaxLabelLength"
         data-max-bytes="@SceneButtonService.MaxBytes"
@@ -36,6 +33,10 @@
             <h2>@T["sceneDeck"]</h2>
             <p class="caption truncate" data-scene-deck-live></p>
         </div>
+        <label class="toggle scene-controls-toggle">
+            <span>@T["sceneControlsToggle"]</span>
+            <input type="checkbox" role="switch" data-scene-enabled aria-label="@T["sceneControlsToggle"]" disabled />
+        </label>
         <button class="btn subtle icon-only" type="button" data-scene-deck-close title="@T["close"]" aria-label="@T["close"]"><i class="icon">&#xE711;</i></button>
     </div>
     <div class="dialog-body" data-say-here>

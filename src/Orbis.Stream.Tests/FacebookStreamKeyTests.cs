@@ -11,11 +11,9 @@ using Orbis.Stream.Core.Streaming;
 namespace Orbis.Stream.Tests;
 
 /// <summary>
-/// Facebook keeps the key of a live for a day and not for a moment longer, and the key is written
-/// in Facebook Live Producer once the broadcast is standing up: the page links the producer, says
-/// that the live is started there first and that the stream key of that broadcast is what goes into
-/// the configuration, and says how old the key it keeps is - which is the only thing it can tell,
-/// since Facebook cannot be asked whether a key is still good.
+/// Tracks the saved key's age and explains the publishing flow: start streaming in Orbis,
+/// publish the incoming preview in Facebook Live Producer, then return to Orbis.
+/// Temporary key validity is checked in Live Producer before the next broadcast.
 /// </summary>
 public sealed class FacebookStreamKeyTests : IClassFixture<ApplicationFixture>
 {
@@ -97,18 +95,20 @@ public sealed class FacebookStreamKeyTests : IClassFixture<ApplicationFixture>
         // The block has a heading, so it reads as instructions instead of as loose text.
         Assert.Contains("class=\"facebook-live-title\"", html, StringComparison.Ordinal);
 
-        // The four steps, in the order they are asked: the broadcast first, the key out of the
-        // producer, the key into the configuration, and the stream from here at the end.
+        // Start the encoder in Orbis, publish its preview on Facebook, return to Orbis,
+        // then remind the user to check the temporary key before their next broadcast.
         var steps = TheStepsOf(html);
         Assert.Equal(4, steps.Count);
-        Assert.Contains("Go live", steps[0], StringComparison.Ordinal);
-        Assert.Contains("Use Stream key", steps[1], StringComparison.Ordinal);
-        Assert.Contains("REST API", steps[1], StringComparison.Ordinal);
-        Assert.Contains("key", steps[2], StringComparison.Ordinal);
-        Assert.Contains("Orbis", steps[3], StringComparison.Ordinal);
+        Assert.Contains("start the live on Orbis", steps[0], StringComparison.Ordinal);
+        Assert.Contains("Facebook Live Producer", steps[1], StringComparison.Ordinal);
+        Assert.Contains("Go live", steps[1], StringComparison.Ordinal);
+        Assert.Contains("return to the Orbis preview", steps[2], StringComparison.Ordinal);
+        Assert.Contains("keys can expire", steps[3], StringComparison.Ordinal);
+        Assert.Contains("validity shown in Live Producer", steps[3], StringComparison.Ordinal);
 
-        // And the key is good for a day, which is why the wizard watches how old the one it has is.
-        Assert.Contains("one day", html, StringComparison.Ordinal);
+        // Key setup remains available in the wizard before the publishing instructions.
+        Assert.Contains("Use Stream key", html, StringComparison.Ordinal);
+        Assert.Contains("REST API", html, StringComparison.Ordinal);
 
         settings.DeleteAStreamingSetting(Service<SettingRepository>()
             .FindAll(new Dictionary<string, string> { ["channelName"] = "wizard.facebook.channel" }).Single().Id);
@@ -119,7 +119,7 @@ public sealed class FacebookStreamKeyTests : IClassFixture<ApplicationFixture>
     {
         var notice = Regex.Match(html, "<ol class=\"facebook-live-steps\">(.*?)</ol>", RegexOptions.Singleline);
         Assert.True(notice.Success, "the Facebook notice draws no steps at all");
-        return Regex.Matches(notice.Groups[1].Value, "<li>(.*?)</li>", RegexOptions.Singleline)
+        return Regex.Matches(notice.Groups[1].Value, "<li(?: [^>]*)?>(.*?)</li>", RegexOptions.Singleline)
             .Select(step => WebUtility.HtmlDecode(Regex.Replace(step.Groups[1].Value, "<.*?>", string.Empty)).Trim())
             .ToList();
     }

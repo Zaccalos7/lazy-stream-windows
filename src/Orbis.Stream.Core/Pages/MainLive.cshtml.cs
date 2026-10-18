@@ -168,6 +168,12 @@ public sealed class MainLiveModel(
         }
     }
 
+    public PartialViewResult OnGetSidebarLives()
+    {
+        Response.Headers.CacheControl = "no-store";
+        return Partial("_SidebarLives");
+    }
+
     public PartialViewResult OnGetRows()
     {
         LoadVideos();

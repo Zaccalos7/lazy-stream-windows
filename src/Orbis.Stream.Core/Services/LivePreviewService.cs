@@ -41,6 +41,9 @@ public sealed record LiveSource(int Pkid, string Name, string Kind, int Volume);
 /// <summary>One of the running lives, for the picker when more than one channel is on air.</summary>
 public sealed record LiveOption(int VideoPkid, string ChannelName, string VideoName, bool IsWatching);
 
+/// <summary>A publishing channel for the sidebar, without media probes or platform requests.</summary>
+public sealed record LiveChannel(int VideoPkid, string ChannelName, string? StreamUrl);
+
 /// <summary>
 /// Everything the preview page draws, sampled once a second. The fields that only mean something
 /// while something is running keep their default when nothing is, and <see cref="IsLive"/> is what
@@ -399,6 +402,21 @@ public sealed class LivePreviewService
         }
 
         return (video.VideoPath, VideoExtensions.ContentTypeOf(video.Extension), video.Extension);
+    }
+
+    /// <summary>One entry per publishing session, regardless of playlist length or scene sources.</summary>
+    public IReadOnlyList<LiveChannel> PublishingChannels()
+    {
+        var channels = new List<LiveChannel>();
+        foreach (var session in _sessions.Running)
+        {
+            if (!session.IsPublishing) continue;
+            var video = _videoRepository.FindByPkid(session.VideoPkid);
+            if (video is null || video.LiveStatus != LiveStatus.Live) continue;
+            var history = video.VideoLiveHistoryId is { } id ? _historyRepository.FindByPkid(id) : null;
+            channels.Add(new LiveChannel(video.Pkid, video.ChannelName, history?.StreamUrl));
+        }
+        return channels;
     }
 
     private IReadOnlyList<LiveOption> Running(int? watching)

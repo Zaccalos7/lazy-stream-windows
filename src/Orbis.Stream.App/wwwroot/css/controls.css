@@ -277,6 +277,11 @@ form:has(input[name="platformStreamName"][value="youtube"]:checked) .option-card
 
 .facebook-live { margin-top: 10px; padding: 10px 12px; border: 1px solid var(--stroke); border-radius: var(--radius); background: var(--tint); }
 .facebook-live-title { display: block; font-size: 12px; font-weight: 600; }
+.facebook-live-toggle { display: flex; align-items: center; justify-content: space-between; gap: 12px; cursor: pointer; list-style: none; }
+.facebook-live-toggle::-webkit-details-marker { display: none; }
+.facebook-live-toggle:focus-visible { outline: 2px solid var(--accent); outline-offset: 4px; border-radius: var(--radius); }
+.facebook-live-toggle .icon { flex: none; }
+.facebook-live[open] > .facebook-live-toggle .icon { transform: rotate(180deg); }
 .facebook-live-open { margin-top: 6px; }
 .facebook-live-help { margin-top: 6px; }
 .facebook-live-steps { margin: 8px 0 0; padding-inline-start: 18px; font-size: 11px; line-height: 1.5; color: var(--text-2); }

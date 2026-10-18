@@ -26,7 +26,7 @@
     <link rel="stylesheet" href="/css/scenes.css" />
     <script src="/js/live-player.js" defer></script>
 }
-<div class="page-header">
+<div class="page-header@(youtube && live.IsLive ? " preview-header-with-help" : "")">
     <div style="display: flex; align-items: center; gap: 1rem;">
         <a class="btn subtle icon-only" href="/orbis/mainLiveMenu" title="@T["back"]" aria-label="@T["back"]"><i class="icon">&#xE72B;</i></a>
         <div>
@@ -61,6 +61,32 @@
     }
 </div>
 
+<p data-preview-words hidden
+   data-ok="@T["success"]" data-ko="@T["error"]"
+   data-applied="@T["parametersApplied"]" data-failed="@T["parametersFailed"]"
+   data-no="@T["noAudioTrack"]"></p>
+
+<div data-preview
+     data-pkid="@live.VideoPkid"
+     data-history="@live.History"
+     data-live="@(live.IsLive ? "1" : "0")"
+     data-status="@(live.Status?.ToWireValue())"
+     data-position="@live.PositionMilliseconds"
+     data-playable="@(live.IsPlayable ? "1" : "0")"
+     data-platform="@(LiveLinkView.PlatformOf(live.StreamUrl))">
+
+@if (youtube && live.IsLive)
+{
+    <section class="card preview-platform-help" data-youtube-verification
+             data-checking="@T["youtubeChecking"]" data-verified="@T["youtubeVerified"]"
+             data-offair="@T["youtubeOffAir"]" data-unverified="@T["youtubeUnverified"]"
+             data-failed="@T["youtubeCheckFailed"]" aria-live="polite">
+        <p data-youtube-status>@(live.StartupMessage ?? T[live.PlatformVerified ? "youtubeVerified" : live.PlatformOffAir ? "youtubeOffAir" : live.PlatformUnverified ? "youtubeUnverified" : "youtubeChecking"])</p>
+        <button type="button" class="btn" data-youtube-recheck>@T["youtubeCheckNow"]</button>
+        <partial name="_YouTubeLiveChecks" />
+    </section>
+}
+
 @* The lives on air, when there is more than one: the page watches one of them and this is how it
    says which, a list instead of a row of buttons across the page. The control is on the page from
    the start and the push channel fills it, so a live that starts while the page is open shows up in
@@ -77,23 +103,15 @@
     </label>
 </div>
 
-<p data-preview-words hidden
-   data-ok="@T["success"]" data-ko="@T["error"]"
-   data-applied="@T["parametersApplied"]" data-failed="@T["parametersFailed"]"
-   data-no="@T["noAudioTrack"]"></p>
-
-<div data-preview
-     data-pkid="@live.VideoPkid"
-     data-history="@live.History"
-     data-live="@(live.IsLive ? "1" : "0")"
-     data-status="@(live.Status?.ToWireValue())"
-     data-position="@live.PositionMilliseconds"
-     data-playable="@(live.IsPlayable ? "1" : "0")"
-     data-platform="@(LiveLinkView.PlatformOf(live.StreamUrl))">
-
 @if (LiveLinkView.PlatformOf(live.StreamUrl) == "facebook")
 {
-    <partial name="_FacebookLiveNotice" />
+    <details class="facebook-live" open>
+        <summary class="facebook-live-toggle">
+            <strong class="facebook-live-title">@T["facebookGoLiveTitle"]</strong>
+            <i class="icon" aria-hidden="true">&#xE70D;</i>
+        </summary>
+        <partial name="_FacebookLiveInstructions" model="true" />
+    </details>
 }
 
 @if (!live.IsLive)
@@ -150,17 +168,6 @@ else
         <p><strong>@T["youtubeUnverified"]</strong> @T["youtubeUnverifiedHelp"]</p>
         <button class="btn subtle icon-only" type="button" data-air-dismiss title="@T["close"]" aria-label="@T["close"]"><i class="icon">&#xE711;</i></button>
     </div>
-    @if (youtube)
-    {
-        <section class="card section" data-youtube-verification
-                 data-checking="@T["youtubeChecking"]" data-verified="@T["youtubeVerified"]"
-                 data-offair="@T["youtubeOffAir"]" data-unverified="@T["youtubeUnverified"]"
-                 data-failed="@T["youtubeCheckFailed"]" aria-live="polite">
-            <p data-youtube-status>@(live.StartupMessage ?? T[live.PlatformVerified ? "youtubeVerified" : live.PlatformOffAir ? "youtubeOffAir" : live.PlatformUnverified ? "youtubeUnverified" : "youtubeChecking"])</p>
-            <button type="button" class="btn" data-youtube-recheck>@T["youtubeCheckNow"]</button>
-            <partial name="_YouTubeLiveChecks" />
-        </section>
-    }
     <div class="preview">
         <div class="preview-main">
             <div class="preview-stage card">
@@ -228,13 +235,17 @@ else
             </div>
 
             @* The scene deck of the live, above its volumes: the buttons that put a video, a banner or
-               an image on air in place of it, and "Resume live" while a picture does. They are locked
-               until the panel is opened for this live, which is what turns them and their keys on. *@
+               an image on air in place of it, and "Resume live" while a picture does. The switch
+               enables the buttons and their keyboard shortcuts for this live. *@
             <section class="card scene-strip" data-scene-strip data-video="@live.VideoPkid" data-history="@live.History">
                 <div class="scene-strip-head">
                     <h3 class="section">@T["sceneStrip"]</h3>
                     <span class="caption scene-strip-state" data-scene-strip-state hidden></span>
                     <span class="grow"></span>
+                    <label class="toggle scene-controls-toggle">
+                        <span>@T["sceneControlsToggle"]</span>
+                        <input type="checkbox" role="switch" data-scene-enabled aria-label="@T["sceneControlsToggle"]" />
+                    </label>
                     <button type="button" class="btn scene-resume is-pulsing" data-scene-strip-resume hidden>
                         <i class="icon">&#xE768;</i><span>@T["sceneResume"]</span>
                     </button>

@@ -107,7 +107,10 @@
                            with where each of them shows it. *@
                         @foreach (var hint in MainChannelSettingModel.IngestHints)
                         {
-                            <small data-show-when="@hint.Platforms">@T[hint.Key]</small>
+                            <div class="tuning-hint" data-show-when="@hint.Platforms">
+                                <i class="icon">&#xE7BA;</i>
+                                <span>@T[hint.Key]</span>
+                            </div>
                         }
                     </label>
                     @* TikTok hands out a key for every live, which goes stale by the next one: its

@@ -8,7 +8,7 @@ const source = readFileSync(new URL('../../Orbis.Stream.App/wwwroot/js/live-play
 const tick = () => new Promise(resolve => setImmediate(resolve));
 const live = id => ({ embed: { platform: 'youtube', videoId: id, url: `https://www.youtube.com/embed/${id}` } });
 
-function setup(answers = []) {
+function setup(answers = [], platform = 'youtube', facebookUrl = null) {
   const element = (dataset = {}) => ({
     dataset, hidden: true, textContent: '', attributes: new Map(), listeners: new Map(), writes: 0,
     addEventListener(name, fn) { this.listeners.set(name, fn); },
@@ -21,15 +21,27 @@ function setup(answers = []) {
   const nodes = {
     '[data-platform-embed]': player, '[data-platform-toggle]': toggle,
     '[data-preview-cover]': cover, '[data-embed-text]': status, '[data-platform-watch]': watch,
-    '[data-platform-words]': element({ start: 'Start', stop: 'Stop', idle: 'Save data', loading: 'Loading', offair: 'Offline', failed: 'Unavailable' })
+    '[data-platform-words]': element({ start: 'Start', stop: 'Stop', idle: 'Save data', loading: 'Loading', offair: 'Offline', failed: 'Unavailable', facebook: 'Paste public video URL' })
   };
-  const preview = element({ pkid: '7', platform: 'youtube' });
+  const input = facebookUrl === null ? null : element();
+  if (input) {
+    input.value = facebookUrl;
+    input.reportValidity = () => input.value.length > 0;
+    nodes['[data-platform-url]'] = input;
+  }
+  const preview = element({ pkid: '7', history: '42', platform });
   preview.querySelector = selector => nodes[selector];
   const document = element(), window = element();
   document.hidden = false;
   document.querySelector = () => preview;
   let timerId = 0;
   const timers = new Map(), requests = [];
+  const stored = new Map();
+  const sessionStorage = {
+    getItem: key => stored.get(key),
+    setItem: (key, value) => stored.set(key, value),
+    removeItem: key => stored.delete(key)
+  };
   const fetch = async (url, options) => {
     requests.push({ url, options });
     const answer = answers.shift();
@@ -38,11 +50,11 @@ function setup(answers = []) {
     return { ok: true, json: async () => answer };
   };
   vm.runInNewContext(source, {
-    document, window, fetch, AbortController, encodeURIComponent,
+    document, window, fetch, AbortController, encodeURIComponent, sessionStorage,
     setTimeout(fn, delay) { const id = ++timerId; timers.set(id, { fn, delay }); return id; },
     clearTimeout(id) { timers.delete(id); }
   });
-  return { player, toggle, cover, status, watch, document, window, timers, requests,
+  return { player, toggle, cover, status, watch, input, stored, document, window, timers, requests,
     click: async () => { toggle.emit('click'); await tick(); },
     poll: async () => { const [id, timer] = timers.entries().next().value; timers.delete(id); timer.fn(); await tick(); },
     visible: async value => { document.hidden = !value; document.emit('visibilitychange'); await tick(); }
@@ -128,4 +140,44 @@ test('a network failure retries without inventing a local preview', async () => 
   assert.equal(ui.player.getAttribute('src'), null);
   await ui.poll();
   assert.equal(ui.player.hidden, false);
+});
+
+for (const [platform, url, watchUrl] of [
+  ['kick', 'https://player.kick.com/channel?autoplay=true&muted=true', 'https://kick.com/channel'],
+  ['facebook', 'https://www.facebook.com/plugins/video.php?href=public-video', 'https://www.facebook.com/watch/?v=123']
+]) {
+  test(`${platform} loads on demand and releases media while hidden`, async () => {
+    const answer = { embed: { platform, url, watchUrl } };
+    const ui = setup([answer, answer], platform, platform === 'facebook' ? watchUrl : null);
+    assert.equal(ui.requests.length, 0);
+    await ui.click();
+    assert.equal(ui.player.getAttribute('src'), url);
+    assert.equal(ui.watch.href, watchUrl);
+    assert.equal(ui.watch.hidden, false);
+    if (platform === 'facebook') {
+      assert(ui.requests[0].url.endsWith(`&watchUrl=${encodeURIComponent(watchUrl)}`));
+      assert.equal(ui.stored.get('orbis-live-watch-42'), watchUrl);
+    }
+    await ui.visible(false);
+    assert.equal(ui.player.getAttribute('src'), null);
+    assert.equal(ui.timers.size, 0);
+    await ui.visible(true);
+    assert.equal(ui.player.getAttribute('src'), url);
+  });
+}
+
+test('Facebook requires a video link and editing it stops the previous broadcast', async () => {
+  const ui = setup([{ embed: { platform: 'facebook', url: 'https://www.facebook.com/plugins/video.php?href=video' } }], 'facebook', '');
+  await ui.click();
+  assert.equal(ui.requests.length, 0);
+  ui.input.value = 'https://www.facebook.com/page/videos/123/';
+  await ui.click();
+  assert.equal(ui.player.hidden, false);
+  ui.input.value = 'https://www.facebook.com/page/videos/456/';
+  ui.input.emit('input');
+  assert.equal(ui.player.getAttribute('src'), null);
+  assert.equal(ui.toggle.textContent, 'Start');
+  assert.equal(ui.watch.hidden, true);
+  assert.equal(ui.stored.size, 0);
+  assert.equal(ui.timers.size, 0);
 });

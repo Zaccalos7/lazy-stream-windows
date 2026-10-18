@@ -15,6 +15,68 @@ public sealed class LivePlatformEmbedTests
 {
     private const string Twitch = "rtmp://live.twitch.tv/app";
     private const string YouTube = "rtmps://a.rtmps.youtube.com/live2";
+    private const string Kick = "rtmps://fa723fc1b171.global-contribute.live-video.net/app";
+    private const string Facebook = "rtmps://live-api-s.facebook.com:443/rtmp/";
+
+    [Theory]
+    [InlineData("ReproChannel")]
+    [InlineData("https://kick.com/ReproChannel/")]
+    public async Task Kick_PlaysTheConfiguredChannelWithoutDownloadingPlatformPages(string channel)
+    {
+        var handler = new RecordingHandler(_ => throw new InvalidOperationException("No lookup needed"));
+        var embeds = new LivePlatformEmbeds(new HttpClient(handler), NullLogger<LivePlatformEmbeds>.Instance);
+        var found = await embeds.ResolveAsync(Kick, channel, "kick", "localhost", default);
+        Assert.NotNull(found.Embed);
+        Assert.Equal("kick", found.Embed.Platform);
+        Assert.Equal("https://player.kick.com/reprochannel?autoplay=true&muted=true", found.Embed.Url);
+        Assert.Equal("https://kick.com/reprochannel", found.Embed.WatchUrl);
+        Assert.Empty(handler.Asked);
+    }
+
+    [Theory]
+    [InlineData("https://www.facebook.com/my.page/videos/123456789/")]
+    [InlineData("https://m.facebook.com/watch/?v=123456789&tracking=ignored")]
+    [InlineData("https://www.facebook.com/video.php?v=123456789")]
+    [InlineData("https://www.facebook.com/watch/live/?v=123456789&ref=watch_permalink")]
+    [InlineData("https://www.facebook.com/videos/title/123456789/")]
+    public async Task Facebook_EmbedsTheSpecifiedPublicVideo(string watchUrl)
+    {
+        var handler = new RecordingHandler(_ => throw new InvalidOperationException("No lookup needed"));
+        var embeds = new LivePlatformEmbeds(new HttpClient(handler), NullLogger<LivePlatformEmbeds>.Instance);
+        var found = await embeds.ResolveAsync(Facebook, "My Page", "facebook", "localhost", default, watchUrl);
+        Assert.NotNull(found.Embed);
+        Assert.Equal("facebook", found.Embed.Platform);
+        Assert.Equal("https://www.facebook.com/watch/?v=123456789", found.Embed.WatchUrl);
+        Assert.StartsWith("https://www.facebook.com/plugins/video.php?href=", found.Embed.Url);
+        Assert.Contains(Uri.EscapeDataString(found.Embed.WatchUrl!), found.Embed.Url);
+        Assert.DoesNotContain("tracking", found.Embed.Url);
+        Assert.Empty(handler.Asked);
+    }
+
+    [Fact]
+    public async Task Facebook_CanUseAPublicVideoUrlAlreadyStoredAsTheChannel()
+    {
+        var embeds = Platform(_ => throw new InvalidOperationException());
+        var found = await embeds.ResolveAsync(Facebook, "https://www.facebook.com/page/videos/123/", "facebook", null, default);
+        Assert.Equal("https://www.facebook.com/watch/?v=123", found.Embed?.WatchUrl);
+    }
+
+    [Theory]
+    [InlineData(null)]
+    [InlineData("My Page")]
+    [InlineData("https://www.facebook.com/page/live")]
+    [InlineData("https://www.facebook.com/live/producer/v2/")]
+    [InlineData("https://www.facebook.com.evil.example/videos/123/")]
+    [InlineData("https://www.facebook.com@evil.example/videos/123/")]
+    [InlineData("http://localhost/videos/123/")]
+    [InlineData("javascript:alert(1)")]
+    public async Task Facebook_DoesNotGuessAVideoOrLoadAnUnrelatedUrl(string? watchUrl)
+    {
+        var embeds = Platform(_ => throw new InvalidOperationException());
+        var found = await embeds.ResolveAsync(Facebook, "Page", "facebook", null, default, watchUrl);
+        Assert.Null(found.Embed);
+        Assert.NotNull(found.Reason);
+    }
 
     [Fact]
     public async Task Twitch_IsPlayedOnTheChannelOfTheConfiguration()

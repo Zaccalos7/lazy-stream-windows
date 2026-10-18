@@ -485,6 +485,10 @@ public sealed class LiveLinkTests
             LiveLinkView.WatchUrlOf(YouTube, "UCuAXFkgsw1L7xaCfnd5JJOw", null));
         Assert.Equal("https://www.twitch.tv/channel", LiveLinkView.WatchUrlOf(Twitch, "channel", "twitch"));
         Assert.Null(LiveLinkView.WatchUrlOf(Twitch, null, null));
+        Assert.Equal("https://kick.com/channel", LiveLinkView.WatchUrlOf(
+            "rtmps://fa723fc1b171.global-contribute.live-video.net/app", "https://kick.com/Channel/", null));
+        Assert.Equal("https://www.facebook.com/watch/?v=123", LiveLinkView.WatchUrlOf(
+            "rtmps://live-api-s.facebook.com:443/rtmp/", "https://www.facebook.com/page/videos/123/", null));
     }
 
     [Fact]

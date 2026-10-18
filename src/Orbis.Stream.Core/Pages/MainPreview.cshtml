@@ -93,7 +93,13 @@
 
 @if (LiveLinkView.PlatformOf(live.StreamUrl) == "facebook")
 {
-    <partial name="_FacebookLiveNotice" />
+    <details class="facebook-live" open>
+        <summary class="facebook-live-toggle">
+            <strong class="facebook-live-title">@T["facebookGoLiveTitle"]</strong>
+            <i class="icon" aria-hidden="true">&#xE70D;</i>
+        </summary>
+        <partial name="_FacebookLiveInstructions" model="true" />
+    </details>
 }
 
 @if (!live.IsLive)

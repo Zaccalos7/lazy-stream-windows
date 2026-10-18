@@ -67,17 +67,18 @@
 }
 .nav a[aria-current="page"] .icon { color: var(--on-accent); }
 
-/* Keep the footer fixed; the live list is the only section that gives up height. */
-.nav > :not(.nav-lives-region) { flex-shrink: 0; }
+/* The live list yields first; very short windows can also scroll navigation above the fixed footer. */
+.nav > :not(.nav-main) { flex-shrink: 0; }
+.nav-main { display: flex; flex: 0 1 auto; flex-direction: column; gap: 3px; min-height: 0; margin-block-end: 1px; overflow-y: auto; overflow-x: hidden; overscroll-behavior: contain; scrollbar-width: thin; }
 .nav-footer { display: flex; flex: none; flex-direction: column; gap: 3px; margin-block-start: auto; }
 .nav-footer .segmented-control { margin-block-start: 0; }
 
 /* Quick channel setup and the publishing channels, grouped by platform. */
-.nav > a { flex-shrink: 0; }
+.nav-main > a { flex-shrink: 0; }
 .nav .nav-add-channel { margin-block: 6px 2px; border: 1px dashed var(--stroke-strong); color: var(--accent-text); }
 .nav .nav-add-channel .icon { color: inherit; }
-/* The 1px margin plus the sidebar's 3px gap leaves gap-1 (4px) above the theme switch. */
-.nav-lives-region { display: flex; flex: 0 1 auto; min-height: 0; margin-block: 10px 1px; }
+/* Navigation's 1px end margin plus the sidebar's 3px gap reserves gap-1 above the theme switch. */
+.nav-lives-region { display: flex; flex: 0 1 auto; min-height: 100px; margin-block: 10px 0; }
 .nav-lives-region:not(:has(.nav-lives)) { display: none; }
 .nav-lives { display: flex; flex-direction: column; gap: 12px; width: 100%; min-height: 0; margin: 0; padding: 12px 10px; border: 1px solid var(--stroke); border-radius: var(--radius); background: var(--tint); }
 .nav-lives-head { display: flex; flex: none; align-items: center; justify-content: space-between; gap: 6px; }
@@ -97,7 +98,7 @@
 .nav-live-channel > span { min-width: 0; }
 .nav .nav-live-channel .icon { flex: none; font-size: 9px; color: var(--text-3); }
 @media (max-width: 800px) {
-  .nav-lives-region { margin-block: 8px 1px; }
+  .nav-lives-region { flex: none; min-height: 0; margin-block: 8px 0; }
   .nav-lives { padding: 0; border: none; background: none; }
   .nav-lives-head { justify-content: center; }
   .nav-lives-title, .nav-lives-list, .nav-lives-total > span { display: none; }
@@ -342,7 +343,7 @@ html.sidebar-closed .nav-title {
   .nav { width: 50px; padding: 10px 4px; }
   .nav a { justify-content: center; padding: 0; }
   /* Direct children only: ".nav a span" would reach the language menu too and blank its labels. */
-  .nav > a span:not(.icon), .nav-title span, .lang-current span, .lang-current .icon, .segmented-control { display: none; }
+  .nav-main > a span:not(.icon), .nav-title span, .lang-current span, .lang-current .icon, .segmented-control { display: none; }
   /* The flag is enough of a label when the sidebar is a strip, and the menu still spells them out. */
   .lang-current { justify-content: center; padding: 0; }
   .lang-menu { left: -8px; min-width: 150px; }

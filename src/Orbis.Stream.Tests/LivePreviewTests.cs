@@ -396,12 +396,12 @@ public sealed class LivePreviewTests : IAsyncLifetime
         using var live = await _host.Client.GetAsync($"/orbis/mainPreview?live={_pkid}");
         Assert.Equal(HttpStatusCode.OK, live.StatusCode);
         var page = await live.Content.ReadAsStringAsync();
-        // The picture is drawn on a canvas, not an <img>: a browser has no clock for a multipart stream,
-        // so frames that arrive faster than it decodes queue up and play late, which is the slow
-        // motion the preview is judged on. The page carries the canvas the frames are drawn on.
-        Assert.Contains("data-preview-frame", page, StringComparison.Ordinal);
-        Assert.Contains("<canvas", page, StringComparison.Ordinal);
-        Assert.DoesNotContain("/stream", page, StringComparison.Ordinal);
+        // The public destination is the preview. No encoder picture or local file is presented
+        // as evidence that viewers can see the broadcast.
+        Assert.Contains("data-platform-embed", page, StringComparison.Ordinal);
+        Assert.Contains("/js/live-player.js", page, StringComparison.Ordinal);
+        Assert.DoesNotContain("data-preview-frame", page, StringComparison.Ordinal);
+        Assert.DoesNotContain("data-preview-video", page, StringComparison.Ordinal);
 
         // The stage is the shape of what is on air, so a canvas that is not 16:9 is not watched
         // inside a 16:9 box.
@@ -510,7 +510,7 @@ public sealed class LivePreviewTests : IAsyncLifetime
     [Fact]
     public async Task ALiveOnAPlatform_IsAlsoWatchableWithThePlayerOfThatPlatform()
     {
-        // Nothing on air has nowhere to watch: the page keeps the picture ffmpeg writes. The answer
+        // Nothing on air has nowhere to watch. The answer
         // is still a 200, because there is a reason to travel with it, and an error status would
         // tell the page the server had a problem rather than that there is no player to draw.
         using (var offline = await _host.Client.GetAsync("/preview/live/embed"))
@@ -530,7 +530,7 @@ public sealed class LivePreviewTests : IAsyncLifetime
 
         // The player is on the page from the start, with no address in it: on YouTube the address is
         // not known before the platform has been asked which video is on air, so the page asks for
-        // it once it is open and keeps the picture of the encoder until it answers.
+        // it when the user requests the preview.
         using (var page = await _host.Client.GetAsync($"/orbis/mainPreview?live={_pkid}"))
         {
             var html = await page.Content.ReadAsStringAsync();
@@ -562,6 +562,12 @@ public sealed class LivePreviewTests : IAsyncLifetime
             "channel=channel-preview",
             embed.GetProperty("url").GetString(),
             StringComparison.Ordinal);
+
+        using var publicPage = await _host.Client.GetAsync($"/orbis/mainPreview?live={_pkid}");
+        var publicHtml = await publicPage.Content.ReadAsStringAsync();
+        Assert.Contains("data-platform-toggle", publicHtml, StringComparison.Ordinal);
+        Assert.Contains("https://www.twitch.tv/channel-preview", publicHtml, StringComparison.Ordinal);
+        Assert.DoesNotContain("data-preview-frame", publicHtml, StringComparison.Ordinal);
     }
 
     [Fact]

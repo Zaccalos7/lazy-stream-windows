@@ -40,8 +40,4 @@ public static class ExpiringStreamKeys
         if (!Expires(platformStreamName, streamUrl)) return false;
         return savedAt is not { } saved || now - saved >= FacebookLifetime;
     }
-
-    /// <summary>How much of the life of the key is left, for the page to say how soon it has to be replaced.</summary>
-    public static TimeSpan AgeOf(DateTime? savedAt, DateTime now) =>
-        savedAt is { } saved ? now - saved : TimeSpan.Zero;
 }

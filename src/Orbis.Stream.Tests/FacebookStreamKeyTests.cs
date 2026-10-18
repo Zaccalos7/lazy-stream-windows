@@ -1,4 +1,5 @@
 using System.Net;
+using System.Text.RegularExpressions;
 using Microsoft.Extensions.DependencyInjection;
 using Orbis.Stream.Core.Contracts;
 using Orbis.Stream.Core.Data;
@@ -81,20 +82,42 @@ public sealed class FacebookStreamKeyTests : IClassFixture<ApplicationFixture>
     }
 
     [Fact]
-    public async Task The_wizard_says_the_live_is_started_on_Facebook_first_and_where_its_key_is()
+    public async Task The_wizard_says_step_by_step_how_a_Facebook_live_is_started_and_keyed()
     {
         var settings = Service<SettingService>();
         settings.AddNewConfiguration(Configuration("wizard.facebook.channel", "facebook-key-wizard"));
 
         var html = WebUtility.HtmlDecode(await _fixture.Client.GetStringAsync("/orbis/mainLive?start=1"));
 
+        // The producer is where the broadcast is started and where its key is written, so that is
+        // where the page sends the user, on the address the dashboard itself opens.
         Assert.Contains("https://www.facebook.com/live/producer", html, StringComparison.Ordinal);
-        Assert.Contains("Go live", html, StringComparison.Ordinal);
-        // The key is under Streaming settings, of the REST API.
-        Assert.Contains("Use Stream key", html, StringComparison.Ordinal);
-        Assert.Contains("REST API", html, StringComparison.Ordinal);
-        // And it is good for a day, which is why the wizard watches how old it is.
+
+        // The four steps, in the order they are asked: the broadcast first, the key out of the
+        // producer, the key into the configuration, and the stream from here at the end.
+        var steps = TheStepsOf(html);
+        Assert.Equal(4, steps.Count);
+        Assert.Contains("Go live", steps[0], StringComparison.Ordinal);
+        Assert.Contains("Use Stream key", steps[1], StringComparison.Ordinal);
+        Assert.Contains("REST API", steps[1], StringComparison.Ordinal);
+        Assert.Contains("key", steps[2], StringComparison.Ordinal);
+        Assert.Contains("Orbis", steps[3], StringComparison.Ordinal);
+
+        // And the key is good for a day, which is why the wizard watches how old the one it has is.
         Assert.Contains("one day", html, StringComparison.Ordinal);
+
+        settings.DeleteAStreamingSetting(Service<SettingRepository>()
+            .FindAll(new Dictionary<string, string> { ["channelName"] = "wizard.facebook.channel" }).Single().Id);
+    }
+
+    /// <summary>The steps of the Facebook notice, in the order they are written.</summary>
+    private static List<string> TheStepsOf(string html)
+    {
+        var notice = Regex.Match(html, "<ol class=\"facebook-live-steps\">(.*?)</ol>", RegexOptions.Singleline);
+        Assert.True(notice.Success, "the Facebook notice draws no steps at all");
+        return Regex.Matches(notice.Groups[1].Value, "<li>(.*?)</li>", RegexOptions.Singleline)
+            .Select(step => WebUtility.HtmlDecode(Regex.Replace(step.Groups[1].Value, "<.*?>", string.Empty)).Trim())
+            .ToList();
     }
 
     /// <summary>

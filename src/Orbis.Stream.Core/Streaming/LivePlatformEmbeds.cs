@@ -214,6 +214,9 @@ public sealed class LivePlatformEmbeds
     }
 
     /// <summary>The YouTube player of a live, once the id of the video is known.</summary>
+    public Task<LivePlatformLookup> ResolveYouTubeChannelAsync(string channel, CancellationToken cancellationToken) =>
+        YouTubeAsync(channel, cancellationToken);
+
     private async Task<LivePlatformLookup> YouTubeAsync(string channel, CancellationToken cancellationToken)
     {
         var handle = channel.Trim().TrimStart('@');
@@ -310,18 +313,18 @@ public sealed class LivePlatformEmbeds
     {
         var streamsUrl = LiveLinkView.YouTubeChannelUrl(handle) + "/streams";
         var streams = await ReadAsync(streamsUrl, cancellationToken);
-        if (streams is null)
-        {
-            // Not "the channel is off air": the page never arrived. A handle that is not a handle
-            // and a platform that answered a request from this machine with something else both end
-            // here, and both have to be told apart from a channel that is simply not broadcasting.
-            return (null, $"YouTube did not return the streams page of @{handle}");
-        }
-
-        var candidates = CandidatesOf(streams);
+        var candidates = streams is null ? null : CandidatesOf(streams);
         if (candidates is null)
         {
-            return (null, "YouTube returned an unrecognized channel page (possibly a consent page)");
+            // Some regions serve a consent document with HTTP 200. Try the public live route,
+            // then the channel with YouTube's public consent-bypass redirect parameter. Neither
+            // uses a signed-in account nor treats the consent page as an offline broadcast.
+            var direct = await ReadAsync(LiveLinkView.YouTubeChannelUrl(handle) + "/live?ucbcb=1", cancellationToken);
+            if (LiveVideoOf(direct) is { } liveVideo) return (liveVideo, null);
+            streams = await ReadAsync(streamsUrl + "?ucbcb=1", cancellationToken);
+            candidates = streams is null ? null : CandidatesOf(streams);
+            if (candidates is null)
+                return (null, "YouTube channel and live pages could not be verified (possibly a consent page)");
         }
 
         string? failure = null;
@@ -339,6 +342,20 @@ public sealed class LivePlatformEmbeds
             if (ended == false) return (candidate, null);
         }
         return (null, failure);
+    }
+
+    internal static string? LiveVideoOf(string? page)
+    {
+        if (page is null || HasEnded(page) != false) return null;
+        try
+        {
+            using var response = ReadData(page, PlayerResponse);
+            return response is not null && response.RootElement.TryGetProperty("videoDetails", out var details) &&
+                details.TryGetProperty("videoId", out var id) && id.ValueKind == JsonValueKind.String &&
+                id.GetString() is { Length: 11 } video && video.All(c => char.IsAsciiLetterOrDigit(c) || c is '-' or '_')
+                ? video : null;
+        }
+        catch (JsonException) { return null; }
     }
 
     /// <summary>

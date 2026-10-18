@@ -10,8 +10,14 @@
   const cover = preview.querySelector('[data-preview-cover]');
   const status = preview.querySelector('[data-embed-text]');
   const watchLink = preview.querySelector('[data-platform-watch]');
+  const urlInput = preview.querySelector('[data-platform-url]');
   const words = preview.querySelector('[data-platform-words]').dataset;
   const pkid = Number(preview.dataset.pkid);
+  // A Facebook video URL belongs to this broadcast, not to the next live on the same channel.
+  const storageKey = `orbis-live-watch-${preview.dataset.history || pkid}`;
+  if (urlInput) {
+    try { urlInput.value = sessionStorage.getItem(storageKey) || urlInput.value; } catch { }
+  }
   let requested = false;
   let timer;
   let pending;
@@ -36,7 +42,9 @@
     const controller = new AbortController();
     pending = controller;
     try {
-      const response = await fetch(`/preview/live/embed?live=${pkid}`, {
+      const address = `/preview/live/embed?live=${pkid}` +
+        (urlInput ? `&watchUrl=${encodeURIComponent(urlInput.value.trim())}` : '');
+      const response = await fetch(address, {
         cache: 'no-store', signal: controller.signal
       });
       if (!response.ok) throw new Error('Player lookup failed');
@@ -47,14 +55,20 @@
         if (player.getAttribute('src') !== answer.embed.url) player.setAttribute('src', answer.embed.url);
         player.hidden = false;
         cover.hidden = true;
-        if (watchLink && answer.embed.platform === 'youtube' && answer.embed.videoId) {
-          watchLink.href = `https://www.youtube.com/watch?v=${encodeURIComponent(answer.embed.videoId)}`;
+        if (watchLink) {
+          if (answer.embed.watchUrl) watchLink.href = answer.embed.watchUrl;
+          else if (answer.embed.platform === 'youtube' && answer.embed.videoId) {
+            watchLink.href = `https://www.youtube.com/watch?v=${encodeURIComponent(answer.embed.videoId)}`;
+          }
+          watchLink.hidden = false;
         }
       } else {
         player.removeAttribute('src');
         player.hidden = true;
         cover.hidden = false;
-        status.textContent = answer.reason ? words.failed : words.offair;
+        status.textContent = answer.reason
+          ? (urlInput ? words.facebook : words.failed) : words.offair;
+        if (urlInput && watchLink) watchLink.hidden = true;
       }
     } catch {
       if (round === generation && player.hidden) status.textContent = words.failed;
@@ -67,6 +81,10 @@
   };
 
   toggle.addEventListener('click', () => {
+    if (!requested && urlInput && !urlInput.reportValidity()) return;
+    if (urlInput) {
+      try { sessionStorage.setItem(storageKey, urlInput.value.trim()); } catch { }
+    }
     requested = !requested;
     toggle.textContent = requested ? words.stop : words.start;
     toggle.setAttribute('aria-pressed', String(requested));
@@ -77,6 +95,16 @@
       unload();
       status.textContent = words.idle;
     }
+  });
+  urlInput?.addEventListener('input', () => {
+    // Editing the destination must not leave the previous broadcast playing.
+    requested = false;
+    unload();
+    toggle.textContent = words.start;
+    toggle.setAttribute('aria-pressed', 'false');
+    status.textContent = words.idle;
+    if (watchLink) watchLink.hidden = true;
+    try { sessionStorage.removeItem(storageKey); } catch { }
   });
   document.addEventListener('visibilitychange', () => {
     if (document.hidden) unload();

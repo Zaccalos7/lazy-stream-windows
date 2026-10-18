@@ -7,5 +7,14 @@
    somewhere the user can be right now. *@
 <section class="facebook-live">
     <strong class="facebook-live-title">@T["facebookGoLiveTitle"]</strong>
+    <a class="btn subtle facebook-live-open" href="@LiveLinkView.FacebookProducerUrl" target="_blank" rel="noopener noreferrer">@T["facebookOpenProducer"]</a>
+    <span class="caption facebook-live-help" style="display: block;" data-facebook-live-notice>@T["facebookGoLiveHelp"]</span>
+    <ol class="facebook-live-steps">
+        <li>@Html.Raw(T["facebookGoLiveStep"])</li>
+        <li>@Html.Raw(T["facebookStreamingKeyHelp"])</li>
+        <li>@Html.Raw(T["facebookSaveKeyStep"])</li>
+        <li>@Html.Raw(T["facebookStartStreamStep"])</li>
+    </ol>
+    <p class="caption facebook-key-lifetime">@T["facebookKeyLifetime"]</p>
     <partial name="_FacebookLiveInstructions" model="false" />
 </section>

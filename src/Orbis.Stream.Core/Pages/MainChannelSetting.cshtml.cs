@@ -22,7 +22,7 @@ namespace Orbis.Stream.Core.Pages;
 /// <param name="IngestHint">
 /// What is said under the ingest while the platform is picked, as a key of the interface bundles:
 /// where the platform shows the address to paste. Null where there is nothing to add to the preset
-/// (TikTok has a hint of its own, about its key) or no address to paste (X is asked for a region).
+/// (TikTok has a hint of its own, about its key).
 /// </param>
 public sealed record PlatformChoice(
     string Value, string Label, string StreamUrl, StreamPlatform Platform, bool PersonalIngest = false, string? IngestHint = null);
@@ -44,30 +44,12 @@ public sealed class MainChannelSettingModel(SettingService settings, RequestVali
         // The IVS endpoint the Kick dashboard shows (RTMPS on 443, app "app"). An account can be
         // given one of its own, under the same network, which is why Kick is read off the domain.
         new("kick", "Kick", "rtmps://fa723fc1b171.global-contribute.live-video.net/app", StreamPlatform.Kick, PersonalIngest: true, IngestHint: "ingestFromDashboard"),
-        // The RTMPS ingest of Facebook Live, where Facebook Gaming lives go: RTMPS on 443 only, as
-        // OBS lists it. Live Producer may show another host of Facebook's (live-api-s), and either
-        // is recognised by its domain.
-        new("facebook", "Facebook Gaming", "rtmps://rtmp-api.facebook.com:443/rtmp", StreamPlatform.Facebook, PersonalIngest: true, IngestHint: "ingestFromDashboard"),
+        // Facebook Live Producer's RTMPS endpoint, also used for gaming broadcasts.
+        new("facebook", "Facebook Gaming", StreamPlatforms.FacebookIngestUrl, StreamPlatform.Facebook, PersonalIngest: true, IngestHint: "ingestFromDashboard"),
         // A TikTok LIVE server as LIVE Producer shows it. The key that goes with it is good for one
         // live only, so it is not kept here: it is asked for whenever a live starts (LiveStreamKeys).
         new("tiktok", "TikTok", "rtmp://push-rtmp-l11-va01.tiktokcdn.com/stage", StreamPlatform.TikTok, PersonalIngest: true),
-        // The universal server of a Rumble Static Stream Key, which keeps the same address and key
-        // from one live to the next. A stream created on its own gets a server and a slot of its own
-        // instead (ls8.live.rmbl.ws/slot-20) and a key for that stream only, which is why Rumble is
-        // read off the domain. Plain RTMP: Rumble serves no RTMPS.
-        new("rumble", "Rumble", "rtmp://rtmp.rumble.com/live", StreamPlatform.Rumble, PersonalIngest: true, IngestHint: "ingestFromRumble"),
-        // A source of X in the region of Germany, over the RTMPS X asks for in production. A source
-        // belongs to the region it was made in, so X is asked for its region rather than for an
-        // address (RegionalIngest), and read off the domain of the server of any region.
-        new("x", "X", XIngestRegions.Default.StreamUrl, StreamPlatform.X, PersonalIngest: true)
     ];
-
-    /// <summary>
-    /// The platform whose ingest is asked for as a region rather than as an address: X, whose sources
-    /// are fed on the server of the region they were made in (<see cref="XIngestRegions"/>). The
-    /// address box goes away while it is picked, and the region list takes its place.
-    /// </summary>
-    public static string RegionalIngest { get; } = Platforms.First(platform => platform.Platform == StreamPlatform.X).Value;
 
     /// <summary>
     /// The hints said under the ingest (<see cref="PlatformChoice.IngestHint"/>), each with the values
@@ -153,16 +135,8 @@ public sealed class MainChannelSettingModel(SettingService settings, RequestVali
         bool autoCleanupEnabled,
         int autoCleanupIntervalMonths,
         int autoCleanupOlderThanMonths,
-        bool ffmpegSender,
-        string? xRegion)
+        bool ffmpegSender)
     {
-        // X is asked for the region of its source, and its address is the one of the server there:
-        // the address box is not on the form while X is picked.
-        if (ChoiceOf(platformStreamName)?.Platform == StreamPlatform.X && XIngestRegions.Of(xRegion) is { } region)
-        {
-            streamUrl = region.StreamUrl;
-        }
-
         if (string.IsNullOrWhiteSpace(streamUrl))
         {
             streamUrl = Platforms.FirstOrDefault(platform => platform.Value == platformStreamName)?.StreamUrl;

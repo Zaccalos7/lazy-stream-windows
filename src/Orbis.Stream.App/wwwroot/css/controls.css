@@ -60,10 +60,6 @@
 /* TikTok is its note on black, with the cyan and the red copies of it off its edges. */
 .btn.brand.tiktok { --hue: #000000; border-color: var(--stroke-strong); }
 .btn.brand.tiktok svg { filter: drop-shadow(-0.8px -0.8px 0 var(--tiktok-cyan)) drop-shadow(0.8px 0.8px 0 var(--tiktok)); }
-/* Rumble is black on its green, like Kick: white on that green cannot be read in the dark theme. */
-.btn.brand.rumble { --hue: var(--rumble); color: #000000; }
-/* X is its white mark on black, as X draws itself in either theme. */
-.btn.brand.x { --hue: #000000; border-color: var(--stroke-strong); }
 /* LinkedIn wears its blue on a tint of itself rather than a solid fill, so the button stands off
    the dialog background while the blue of the mark and the name stays the blue of the brand. */
 .btn.brand.linkedin {
@@ -285,8 +281,9 @@ form:has(input[name="platformStreamName"][value="youtube"]:checked) .option-card
    height, and what they say starts at their top, next to the radio. */
 .choice-list.grid {
   display: grid;
-  grid-template-columns: repeat(auto-fill, minmax(min(100%, 300px), 1fr));
+  grid-template-columns: repeat(auto-fit, minmax(min(100%, 300px), 1fr));
   gap: 10px;
+  align-items: start;
 }
 .choice-list.grid > .choice { align-items: flex-start; min-width: 0; padding: 12px 14px; }
 .choice-list.grid > .choice > input { margin-top: 2px; }
@@ -310,8 +307,6 @@ form:has(input[name="platformStreamName"][value="youtube"]:checked) .option-card
 .choice.kick { --hue: var(--kick); }
 .choice.facebook { --hue: var(--facebook); }
 .choice.tiktok { --hue: var(--tiktok); }
-.choice.rumble { --hue: var(--rumble); }
-.choice.x { --hue: var(--x); }
 .choice > .icon { color: var(--text); font-size: 16px; }
 .choice:hover { border-color: var(--text-3); }
 .choice:has(input:checked) {

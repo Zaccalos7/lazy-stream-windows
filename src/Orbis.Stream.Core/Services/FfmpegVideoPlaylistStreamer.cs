@@ -425,7 +425,7 @@ public sealed class FfmpegVideoPlaylistStreamer : IVideoPlaylistStreamer
                 var connecting = _localizer.PrintMessage("video.live.connecting", [inputPath, platform]);
                 _logger.LogInformation("{Message}", connecting);
                 SaveMessageOnVideoLiveHistory(
-                    connecting, videoLiveHistoryPkid, inputPath, LiveStatus.Live, DateTime.Now);
+                    connecting, videoLiveHistoryPkid, inputPath, LiveStatus.Connecting, DateTime.Now);
 
                 var outcome = await MonitorAsync(
                         session,
@@ -527,7 +527,7 @@ public sealed class FfmpegVideoPlaylistStreamer : IVideoPlaylistStreamer
                             session,
                             reconnects,
                             inputPath,
-                            message => SaveMessageOnVideoLiveHistory(message, videoLiveHistoryPkid, inputPath, LiveStatus.Live, null),
+                            message => SaveMessageOnVideoLiveHistory(message, videoLiveHistoryPkid, inputPath, LiveStatus.Reconnecting, null),
                             cancellationToken)
                         .ConfigureAwait(false))
                 {
@@ -940,7 +940,7 @@ public sealed class FfmpegVideoPlaylistStreamer : IVideoPlaylistStreamer
 
                 var platform = PlatformName(next);
                 var connecting = _localizer.PrintMessage("video.live.connecting", [description, platform]);
-                MarkRows(rows, LiveStatus.Live, connecting);
+                MarkRows(rows, LiveStatus.Connecting, connecting);
                 _logger.LogInformation("{Message}", connecting);
 
                 var outcome = await MonitorAsync(
@@ -1051,7 +1051,7 @@ public sealed class FfmpegVideoPlaylistStreamer : IVideoPlaylistStreamer
                 if (!session.EndedNaturally
                     && (outcome == StreamOutcome.Stalled || exitCode != 0)
                     && await ShouldReconnectAsync(
-                            session, reconnects, description, message => MarkRows(rows, LiveStatus.Live, message), cancellationToken)
+                            session, reconnects, description, message => MarkRows(rows, LiveStatus.Reconnecting, message), cancellationToken)
                         .ConfigureAwait(false))
                 {
                     resumeFrom = TimeSpan.FromMilliseconds(session.PositionMilliseconds);
@@ -1373,7 +1373,7 @@ public sealed class FfmpegVideoPlaylistStreamer : IVideoPlaylistStreamer
                             session,
                             reconnects,
                             takeover.Label,
-                            message => SaveMessageOnVideoLiveHistory(message, program.History, program.Path, LiveStatus.Live, null),
+                            message => SaveMessageOnVideoLiveHistory(message, program.History, program.Path, LiveStatus.Reconnecting, null),
                             cancellationToken)
                         .ConfigureAwait(false))
                 {
@@ -1689,7 +1689,7 @@ public sealed class FfmpegVideoPlaylistStreamer : IVideoPlaylistStreamer
             }
             else
             {
-                if (!announced)
+                if (!announced && session.IsPublishing)
                 {
                     announced = true;
                     onAir();
@@ -1818,17 +1818,7 @@ public sealed class FfmpegVideoPlaylistStreamer : IVideoPlaylistStreamer
         return string.IsNullOrWhiteSpace(errorOutput) ? message : message + "\n" + errorOutput.Trim();
     }
 
-    private static string PlatformName(FfmpegStreamingSession session) => session.Profile.Platform switch
-    {
-        StreamPlatform.Twitch => "Twitch",
-        StreamPlatform.YouTube => "YouTube",
-        StreamPlatform.Kick => "Kick",
-        StreamPlatform.Facebook => "Facebook Gaming",
-        StreamPlatform.TikTok => "TikTok",
-        StreamPlatform.Rumble => "Rumble",
-        StreamPlatform.X => "X",
-        _ => "RTMP"
-    };
+    private static string PlatformName(FfmpegStreamingSession session) => session.Profile.Name;
 
     private async Task StopAndRecordAsync(
         FfmpegStreamingSession session,

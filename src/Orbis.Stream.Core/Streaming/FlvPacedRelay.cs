@@ -870,6 +870,8 @@ public sealed class RelaySegment
     /// <summary>How much of this encoder went on air, in milliseconds.</summary>
     public long SentPositionMilliseconds => Interlocked.Read(ref _sentPositionMilliseconds);
 
+    public long FirstSentTimestamp => Interlocked.Read(ref _firstSentTimestamp);
+
     /// <summary>When the first frame of this encoder went on air (Environment.TickCount64); 0 before.</summary>
     public long OnAirSinceTicks => Interlocked.Read(ref _onAirSinceTicks);
 
@@ -910,7 +912,7 @@ public sealed class RelaySegment
         Interlocked.CompareExchange(ref _onAirSinceTicks, now, 0);
         if (_firstSentTimestamp < 0)
         {
-            _firstSentTimestamp = tag.Timestamp;
+            Interlocked.Exchange(ref _firstSentTimestamp, tag.Timestamp);
         }
 
         var position = tag.Timestamp - _firstSentTimestamp;

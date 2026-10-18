@@ -123,7 +123,7 @@ public sealed class VideoService
     {
         var videos = _videoRepository.FindByLiveHistoryId(videoLiveHistoryPkid);
 
-        if (videos.Any(video => video.LiveStatus == LiveStatus.Live))
+        if (videos.Any(video => video.LiveStatus.IsActive()))
         {
             throw new LiveException("video.delete.live");
         }
@@ -186,7 +186,7 @@ public sealed class VideoService
 
     /// <summary>Videos still marked LIVE, grouped by channel: the ones the unlock dialog can release.</summary>
     public List<ChannelResponse> GetLockedVideos() =>
-        _videoRepository.FindByLiveStatus(LiveStatus.Live)
+        _videoRepository.FindActive()
             .GroupBy(video => video.ChannelName, StringComparer.Ordinal)
             .Select(group => new ChannelResponse(
                 group.Key,
@@ -219,7 +219,7 @@ public sealed class VideoService
     /// <summary>All channels with the live videos currently streaming, as the stop card needs.</summary>
     public List<ChannelResponse> GetAllChannelOnline()
     {
-        var videoList = _videoRepository.FindByLiveStatus(LiveStatus.Live);
+        var videoList = _videoRepository.FindActive();
         if (videoList.Count == 0)
         {
             _logger.LogError("{Message}", _localizer.PrintMessage("nothing.to.stop"));
@@ -255,7 +255,7 @@ public sealed class VideoService
     public MessageResponse DeleteVideo(int pkid)
     {
         var video = FindVideoToUnlock(pkid);
-        if (video.LiveStatus == LiveStatus.Live)
+        if (video.LiveStatus.IsActive())
         {
             throw new LiveException("video.delete.live");
         }

@@ -92,6 +92,7 @@ public sealed class RtmpPublisherFfmpegTests
     [Theory]
     [InlineData(StreamPlatform.Twitch, 0)]
     [InlineData(StreamPlatform.YouTube, 0)]
+    [InlineData(StreamPlatform.Facebook, 0)]
 
     // Past 2^24 ms (4 h 39 min): every chunk carries the extended timestamp, as on a long live.
     [InlineData(StreamPlatform.Twitch, 16_800)]
@@ -116,7 +117,9 @@ public sealed class RtmpPublisherFfmpegTests
                 + $"-t 3 -pix_fmt yuv420p -c:a aac \"{clip}\"");
 
             var port = RtmpPublisherUrlTests.FreePort();
-            var url = $"rtmp://127.0.0.1:{port}/live2/test-key-1234";
+            var url = platform == StreamPlatform.Facebook
+                ? $"rtmp://127.0.0.1:{port}/rtmp/test-key-1234/segment?token=private-token-1234"
+                : $"rtmp://127.0.0.1:{port}/live2/test-key-1234";
             using var server = Process.Start(new ProcessStartInfo(
                 ffmpeg, $"-hide_banner -loglevel error -listen 1 -timeout 20 -i {url} -c copy -copyts -y \"{received}\"")
             {
@@ -128,7 +131,12 @@ public sealed class RtmpPublisherFfmpegTests
 
             var locator = new FfmpegToolLocator(ffmpeg, ffprobe);
             var probe = await new FfmpegProbe(locator, NullLogger<FfmpegProbe>.Instance).ProbeAsync(clip, CancellationToken.None);
-            var profile = platform == StreamPlatform.YouTube ? StreamPlatformProfile.YouTube : StreamPlatformProfile.Twitch;
+            var profile = platform switch
+            {
+                StreamPlatform.YouTube => StreamPlatformProfile.YouTube,
+                StreamPlatform.Facebook => StreamPlatformProfile.Facebook,
+                _ => StreamPlatformProfile.Twitch
+            };
             var setting = new VideoSettingEntity
             {
                 Title = "test",

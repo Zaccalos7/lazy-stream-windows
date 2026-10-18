@@ -1,5 +1,6 @@
 using System.Collections.Concurrent;
 using System.Text.RegularExpressions;
+using Microsoft.AspNetCore.WebUtilities;
 using Microsoft.Extensions.Logging;
 using Orbis.Stream.Core.Pages;
 
@@ -11,11 +12,10 @@ namespace Orbis.Stream.Core.Streaming;
 /// address of the player that plays it.
 /// </summary>
 /// <param name="VideoId">The video on air, where the platform addresses a live by one (YouTube).</param>
-public sealed record LivePlatformEmbed(string Platform, string Channel, string Url, string? VideoId = null);
+public sealed record LivePlatformEmbed(string Platform, string Channel, string Url, string? VideoId = null, string? WatchUrl = null);
 
 /// <summary>
-/// Where a live can be watched when the live is not only the local picture: the Twitch and the
-/// YouTube player, addressed by the channel of the configuration.
+/// Public players for Twitch, YouTube, Kick and Facebook Live.
 ///
 /// The channel is the only thing the configuration stores about where a live goes, and it is stored
 /// where it is easy to mistake it for something else: a live started from the wizard keeps the
@@ -82,19 +82,26 @@ public sealed class LivePlatformEmbeds
 
     private readonly HttpClient _http;
     private readonly ILogger<LivePlatformEmbeds> _logger;
-    private readonly ConcurrentDictionary<string, (string? VideoId, DateTimeOffset Asked)> _youtube =
+    private readonly TimeProvider _time;
+    private readonly ConcurrentDictionary<string, (string? VideoId, string? Failure, DateTimeOffset Asked)> _youtube =
         new(StringComparer.OrdinalIgnoreCase);
 
     /// <summary>One question at a time: a page asking again while the first one is still open.</summary>
     private readonly SemaphoreSlim _gate = new(1, 1);
 
     public LivePlatformEmbeds(HttpClient http, ILogger<LivePlatformEmbeds> logger)
+        : this(http, logger, TimeProvider.System)
+    {
+    }
+
+    internal LivePlatformEmbeds(HttpClient http, ILogger<LivePlatformEmbeds> logger, TimeProvider time)
     {
         _http = http;
         _logger = logger;
+        _time = time;
     }
 
-/// <summary>
+    /// <summary>
     /// The answer for a live that cannot be played where it goes, and why. There is a difference
     /// between a channel that is not on air and a channel this application failed to ask about, and
     /// a page told the first when the second is what happened repeats it for ever, because the
@@ -121,9 +128,20 @@ public sealed class LivePlatformEmbeds
         string? channelName,
         string? platformStreamName,
         string? host,
-        CancellationToken cancellationToken)
+        CancellationToken cancellationToken,
+        string? watchUrl = null)
     {
         var channel = (channelName ?? platformStreamName)?.Trim();
+        // Facebook needs the individual public video, not the producer URL or a page name.
+        if (LiveLinkView.PlatformOf(streamUrl) == "facebook")
+        {
+            var video = FacebookVideoUrl(watchUrl ?? channel);
+            return video is null
+                ? LivePlatformLookup.Failed("Facebook Live requires the public URL of the live video")
+                : LivePlatformLookup.Of(new LivePlatformEmbed("facebook", channel ?? string.Empty,
+                    "https://www.facebook.com/plugins/video.php?href=" + Uri.EscapeDataString(video) +
+                    "&show_text=false&autoplay=true&mute=true&width=640", WatchUrl: video));
+        }
         if (string.IsNullOrEmpty(channel))
         {
             return LivePlatformLookup.Nothing;
@@ -133,8 +151,46 @@ public sealed class LivePlatformEmbeds
         {
             "twitch" => LivePlatformLookup.Of(new LivePlatformEmbed("twitch", channel, TwitchUrl(channel, host))),
             "youtube" => await YouTubeAsync(channel, cancellationToken),
+            "kick" => KickChannel(channel) is { } kick
+                ? LivePlatformLookup.Of(new LivePlatformEmbed("kick", kick,
+                    "https://player.kick.com/" + Uri.EscapeDataString(kick) + "?autoplay=true&muted=true",
+                    WatchUrl: "https://kick.com/" + Uri.EscapeDataString(kick)))
+                : LivePlatformLookup.Failed("Kick requires the channel username or URL"),
             _ => LivePlatformLookup.Nothing
         };
+    }
+
+    /// <summary>Accept a Kick username or its public channel URL.</summary>
+    public static string? KickChannel(string value)
+    {
+        var channel = value.Trim();
+        if (Uri.TryCreate(channel, UriKind.Absolute, out var url))
+        {
+            if (url.Scheme is not ("https" or "http") || !url.IsDefaultPort || url.UserInfo.Length > 0 ||
+                url.Host is not ("kick.com" or "www.kick.com")) return null;
+            channel = url.AbsolutePath.Trim('/');
+        }
+        channel = channel.TrimStart('@').ToLowerInvariant();
+        return Regex.IsMatch(channel, @"\A[a-z0-9_-]+\z", RegexOptions.CultureInvariant) ? channel : null;
+    }
+
+    /// <summary>Canonical public video URL. Page names and Producer URLs do not identify a live.</summary>
+    public static string? FacebookVideoUrl(string? value)
+    {
+        if (!Uri.TryCreate(value?.Trim(), UriKind.Absolute, out var url) ||
+            url.Scheme is not ("https" or "http") || !url.IsDefaultPort || url.UserInfo.Length > 0 ||
+            url.Host is not ("facebook.com" or "www.facebook.com" or "m.facebook.com" or "web.facebook.com")) return null;
+
+        var path = url.AbsolutePath.TrimEnd('/');
+        var match = Regex.Match(path, @"\A/(?:[^/]+/)?videos/(?:[^/]+/)?(?<id>[0-9]+)\z", RegexOptions.CultureInvariant);
+        var id = match.Success ? match.Groups["id"].Value : null;
+        if (id is null && path is ("" or "/watch" or "/watch/live" or "/video.php" or "/live"))
+        {
+            var query = QueryHelpers.ParseQuery(url.Query);
+            if (query.TryGetValue("v", out var video) && video.Count == 1 &&
+                Regex.IsMatch(video.ToString(), @"\A[0-9]+\z", RegexOptions.CultureInvariant)) id = video.ToString();
+        }
+        return id is null ? null : "https://www.facebook.com/watch/?v=" + id;
     }
 
     /// <summary>
@@ -177,7 +233,7 @@ public sealed class LivePlatformEmbeds
             handle,
             // Muted and inline, so the browser lets it start on its own: a preview is opened
             // without a gesture on the player and autoplay of sound is not one it will allow.
-            $"https://www.youtube.com/embed/{videoId}?autoplay=1&mute=1&playsinline=1&rel=0&modestbranding=1",
+            $"https://www.youtube.com/embed/{videoId}?autoplay=1&mute=1&playsinline=1&rel=0",
             videoId));
     }
 
@@ -189,7 +245,7 @@ public sealed class LivePlatformEmbeds
     {
         if (Remembered(handle) is { } fresh)
         {
-            return (fresh, null);
+            return fresh;
         }
 
         await _gate.WaitAsync(cancellationToken);
@@ -197,11 +253,11 @@ public sealed class LivePlatformEmbeds
         {
             if (Remembered(handle) is { } again)
             {
-                return (again, null);
+                return again;
             }
 
             var (videoId, failure) = await LookUpAsync(handle, cancellationToken);
-            _youtube[handle] = (videoId, DateTimeOffset.UtcNow);
+            _youtube[handle] = (videoId, failure, _time.GetUtcNow());
             return (videoId, failure);
         }
         catch (OperationCanceledException)
@@ -210,12 +266,11 @@ public sealed class LivePlatformEmbeds
         }
         catch (Exception problem)
         {
-            // A platform that cannot be asked is not a reason to fail the preview: the answer the
-            // page already had is the one it keeps.
+            // A stale success cannot confirm that a broadcast is still on air.
             _logger.LogWarning(problem, "The live of the YouTube channel {Channel} could not be looked up.", handle);
-            return _youtube.TryGetValue(handle, out var last)
-                ? (last.VideoId, null)
-                : (null, "YouTube could not be asked for the streams of the channel");
+            const string failure = "YouTube could not be asked for the streams of the channel";
+            _youtube[handle] = (null, failure, _time.GetUtcNow());
+            return (null, failure);
         }
         finally
         {
@@ -224,15 +279,15 @@ public sealed class LivePlatformEmbeds
     }
 
     /// <summary>The answer for a channel that was asked recently enough to still be a good one.</summary>
-    private string? Remembered(string handle)
+    private (string? VideoId, string? Failure)? Remembered(string handle)
     {
         if (!_youtube.TryGetValue(handle, out var entry))
         {
             return null;
         }
 
-        var age = DateTimeOffset.UtcNow - entry.Asked;
-        return age < (entry.VideoId is null ? OffAir : OnAir) ? entry.VideoId : null;
+        var age = _time.GetUtcNow() - entry.Asked;
+        return age < (entry.VideoId is null ? OffAir : OnAir) ? (entry.VideoId, entry.Failure) : null;
     }
 
     /// <summary>

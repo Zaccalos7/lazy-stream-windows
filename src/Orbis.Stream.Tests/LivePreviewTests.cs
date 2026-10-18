@@ -237,9 +237,14 @@ public sealed class LivePreviewTests : IAsyncLifetime
         while (DateTime.UtcNow < deadline)
         {
             var current = await SnapshotAsync();
-            // The page reloads when the snapshot says nothing is running, and a moment where the two
-            // ffmpeg processes overlap into "no live" would reload it on every change.
-            Assert.True(current.GetProperty("isLive").GetBoolean(), "the live went missing while it restarted");
+            // The replacement publisher must report progress before the preview calls it live.
+            // Keep watching this video while it connects, then verify the applied output below.
+            Assert.Equal(_pkid, current.GetProperty("videoPkid").GetInt32());
+            if (!current.GetProperty("isLive").GetBoolean())
+            {
+                await Task.Delay(250);
+                continue;
+            }
 
             var at = current.GetProperty("positionMilliseconds").GetInt64();
             var width = current.GetProperty("output").GetProperty("width").GetInt32();
@@ -391,12 +396,12 @@ public sealed class LivePreviewTests : IAsyncLifetime
         using var live = await _host.Client.GetAsync($"/orbis/mainPreview?live={_pkid}");
         Assert.Equal(HttpStatusCode.OK, live.StatusCode);
         var page = await live.Content.ReadAsStringAsync();
-        // The picture is drawn on a canvas, not an <img>: a browser has no clock for a multipart stream,
-        // so frames that arrive faster than it decodes queue up and play late, which is the slow
-        // motion the preview is judged on. The page carries the canvas the frames are drawn on.
-        Assert.Contains("data-preview-frame", page, StringComparison.Ordinal);
-        Assert.Contains("<canvas", page, StringComparison.Ordinal);
-        Assert.DoesNotContain("/stream", page, StringComparison.Ordinal);
+        // The public destination is the preview. No encoder picture or local file is presented
+        // as evidence that viewers can see the broadcast.
+        Assert.Contains("data-platform-embed", page, StringComparison.Ordinal);
+        Assert.Contains("/js/live-player.js", page, StringComparison.Ordinal);
+        Assert.DoesNotContain("data-preview-frame", page, StringComparison.Ordinal);
+        Assert.DoesNotContain("data-preview-video", page, StringComparison.Ordinal);
 
         // The stage is the shape of what is on air, so a canvas that is not 16:9 is not watched
         // inside a 16:9 box.
@@ -505,7 +510,7 @@ public sealed class LivePreviewTests : IAsyncLifetime
     [Fact]
     public async Task ALiveOnAPlatform_IsAlsoWatchableWithThePlayerOfThatPlatform()
     {
-        // Nothing on air has nowhere to watch: the page keeps the picture ffmpeg writes. The answer
+        // Nothing on air has nowhere to watch. The answer
         // is still a 200, because there is a reason to travel with it, and an error status would
         // tell the page the server had a problem rather than that there is no player to draw.
         using (var offline = await _host.Client.GetAsync("/preview/live/embed"))
@@ -525,7 +530,7 @@ public sealed class LivePreviewTests : IAsyncLifetime
 
         // The player is on the page from the start, with no address in it: on YouTube the address is
         // not known before the platform has been asked which video is on air, so the page asks for
-        // it once it is open and keeps the picture of the encoder until it answers.
+        // it when the user requests the preview.
         using (var page = await _host.Client.GetAsync($"/orbis/mainPreview?live={_pkid}"))
         {
             var html = await page.Content.ReadAsStringAsync();
@@ -557,6 +562,47 @@ public sealed class LivePreviewTests : IAsyncLifetime
             "channel=channel-preview",
             embed.GetProperty("url").GetString(),
             StringComparison.Ordinal);
+
+        using var publicPage = await _host.Client.GetAsync($"/orbis/mainPreview?live={_pkid}");
+        var publicHtml = await publicPage.Content.ReadAsStringAsync();
+        Assert.Contains("data-platform-toggle", publicHtml, StringComparison.Ordinal);
+        Assert.Contains("https://www.twitch.tv/channel-preview", publicHtml, StringComparison.Ordinal);
+        Assert.DoesNotContain("data-preview-frame", publicHtml, StringComparison.Ordinal);
+    }
+
+    [Fact]
+    public async Task KickAndFacebook_PublicPlayersAreAvailableFromThePreview()
+    {
+        if (!await StartLiveAsync()) return;
+        await WaitForLiveAsync();
+        foreach (var (platform, ingest) in new[]
+        {
+            ("kick", "rtmps://fa723fc1b171.global-contribute.live-video.net/app"),
+            ("facebook", "rtmps://live-api-s.facebook.com:443/rtmp/")
+        })
+        {
+            using (var connection = _host.Services.GetRequiredService<Orbis.Stream.Core.Data.SqliteConnectionFactory>().Open())
+            using (var command = connection.CreateCommand())
+            {
+                command.CommandText = "UPDATE video_live_history SET stream_url = $url;";
+                command.Parameters.AddWithValue("$url", ingest);
+                command.ExecuteNonQuery();
+            }
+            var query = platform == "facebook"
+                ? "&watchUrl=" + Uri.EscapeDataString("https://www.facebook.com/page/videos/123456789/")
+                : string.Empty;
+            using var response = await _host.Client.GetAsync($"/preview/live/embed?live={_pkid}{query}");
+            var embed = JsonDocument.Parse(await response.Content.ReadAsStringAsync()).RootElement.GetProperty("embed");
+            Assert.Equal(platform, embed.GetProperty("platform").GetString());
+            Assert.StartsWith(platform == "kick" ? "https://player.kick.com/" : "https://www.facebook.com/plugins/video.php?",
+                embed.GetProperty("url").GetString());
+            Assert.NotNull(embed.GetProperty("watchUrl").GetString());
+            using var page = await _host.Client.GetAsync($"/orbis/mainPreview?live={_pkid}");
+            var html = await page.Content.ReadAsStringAsync();
+            Assert.Contains("data-platform-toggle", html);
+            Assert.DoesNotContain("data-preview-frame", html);
+            if (platform == "facebook") Assert.Contains("data-platform-url", html);
+        }
     }
 
     [Fact]

@@ -34,14 +34,6 @@ public sealed class StreamPlatformTests
     [InlineData("rtmp://push-rtmp-f5-tt02.tiktokcdn-eu.com/game/stream-123", StreamPlatform.TikTok)]
     [InlineData("rtmp://push.tiktokcdn-us.com/live/stream-123", StreamPlatform.TikTok)]
     [InlineData("rtmp://nottiktokcdn.com/live/key", StreamPlatform.Generic)]
-    // Rumble: the universal server of a Static Stream Key, or the server and slot of one stream.
-    [InlineData("rtmp://rtmp.rumble.com/live/r-abcdefghijklmnopqrstuvw", StreamPlatform.Rumble)]
-    [InlineData("rtmp://ls8.live.rmbl.ws/slot-20/abcd-efgh-ijkl", StreamPlatform.Rumble)]
-    [InlineData("rtmp://notrmbl.ws/live/key", StreamPlatform.Generic)]
-    // X: one server per region, over RTMP on 80 or RTMPS on 443.
-    [InlineData("rtmps://de.pscp.tv:443/x/abcdefghijkl", StreamPlatform.X)]
-    [InlineData("rtmp://va.pscp.tv:80/x/abcdefghijkl", StreamPlatform.X)]
-    [InlineData("rtmp://notpscp.tv/x/key", StreamPlatform.Generic)]
     public void Detect_ReadsThePlatformOffTheHost(string? url, StreamPlatform expected) =>
         Assert.Equal(expected, StreamPlatforms.Detect(url));
 
@@ -55,6 +47,15 @@ public sealed class StreamPlatformTests
     [InlineData("rtmps://ingest.live-video.net/app/key", "rtmps://ingest.live-video.net/app/key")]
     [InlineData("rtmp://my.cdn.example/live/key", "rtmp://my.cdn.example/live/key")]
     public void NormalizeIngestUrl_PutsYouTubeOnTheTlsItOnlyTakesIngestOver(string url, string expected) =>
+        Assert.Equal(expected, StreamPlatforms.NormalizeIngestUrl(url));
+
+    [Theory]
+    [InlineData("rtmps://rtmp-api.facebook.com:443/rtmp/FB-test-key", "rtmps://live-api-s.facebook.com:443/rtmp/FB-test-key")]
+    [InlineData("rtmp://RTMP-API.FACEBOOK.COM:80/rtmp/key%2Fvalue?token=a%2Bb", "rtmps://live-api-s.facebook.com:443/rtmp/key%2Fvalue?token=a%2Bb")]
+    [InlineData("rtmps://rtmp-api.facebook.com:443/rtmp", "rtmps://live-api-s.facebook.com:443/rtmp")]
+    [InlineData("rtmps://live-api-s.facebook.com:443/rtmp/key", "rtmps://live-api-s.facebook.com:443/rtmp/key")]
+    [InlineData("rtmps://rtmp-api.facebook.com.example:443/rtmp/key", "rtmps://rtmp-api.facebook.com.example:443/rtmp/key")]
+    public void NormalizeIngestUrl_UsesLiveProducerForLegacyFacebookConfigurations(string url, string expected) =>
         Assert.Equal(expected, StreamPlatforms.NormalizeIngestUrl(url));
 
     [Fact]
@@ -81,8 +82,6 @@ public sealed class StreamPlatformTests
 
         Assert.Same(StreamPlatformProfile.Kick, StreamPlatformProfile.For("rtmps://fa723fc1b171.global-contribute.live-video.net/app/key"));
         Assert.Same(StreamPlatformProfile.Facebook, StreamPlatformProfile.For("rtmps://rtmp-api.facebook.com:443/rtmp/key"));
-        Assert.Same(StreamPlatformProfile.Rumble, StreamPlatformProfile.For("rtmp://ls8.live.rmbl.ws/slot-20/key"));
-        Assert.Same(StreamPlatformProfile.X, StreamPlatformProfile.For("rtmps://de.pscp.tv:443/x/key"));
     }
 
     [Fact]
@@ -110,6 +109,10 @@ public sealed class StreamPlatformTests
         Assert.Equal(StreamPlatformProfile.YouTube.Preroll, facebook.Preroll);
         Assert.Equal(StreamPlatformProfile.YouTube.MaxLead, facebook.MaxLead);
         Assert.Same(StreamPlatformProfile.YouTube.Adaptation, facebook.Adaptation);
+        // The header of the publish is read before the broadcast goes up, as YouTube's is, and
+        // what ffmpeg makes of the stream is reported line by line, as it is on YouTube.
+        Assert.Equal(StreamPlatformProfile.YouTube.CompleteHeaders, facebook.CompleteHeaders);
+        Assert.Equal(StreamPlatformProfile.YouTube.Diagnostics, facebook.Diagnostics);
         // Facebook ends a broadcast without sound, or one that changes its settings, and wants CBR.
         Assert.True(facebook.RequiresAudio);
         Assert.Equal(48_000, facebook.AudioSampleRate);
@@ -130,15 +133,12 @@ public sealed class StreamPlatformTests
         // A custom ingest has no relay to measure the network on, and keeps the rate it always had.
         Assert.Null(StreamPlatformProfile.Generic.Adaptation);
         Assert.Equal(TimeSpan.Zero, StreamPlatformProfile.Generic.RateBuffer);
-        foreach (var profile in new[] { StreamPlatformProfile.Twitch, StreamPlatformProfile.YouTube, StreamPlatformProfile.Kick, StreamPlatformProfile.Facebook, StreamPlatformProfile.Rumble })
+        foreach (var profile in new[] { StreamPlatformProfile.Twitch, StreamPlatformProfile.YouTube, StreamPlatformProfile.Kick, StreamPlatformProfile.Facebook })
         {
             Assert.Equal(TimeSpan.FromSeconds(1), profile.RateBuffer);
             Assert.Equal(2, profile.KeyframeSeconds);
         }
 
-        // X asks for its keyframe every three seconds.
-        Assert.Equal(TimeSpan.FromSeconds(1), StreamPlatformProfile.X.RateBuffer);
-        Assert.Equal(3, StreamPlatformProfile.X.KeyframeSeconds);
     }
 }
 
@@ -716,6 +716,7 @@ public sealed class PacedRelayFfmpegTests
 
     public PacedRelayFfmpegTests(ITestOutputHelper output) => _output = output;
 
+
     [Theory]
     [InlineData(StreamPlatform.Twitch)]
     [InlineData(StreamPlatform.YouTube)]
@@ -740,7 +741,11 @@ public sealed class PacedRelayFfmpegTests
             var probe = await new FfmpegProbe(locator, NullLogger<FfmpegProbe>.Instance).ProbeAsync(clip, CancellationToken.None);
             // A file is not an RTMP ingest: the paced stream goes through the ffmpeg sender here,
             // and the native transport has its own test against a real RTMP server below.
-            var profile = (platform == StreamPlatform.YouTube ? StreamPlatformProfile.YouTube : StreamPlatformProfile.Twitch)
+            var profile = (platform switch
+            {
+                StreamPlatform.YouTube => StreamPlatformProfile.YouTube,
+                _ => StreamPlatformProfile.Twitch
+            })
                 with { Transport = RelayTransport.FfmpegSender };
             var setting = new VideoSettingEntity
             {
@@ -773,7 +778,7 @@ public sealed class PacedRelayFfmpegTests
             var streams = await RunAsync(
                 ffprobe, $"-v error -show_entries stream=codec_type -of csv=p=0 \"{output}\"");
             Assert.Contains("video", streams, StringComparison.Ordinal);
-            Assert.Equal(platform == StreamPlatform.YouTube, streams.Contains("audio", StringComparison.Ordinal));
+            Assert.Equal(profile.RequiresAudio, streams.Contains("audio", StringComparison.Ordinal));
         }
         finally
         {

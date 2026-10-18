@@ -27,6 +27,10 @@ else
                 <span class="grow">
                     <strong>@configuration.ChannelName</strong> · @(choice?.Label ?? configuration.PlatformStreamName)
                     <span class="caption truncate" style="display: block;" title="@configuration.StreamUrl">@configuration.StreamUrl</span>
+                    @if (choice?.Value == "facebook")
+                    {
+                        <partial name="_FacebookLiveNotice" />
+                    }
                     @if (!string.IsNullOrWhiteSpace(configuration.Description))
                     {
                         <span class="caption" style="display: block;">@configuration.Description</span>

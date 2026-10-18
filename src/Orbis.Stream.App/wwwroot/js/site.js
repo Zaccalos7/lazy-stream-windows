@@ -145,191 +145,7 @@ if (watchStats && stream) {
 // nothing while it watches.
 const preview = document.querySelector("[data-preview]");
 
-// The light picture of the live, drawn frame by frame on a canvas.
-//
-// It used to be an <img src="...multipart/x-mixed-replace">, which is the obvious way to show motion
-// JPEG and the wrong one here: a browser has no clock for a multipart image, so when the decode does
-// not keep up the frames queue up instead of being dropped, the picture drifts behind the live and
-// keeps drifting. That is the juddering, and the slow motion, this canvas is here to end. The page
-// keeps no queue either: it holds the newest picture and nothing else, and draws it on a clock of
-// its own that nothing but the picture can hurry or hold back.
-const previewFrame = preview?.querySelector("[data-preview-frame]");
-let previewFrameUrl = previewFrame ? `/preview/live/${Number(preview.dataset.pkid || 0)}/frame` : null;
-
-// The platform player (Twitch/YouTube): what the viewers see, in place of the local picture.
-//
-// It is asked for once the page is open and not written into the page, because on YouTube the
-// address of the player is not known before the platform has been asked which video is on air.
-// Until it answers, the light picture of the live is on the stage: it is the truth of the encoder
-// and it is there at once, so a platform that cannot be reached costs a missing picture and not an
-// empty stage.
-const previewPlatformPlayer = preview?.querySelector("[data-platform-embed]");
-
-// How long a question waits for its answer. ffmpeg writes the next picture every thirty third of a
-// second, and the server holds the request open until that picture exists instead of being asked
-// again on a timer of the page's own. That is the whole trick against the judder: two clocks, one
-// for the writing and one for the drawing, drift apart, and once they do, half the questions land
-// inside a frame that has already been sent and come back with nothing while the frame after them
-// waits. A picture is then held on the canvas for one beat and for three, and that uneven beat is
-// what judder is. The server answers with a picture as soon as there is one that is new, so the
-// page is on the clock of the live. The wait is capped there as well: an answer without a picture
-// costs nothing here but another question, which goes out at once.
-const previewWait = 250;
-
-// The gap between two questions when the answer said there was nothing new yet, and the gap when
-// there is no live to write pictures at all. Without the first one, an answer that says "nothing
-// new" straight away would turn the loop into a spin; the second keeps a page left open on a live
-// that is over from asking thirty times a second for a picture nobody writes.
-const previewFloor = 4;
-const previewIdle = 1000;
-
-// The stamp of the picture the page holds. The server compares it with the one it has: the same
-// picture comes back as 304 without the JPEG, which is what a live that is still writing but has
-// nothing new for this page costs.
-let previewStamp = null;
-
-// An in-flight question, so the loop never has two open at once.
-let previewPending = false;
-
-// Set while the tab is hidden. A background tab is one the browser stops servicing, and a loop that
-// kept asking through it would only pile requests up behind a window nobody is looking at.
-let previewPaused = false;
-
-// The picture that has been decoded and is waiting for its turn on the canvas, and the one that is
-// on it. Only one picture is ever kept: the one before it is already on the screen and the one after
-// it is the newest, so a frame that is overtaken while it is being decoded is closed rather than
-// queued behind the others - a queue of pictures is a preview in slow motion.
-let previewPicture = null;
-let previewPainted = null;
-
-// Puts the newest decoded picture on the canvas, on the refresh of the screen rather than in the
-// middle of one.
-//
-// No timer decides this and nothing is held back: the picture goes up as soon as the screen is
-// ready for it, which is the least the page can do about when a frame is due. The evenness of the
-// motion is not bought here, it comes from the other side - every question is answered with a
-// picture ffmpeg has just written, so there is never a frame to wait for and never the same picture
-// twice, and the only thing left to time is the screen's own refresh.
-//
-// The canvas is the size it is looked at, not the size the picture arrives in: ffmpeg shrinks the
-// preview to 640 pixels wide because that is what a frame costs almost nothing at, and the browser
-// is the one that stretches it over the stage. Painting it here at the size of the stage, with the
-// smoothing the browser does at its best, costs the same and keeps the picture as sharp as a scaled
-// frame can be.
-const paintPreviewPicture = () => {
-  if (!previewFrame) return;
-
-  requestAnimationFrame(paintPreviewPicture);
-
-  // Nothing decoded yet, or the picture on the canvas is the newest one: the screen is left alone.
-  const picture = previewPicture;
-  if (!picture || picture === previewPainted) return;
-
-  previewPainted = picture;
-
-  // The canvas is measured rather than set from the picture: setting its size clears it, and a
-  // canvas cleared thirty times a second is a canvas that flickers.
-  if (previewFrame.hidden) previewFrame.hidden = false;
-  const cover = preview?.querySelector("[data-preview-cover]");
-  if (cover && !cover.hidden) cover.hidden = true;
-
-  const scale = window.devicePixelRatio || 1;
-  const parentWidth = previewFrame.parentElement?.clientWidth || 0;
-  const parentHeight = previewFrame.parentElement?.clientHeight || 0;
-  const clientW = previewFrame.clientWidth || parentWidth;
-  const clientH = previewFrame.clientHeight || parentHeight;
-  const width = Math.round(clientW * scale);
-  const height = Math.round(clientH * scale);
-  if (width > 0 && height > 0 && (previewFrame.width !== width || previewFrame.height !== height)) {
-    previewFrame.width = width;
-    previewFrame.height = height;
-  }
-
-  const context = previewFrame.getContext("2d");
-  if (!context) return;
-
-  context.imageSmoothingEnabled = true;
-  context.imageSmoothingQuality = "high";
-  context.drawImage(picture, 0, 0, previewFrame.width, previewFrame.height);
-};
-
-// Asks for the picture the page does not have and waits for it. What it answers with is what the
-// loop does next: a picture means another question at once, nothing new means another question
-// shortly, and no live at all means the page can rest until something changes.
-const fetchPreviewFrame = async () => {
-  if (previewPending || previewPaused || !previewFrameUrl) return "idle";
-  previewPending = true;
-  try {
-    const headers = previewStamp ? { "If-None-Match": previewStamp } : {};
-    const response = await fetch(`${previewFrameUrl}?wait=${previewWait}`, { headers, cache: "no-store" });
-
-    // 304 is the answer to a page that is ahead of the live: nothing new has been written while it
-    // was asking, and the question goes out again straight away.
-    if (response.status === 304) return "waiting";
-
-    // The live is over, or it has not written a frame yet: the page covers the picture and the push
-    // channel is what brings it back when there is something to see.
-    if (!response.ok) return "idle";
-
-    previewStamp = response.headers.get("X-Orbis-Frame") || previewStamp;
-
-    // The bitmaps are decoded off the main thread, so a frame is turned into pixels while the page
-    // keeps painting and the numbers keep arriving.
-    try {
-      const picture = await createImageBitmap(await response.blob());
-      const overtaken = previewPicture;
-      previewPicture = picture;
-      overtaken?.close();
-    } catch {
-      // A frame that cannot be decoded is the one the page goes on without; the next question asks
-      // for a newer one anyway.
-    }
-
-    return "picture";
-  } catch {
-    // The server is not answering (the live ended, the page is closing): the picture keeps the last
-    // frame it drew and the next tick tries again.
-    return "idle";
-  } finally {
-    previewPending = false;
-  }
-};
-
-// The loop is a chain of waits rather than a timer, and what it waits for is the answer: the next
-// question goes out as soon as the last one has been dealt with, and the server decides when there
-// is a picture to draw. Nothing here decides when the live moves. It ends when the platform player
-// takes the stage: there is no longer a picture on the canvas to keep fed.
-const previewLoop = async () => {
-  while (previewFrameUrl) {
-    const outcome = await fetchPreviewFrame();
-    await new Promise(resolve => setTimeout(resolve,
-      outcome === "idle" ? previewIdle : outcome === "waiting" ? previewFloor : 0));
-  }
-};
-
-// Coming back to the tab: the frame the page was holding is a moment old and there is a good chance
-// the live has ended while nobody was looking, so the stamp is forgotten and the picture asked for
-// again from scratch. The cover under the canvas hides anything stale in the meantime.
-const armPreviewFrame = () => {
-  if (!previewFrame) return;
-  previewStamp = null;
-  previewPaused = false;
-  previewPicture?.close();
-  previewPicture = null;
-  previewPainted = null;
-  previewFrame.hidden = true;
-  const cover = preview?.querySelector("[data-preview-cover]");
-  if (cover) cover.hidden = false;
-};
-const previewVideo = preview?.querySelector("[data-preview-video]");
 const previewForm = preview?.querySelector("[data-preview-form]");
-
-// A player is behind the encoder by whatever the machine did in the last second, and it falls
-// further behind every time a frame is late. A little drift is not worth a seek: a seek costs a
-// keyframe, and a keyframe during a live is a freeze the viewer sees. So the player is corrected
-// only once it is more than a second behind, and never pushed back: running ahead is not a drift
-// worth undoing, the file does not have anything past the encoder to show.
-const previewTolerance = 1.2;
 
 // How long a control the user has just touched is left alone by the repaint, so the value that
 // comes back from the server does not land in the middle of what is being typed.
@@ -337,9 +153,7 @@ const previewSettle = 2500;
 
 let previewPkid = Number(preview?.dataset.pkid || 0);
 let previewIsLive = preview?.dataset.live === "1";
-let previewPosition = Number(preview?.dataset.position || 0);
 let previewBusy = false;
-let previewDropped = false;
 const previewDirty = new Map();
 
 const previewWords = preview?.querySelector("[data-preview-words]") || {};
@@ -519,123 +333,6 @@ const setPreviewField = (name, value) => {
   }
 };
 
-// The player follows the encoder instead of the wall clock: every sample says where ffmpeg really
-// is, and the video is asked to be there. A player that has nothing loaded yet, or that is seeking,
-// is left alone: its currentTime is not the truth while it is looking for a frame.
-const followEncoder = position => {
-  previewPosition = position;
-  if (!previewVideo) return;
-  if (previewVideo.readyState === 0 || previewVideo.seeking) return;
-  const target = position / 1000;
-  if (target - previewVideo.currentTime > previewTolerance) previewVideo.currentTime = target;
-};
-
-if (previewVideo) {
-  // Muted and inline, so the autoplay of a file the browser has no user gesture for is allowed.
-  previewVideo.play().catch(() => {});
-  // A player that was paused because the window went to the background, or because a seek left it
-  // without a buffer, is put back on the edge instead of showing the last decoded frame.
-  previewVideo.addEventListener("stalled", () => { previewDropped = true; });
-  previewVideo.addEventListener("playing", () => { previewDropped = false; });
-  previewVideo.addEventListener("error", () => {
-    preview.querySelector("[data-preview-cover]")?.removeAttribute("hidden");
-    previewVideo.hidden = true;
-  });
-  document.addEventListener("visibilitychange", () => {
-    if (document.hidden || previewDropped) return;
-    previewVideo.play().then(() => followEncoder(previewPosition)).catch(() => {});
-  });
-}
-
-// Puts the platform player on the stage in place of the local picture, once the server has said
-// which one the live can be watched on.
-const showPlatformPlayer = url => {
-  if (!previewPlatformPlayer) return;
-  if (previewPlatformPlayer.getAttribute("src") !== url) previewPlatformPlayer.setAttribute("src", url);
-  previewPlatformPlayer.hidden = false;
-  if (previewFrame) previewFrame.hidden = true;
-  const cover = preview?.querySelector(".preview-cover");
-  if (cover) cover.hidden = true;
-  // The canvas is not drawn on any more: the questions for its frames stop with the loop that asks
-  // for them, so an encoder nobody is watching does not keep writing a preview for a hidden canvas.
-  // Don't stop fetching local preview frames - keep continuous stream
-  // previewFrameUrl = null;
-};
-
-// Asks where this live can be watched. A page that is told there is nowhere to watch it keeps the
-// local picture, which is the right answer for a platform this application has no player for and
-// for a channel that is not on air yet.
-//
-// The question is asked again for as long as there is no answer: ffmpeg starts pushing before the
-// platform calls the channel live, and a live started on another machine while this page is open is
-// not on air at all when the page is drawn. A live that is on air keeps its player until it ends,
-// so the question stops there and not one moment before.
-const previewRetry = 15000;
-
-const embedStatus = preview?.querySelector(".preview-embed-status");
-const embedText = embedStatus?.querySelector("[data-embed-text]");
-
-// Why there is no player, as the server said it. Kept between polls so the message on the page is
-// the reason for this round and not a leftover from the one before.
-let embedReason = null;
-
-const resolvePlatformPlayer = async () => {
-  if (!previewPlatformPlayer || previewPkid <= 0) return;
-  const platform = (preview?.dataset.platform || "").toLowerCase();
-  if (platform && platform !== "twitch") {
-    if (embedStatus) embedStatus.hidden = true;
-    return;
-  }
-  if (embedStatus) embedStatus.hidden = false;
-  embedReason = null;
-  try {
-    const response = await fetch(`/preview/live/embed?live=${previewPkid}`, { cache: "no-store" });
-    if (response.ok) {
-      const answer = await response.json();
-      // The player to draw, if the live is on air somewhere a player can show it.
-      if (answer?.embed?.url) {
-        showPlatformPlayer(answer.embed.url);
-        if (embedStatus) embedStatus.hidden = true;
-        // Keep polling to stay updated
-        if (previewIsLive) setTimeout(resolvePlatformPlayer, previewRetry);
-        return;
-      }
-      embedReason = answer?.reason || null;
-    }
-  } catch {
-    // The server is not answering: the local picture stays, which is what it is for.
-  }
-  if (embedStatus && embedText) {
-    // The reason comes from the server and is what the page repeats for as long as it stays open,
-    // so it has to say which of the two things happened: a channel that is off air, or a platform
-    // this application failed to reach. Only the first is about the live.
-    const reason = embedReason
-      || previewMark("embedFailed", "Unable to load {0} player: channel is not live").replace("{0}", "Twitch");
-    embedText.textContent = reason;
-  }
-  if (previewIsLive) setTimeout(resolvePlatformPlayer, previewRetry);
-};
-
-if (previewIsLive) {
-  if (previewFrame) {
-    // The light picture of the live, on the stage from the first frame and until the platform
-    // player takes it over.
-    previewLoop();
-    requestAnimationFrame(paintPreviewPicture);
-    document.addEventListener("visibilitychange", () => {
-      // A tab nobody is looking at is not asked for frames: the browser stops servicing its work
-      // anyway, and what would pile up behind it is not a preview but a queue of stale pictures.
-      previewPaused = document.hidden;
-      if (document.hidden) return;
-      armPreviewFrame();
-    });
-  }
-  const platform = (preview?.dataset.platform || "").toLowerCase();
-  if (platform === "twitch") {
-    resolvePlatformPlayer();
-  }
-}
-
 // The colour of a level in the mix: green up to the sound of the source, yellow while it is pushed
 // past it, red once the boost is loud enough to clip. The one place the thresholds are written.
 const volumeLoud = 100;
@@ -688,6 +385,11 @@ const paintPreview = state => {
     return;
   }
 
+  if (!state.isLive && (state.status || "") !== (preview.dataset.status || "")) {
+    location.reload();
+    return;
+  }
+
   previewMismatch = 0;
 
   paintLivePicker(state.running || []);
@@ -696,7 +398,6 @@ const paintPreview = state => {
 
   if (!state.isLive) return;
 
-  followEncoder(position);
   setPreviewText("[data-preview-position]", previewClock(position) + " / " + previewClock(state.durationMilliseconds));
   for (const spinner of preview.querySelectorAll("[data-preview-restart]")) spinner.hidden = !state.reconfiguring;
   for (const bar of preview.querySelectorAll("[data-preview-offair]")) bar.hidden = !state.platformOffAir;
@@ -723,6 +424,7 @@ const paintPreview = state => {
   for (const box of preview.querySelectorAll('[data-param="keepSource"]')) {
     if (Date.now() < (previewDirty.get("keepSource") || 0)) continue;
     box.checked = parameters.videoWidth === null || parameters.videoWidth === undefined;
+    setSourceFields(box.checked);
   }
   for (const source of state.sources || []) {
     if (Date.now() < (previewDirty.get("volume" + source.pkid) || 0)) continue;
@@ -747,8 +449,8 @@ if (watchLive && stream) {
   });
 }
 
-// "As the source" and the two halves of a resolution are one decision: the halves are hidden and
-// skipped while it is on, which is also why they travel as nothing at all in the request.
+// "As the source" and the two halves of a resolution are one decision: the halves are hidden
+// while it is on; both travel as zero to clear a previously saved resolution.
 const sourceFields = () => preview.querySelectorAll("[data-source-off]");
 
 const setSourceFields = keep => {
@@ -798,7 +500,7 @@ if (previewForm) {
       if (key === "videoWidth" || key === "videoHeight") {
         // Zero is how the request says "as the source": the two halves travel together, and both
         // travel only when the decision is to drop the resolution the setting carried.
-        if (!keep) body[key] = value === "" ? 0 : Number(value);
+        body[key] = keep || value === "" ? 0 : Number(value);
         continue;
       }
       if (key === "frameRate") {
@@ -1228,13 +930,13 @@ for (const counter of document.querySelectorAll("[data-countdown]")) {
 for (const dialog of document.querySelectorAll('dialog[data-open]:not([data-open="0"])')) dialog.showModal();
 
 // <input type="radio" data-stream-url="rtmp://…">: picking a platform fills its form's streamUrl,
-// unless the user typed a custom ingest (anything that is not one of the platform presets).
+// Facebook always starts with its Live Producer endpoint. Other platforms preserve custom ingests.
 document.addEventListener("change", event => {
   const url = event.target.dataset?.streamUrl;
   if (!url) return;
   const field = event.target.form.elements.streamUrl;
   const presets = [...event.target.form.querySelectorAll("[data-stream-url]")].map(radio => radio.dataset.streamUrl);
-  if (!field.value.trim() || presets.includes(field.value.trim())) field.value = url;
+  if (event.target.value === "facebook" || !field.value.trim() || presets.includes(field.value.trim())) field.value = url;
 });
 
 // <input data-drop-path>: dropping a file or folder on it fills its absolute path. The browser
@@ -1543,4 +1245,45 @@ for (const show of document.querySelectorAll("[data-show-when]")) {
     if (event.target.type === "radio") update();
   });
   update();
+}
+
+// Error reports are generated locally and opened only when the user asks.
+{
+  const dialog = document.getElementById("error-report-dialog");
+  let generation = 0;
+  document.addEventListener("click", async event => {
+    const button = event.target.closest("[data-error-report]");
+    if (!button || !dialog) return;
+    const request = ++generation;
+    const status = dialog.querySelector("[data-report-status]");
+    const qr = dialog.querySelector("[data-report-qr]");
+    const download = dialog.querySelector("[data-report-download]");
+    qr.hidden = true;
+    qr.removeAttribute("src");
+    download.hidden = true;
+    download.removeAttribute("href");
+    dialog.querySelector("[data-report-qr-help]").hidden = true;
+    dialog.querySelector("[data-report-download-help]").hidden = true;
+    dialog.querySelector("[data-report-text]").textContent = "";
+    status.textContent = status.dataset.loading;
+    if (!dialog.open) dialog.showModal();
+    try {
+      const response = await fetch(`/video/${encodeURIComponent(button.dataset.errorReport)}/error-report`, { cache: "no-store" });
+      if (!response.ok) throw new Error(String(response.status));
+      const report = await response.json();
+      if (request !== generation || !dialog.open) return;
+      const hasQr = report.images.length > 0;
+      if (hasQr) qr.src = report.images[0];
+      qr.hidden = !hasQr;
+      dialog.querySelector("[data-report-qr-help]").hidden = !hasQr;
+      if (report.downloadUrl) download.href = report.downloadUrl;
+      download.hidden = !report.downloadUrl;
+      dialog.querySelector("[data-report-download-help]").hidden = !report.downloadUrl;
+      dialog.querySelector("[data-report-text]").textContent = report.text;
+      status.textContent = "";
+    } catch {
+      if (request === generation) status.textContent = status.dataset.failed;
+    }
+  });
+  dialog?.addEventListener("close", () => { generation++; });
 }

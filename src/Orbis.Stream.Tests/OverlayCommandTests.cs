@@ -40,6 +40,8 @@ public sealed class OverlayCommandTests
     [Theory]
     [InlineData("png_pipe", "png", 0, false, false, null)]
     [InlineData("webp_pipe", "webp", 0, false, false, null)]
+    [InlineData("webp_anim", "webp_anim", 0, false, true, null)]
+    [InlineData("webp_pipe", "webp_anim", 0, false, true, null)]
     [InlineData("image2", "mjpeg", 0, false, false, null)]
     [InlineData("gif", "gif", 1, false, false, null)]
     [InlineData("gif", "gif", 20, false, true, null)]
@@ -54,7 +56,7 @@ public sealed class OverlayCommandTests
         var duration = frames > 1 ? 2d : 0.1d;
         var media = OverlayMedia.Of(new MediaProbeResult(1920, 1080, 30, false, 0, duration, Format: format, VideoCodec: codec, Frames: frames, AlphaMode: alpha));
 
-        Assert.Equal(new OverlayMedia(loop, decoder), media);
+        Assert.Equal(new OverlayMedia(loop, decoder, NativeWebpLoop: codec == "webp_anim" || format == "webp_anim"), media);
     }
 
     [Fact]
@@ -106,6 +108,22 @@ public sealed class OverlayCommandTests
 
         // The decoder is an input option: it has to come before the file.
         Assert.Contains("-stream_loop -1 -c:v libvpx-vp9 -thread_queue_size 512 -i /overlays/frame-0123456789.png", text, StringComparison.Ordinal);
+    }
+
+    [Fact]
+    public void AnAnimatedWebPFromFfmpeg9LoopsWithoutForcingTheStillDecoder()
+    {
+        var probe = new FfmpegProbe(new FfmpegToolLocator("ffmpeg", "ffprobe"), NullLogger<FfmpegProbe>.Instance).Parse(
+            """{"streams":[{"codec_type":"video","codec_name":"webp_anim","width":64,"height":32,"pix_fmt":"argb","r_frame_rate":"10/1"}],"format":{"format_name":"webp_anim"}}""",
+            "badge.webp");
+        var overlay = Frame(OverlayMedia.Of(probe)) with { Target = "/overlays/badge.webp" };
+        var text = string.Join(' ', FfmpegCommandBuilder.BuildComposition(Request(Video(), overlay)));
+
+        Assert.Contains("-ignore_loop 0 -thread_queue_size 512 -i /overlays/badge.webp", text, StringComparison.Ordinal);
+        Assert.DoesNotContain("-stream_loop", text, StringComparison.Ordinal);
+        Assert.DoesNotContain("-c:v webp", text, StringComparison.Ordinal);
+        Assert.DoesNotContain("-stream_loop", string.Join(' ', FfmpegCommandBuilder.BuildSnapshot(SourceKind.Overlay, overlay.Target, 480, overlay.Overlay)), StringComparison.Ordinal);
+        Assert.Contains("-ignore_loop 1", string.Join(' ', FfmpegCommandBuilder.BuildSnapshot(SourceKind.Overlay, overlay.Target, 480, overlay.Overlay)), StringComparison.Ordinal);
     }
 
     [Fact]

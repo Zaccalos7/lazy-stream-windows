@@ -1,6 +1,7 @@
 using System.Net;
 using System.Text;
 using Microsoft.Extensions.Logging.Abstractions;
+using Orbis.Stream.Core.Services;
 using Orbis.Stream.Core.Streaming;
 
 namespace Orbis.Stream.Tests;
@@ -14,6 +15,68 @@ public sealed class LivePlatformEmbedTests
 {
     private const string Twitch = "rtmp://live.twitch.tv/app";
     private const string YouTube = "rtmps://a.rtmps.youtube.com/live2";
+    private const string Kick = "rtmps://fa723fc1b171.global-contribute.live-video.net/app";
+    private const string Facebook = "rtmps://live-api-s.facebook.com:443/rtmp/";
+
+    [Theory]
+    [InlineData("ReproChannel")]
+    [InlineData("https://kick.com/ReproChannel/")]
+    public async Task Kick_PlaysTheConfiguredChannelWithoutDownloadingPlatformPages(string channel)
+    {
+        var handler = new RecordingHandler(_ => throw new InvalidOperationException("No lookup needed"));
+        var embeds = new LivePlatformEmbeds(new HttpClient(handler), NullLogger<LivePlatformEmbeds>.Instance);
+        var found = await embeds.ResolveAsync(Kick, channel, "kick", "localhost", default);
+        Assert.NotNull(found.Embed);
+        Assert.Equal("kick", found.Embed.Platform);
+        Assert.Equal("https://player.kick.com/reprochannel?autoplay=true&muted=true", found.Embed.Url);
+        Assert.Equal("https://kick.com/reprochannel", found.Embed.WatchUrl);
+        Assert.Empty(handler.Asked);
+    }
+
+    [Theory]
+    [InlineData("https://www.facebook.com/my.page/videos/123456789/")]
+    [InlineData("https://m.facebook.com/watch/?v=123456789&tracking=ignored")]
+    [InlineData("https://www.facebook.com/video.php?v=123456789")]
+    [InlineData("https://www.facebook.com/watch/live/?v=123456789&ref=watch_permalink")]
+    [InlineData("https://www.facebook.com/videos/title/123456789/")]
+    public async Task Facebook_EmbedsTheSpecifiedPublicVideo(string watchUrl)
+    {
+        var handler = new RecordingHandler(_ => throw new InvalidOperationException("No lookup needed"));
+        var embeds = new LivePlatformEmbeds(new HttpClient(handler), NullLogger<LivePlatformEmbeds>.Instance);
+        var found = await embeds.ResolveAsync(Facebook, "My Page", "facebook", "localhost", default, watchUrl);
+        Assert.NotNull(found.Embed);
+        Assert.Equal("facebook", found.Embed.Platform);
+        Assert.Equal("https://www.facebook.com/watch/?v=123456789", found.Embed.WatchUrl);
+        Assert.StartsWith("https://www.facebook.com/plugins/video.php?href=", found.Embed.Url);
+        Assert.Contains(Uri.EscapeDataString(found.Embed.WatchUrl!), found.Embed.Url);
+        Assert.DoesNotContain("tracking", found.Embed.Url);
+        Assert.Empty(handler.Asked);
+    }
+
+    [Fact]
+    public async Task Facebook_CanUseAPublicVideoUrlAlreadyStoredAsTheChannel()
+    {
+        var embeds = Platform(_ => throw new InvalidOperationException());
+        var found = await embeds.ResolveAsync(Facebook, "https://www.facebook.com/page/videos/123/", "facebook", null, default);
+        Assert.Equal("https://www.facebook.com/watch/?v=123", found.Embed?.WatchUrl);
+    }
+
+    [Theory]
+    [InlineData(null)]
+    [InlineData("My Page")]
+    [InlineData("https://www.facebook.com/page/live")]
+    [InlineData("https://www.facebook.com/live/producer/v2/")]
+    [InlineData("https://www.facebook.com.evil.example/videos/123/")]
+    [InlineData("https://www.facebook.com@evil.example/videos/123/")]
+    [InlineData("http://localhost/videos/123/")]
+    [InlineData("javascript:alert(1)")]
+    public async Task Facebook_DoesNotGuessAVideoOrLoadAnUnrelatedUrl(string? watchUrl)
+    {
+        var embeds = Platform(_ => throw new InvalidOperationException());
+        var found = await embeds.ResolveAsync(Facebook, "Page", "facebook", null, default, watchUrl);
+        Assert.Null(found.Embed);
+        Assert.NotNull(found.Reason);
+    }
 
     [Fact]
     public async Task Twitch_IsPlayedOnTheChannelOfTheConfiguration()
@@ -191,6 +254,69 @@ public sealed class LivePlatformEmbedTests
         Assert.Equal(2, handler.Asked.Count);
     }
 
+    [Theory]
+    [InlineData(false)]
+    [InlineData(true)]
+    public async Task YouTube_AnOfflineOrFailedLookupIsSharedUntilTheShortCacheExpires(bool failure)
+    {
+        var clock = new LookupClock();
+        var handler = new RecordingHandler(_ => failure
+            ? new HttpResponseMessage(HttpStatusCode.ServiceUnavailable)
+            : Text(string.Empty));
+        var embeds = new LivePlatformEmbeds(new HttpClient(handler), NullLogger<LivePlatformEmbeds>.Instance, clock);
+
+        var first = await embeds.ResolveAsync(YouTube, "channel", null, "localhost", default);
+        var second = await embeds.ResolveAsync(YouTube, "channel", null, "localhost", default);
+        Assert.Equal(first, second);
+        Assert.Single(handler.Asked);
+        Assert.Equal(failure, second.Reason is not null);
+
+        clock.Advance(TimeSpan.FromSeconds(30));
+        await embeds.ResolveAsync(YouTube, "channel", null, "localhost", default);
+        Assert.Equal(2, handler.Asked.Count);
+    }
+
+    [Fact]
+    public async Task YouTube_RechecksAfterTheWarningAndClearsItWhenThePublicBroadcastStarts()
+    {
+        var clock = new LookupClock();
+        var online = false;
+        var handler = Page(_ => Watch(online));
+        var embeds = new LivePlatformEmbeds(new HttpClient(handler), NullLogger<LivePlatformEmbeds>.Instance, clock);
+        var state = new YouTubeAirState();
+        const long history = 7;
+
+        for (var pass = 0; pass < 2; pass++)
+        {
+            state.Observe(history, await embeds.ResolveAsync(YouTube, "channel", null, null, default));
+            clock.Advance(TimeSpan.FromSeconds(30));
+        }
+        Assert.True(state.IsOffAir(history));
+
+        online = true;
+        var found = await embeds.ResolveAsync(YouTube, "channel", null, null, default);
+        Assert.True(state.Observe(history, found));
+        Assert.False(state.IsOffAir(history));
+        Assert.Equal("RU6gEobXVHA", state.OnAirVideoOf(history));
+        Assert.Equal(6, handler.Asked.Count);
+    }
+
+    [Fact]
+    public async Task YouTube_ExpiredSuccessIsNotReusedWhenTheNextLookupFails()
+    {
+        var clock = new LookupClock();
+        var fail = false;
+        var handler = Page(_ => fail ? throw new InvalidOperationException("lookup failed") : Watch(true));
+        var embeds = new LivePlatformEmbeds(new HttpClient(handler), NullLogger<LivePlatformEmbeds>.Instance, clock);
+
+        Assert.NotNull((await embeds.ResolveAsync(YouTube, "channel", null, null, default)).Embed);
+        clock.Advance(TimeSpan.FromSeconds(60));
+        fail = true;
+        var found = await embeds.ResolveAsync(YouTube, "channel", null, null, default);
+        Assert.Null(found.Embed);
+        Assert.NotNull(found.Reason);
+    }
+
     [Fact]
     public void CandidateOf_TakesTheTopOfTheGrid_AndNotTheVideoElsewhereOnThePage()
     {
@@ -247,5 +373,12 @@ public sealed class LivePlatformEmbedTests
             Asked.Add(request.RequestUri!);
             return Task.FromResult(answer(request));
         }
+    }
+
+    private sealed class LookupClock : TimeProvider
+    {
+        private DateTimeOffset _now = DateTimeOffset.UtcNow;
+        public override DateTimeOffset GetUtcNow() => _now;
+        public void Advance(TimeSpan elapsed) => _now += elapsed;
     }
 }

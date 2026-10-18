@@ -317,6 +317,39 @@ public static class OrbisEndpoints
     {
         var group = app.MapGroup("/video");
 
+        static string? ReportText(int pkid, VideoRepository videos, VideoLiveHistoryRepository histories)
+        {
+            var video = videos.FindByPkid(pkid);
+            if (video is null || video.LiveStatus != LiveStatus.Error || string.IsNullOrWhiteSpace(video.Message))
+                return null;
+            var history = video.VideoLiveHistoryId is long historyId ? histories.FindByPkid(historyId) : null;
+            return ErrorReport.Text(video, history?.StreamKey);
+        }
+
+        group.MapGet("/{pkid:int}/error-report", (int pkid, VideoRepository videos, VideoLiveHistoryRepository histories, HttpContext context) =>
+        {
+            context.Response.Headers.CacheControl = "no-store";
+            var text = ReportText(pkid, videos, histories);
+            if (text is null) return Results.NotFound();
+            var parts = ErrorReport.Parts(text);
+            // A large diagnostic is an attachment, rather than a sequence of QR screenshots.
+            var download = parts.Count > 1;
+            return Results.Ok(new
+            {
+                text,
+                images = download ? Array.Empty<string>() : parts.Select((part, index) => ErrorReport.Image(part, index, parts.Count)).ToArray(),
+                downloadUrl = download ? $"/video/{pkid}/error-report.txt" : null
+            });
+        });
+
+        group.MapGet("/{pkid:int}/error-report.txt", (int pkid, VideoRepository videos, VideoLiveHistoryRepository histories, HttpContext context) =>
+        {
+            context.Response.Headers.CacheControl = "no-store";
+            var text = ReportText(pkid, videos, histories);
+            if (text is null) return Results.NotFound();
+            return Results.File(System.Text.Encoding.UTF8.GetBytes(text), "text/plain; charset=utf-8", $"Orbis-error-report-{pkid}.txt");
+        });
+
         group.MapGet("/getPage", (HttpContext context, VideoService service) => service.GetVideoList(
             PageRequest.Parse(context.Request.Query, 20, "pkid", true)));
 
@@ -449,7 +482,7 @@ public static class OrbisEndpoints
         // the platform has been asked which video is on air, and that takes longer than a page
         // should wait to be drawn. There is nothing to hand back when the live is over, when the
         // platform is one this application has no player for, or when the channel is not on air,
-        // and a page that is told so keeps the local picture.
+        // and a page that is told so waits for the public broadcast without playing a local file.
         group.MapGet("/live/embed", async (
             LivePreviewService service,
             HttpRequest request,
@@ -458,7 +491,8 @@ public static class OrbisEndpoints
             var found = await service.EmbedAsync(
                 Watched(request),
                 context.Request.Host.Host,
-                context.RequestAborted);
+                context.RequestAborted,
+                request.Query["watchUrl"].FirstOrDefault());
 
             // There is no address to play, but the reason travels with the answer: a channel that is
             // off air and a platform that could not be reached are different things to tell a page,

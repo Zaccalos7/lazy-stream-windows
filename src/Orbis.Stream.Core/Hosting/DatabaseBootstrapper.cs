@@ -51,7 +51,7 @@ public sealed class DatabaseBootstrapper : IHostedService
     /// </summary>
     private void ReleaseLivesLeftRunning()
     {
-        foreach (var video in _videoRepository.FindByLiveStatus(LiveStatus.Live))
+        foreach (var video in _videoRepository.FindActive())
         {
             _logger.LogInformation("Video {Name} was still marked live at startup and is released", video.Name);
 
@@ -83,10 +83,6 @@ public sealed class DatabaseBootstrapper : IHostedService
         InitializeDefaultVideoSetting("Facebook Gaming", createHighQuality: false);
         InitializeDefaultVideoSetting("TikTok", createHighQuality: true);
         InitializeDefaultVideoSetting("TikTok", createHighQuality: false);
-        InitializeDefaultVideoSetting("Rumble", createHighQuality: true);
-        InitializeDefaultVideoSetting("Rumble", createHighQuality: false);
-        InitializeDefaultVideoSetting("X", createHighQuality: true);
-        InitializeDefaultVideoSetting("X", createHighQuality: false);
         UpgradeLegacyYouTubeDefaults();
     }
 
@@ -164,37 +160,6 @@ public sealed class DatabaseBootstrapper : IHostedService
         2_500_000, 128_000, 720, 1280, 30,
         [("preset", "superfast"), ("profile", "main"), ("x264-params", "scenecut=0:rc_lookahead=0")]);
 
-    /// <summary>
-    /// Rumble: a fixed 1080p30 at 4.5 Mbps, the top of the 2.5 to 4.5 Mbps its settings page gives
-    /// that size and rate (8 Mbps is the most it takes at all), with the 128 Kbps of sound it asks
-    /// for. The constant rate, the B-frames it takes none of and its single reference frame are
-    /// the profile's (StreamPlatformProfile.Rumble), so they hold for any setting sent there.
-    /// </summary>
-    private static readonly DefaultSpec RumbleHigh = new(
-        4_500_000, 128_000, 1920, 1080, 30,
-        [("preset", "veryfast"), ("profile", "high")]);
-
-    /// <summary>Rumble on a light machine: 720p30 at 2.5 Mbps, the middle of the 2 to 3 Mbps it gives that size.</summary>
-    private static readonly DefaultSpec RumbleLow = new(
-        2_500_000, 128_000, 1280, 720, 30,
-        [("preset", "superfast"), ("profile", "main"), ("x264-params", "scenecut=0:rc_lookahead=0")]);
-
-    /// <summary>
-    /// X: a fixed 1080p30 at 9 Mbps, the bitrate Media Studio Producer recommends, under the 12 Mbps
-    /// its sources take, with the 128 Kbps of sound that is both what X recommends and the most it
-    /// takes. The keyframe comes every three seconds, the interval X asks for (StreamPlatformProfile.X).
-    /// </summary>
-    private static readonly DefaultSpec XHigh = new(
-        9_000_000, 128_000, 1920, 1080, 30,
-        [("preset", "veryfast"), ("profile", "high")],
-        KeyframeSeconds: 3);
-
-    /// <summary>X on a light machine: the configuration X recommends for a new source, 720p30 at 4 Mbps.</summary>
-    private static readonly DefaultSpec XLow = new(
-        4_000_000, 128_000, 1280, 720, 30,
-        [("preset", "superfast"), ("profile", "main"), ("x264-params", "scenecut=0:rc_lookahead=0")],
-        KeyframeSeconds: 3);
-
     private static DefaultSpec SpecOf(string platform, bool highQuality) => (platform, highQuality) switch
     {
         ("Twitch", true) => new(6_000_000, 160_000, null, null, null,
@@ -203,8 +168,6 @@ public sealed class DatabaseBootstrapper : IHostedService
         ("Kick", true) => KickHigh,
         ("Facebook Gaming", true) => FacebookGamingHigh,
         ("TikTok", true) => TikTokHigh,
-        ("Rumble", true) => RumbleHigh,
-        ("X", true) => XHigh,
         (_, true) => new(5_000_000, 128_000, null, null, null,
             [("preset", "veryfast"), ("tune", "zerolatency")]),
 
@@ -215,8 +178,6 @@ public sealed class DatabaseBootstrapper : IHostedService
         ("Kick", false) => KickLow,
         ("Facebook Gaming", false) => FacebookGamingLow,
         ("TikTok", false) => TikTokLow,
-        ("Rumble", false) => RumbleLow,
-        ("X", false) => XLow,
         _ => new(2_000_000, 64_000, 1280, 720, 30,
             [("preset", "ultrafast"), ("tune", "zerolatency")])
     };

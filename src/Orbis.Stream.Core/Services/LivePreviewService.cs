@@ -70,7 +70,8 @@ public sealed record LiveSnapshot(
     /// <summary>The live this is, which the scene deck is armed for (see LiveTakeovers).</summary>
     long? History = null,
     /// <summary>What is on air in place of the program, when something is: a spot or a scene button.</summary>
-    LiveScene? Scene = null)
+    LiveScene? Scene = null,
+    LiveStatus? Status = null)
 {
     public static LiveSnapshot Offline(IReadOnlyList<LiveOption> running) => new(
         false,
@@ -163,18 +164,17 @@ public sealed class LivePreviewService
     /// <summary>
     /// The platform player of the live the page is watching, so the page can show the live as the
     /// viewers see it. Nothing when the live is not running, when the platform is one this
-    /// application does not have a player for, or when the channel is not on air: the page falls
-    /// back to the picture ffmpeg writes, which is the truth of the encoder either way.
+    /// application does not have a player for, or when the channel is not on air.
     /// <para>A channel that is off air and a platform this application failed to reach are told
     /// apart here, because the page has something else to say about the second.</para>
     /// </summary>
     /// <param name="host">The host the page is served on, which Twitch has to be told about.</param>
     public async Task<LivePlatformEmbeds.LivePlatformLookup> EmbedAsync(
-        int? videoPkid, string? host, CancellationToken cancellationToken)
+        int? videoPkid, string? host, CancellationToken cancellationToken, string? watchUrl = null)
     {
         var snapshot = Snapshot(videoPkid);
         return snapshot.IsLive
-            ? await _embeds.ResolveAsync(snapshot.StreamUrl, snapshot.ChannelName, snapshot.PlatformStreamName, host, cancellationToken)
+            ? await _embeds.ResolveAsync(snapshot.StreamUrl, snapshot.ChannelName, snapshot.PlatformStreamName, host, cancellationToken, watchUrl)
             : LivePlatformEmbeds.LivePlatformLookup.Nothing;
     }
 
@@ -208,7 +208,8 @@ public sealed class LivePreviewService
                         isPlayable,
                         new LiveMedia(0, 0, 0, false, 0),
                         new LiveMedia(0, 0, 0, false, 0),
-                        new LiveParameters(null, null, null, null, null, null, null, null, null, null, null, null, null));
+                        new LiveParameters(null, null, null, null, null, null, null, null, null, null, null, null, null),
+                        Status: vid.LiveStatus);
                 }
             }
             return LiveSnapshot.Offline(Running(null));
@@ -233,7 +234,7 @@ public sealed class LivePreviewService
         }
 
         return new LiveSnapshot(
-            true,
+            session.IsPublishing,
             session.RestartRequested,
             Running(session.VideoPkid),
             video.Pkid,
@@ -257,7 +258,8 @@ public sealed class LivePreviewService
             _air.IsUnverified(video.VideoLiveHistoryId),
             _air.OnAirVideoOf(video.VideoLiveHistoryId),
             video.VideoLiveHistoryId,
-            LiveScene.Of(_takeovers.CurrentOf(video.VideoLiveHistoryId)));
+            LiveScene.Of(_takeovers.CurrentOf(video.VideoLiveHistoryId)),
+            session.IsPublishing ? LiveStatus.Live : video.LiveStatus);
     }
 
     /// <summary>
@@ -398,7 +400,7 @@ public sealed class LivePreviewService
         var options = new List<LiveOption>();
         foreach (var session in _sessions.Running)
         {
-            if (session.HasExited)
+            if (!session.IsPublishing)
             {
                 continue;
             }

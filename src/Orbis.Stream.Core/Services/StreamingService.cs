@@ -377,13 +377,13 @@ public sealed class StreamingService
         {
             // The status goes back too: an ENDED left over from the previous pass would make the
             // playlist read as finished while it is starting over.
-            if (video.LastTimeStampBeforeStop == 0 && video.LiveStatus is LiveStatus.Offline or LiveStatus.Live)
+            if (video.LastTimeStampBeforeStop == 0 && (video.LiveStatus == LiveStatus.Offline || video.LiveStatus.IsActive()))
             {
                 continue;
             }
 
             video.LastTimeStampBeforeStop = 0;
-            if (video.LiveStatus != LiveStatus.Live)
+            if (!video.LiveStatus.IsActive())
             {
                 video.LiveStatus = LiveStatus.Offline;
             }
@@ -447,7 +447,7 @@ public sealed class StreamingService
 
     private void CheckIfALiveAlreadyStreamingForAChannel(string channelName, string platformStreamName)
     {
-        var videoList = _videoRepository.FindByLiveStatusAndChannelName(LiveStatus.Live, channelName);
+        var videoList = _videoRepository.FindActive(channelName);
         if (videoList.Count == 0)
         {
             return;

@@ -32,8 +32,10 @@ public sealed class MainVideoSettingModel(VideoSettingService videoSettings, Loc
 
         if (Form is not null && preset is not null)
         {
-            var template = videoSettings.GetAllVideoSettings(new Dictionary<string, string> { ["defaultPlatformConfiguration"] = preset })
-                .FirstOrDefault();
+            var template = MainChannelSettingModel.ChoiceOfSetting(preset) is null
+                ? null
+                : videoSettings.GetAllVideoSettings(new Dictionary<string, string> { ["defaultPlatformConfiguration"] = preset })
+                    .FirstOrDefault();
             if (template is null)
             {
                 SetNotice(NoticeKind.Error, text["noDataPresent"]);

@@ -10,7 +10,7 @@ namespace Orbis.Stream.Core.Streaming;
 /// lasts. A WebM with alpha also needs the libvpx decoder: the native vp8 and vp9 decoders ignore
 /// the alpha track, and the overlay would cover the canvas with black where it should be clear.</para>
 /// </summary>
-public sealed record OverlayMedia(bool Loop, string? Decoder)
+public sealed record OverlayMedia(bool Loop, string? Decoder, bool NativeWebpLoop = false)
 {
     /// <summary>One picture, shown for ever: what a file that could not be read is opened as too.</summary>
     public static readonly OverlayMedia Still = new(false, null);
@@ -18,6 +18,13 @@ public sealed record OverlayMedia(bool Loop, string? Decoder)
     public static OverlayMedia Of(MediaProbeResult probe)
     {
         ArgumentNullException.ThrowIfNull(probe);
+
+        // FFmpeg 9 reads animated WebP as webp_anim, separately from the still webp_pipe.
+        // Prefer the codec too, so an animation is never classified as a still image pipe.
+        if (probe.VideoCodec == "webp_anim" || probe.Format == "webp_anim")
+        {
+            return new OverlayMedia(true, null, NativeWebpLoop: true);
+        }
 
         // A picture read by an image demuxer is one picture: image2 for a JPEG, png_pipe, webp_pipe
         // and the like for the others. A GIF of one frame shown for a moment is a still in an

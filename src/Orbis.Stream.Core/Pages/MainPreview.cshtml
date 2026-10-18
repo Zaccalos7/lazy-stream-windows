@@ -22,6 +22,7 @@
     <link rel="stylesheet" href="/css/preview.css" />
     <link rel="stylesheet" href="/css/composer.css" />
     <link rel="stylesheet" href="/css/scenes.css" />
+    <script src="/js/live-player.js" defer></script>
 }
 <div class="page-header">
     <div style="display: flex; align-items: center; gap: 1rem;">
@@ -77,22 +78,36 @@
 <p data-preview-words hidden
    data-ok="@T["success"]" data-ko="@T["error"]"
    data-applied="@T["parametersApplied"]" data-failed="@T["parametersFailed"]"
-   data-no="@T["noAudioTrack"]"
-   data-embed-loading="@T["embedLoading"]" data-embed-failed="@T["embedFailed"]"></p>
+   data-no="@T["noAudioTrack"]"></p>
 
 <div data-preview
      data-pkid="@live.VideoPkid"
+     data-history="@live.History"
      data-live="@(live.IsLive ? "1" : "0")"
+     data-status="@(live.Status?.ToWireValue())"
      data-position="@live.PositionMilliseconds"
      data-playable="@(live.IsPlayable ? "1" : "0")"
      data-platform="@(LiveLinkView.PlatformOf(live.StreamUrl))">
+
+@if (LiveLinkView.PlatformOf(live.StreamUrl) == "facebook")
+{
+    <partial name="_FacebookLiveNotice" />
+}
 
 @if (!live.IsLive)
 {
     <div class="card empty">
         <i class="icon">&#xE7F4;</i>
-        <p>@T["noLiveRunning"]</p>
-        <a class="btn accent" href="/orbis/mainLive?start=1"><i class="icon">&#xE768;</i>@T["startLiveButton"]</a>
+        @if (live.Status is LiveStatus.Connecting or LiveStatus.Reconnecting)
+        {
+            <p>@T[LiveStatusView.Key(live.Status)] · @live.ChannelName</p>
+            <a class="btn accent" href="/orbis/mainLive"><i class="icon">&#xE7F4;</i>@T["manageLiveButton"]</a>
+        }
+        else
+        {
+            <p>@T["noLiveRunning"]</p>
+            <a class="btn accent" href="/orbis/mainLive?start=1"><i class="icon">&#xE768;</i>@T["startLiveButton"]</a>
+        }
     </div>
 }
 else
@@ -104,13 +119,10 @@ else
         ? $"aspect-ratio: {live.Output.Width.ToString(CultureInfo.InvariantCulture)} / {live.Output.Height.ToString(CultureInfo.InvariantCulture)}"
         : null;
 
-    // The platform the live goes on, shown next to the name of the channel. Where the live can be
-    // watched with the player of the platform is asked for here rather than written into the page:
-    // the player of YouTube is addressed by the id of the video, and that id only exists once the
-    // platform has been asked which video is on air, which is longer than a page should wait to be
-    // drawn. The page asks for it once it is open and keeps the picture below until it answers.
+    // The public player is resolved on demand; no local video is shown as proof of delivery.
     var platform = LiveLinkView.PlatformOf(live.StreamUrl);
     var platformLabel = LiveLinkView.LabelOf(platform);
+    var hasPlayer = platform is "twitch" or "youtube" or "kick" or "facebook";
 
     // A picture that stands up gets a stage that stands up: a live going out in portrait (a
     // setting of 1080x1920, a phone video kept at its own size) is drawn at the height of the
@@ -142,25 +154,47 @@ else
             
                 <div class="preview-screen@(portrait ? " portrait" : "")" style="@shape">
                     <div class="preview-cover" data-preview-cover>
-                        <span class="spinner"></span>
-                        <p class="muted" data-cover-text>@T["previewWaiting"]</p>
+                        <i class="icon">&#xE7F4;</i>
+                        <p class="muted" data-embed-text>@T[hasPlayer ? "previewBandwidth" : "previewExternal"]</p>
                     </div>
                     <iframe class="preview-platform-player"
                             data-platform-embed
                             title="@(platformLabel ?? "Platform") live stream"
-                            allow="autoplay; fullscreen; picture-in-picture"
+                            allow="autoplay; encrypted-media; fullscreen; picture-in-picture"
+                            referrerpolicy="strict-origin-when-cross-origin"
                             allowfullscreen
                             scrolling="no"
                             hidden></iframe>
-                    <canvas data-preview-frame role="img" aria-label="@live.VideoName" hidden></canvas>
-                    @if (platformLabel is not null)
+                </div>
+                @if (platform == "facebook")
+                {
+                    <label class="field">
+                        <span>@T["previewFacebookUrl"]</span>
+                        <input class="input" type="url" data-platform-url value="@Model.WatchUrl" required maxlength="2048"
+                               placeholder="https://www.facebook.com/watch/?v=…" />
+                        <small>@T["previewFacebookHint"]</small>
+                    </label>
+                }
+                <div class="preview-player-controls">
+                    @if (hasPlayer)
                     {
-                        <div class="preview-badge-live" title="@T["liveNow"]"><span class="live-dot"></span><span>LIVE · @platformLabel</span></div>
+                        <button type="button" class="btn" data-platform-toggle aria-pressed="false">@T["previewStart"]</button>
+                        <span hidden data-platform-words
+                              data-start="@T["previewStart"]" data-stop="@T["previewStop"]"
+                              data-idle="@T["previewBandwidth"]"
+                              data-loading="@T["embedLoading"].Replace("{0}", platformLabel)"
+                              data-offair="@T["embedFailed"].Replace("{0}", platformLabel)"
+                              data-facebook="@T["previewFacebookHint"]"
+                              data-failed="@T["previewUnavailable"]"></span>
                     }
-                    <div class="preview-embed-status" hidden>
-                        <span class="spinner"></span>
-                        <span data-embed-text>@T["embedLoading"]</span>
-                    </div>
+                    @if (Model.WatchUrl is { } watchUrl)
+                    {
+                        <a class="btn subtle" href="@watchUrl" data-platform-watch target="_blank" rel="noopener noreferrer">@T["openLivePage"]</a>
+                    }
+                    else if (platform == "facebook")
+                    {
+                        <a class="btn subtle" data-platform-watch target="_blank" rel="noopener noreferrer" hidden>@T["openLivePage"]</a>
+                    }
                 </div>
                 <div class="preview-bar">
                     <div class="preview-id">

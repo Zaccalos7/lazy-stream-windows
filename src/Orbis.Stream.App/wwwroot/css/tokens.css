@@ -24,10 +24,6 @@
   --tiktok-cyan: #25f4ee;
   /* The blue of the Facebook Gaming logo itself, the same in both themes: a logo is not restyled. */
   --facebook-logo: #015eec;
-  /* Rumble's green, darker here the way Kick's is: the green of the brand is unreadable on white. */
-  --rumble: #4f8a1f;
-  /* X is black on white and white on black, as X draws itself: the tone of its text in each theme. */
-  --x: #0f1419;
   --grad: var(--accent);
   --hero: var(--panel);
 
@@ -100,8 +96,6 @@
     --kick: #53fc18;
     --facebook: #3b82f6;
     --linkedin: #4aa3ff;
-    --rumble: #85c742;
-    --x: #e7e9ea;
 
     --success: #30d158;
     --success-bg: rgba(48, 209, 88, 0.15);
@@ -146,8 +140,6 @@ html[data-theme="dark"] {
   --youtube: #ff453a;
   --kick: #53fc18;
   --facebook: #3b82f6;
-  --rumble: #85c742;
-  --x: #e7e9ea;
 
   --success: #30d158;
   --success-bg: rgba(48, 209, 88, 0.15);

@@ -81,6 +81,8 @@
 .live-picker label.field { width: min(420px, 100%); }
 .preview-cover .icon { font-size: 30px; color: var(--text-3); }
 .preview-cover p { margin: 0; font-size: 12px; }
+.preview-cover { padding: 24px; text-align: center; }
+.preview-player-controls { display: flex; flex-wrap: wrap; gap: 8px; }
 
 .preview-embed-status {
   position: absolute;

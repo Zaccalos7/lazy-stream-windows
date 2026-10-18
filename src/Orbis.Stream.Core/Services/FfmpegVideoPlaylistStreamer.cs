@@ -138,6 +138,7 @@ public sealed class FfmpegVideoPlaylistStreamer : IVideoPlaylistStreamer
                 cancellationToken.ThrowIfCancellationRequested();
                 await StreamSceneAsync(scene.Videos, outputUrl, output, videoLiveHistoryPkid, cancellationToken)
                     .ConfigureAwait(false);
+                if (scene.Videos.Any(row => row.LiveStatus is LiveStatus.Error or LiveStatus.Stopped)) return;
             }
 
             return;
@@ -1491,8 +1492,14 @@ public sealed class FfmpegVideoPlaylistStreamer : IVideoPlaylistStreamer
             {
                 // Persist the original program position, including a resumed live. Waiting and
                 // reconnecting never consume the user's files or the rest of a playlist.
-                foreach (var row in rows) row.LastTimeStampBeforeStop = (long)resumeFrom.TotalMilliseconds;
-                MarkRows(rows, status, message);
+                foreach (var row in rows)
+                {
+                    row.LastTimeStampBeforeStop = (long)resumeFrom.TotalMilliseconds;
+                    row.LiveStatus = status;
+                    row.Message = message;
+                    _videoRepository.SetStartupState(row.Pkid, status, message, row.LastTimeStampBeforeStop);
+                }
+                _notifier.Raise();
                 if (status == LiveStatus.Stopped) _videoRepository.SetStopFlag(driving.Pkid, false);
             }, cancellationToken);
     }

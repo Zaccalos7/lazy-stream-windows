@@ -1115,9 +1115,10 @@ public sealed class FfmpegVideoPlaylistStreamer : IVideoPlaylistStreamer
                     }
                 }
 
-                var failure = _localizer.PrintMessage("error.during.streaming.video", [description, videoLiveHistoryPkid])
-                    + "\n"
-                    + (string.IsNullOrWhiteSpace(errorOutput) ? $"ffmpeg exited with code {exitCode}" : errorOutput.Trim());
+                var failure = Failure(
+                    _localizer.PrintMessage("error.during.streaming.video", [description, videoLiveHistoryPkid]),
+                    string.IsNullOrWhiteSpace(errorOutput) ? $"ffmpeg exited with code {exitCode}" : errorOutput.Trim(),
+                    publishPlatform);
                 _logger.LogError("{Message}", failure);
                 MarkRows(rows, LiveStatus.Error, failure);
                 return;
@@ -1825,9 +1826,39 @@ public sealed class FfmpegVideoPlaylistStreamer : IVideoPlaylistStreamer
     private async Task<string> NotReceivedMessageAsync(FfmpegStreamingSession session, string label, string platform)
     {
         var errorOutput = await session.ReadErrorAsync().ConfigureAwait(false);
-        var message = _localizer.PrintMessage("video.live.not.received", [label, platform]);
-        return string.IsNullOrWhiteSpace(errorOutput) ? message : message + "\n" + errorOutput.Trim();
+        return Failure(
+            _localizer.PrintMessage("video.live.not.received", [label, platform]),
+            errorOutput?.Trim(),
+            session.Profile.Platform);
     }
+
+    /// <summary>
+    /// What is said of a live that did not make it: the headline, then the warning about a key that
+    /// does not keep when the platform is one that hands out a new one for every live, then what
+    /// ffmpeg said.
+    /// </summary>
+    private string Failure(string headline, string? detail, StreamPlatform? platform)
+    {
+        var text = headline;
+        if (ExpiredKeyWarning(platform) is { } warning)
+        {
+            text += "\n" + warning;
+        }
+
+        return string.IsNullOrWhiteSpace(detail) ? text : text + "\n" + detail;
+    }
+
+    /// <summary>
+    /// The warning a live on a platform whose stream key does not keep gets, and nothing anywhere
+    /// else. Facebook Live Producer and TikTok LIVE hand out a key for every live and it is good
+    /// for 24 hours; past that, or while another publisher holds it, the ingest takes the
+    /// connection, answers the handshake and the publish as it always does, and closes the socket
+    /// without a word. A user only sees an I/O error, so this is what tells them what to do.
+    /// </summary>
+    private string? ExpiredKeyWarning(StreamPlatform? platform) => platform is StreamPlatform.Facebook
+        or StreamPlatform.TikTok
+        ? _localizer.PrintMessage("video.live.key.expired")
+        : null;
 
     private static string PlatformName(FfmpegStreamingSession session) => session.Profile.Name;
 

@@ -1,19 +1,21 @@
 @model bool
-<a class="btn subtle facebook-live-open" href="@LiveLinkView.FacebookProducerUrl" target="_blank" rel="noopener noreferrer">@T["facebookOpenProducer"]</a>
 <span class="caption facebook-live-help" style="display: block;" data-facebook-live-notice>@T["facebookGoLiveHelp"]</span>
+@if (!Model)
+{
+    <p class="caption facebook-live-help">@T["facebookStreamingKeyHelp"] @T["facebookSaveKeyStep"]</p>
+}
 <ol class="facebook-live-steps">
-    <li>@T["facebookGoLiveStep"]</li>
-    <li>@T["facebookStreamingKeyHelp"]</li>
     <li>
+        @T["facebookStartStreamStep"]
         @if (Model)
         {
-            <a href="/orbis/mainChannelSetting?platform=facebook">@T["facebookSaveKeyStep"]</a>
-        }
-        else
-        {
-            @T["facebookSaveKeyStep"]
+            <a href="/orbis/mainChannelSetting?platform=facebook">@T["configureChannel"]</a>
         }
     </li>
-    <li>@T["facebookStartStreamStep"]</li>
+    <li>
+        @T["facebookGoLiveStep"]
+        <a class="btn subtle facebook-live-open" href="@LiveLinkView.FacebookProducerUrl" target="_blank" rel="noopener noreferrer">@T["facebookOpenProducer"]</a>
+    </li>
+    <li>@T["facebookReturnStep"]</li>
+    <li class="facebook-key-lifetime">@T["facebookKeyLifetime"]</li>
 </ol>
-<p class="caption facebook-key-lifetime">@T["facebookKeyLifetime"]</p>

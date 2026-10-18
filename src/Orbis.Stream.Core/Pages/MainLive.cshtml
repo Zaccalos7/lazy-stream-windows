@@ -69,6 +69,20 @@
     <partial name="_LiveRows" model="Model" />
 </div>
 
+<dialog class="dialog wide" id="facebook-live-dialog" aria-labelledby="facebook-live-dialog-title">
+    <div class="dialog-head">
+        <h2 class="grow" id="facebook-live-dialog-title">@T["facebookGoLiveTitle"]</h2>
+        <button type="button" class="btn subtle icon-only" commandfor="facebook-live-dialog" command="close"
+                title="@T["close"]" aria-label="@T["close"]"><i class="icon" aria-hidden="true">&#xE711;</i></button>
+    </div>
+    <div class="dialog-body">
+        <partial name="_FacebookLiveInstructions" model="true" />
+    </div>
+    <div class="dialog-footer">
+        <button type="button" class="btn" commandfor="facebook-live-dialog" command="close">@T["close"]</button>
+    </div>
+</dialog>
+
 @* Start a new live: the video/audio setting first, then where it goes, a step at a time. What goes
    on air is chosen next, on the canvas: this form is never sent, its two picks travel on. The sheet
    takes nearly the whole window and lays the choices of a step out in columns: every platform

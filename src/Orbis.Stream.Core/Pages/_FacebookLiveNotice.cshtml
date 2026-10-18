@@ -10,10 +10,10 @@
     <a class="btn subtle facebook-live-open" href="@LiveLinkView.FacebookProducerUrl" target="_blank" rel="noopener noreferrer">@T["facebookOpenProducer"]</a>
     <span class="caption facebook-live-help" style="display: block;" data-facebook-live-notice>@T["facebookGoLiveHelp"]</span>
     <ol class="facebook-live-steps">
-        <li>@T["facebookGoLiveStep"]</li>
-        <li>@T["facebookStreamingKeyHelp"]</li>
-        <li>@T["facebookSaveKeyStep"]</li>
-        <li>@T["facebookStartStreamStep"]</li>
+        <li>@Html.Raw(T["facebookGoLiveStep"])</li>
+        <li>@Html.Raw(T["facebookStreamingKeyHelp"])</li>
+        <li>@Html.Raw(T["facebookSaveKeyStep"])</li>
+        <li>@Html.Raw(T["facebookStartStreamStep"])</li>
     </ol>
     <p class="caption facebook-key-lifetime">@T["facebookKeyLifetime"]</p>
 </section>

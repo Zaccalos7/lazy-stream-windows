@@ -28,13 +28,7 @@ else
                 <span class="grow">
                     <strong>@configuration.ChannelName</strong> · @(choice?.Label ?? configuration.PlatformStreamName)
                     <span class="caption truncate" style="display: block;" title="@configuration.StreamUrl">@configuration.StreamUrl</span>
-                    @if (choice?.Value == "facebook")
-                    {
-                        <partial name="_FacebookLiveNotice" />
-                        @* A Facebook key is good for a day and the user cannot tell a stale one from
-                           a live one: this is where they read the key before starting with it. *@
-                        <partial name="_FacebookKeyWarning" model="StreamKeyAge.Of(configuration)" />
-                    }
+
                     @if (!string.IsNullOrWhiteSpace(configuration.Description))
                     {
                         <span class="caption" style="display: block;">@configuration.Description</span>
@@ -43,6 +37,18 @@ else
             </label>
         }
     </div>
+
+    @foreach (var configuration in Model.ActiveConfigurations)
+    {
+        var choice = MainChannelSettingModel.ChoiceOf(configuration.PlatformStreamName, configuration.StreamUrl);
+        if (choice?.Value == "facebook")
+        {
+            <div class="section" data-show-when="@configuration.Id">
+                <partial name="_FacebookLiveNotice" />
+                <partial name="_FacebookKeyWarning" model="StreamKeyAge.Of(configuration)" />
+            </div>
+        }
+    }
 
     <section data-youtube-preflight hidden>
         <a class="btn" data-youtube-studio-link target="_blank" rel="noopener noreferrer">YouTube Studio</a>

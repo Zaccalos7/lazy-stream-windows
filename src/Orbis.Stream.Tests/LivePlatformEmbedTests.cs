@@ -1,6 +1,7 @@
 using System.Net;
 using System.Text;
 using Microsoft.Extensions.Logging.Abstractions;
+using Orbis.Stream.Core.Services;
 using Orbis.Stream.Core.Streaming;
 
 namespace Orbis.Stream.Tests;
@@ -191,6 +192,69 @@ public sealed class LivePlatformEmbedTests
         Assert.Equal(2, handler.Asked.Count);
     }
 
+    [Theory]
+    [InlineData(false)]
+    [InlineData(true)]
+    public async Task YouTube_AnOfflineOrFailedLookupIsSharedUntilTheShortCacheExpires(bool failure)
+    {
+        var clock = new LookupClock();
+        var handler = new RecordingHandler(_ => failure
+            ? new HttpResponseMessage(HttpStatusCode.ServiceUnavailable)
+            : Text(string.Empty));
+        var embeds = new LivePlatformEmbeds(new HttpClient(handler), NullLogger<LivePlatformEmbeds>.Instance, clock);
+
+        var first = await embeds.ResolveAsync(YouTube, "channel", null, "localhost", default);
+        var second = await embeds.ResolveAsync(YouTube, "channel", null, "localhost", default);
+        Assert.Equal(first, second);
+        Assert.Single(handler.Asked);
+        Assert.Equal(failure, second.Reason is not null);
+
+        clock.Advance(TimeSpan.FromSeconds(30));
+        await embeds.ResolveAsync(YouTube, "channel", null, "localhost", default);
+        Assert.Equal(2, handler.Asked.Count);
+    }
+
+    [Fact]
+    public async Task YouTube_RechecksAfterTheWarningAndClearsItWhenThePublicBroadcastStarts()
+    {
+        var clock = new LookupClock();
+        var online = false;
+        var handler = Page(_ => Watch(online));
+        var embeds = new LivePlatformEmbeds(new HttpClient(handler), NullLogger<LivePlatformEmbeds>.Instance, clock);
+        var state = new YouTubeAirState();
+        const long history = 7;
+
+        for (var pass = 0; pass < 2; pass++)
+        {
+            state.Observe(history, await embeds.ResolveAsync(YouTube, "channel", null, null, default));
+            clock.Advance(TimeSpan.FromSeconds(30));
+        }
+        Assert.True(state.IsOffAir(history));
+
+        online = true;
+        var found = await embeds.ResolveAsync(YouTube, "channel", null, null, default);
+        Assert.True(state.Observe(history, found));
+        Assert.False(state.IsOffAir(history));
+        Assert.Equal("RU6gEobXVHA", state.OnAirVideoOf(history));
+        Assert.Equal(6, handler.Asked.Count);
+    }
+
+    [Fact]
+    public async Task YouTube_ExpiredSuccessIsNotReusedWhenTheNextLookupFails()
+    {
+        var clock = new LookupClock();
+        var fail = false;
+        var handler = Page(_ => fail ? throw new InvalidOperationException("lookup failed") : Watch(true));
+        var embeds = new LivePlatformEmbeds(new HttpClient(handler), NullLogger<LivePlatformEmbeds>.Instance, clock);
+
+        Assert.NotNull((await embeds.ResolveAsync(YouTube, "channel", null, null, default)).Embed);
+        clock.Advance(TimeSpan.FromSeconds(60));
+        fail = true;
+        var found = await embeds.ResolveAsync(YouTube, "channel", null, null, default);
+        Assert.Null(found.Embed);
+        Assert.NotNull(found.Reason);
+    }
+
     [Fact]
     public void CandidateOf_TakesTheTopOfTheGrid_AndNotTheVideoElsewhereOnThePage()
     {
@@ -247,5 +311,12 @@ public sealed class LivePlatformEmbedTests
             Asked.Add(request.RequestUri!);
             return Task.FromResult(answer(request));
         }
+    }
+
+    private sealed class LookupClock : TimeProvider
+    {
+        private DateTimeOffset _now = DateTimeOffset.UtcNow;
+        public override DateTimeOffset GetUtcNow() => _now;
+        public void Advance(TimeSpan elapsed) => _now += elapsed;
     }
 }

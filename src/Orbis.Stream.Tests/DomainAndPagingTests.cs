@@ -477,6 +477,17 @@ public sealed class LiveLinkTests
     }
 
     [Fact]
+    public void WatchUrlOf_OpensThePublicBroadcast()
+    {
+        Assert.Equal("https://www.youtube.com/watch?v=abcdefghijk", LiveLinkView.WatchUrlOf(YouTube, "channel", null, "abcdefghijk"));
+        Assert.Equal("https://www.youtube.com/@channel/live", LiveLinkView.WatchUrlOf(YouTube, "@channel", null));
+        Assert.Equal("https://www.youtube.com/channel/UCuAXFkgsw1L7xaCfnd5JJOw/live",
+            LiveLinkView.WatchUrlOf(YouTube, "UCuAXFkgsw1L7xaCfnd5JJOw", null));
+        Assert.Equal("https://www.twitch.tv/channel", LiveLinkView.WatchUrlOf(Twitch, "channel", "twitch"));
+        Assert.Null(LiveLinkView.WatchUrlOf(Twitch, null, null));
+    }
+
+    [Fact]
     public void UrlOf_YouTubeIsTheLiveControlRoomOfTheBroadcastOnAir()
     {
         Assert.Equal(

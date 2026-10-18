@@ -281,9 +281,8 @@ form:has(input[name="platformStreamName"][value="youtube"]:checked) .option-card
    height, and what they say starts at their top, next to the radio. */
 .choice-list.grid {
   display: grid;
-  grid-template-columns: repeat(auto-fit, minmax(min(100%, 300px), 1fr));
+  grid-template-columns: repeat(auto-fill, minmax(min(100%, 300px), 1fr));
   gap: 10px;
-  align-items: start;
 }
 .choice-list.grid > .choice { align-items: flex-start; min-width: 0; padding: 12px 14px; }
 .choice-list.grid > .choice > input { margin-top: 2px; }

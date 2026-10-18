@@ -184,7 +184,7 @@ public sealed class LivePlatformEmbeds
         var path = url.AbsolutePath.TrimEnd('/');
         var match = Regex.Match(path, @"\A/(?:[^/]+/)?videos/(?:[^/]+/)?(?<id>[0-9]+)\z", RegexOptions.CultureInvariant);
         var id = match.Success ? match.Groups["id"].Value : null;
-        if (id is null && path is ("" or "/watch" or "/video.php" or "/live"))
+        if (id is null && path is ("" or "/watch" or "/watch/live" or "/video.php" or "/live"))
         {
             var query = QueryHelpers.ParseQuery(url.Query);
             if (query.TryGetValue("v", out var video) && video.Count == 1 &&

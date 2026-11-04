@@ -72,6 +72,7 @@
 .nav-main { display: flex; flex: 0 1 auto; flex-direction: column; gap: 3px; min-height: 0; margin-block-end: 1px; overflow-y: auto; overflow-x: hidden; overscroll-behavior: contain; scrollbar-width: thin; }
 .nav-footer { display: flex; flex: none; flex-direction: column; gap: 3px; margin-block-start: auto; }
 .nav-footer .segmented-control { margin-block-start: 0; }
+.nav .nav-new-window { margin-block-end: 6px; border: 1px solid var(--stroke); }
 
 /* Quick channel setup and the publishing channels, grouped by platform. */
 .nav-main > a { flex-shrink: 0; }
@@ -343,7 +344,7 @@ html.sidebar-closed .nav-title {
   .nav { width: 50px; padding: 10px 4px; }
   .nav a { justify-content: center; padding: 0; }
   /* Direct children only: ".nav a span" would reach the language menu too and blank its labels. */
-  .nav-main > a span:not(.icon), .nav-title span, .lang-current span, .lang-current .icon, .segmented-control { display: none; }
+  .nav-main > a span:not(.icon), .nav-new-window span, .nav-title span, .lang-current span, .lang-current .icon, .segmented-control { display: none; }
   /* The flag is enough of a label when the sidebar is a strip, and the menu still spells them out. */
   .lang-current { justify-content: center; padding: 0; }
   .lang-menu { left: -8px; min-width: 150px; }

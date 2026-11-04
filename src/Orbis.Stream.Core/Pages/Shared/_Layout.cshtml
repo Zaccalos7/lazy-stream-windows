@@ -61,6 +61,10 @@
             </div>
         </div>
         <div class="nav-footer">
+            <a class="nav-new-window" href="@(Context.Request.PathBase + Context.Request.Path + Context.Request.QueryString)"
+               target="_blank" rel="noopener" title="@T["newWindow"]" aria-label="@T["newWindow"]">
+                <i class="icon" aria-hidden="true">&#xE78B;</i><span>@T["newWindow"]</span>
+            </a>
             <div class="segmented-control" role="radiogroup" aria-label="Theme">
                 <button type="button" class="segment" data-theme-set="light" title="Light" aria-label="Light Theme"><i class="icon">&#xE706;</i></button>
                 <button type="button" class="segment" data-theme-set="dark" title="Dark" aria-label="Dark Theme"><i class="icon">&#xE708;</i></button>

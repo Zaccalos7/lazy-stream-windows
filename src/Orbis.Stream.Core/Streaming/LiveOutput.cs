@@ -88,6 +88,31 @@ public sealed class LiveOutput : IAsyncDisposable
         }
     }
 
+    /// <summary>
+    /// Whether the shared connection to the platform is currently open and sending data.
+    /// Across encoder reconfigurations (e.g. volume or parameter changes), the connection remains
+    /// publishing even while a new encoder segment is warming up.
+    /// </summary>
+    public bool IsPublishing
+    {
+        get
+        {
+            lock (_gate)
+            {
+                if (Profile.Transport == RelayTransport.FfmpegSender)
+                {
+                    return _sender is { HasExited: false }
+                        && PublishedMilliseconds > 0
+                        && Environment.TickCount64 - LastPublishAdvanceTicks <= (long)Profile.StallTimeout.TotalMilliseconds;
+                }
+
+                return _relay is { IsOpen: true }
+                    && _relay.OnAirSinceTicks != 0
+                    && Environment.TickCount64 - _relay.LastAdvanceTicks <= (long)Profile.StallTimeout.TotalMilliseconds;
+            }
+        }
+    }
+
     public async Task<string> ReadSenderErrorAsync()
     {
         Task<string>? errors;

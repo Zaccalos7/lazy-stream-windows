@@ -240,9 +240,12 @@ public sealed class LivePreviewService
             totalDurationMs = videosInHistory.Sum(v => v.DurationMilliseconds ?? 0);
         }
 
+        var reconfiguring = session.RestartRequested
+            || (session.SharesOutput && session.Connection is { IsPublishing: true } && !session.IsOnAir);
+
         return new LiveSnapshot(
             session.IsPublishing,
-            session.RestartRequested,
+            reconfiguring,
             Running(session.VideoPkid),
             video.Pkid,
             video.Name,

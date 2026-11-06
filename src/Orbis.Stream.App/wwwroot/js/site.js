@@ -387,11 +387,14 @@ const paintPreview = state => {
   // open, and the reloaded page asks for the same live again. A page with nothing on air has no
   // form, and is only waiting for this.
   if (state.isLive !== previewIsLive || (state.isLive && state.videoPkid !== previewPkid)) {
-    if (++previewMismatch >= 2 || !previewIsLive) location.reload();
-    return;
+    if (!state.reconfiguring) {
+      if (++previewMismatch >= 2 || !previewIsLive) location.reload();
+      return;
+    }
+    previewMismatch = 0;
   }
 
-  if (!state.isLive && (state.status || "") !== (preview.dataset.status || "")) {
+  if (!state.isLive && !state.reconfiguring && (state.status || "") !== (preview.dataset.status || "")) {
     location.reload();
     return;
   }

@@ -165,6 +165,29 @@ test('stopping a live or leaving the page releases the player', async () => {
   assert.equal(next.timers.size, 0);
 });
 
+test('reconfiguring live preserves player without unloading', async () => {
+  const ui = setup([live('firstLive01')]);
+  await ui.click();
+  assert.notEqual(ui.player.getAttribute('src'), null);
+  ui.document.emit('orbis:live', { isLive: true, reconfiguring: true, videoPkid: 7 });
+  assert.notEqual(ui.player.getAttribute('src'), null);
+  assert.equal(ui.player.hidden, false);
+});
+
+test('player can be restarted with toggle button after a live was stopped', async () => {
+  const ui = setup([live('firstLive01'), live('firstLive01')]);
+  await ui.click();
+  assert.notEqual(ui.player.getAttribute('src'), null);
+  ui.document.emit('orbis:live', { isLive: false, videoPkid: 7 });
+  assert.equal(ui.player.getAttribute('src'), null);
+  // toggle off
+  await ui.click();
+  // toggle back on
+  await ui.click();
+  assert.notEqual(ui.player.getAttribute('src'), null);
+  assert.equal(ui.player.hidden, false);
+});
+
 test('a network failure retries without inventing a local preview', async () => {
   const ui = setup([new Error('network'), live('firstLive01')]);
   await ui.click();

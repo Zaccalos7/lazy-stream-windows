@@ -437,8 +437,11 @@ public sealed class FfmpegVideoPlaylistStreamer : IVideoPlaylistStreamer
                 publishPlatform = next.Profile.Platform;
                 var connecting = _localizer.PrintMessage("video.live.connecting", [inputPath, platform]);
                 _logger.LogInformation("{Message}", connecting);
-                SaveMessageOnVideoLiveHistory(
-                    connecting, videoLiveHistoryPkid, inputPath, LiveStatus.Connecting, DateTime.Now);
+                if (previous is null)
+                {
+                    SaveMessageOnVideoLiveHistory(
+                        connecting, videoLiveHistoryPkid, inputPath, LiveStatus.Connecting, DateTime.Now);
+                }
 
                 var outcome = await MonitorAsync(
                         session,
@@ -963,7 +966,10 @@ public sealed class FfmpegVideoPlaylistStreamer : IVideoPlaylistStreamer
                 var platform = PlatformName(next);
                 publishPlatform = next.Profile.Platform;
                 var connecting = _localizer.PrintMessage("video.live.connecting", [description, platform]);
-                MarkRows(rows, LiveStatus.Connecting, connecting);
+                if (previous is null)
+                {
+                    MarkRows(rows, LiveStatus.Connecting, connecting);
+                }
                 _logger.LogInformation("{Message}", connecting);
 
                 var outcome = await MonitorAsync(

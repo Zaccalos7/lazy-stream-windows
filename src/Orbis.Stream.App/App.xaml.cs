@@ -1,6 +1,7 @@
 ﻿using System.Windows;
 using System.Windows.Threading;
 using Microsoft.AspNetCore.Builder;
+using Microsoft.Web.WebView2.Core;
 using Orbis.Stream.Core.Configuration;
 using Orbis.Stream.Core.Hosting;
 using Orbis.Stream.Core.Services;
@@ -15,6 +16,10 @@ namespace Orbis.Stream.App;
 public partial class App : Application
 {
     private WebApplication? _host;
+    private OrbisRuntimeOptions? _options;
+    private Task<CoreWebView2Environment>? _browserEnvironment;
+    private readonly HashSet<MainWindow> _windows = [];
+    private bool _shuttingDown;
 
     private async void OnStartup(object sender, StartupEventArgs e)
     {
@@ -24,6 +29,7 @@ public partial class App : Application
         try
         {
             options = OrbisHost.ResolveOptions(e.Args);
+            _options = options;
             _host = OrbisHost.Create(options, e.Args);
             await _host.StartAsync().ConfigureAwait(true);
         }
@@ -44,24 +50,60 @@ public partial class App : Application
             return;
         }
 
-        var window = new MainWindow(options, _host);
-        MainWindow = window;
-        // OnExplicitShutdown keeps the headless (--no-browser) server alive; with a window,
-        // closing it must still stop the process and release the Kestrel port. The host is
-        // stopped here, while the dispatcher still runs: an await inside OnExit would let
-        // the process exit before FFmpeg and Kestrel are stopped.
-        window.Closed += async (_, _) =>
+        OpenWindow();
+    }
+
+    /// <summary>All windows share one server and WebView2 environment, with independent pages.</summary>
+    internal void OpenWindow(string? entryPoint = null)
+    {
+        if (_shuttingDown || _options is null)
         {
-            try
-            {
-                await ShutdownHostAsync().ConfigureAwait(true);
-            }
-            finally
-            {
-                Shutdown();
-            }
-        };
+            return;
+        }
+
+        _browserEnvironment ??= CreateBrowserEnvironmentAsync(_options);
+        var window = new MainWindow(_options, _browserEnvironment, entryPoint);
+        _windows.Add(window);
+        MainWindow ??= window;
+        window.Closed += OnWindowClosed;
         window.Show();
+    }
+
+    private static async Task<CoreWebView2Environment> CreateBrowserEnvironmentAsync(OrbisRuntimeOptions options)
+    {
+        var userDataFolder = System.IO.Path.Combine(options.DataDirectory, "webview2");
+        System.IO.Directory.CreateDirectory(userDataFolder);
+        return await CoreWebView2Environment.CreateAsync(userDataFolder: userDataFolder).ConfigureAwait(true);
+    }
+
+    private async void OnWindowClosed(object? sender, EventArgs e)
+    {
+        if (sender is not MainWindow window || !_windows.Remove(window))
+        {
+            return;
+        }
+
+        if (MainWindow == window)
+        {
+            MainWindow = _windows.FirstOrDefault();
+        }
+
+        if (_windows.Count != 0 || _shuttingDown)
+        {
+            return;
+        }
+
+        // Keep the dispatcher alive until FFmpeg and Kestrel stop. Closing any earlier window,
+        // including the first one, only disposes that window's browser.
+        _shuttingDown = true;
+        try
+        {
+            await ShutdownHostAsync().ConfigureAwait(true);
+        }
+        finally
+        {
+            Shutdown();
+        }
     }
 
     protected override async void OnExit(ExitEventArgs e)

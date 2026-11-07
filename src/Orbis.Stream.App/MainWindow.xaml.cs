@@ -1,9 +1,7 @@
 ﻿using System.Diagnostics;
-using System.IO;
 using System.Text.Json;
 using System.Windows;
 using Microsoft.Win32;
-using Microsoft.AspNetCore.Builder;
 using Microsoft.Web.WebView2.Core;
 using Orbis.Stream.Core.Configuration;
 
@@ -26,12 +24,15 @@ public partial class MainWindow : Window
     private const double MaxZoom = 2d;
 
     private readonly OrbisRuntimeOptions _options;
-    private readonly WebApplication _host;
+    private readonly Task<CoreWebView2Environment> _environment;
+    private readonly string _entryPoint;
+    private bool _closed;
 
-    public MainWindow(OrbisRuntimeOptions options, WebApplication host)
+    public MainWindow(OrbisRuntimeOptions options, Task<CoreWebView2Environment> environment, string? entryPoint = null)
     {
         _options = options;
-        _host = host;
+        _environment = environment;
+        _entryPoint = entryPoint ?? options.ApplicationEntryPoint;
 
         InitializeComponent();
         StatusText.Text = AppText.Loading;
@@ -48,19 +49,22 @@ public partial class MainWindow : Window
         // resolution or another scaling all arrive here, because the width is measured in DIPs.
         SizeChanged += (_, _) => FitZoomToWidth();
         Closing += OnClosing;
+        Closed += (_, _) =>
+        {
+            _closed = true;
+            Browser.Dispose();
+        };
     }
 
     private async void OnLoaded(object sender, RoutedEventArgs e)
     {
         try
         {
-            var userDataFolder = Path.Combine(_options.DataDirectory, "webview2");
-            Directory.CreateDirectory(userDataFolder);
-
-            var environment = await CoreWebView2Environment.CreateAsync(userDataFolder: userDataFolder)
-                .ConfigureAwait(true);
+            var environment = await _environment.ConfigureAwait(true);
+            if (_closed) return;
 
             await Browser.EnsureCoreWebView2Async(environment).ConfigureAwait(true);
+            if (_closed) return;
 
             Browser.CoreWebView2.Settings.AreDefaultContextMenusEnabled = true;
             Browser.CoreWebView2.Settings.AreDevToolsEnabled = true;
@@ -69,13 +73,17 @@ public partial class MainWindow : Window
                 "orbis.local",
                 _options.WebRootPath,
                 CoreWebView2HostResourceAccessKind.Allow);
-            Browser.CoreWebView2.Navigate(_options.ApplicationEntryPoint);
             Browser.CoreWebView2.NavigationCompleted += OnNavigationCompleted;
             Browser.CoreWebView2.NewWindowRequested += OnNewWindowRequested;
             Browser.CoreWebView2.WebMessageReceived += OnWebMessageReceived;
+            Browser.CoreWebView2.DocumentTitleChanged += (_, _) =>
+                Title = Browser.CoreWebView2.DocumentTitle;
+            FitZoomToWidth();
+            Browser.CoreWebView2.Navigate(_entryPoint);
         }
         catch (Exception exception)
         {
+            if (_closed) return;
             LoadingBar.Visibility = Visibility.Collapsed;
             StatusText.Text = AppText.BrowserInitError(exception.Message);
         }
@@ -113,10 +121,9 @@ public partial class MainWindow : Window
     }
 
     /// <summary>
-    /// A link that opens in another window (the page of a live on Twitch or YouTube, the coffee
-    /// page): the WebView would replace the whole application with the site, so the browser of the
-    /// system takes it. Only http and https are handed over: the URI reaches a shell that runs
-    /// whatever it is given.
+    /// Internal pages open in independent app windows. External http/https links keep using the
+    /// system browser. The request is handled immediately; opening the window is posted so that
+    /// WebView2's native callback has returned before another WebView2 control is created.
     /// </summary>
     private void OnNewWindowRequested(object? sender, CoreWebView2NewWindowRequestedEventArgs e)
     {
@@ -124,6 +131,15 @@ public partial class MainWindow : Window
 
         if (!Uri.TryCreate(e.Uri, UriKind.Absolute, out var uri) || (uri.Scheme != "http" && uri.Scheme != "https"))
         {
+            return;
+        }
+
+        var applicationUri = new Uri(_options.ApplicationUrl);
+        if (Uri.Compare(uri, applicationUri, UriComponents.SchemeAndServer, UriFormat.Unescaped,
+                StringComparison.OrdinalIgnoreCase) == 0 &&
+            uri.AbsolutePath.StartsWith("/orbis/", StringComparison.OrdinalIgnoreCase))
+        {
+            Dispatcher.InvokeAsync(() => ((App)Application.Current).OpenWindow(uri.AbsoluteUri));
             return;
         }
 

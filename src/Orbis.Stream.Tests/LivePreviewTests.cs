@@ -367,6 +367,32 @@ public sealed class LivePreviewTests : IAsyncLifetime
     }
 
     [Fact]
+    public async Task Preview_ApplyVolume_KeepsLiveRunningAndUpdatesSources()
+    {
+        if (!await StartLiveAsync())
+        {
+            return;
+        }
+
+        var live = await WaitForLiveAsync();
+        var sources = live.GetProperty("sources").EnumerateArray().ToList();
+        if (sources.Count == 0)
+        {
+            return;
+        }
+
+        var sourcePkid = sources[0].GetProperty("pkid").GetInt32();
+
+        using var applied = await _host.Client.PutAsJsonAsync(
+            $"/preview/live/{_pkid}/volume",
+            new { sourcePkid = sourcePkid, volume = 120 });
+        Assert.Equal(HttpStatusCode.OK, applied.StatusCode);
+
+        var snapshot = await SnapshotAsync();
+        Assert.True(snapshot.GetProperty("isLive").GetBoolean());
+    }
+
+    [Fact]
     public async Task PreviewPage_IsServedWithAndWithoutALive()
     {
         using var offline = await _host.Client.GetAsync("/orbis/mainPreview");

@@ -113,7 +113,10 @@ public sealed class FfmpegStreamingSession : IAsyncDisposable
     /// </summary>
     public bool IsOnAir => OnAirSinceTicks != 0;
 
-    public bool IsPublishing => IsOnAir && !HasExited && SinceLastAdvance <= Profile.StallTimeout;
+    public bool IsPublishing =>
+        !HasExited && !StopRequested && (
+            (IsOnAir && SinceLastAdvance <= Profile.StallTimeout)
+            || (SharesOutput && _output is { IsPublishing: true }));
 
     /// <summary>How long the live has been on air; zero when it is not.</summary>
     public TimeSpan OnAirFor

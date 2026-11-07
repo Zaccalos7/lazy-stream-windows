@@ -39,6 +39,13 @@ dotnet run --project src/Orbis.Stream.App/Orbis.Stream.App.csproj
 The shell opens on `http://localhost:1200/orbis/mainMenu`, the dashboard of the Razor
 frontend, whose router basename is `/orbis`.
 
+Use **New window** in the sidebar to open the current page in another app window, then navigate
+each window independently (for example, live preview, start live and task manager). Ctrl-click,
+middle-click and **Open link in new window** on an internal link also open an app window.
+All windows share the same server, live sessions and saved settings. Closing a window leaves
+the other windows and streams running; closing the last app window stops streaming and exits.
+External links continue to open in the system browser.
+
 ## Publish
 
 ```bash

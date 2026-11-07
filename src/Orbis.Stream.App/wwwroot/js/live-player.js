@@ -211,6 +211,7 @@
     toggle.textContent = requested ? words.stop : words.start;
     toggle.setAttribute('aria-pressed', String(requested));
     if (requested) {
+      ended = false;
       status.textContent = words.loading;
       resolve();
     } else {
@@ -245,9 +246,13 @@
   window.addEventListener('pageshow', () => { if (requested) resolve(); });
   document.addEventListener('orbis:live', event => {
     const state = event.detail;
+    if (!state || state.reconfiguring) return;
     if (!state.isLive || state.videoPkid !== pkid) {
       ended = true;
       unload();
+    } else if (ended) {
+      ended = false;
+      if (requested) resolve();
     }
   });
 })();

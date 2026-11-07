@@ -48,6 +48,10 @@
             </button>
         </div>
         <div class="nav-main">
+            <a class="nav-new-window" href="@(Context.Request.PathBase + Context.Request.Path + Context.Request.QueryString)"
+               target="_blank" rel="noopener" title="@T["newWindow"]" aria-label="@T["newWindow"]">
+                <i class="icon" aria-hidden="true">+</i><span>@T["newWindow"]</span>
+            </a>
             <a href="/orbis/mainMenu" aria-current="@Current("mainMenu")"><i class="icon">&#xE80F;</i><span>@T["dashboard"]</span></a>
             <a href="/orbis/mainLiveMenu" aria-current="@Current("mainLiveMenu", "mainLive", "countdown", "mainLiveHistory")"><i class="icon">&#xE714;</i><span>Live</span></a>
             <a href="/orbis/mainPreview" aria-current="@Current("mainPreview")"><i class="icon">&#xE7F4;</i><span>@T["livePreviewTitle"]</span></a>
@@ -61,10 +65,6 @@
             </div>
         </div>
         <div class="nav-footer">
-            <a class="nav-new-window" href="@(Context.Request.PathBase + Context.Request.Path + Context.Request.QueryString)"
-               target="_blank" rel="noopener" title="@T["newWindow"]" aria-label="@T["newWindow"]">
-                <i class="icon" aria-hidden="true">&#xE78B;</i><span>@T["newWindow"]</span>
-            </a>
             <div class="segmented-control" role="radiogroup" aria-label="Theme">
                 <button type="button" class="segment" data-theme-set="light" title="Light" aria-label="Light Theme"><i class="icon">&#xE706;</i></button>
                 <button type="button" class="segment" data-theme-set="dark" title="Dark" aria-label="Dark Theme"><i class="icon">&#xE708;</i></button>
